@@ -31,7 +31,8 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { useDados } from '../hooks/useDados';
+import { useFirebase } from '../hooks/useFirebase';
+import { Timestamp } from 'firebase/firestore';
 
 const COLORS = ['#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', '#f44336', '#2196f3'];
 
@@ -97,11 +98,12 @@ function ModernDashboard() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const { dados: agendamentos, loading: loadingAgendamentos } = useDados('agendamentos');
-  const { dados: atendimentos, loading: loadingAtendimentos } = useDados('atendimentos');
-  const { dados: clientes, loading: loadingClientes } = useDados('clientes');
-  const { dados: servicos, loading: loadingServicos } = useDados('servicos');
-  const { dados: pagamentos, loading: loadingPagamentos } = useDados('pagamentos');
+  // Hooks do Firebase
+  const { data: agendamentos, loading: loadingAgendamentos } = useFirebase('agendamentos');
+  const { data: atendimentos, loading: loadingAtendimentos } = useFirebase('atendimentos');
+  const { data: clientes, loading: loadingClientes } = useFirebase('clientes');
+  const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
+  const { data: pagamentos, loading: loadingPagamentos } = useFirebase('pagamentos');
 
   useEffect(() => {
     if (!loadingAgendamentos && !loadingAtendimentos && !loadingClientes && !loadingServicos && !loadingPagamentos) {
@@ -115,31 +117,38 @@ function ModernDashboard() {
     const hoje = new Date();
     const trintaDiasAtras = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 30);
     
-    const pagamentosMes = pagamentos.filter(p => new Date(p.data) >= trintaDiasAtras);
-    const faturamento = pagamentosMes.reduce((acc, p) => acc + p.valor, 0);
+    const pagamentosMes = (pagamentos || []).filter(p => {
+      const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
+      return dataPagamento >= trintaDiasAtras;
+    });
+    const faturamento = pagamentosMes.reduce((acc, p) => acc + (p.valor || 0), 0);
     
     // Calcular faturamento do mês anterior para trend
     const sessentaDiasAtras = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 60);
     const trintaAQuarentaDiasAtras = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 30);
     
-    const pagamentosMesAnterior = pagamentos.filter(p => {
-      const data = new Date(p.data);
-      return data >= sessentaDiasAtras && data < trintaAQuarentaDiasAtras;
+    const pagamentosMesAnterior = (pagamentos || []).filter(p => {
+      const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
+      return dataPagamento >= sessentaDiasAtras && dataPagamento < trintaAQuarentaDiasAtras;
     });
-    const faturamentoAnterior = pagamentosMesAnterior.reduce((acc, p) => acc + p.valor, 0);
+    const faturamentoAnterior = pagamentosMesAnterior.reduce((acc, p) => acc + (p.valor || 0), 0);
     
     const trendFaturamento = faturamentoAnterior > 0 
       ? ((faturamento - faturamentoAnterior) / faturamentoAnterior * 100).toFixed(1)
       : 0;
 
     // Total de clientes
-    const totalClientes = clientes.length;
+    const totalClientes = (clientes || []).length;
     
     // Calcular trend de clientes (últimos 30 dias vs anterior)
-    const clientesNovos = clientes.filter(c => new Date(c.dataCadastro) >= trintaDiasAtras).length;
-    const clientesNovosAnterior = clientes.filter(c => {
-      const data = new Date(c.dataCadastro);
-      return data >= sessentaDiasAtras && data < trintaAQuarentaDiasAtras;
+    const clientesNovos = (clientes || []).filter(c => {
+      const dataCadastro = c.dataCadastro?.toDate ? c.dataCadastro.toDate() : new Date(c.dataCadastro);
+      return dataCadastro >= trintaDiasAtras;
+    }).length;
+    
+    const clientesNovosAnterior = (clientes || []).filter(c => {
+      const dataCadastro = c.dataCadastro?.toDate ? c.dataCadastro.toDate() : new Date(c.dataCadastro);
+      return dataCadastro >= sessentaDiasAtras && dataCadastro < trintaAQuarentaDiasAtras;
     }).length;
     
     const trendClientes = clientesNovosAnterior > 0
@@ -148,14 +157,18 @@ function ModernDashboard() {
 
     // Taxa de ocupação (agendamentos confirmados vs horários disponíveis)
     const hojeStr = hoje.toISOString().split('T')[0];
-    const agendamentosHoje = agendamentos.filter(a => a.data === hojeStr && a.status !== 'cancelado');
+    const agendamentosHoje = (agendamentos || []).filter(a => 
+      a.data === hojeStr && a.status !== 'cancelado'
+    );
     const totalHorarios = 12; // 12 horários por dia (9h-20h)
     const taxaOcupacao = Math.round((agendamentosHoje.length / totalHorarios) * 100);
     
     // Calcular trend da ocupação (comparar com ontem)
     const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
     const ontemStr = ontem.toISOString().split('T')[0];
-    const agendamentosOntem = agendamentos.filter(a => a.data === ontemStr && a.status !== 'cancelado');
+    const agendamentosOntem = (agendamentos || []).filter(a => 
+      a.data === ontemStr && a.status !== 'cancelado'
+    );
     const taxaOcupacaoOntem = Math.round((agendamentosOntem.length / totalHorarios) * 100);
     
     const trendOcupacao = taxaOcupacaoOntem > 0
@@ -203,12 +216,12 @@ function ModernDashboard() {
       const mesIndex = dataMes.getMonth();
       const ano = dataMes.getFullYear();
       
-      const pagamentosMes = pagamentos.filter(p => {
-        const data = new Date(p.data);
-        return data.getMonth() === mesIndex && data.getFullYear() === ano;
+      const pagamentosMes = (pagamentos || []).filter(p => {
+        const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
+        return dataPagamento.getMonth() === mesIndex && dataPagamento.getFullYear() === ano;
       });
       
-      const total = pagamentosMes.reduce((acc, p) => acc + p.valor, 0);
+      const total = pagamentosMes.reduce((acc, p) => acc + (p.valor || 0), 0);
       
       revenueByMonth.push({
         name: meses[mesIndex],
@@ -219,30 +232,30 @@ function ModernDashboard() {
 
     // Distribuição de serviços
     const servicosCount = {};
-    atendimentos.forEach(a => {
-      const servico = servicos.find(s => s.id === a.servicoId);
+    (atendimentos || []).forEach(a => {
+      const servico = (servicos || []).find(s => s.id === a.servicoId);
       if (servico) {
         servicosCount[servico.nome] = (servicosCount[servico.nome] || 0) + 1;
       }
     });
     
-    const totalAtendimentos = atendimentos.length;
+    const totalAtendimentos = (atendimentos || []).length;
     const servicesDist = Object.entries(servicosCount).map(([name, count]) => ({
       name,
-      value: Math.round((count / totalAtendimentos) * 100)
+      value: totalAtendimentos > 0 ? Math.round((count / totalAtendimentos) * 100) : 0
     })).slice(0, 4); // Pegar os 4 principais
     
     setServicesData(servicesDist);
 
     // Agenda de hoje
-    const hojeAppointments = agendamentos
+    const hojeAppointments = (agendamentos || [])
       .filter(a => a.data === hojeStr)
       .sort((a, b) => a.horario.localeCompare(b.horario))
       .slice(0, 4); // Mostrar apenas 4
       
     const appointmentsList = hojeAppointments.map(a => {
-      const cliente = clientes.find(c => c.id === a.clienteId);
-      const servico = servicos.find(s => s.id === a.servicoId);
+      const cliente = (clientes || []).find(c => c.id === a.clienteId);
+      const servico = (servicos || []).find(s => s.id === a.servicoId);
       
       return {
         time: a.horario,
@@ -264,6 +277,8 @@ function ModernDashboard() {
         return { label: 'Cancelado', color: 'error', borderColor: '#f44336' };
       case 'finalizado':
         return { label: 'Concluído', color: 'default', borderColor: '#9e9e9e' };
+      case 'em_andamento':
+        return { label: 'Em Andamento', color: 'secondary', borderColor: '#9c27b0' };
       default:
         return { label: status, color: 'default', borderColor: '#9e9e9e' };
     }
@@ -273,7 +288,7 @@ function ModernDashboard() {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
-    }).format(valor);
+    }).format(valor || 0);
   };
 
   if (loading) {
