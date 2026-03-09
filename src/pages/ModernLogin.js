@@ -1,142 +1,106 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  CircularProgress,
-  Paper,
-} from '@mui/material';
-import { Spa as SpaIcon } from '@mui/icons-material';
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-import { usuariosService } from '../services/usuariosService';
+import { firebaseService } from './firebase';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
-function ModernLogin() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
-    email: '',
-    senha: '',
-  });
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
+export const usuariosService = {
+  // Login
+  login: async (email, senha) => {
     try {
-      const usuario = await usuariosService.login(formData.email, formData.senha);
-      toast.success(`Bem-vindo, ${usuario.nome}!`);
-      navigate('/');
+      console.log('🔑 Tentando login com:', email);
+      
+      const auth = getAuth();
+      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
+      const user = userCredential.user;
+      
+      // Buscar dados adicionais do usuário no Firestore
+      const usuarios = await firebaseService.query('usuarios', [
+        { field: 'email', operator: '==', value: email }
+      ]);
+      
+      if (usuarios.length === 0) {
+        throw new Error('Usuário não encontrado no banco de dados');
+      }
+      
+      const usuarioData = usuarios[0];
+      
+      // Combinar dados do Firebase Auth com dados do Firestore
+      const usuarioCompleto = {
+        id: user.uid,
+        ...usuarioData,
+        email: user.email
+      };
+      
+      // Salvar no localStorage para manter a sessão
+      localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+      
+      console.log('✅ Login bem-sucedido:', usuarioCompleto.nome);
+      return usuarioCompleto;
+      
     } catch (error) {
-      setError('Email ou senha inválidos');
-    } finally {
-      setLoading(false);
+      console.error('❌ Erro no login:', error);
+      throw error;
     }
-  };
+  },
 
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-        p: 2,
-      }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Paper
-          elevation={24}
-          sx={{
-            borderRadius: 4,
-            overflow: 'hidden',
-            maxWidth: 400,
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              bgcolor: '#9c27b0',
-              p: 4,
-              textAlign: 'center',
-            }}
-          >
-            <SpaIcon sx={{ fontSize: 60, color: 'white', mb: 2 }} />
-            <Typography variant="h4" sx={{ color: 'white', fontWeight: 700 }}>
-              Beauty Pro
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-              Sistema de Gerenciamento
-            </Typography>
-          </Box>
+  // Logout
+  logout: async () => {
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+      localStorage.removeItem('usuario');
+      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: null }));
+      console.log('👋 Logout realizado');
+    } catch (error) {
+      console.error('❌ Erro no logout:', error);
+      throw error;
+    }
+  },
 
-          <CardContent sx={{ p: 4 }}>
-            <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
-              Acessar Sistema
-            </Typography>
+  // Obter usuário atual
+  getUsuarioAtual: () => {
+    try {
+      const user = localStorage.getItem('usuario');
+      return user ? JSON.parse(user) : null;
+    } catch (error) {
+      console.error('Erro ao recuperar usuário:', error);
+      return null;
+    }
+  },
 
-            {error && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
-            )}
+  // Verificar se está logado
+  isLoggedIn: () => {
+    return !!localStorage.getItem('usuario');
+  },
 
-            <form onSubmit={handleLogin}>
-              <TextField
-                fullWidth
-                label="Email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                sx={{ mb: 2 }}
-                required
-              />
+  // Atualizar usuário
+  atualizar: async (id, dados) => {
+    try {
+      await firebaseService.update('usuarios', id, dados);
+      
+      // Atualizar localStorage se for o usuário atual
+      const usuarioAtual = usuariosService.getUsuarioAtual();
+      if (usuarioAtual && usuarioAtual.id === id) {
+        const usuarioAtualizado = { ...usuarioAtual, ...dados };
+        localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+        window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioAtualizado }));
+      }
+      
+      return { id, ...dados };
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      throw error;
+    }
+  },
 
-              <TextField
-                fullWidth
-                label="Senha"
-                type="password"
-                value={formData.senha}
-                onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
-                sx={{ mb: 3 }}
-                required
-              />
+  // Criar usuário (para cadastro)
+  criar: async (dados) => {
+    try {
+      const novoUsuario = await firebaseService.add('usuarios', dados);
+      return novoUsuario;
+    } catch (error) {
+      console.error('Erro ao criar usuário:', error);
+      throw error;
+    }
+  }
+};
 
-              <Button
-                fullWidth
-                type="submit"
-                variant="contained"
-                disabled={loading}
-                sx={{
-                  py: 1.5,
-                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                  fontSize: '1.1rem',
-                }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Entrar'}
-              </Button>
-            </form>
-
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 3, textAlign: 'center' }}>
-              Use: ana@salao.com / 123456
-            </Typography>
-          </CardContent>
-        </Paper>
-      </motion.div>
-    </Box>
-  );
-}
-
-export default ModernLogin;
+export default usuariosService;
