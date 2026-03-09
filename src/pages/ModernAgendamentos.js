@@ -48,7 +48,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { useFirebase } from '../hooks/useFirebase';
+import { Timestamp } from 'firebase/firestore';
 
 // Funções auxiliares de data
 const getDaysInMonth = (date) => {
@@ -113,166 +114,32 @@ function ModernAgendamentos() {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  // Dados da API
-  const [agendamentos, setAgendamentos] = useState([]);
-  const [atendimentos, setAtendimentos] = useState([]);
-  const [clientes, setClientes] = useState([]);
-  const [profissionais, setProfissionais] = useState([]);
-  const [servicos, setServicos] = useState([]);
+  // Hooks do Firebase
+  const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
+  const { data: atendimentos, loading: loadingAtendimentos } = useFirebase('atendimentos');
+  const { data: clientes, loading: loadingClientes } = useFirebase('clientes');
+  const { data: profissionais, loading: loadingProfissionais } = useFirebase('profissionais');
+  const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
 
-  // Carregar dados da API
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  const carregarDados = async () => {
-    try {
-      setLoading(true);
-      const [agendamentosRes, atendimentosRes, clientesRes, profissionaisRes, servicosRes] = await Promise.all([
-        api.get('/agendamentos'),
-        api.get('/atendimentos'),
-        api.get('/clientes'),
-        api.get('/profissionais'),
-        api.get('/servicos'),
-      ]);
-      
-      setAgendamentos(agendamentosRes.data || []);
-      setAtendimentos(atendimentosRes.data || []);
-      setClientes(clientesRes.data || []);
-      setProfissionais(profissionaisRes.data || []);
-      setServicos(servicosRes.data || []);
-      
-      console.log('✅ Dados carregados');
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      setError('Erro ao carregar dados');
-      toast.error('Erro ao carregar dados');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const adicionarAgendamento = async (dados) => {
-    try {
-      // Validar dados obrigatórios
-      if (!dados.clienteId || !dados.profissionalId || !dados.servicoId || !dados.data || !dados.horario) {
-        toast.error('Preencha todos os campos obrigatórios');
-        return;
-      }
-  
-      // Verificar se o ID já existe
-      const novoId = Date.now();
-      
-      // Preparar dados no formato correto para o JSON Server
-      const novoAgendamento = {
-        id: novoId,
-        clienteId: parseInt(dados.clienteId),
-        profissionalId: parseInt(dados.profissionalId),
-        servicoId: parseInt(dados.servicoId),
-        data: dados.data,
-        horario: dados.horario,
-        observacoes: dados.observacoes || '',
-        status: dados.status || 'pendente',
-        dataCriacao: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-  
-      console.log('📝 Criando agendamento:', novoAgendamento);
-  
-      // Fazer a requisição POST
-      const response = await api.post('/agendamentos', novoAgendamento);
-      
-      console.log('✅ Agendamento criado:', response.data);
-      
-      // Atualizar a lista local
-      setAgendamentos(prev => [...prev, response.data]);
-      
-      toast.success('Agendamento criado com sucesso!');
-      return response.data;
-      
-    } catch (error) {
-      console.error('❌ Erro detalhado ao adicionar agendamento:', error);
-      
-      // Mostrar mensagem de erro mais específica
-      if (error.response) {
-        console.error('Resposta do servidor:', error.response.data);
-        toast.error(`Erro ${error.response.status}: ${error.response.data?.message || 'Erro ao criar agendamento'}`);
-      } else if (error.request) {
-        toast.error('Erro de conexão. Verifique se o servidor está rodando.');
-      } else {
-        toast.error('Erro ao criar agendamento: ' + error.message);
-      }
-      
-      throw error;
-    }
-  };
-
-  const atualizarAgendamento = async (id, dados) => {
-    try {
-      // Preparar dados no formato correto
-      const dadosAtualizados = {
-        clienteId: parseInt(dados.clienteId),
-        profissionalId: parseInt(dados.profissionalId),
-        servicoId: parseInt(dados.servicoId),
-        data: dados.data,
-        horario: dados.horario,
-        observacoes: dados.observacoes || '',
-        status: dados.status || 'pendente',
-        updatedAt: new Date().toISOString()
-      };
-  
-      console.log('📝 Atualizando agendamento:', id, dadosAtualizados);
-  
-      const response = await api.patch(`/agendamentos/${id}`, dadosAtualizados);
-      
-      console.log('✅ Agendamento atualizado:', response.data);
-      
-      // Atualizar a lista local
-      setAgendamentos(prev => prev.map(item => item.id === id ? response.data : item));
-      
-      toast.success('Agendamento atualizado com sucesso!');
-      return response.data;
-      
-    } catch (error) {
-      console.error('❌ Erro ao atualizar agendamento:', error);
-      
-      if (error.response) {
-        toast.error(`Erro ${error.response.status}: ${error.response.data?.message || 'Erro ao atualizar agendamento'}`);
-      } else {
-        toast.error('Erro ao atualizar agendamento');
-      }
-      
-      throw error;
-    }
-  };
-
-  const excluirAgendamento = async (id) => {
-    try {
-      await api.delete(`/agendamentos/${id}`);
-      setAgendamentos(agendamentos.filter(item => item.id !== id));
-      toast.success('Agendamento excluído com sucesso!');
-    } catch (error) {
-      console.error('Erro ao excluir agendamento:', error);
-      toast.error('Erro ao excluir agendamento');
-      throw error;
-    }
-  };
+  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos;
 
   // Combinar agendamentos e atendimentos
   const todosEventos = [
-    ...agendamentos.map(apt => ({
+    ...(agendamentos || []).map(apt => ({
       ...apt,
       tipo: 'agendamento',
       icone: <ScheduleIcon />,
+      dataObj: apt.data,
+      horarioObj: apt.horario
     })),
-    ...atendimentos.map(att => ({
+    ...(atendimentos || []).map(att => ({
       ...att,
       tipo: 'atendimento',
       icone: <TimerIcon />,
       status: att.status || 'em_andamento',
+      dataObj: att.data,
+      horarioObj: att.horaInicio
     }))
   ];
 
@@ -316,7 +183,7 @@ function ModernAgendamentos() {
 
   // Filtrar eventos
   const filteredEvents = todosEventos.filter(event => {
-    const professionalMatch = selectedProfessional === 'all' || event.profissionalId === parseInt(selectedProfessional);
+    const professionalMatch = selectedProfessional === 'all' || event.profissionalId === selectedProfessional;
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
     return professionalMatch && statusMatch && tipoMatch;
@@ -326,7 +193,7 @@ function ModernAgendamentos() {
   const dayEvents = filteredEvents.filter(event => event.data === selectedDate);
 
   // Atendimentos em andamento
-  const atendimentosEmAndamento = atendimentos.filter(att => att.status === 'em_andamento');
+  const atendimentosEmAndamento = (atendimentos || []).filter(att => att.status === 'em_andamento');
 
   // Agendamentos da semana
   const weekDays_list = getWeekDays(currentDate);
@@ -441,9 +308,11 @@ function ModernAgendamentos() {
 
   const confirmDelete = async () => {
     try {
-      await excluirAgendamento(appointmentToDelete);
+      await excluir(appointmentToDelete);
+      toast.success('Agendamento cancelado com sucesso!');
     } catch (error) {
-      // Erro já tratado na função
+      console.error('Erro ao excluir:', error);
+      toast.error('Erro ao cancelar agendamento');
     }
     setOpenDeleteDialog(false);
     setAppointmentToDelete(null);
@@ -451,9 +320,11 @@ function ModernAgendamentos() {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      await atualizarAgendamento(id, { status: newStatus });
+      await atualizar(id, { status: newStatus });
+      toast.success(`Status alterado para ${getStatusLabel(newStatus)}!`);
     } catch (error) {
-      // Erro já tratado na função
+      console.error('Erro ao alterar status:', error);
+      toast.error('Erro ao alterar status');
     }
   };
 
@@ -466,10 +337,11 @@ function ModernAgendamentos() {
         return;
       }
 
-      const horarioOcupado = agendamentos.some(apt => 
+      // Verificar horário ocupado
+      const horarioOcupado = (agendamentos || []).some(apt => 
         apt.data === formData.data && 
         apt.horario === formData.horario && 
-        apt.profissionalId === parseInt(formData.profissionalId) &&
+        apt.profissionalId === formData.profissionalId &&
         apt.id !== selectedAppointment?.id &&
         apt.status !== 'cancelado'
       );
@@ -479,21 +351,32 @@ function ModernAgendamentos() {
         return;
       }
 
+      const dadosParaSalvar = {
+        clienteId: formData.clienteId,
+        profissionalId: formData.profissionalId,
+        servicoId: formData.servicoId,
+        data: formData.data,
+        horario: formData.horario,
+        observacoes: formData.observacoes || '',
+        status: formData.status || 'pendente'
+      };
+
       if (selectedAppointment) {
-        await atualizarAgendamento(selectedAppointment.id, formData);
+        await atualizar(selectedAppointment.id, dadosParaSalvar);
+        toast.success('Agendamento atualizado!');
       } else {
-        await adicionarAgendamento(formData);
+        await adicionar(dadosParaSalvar);
+        toast.success('Agendamento criado!');
       }
       
       setOpenDialog(false);
     } catch (error) {
-      // Erro já tratado nas funções
+      console.error('Erro ao salvar agendamento:', error);
+      toast.error('Erro ao salvar agendamento');
     }
   };
 
   const iniciarAtendimento = async (agendamento) => {
-    console.log('🎯 Função iniciarAtendimento chamada com:', agendamento);
-    
     try {
       if (!agendamento || !agendamento.id) {
         toast.error('Agendamento não encontrado');
@@ -503,7 +386,7 @@ function ModernAgendamentos() {
       const toastId = toast.loading('Iniciando atendimento...');
 
       // Verificar se já existe um atendimento para este agendamento
-      const atendimentoExistente = atendimentos.find(a => a.agendamentoId === agendamento.id);
+      const atendimentoExistente = (atendimentos || []).find(a => a.agendamentoId === agendamento.id);
       
       if (atendimentoExistente) {
         toast.dismiss(toastId);
@@ -512,9 +395,10 @@ function ModernAgendamentos() {
         return;
       }
 
-      // Criar novo atendimento
+      const servico = (servicos || []).find(s => s.id === agendamento.servicoId);
+
+      // Criar novo atendimento no Firebase
       const novoAtendimento = {
-        id: Date.now(),
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
         profissionalId: agendamento.profissionalId,
@@ -526,38 +410,34 @@ function ModernAgendamentos() {
         observacoes: '',
         itensServico: [{
           id: agendamento.servicoId,
-          nome: servicos.find(s => s.id === agendamento.servicoId)?.nome || 'Serviço',
-          preco: servicos.find(s => s.id === agendamento.servicoId)?.preco || 0,
+          nome: servico?.nome || 'Serviço',
+          preco: servico?.preco || 0,
           principal: true
         }],
         itensProduto: [],
-        valorTotal: servicos.find(s => s.id === agendamento.servicoId)?.preco || 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        valorTotal: servico?.preco || 0
       };
 
-      const response = await api.post('/atendimentos', novoAtendimento);
+      // Usar o serviço de atendimentos do Firebase
+      const { adicionar: adicionarAtendimento } = useFirebase('atendimentos');
+      const atendimentoCriado = await adicionarAtendimento(novoAtendimento);
       
       // Atualizar status do agendamento
-      await api.patch(`/agendamentos/${agendamento.id}`, { 
-        status: 'em_andamento',
-        updatedAt: new Date().toISOString()
-      });
+      await atualizar(agendamento.id, { status: 'em_andamento' });
 
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
       
-      navigate(`/atendimento/${response.data.id}`);
+      navigate(`/atendimento/${atendimentoCriado.id}`);
       
     } catch (error) {
-      console.error('❌ Erro detalhado:', error);
+      console.error('Erro ao iniciar atendimento:', error);
       toast.error('Erro ao iniciar atendimento');
     }
   };
 
   const continuarAtendimento = (atendimento) => {
-    console.log('Continuando atendimento:', atendimento);
-    navigate(`/atendimento/${atendimento.agendamentoId || atendimento.id}`);
+    navigate(`/atendimento/${atendimento.id}`);
   };
 
   const handleDayClick = (date) => {
@@ -614,10 +494,10 @@ function ModernAgendamentos() {
   const isHorarioDisponivel = (horario) => {
     if (!formData.profissionalId || !formData.data) return true;
     
-    return !agendamentos.some(apt => 
+    return !(agendamentos || []).some(apt => 
       apt.data === formData.data && 
       apt.horario === horario && 
-      apt.profissionalId === parseInt(formData.profissionalId) &&
+      apt.profissionalId === formData.profissionalId &&
       apt.id !== selectedAppointment?.id &&
       apt.status !== 'cancelado'
     );
@@ -648,10 +528,10 @@ function ModernAgendamentos() {
     );
   }
 
-  if (error) {
+  if (errorAgendamentos) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{errorAgendamentos}</Alert>
       </Box>
     );
   }
@@ -719,9 +599,9 @@ function ModernAgendamentos() {
             
             <Grid container spacing={2}>
               {atendimentosEmAndamento.slice(0, 3).map(atendimento => {
-                const cliente = clientes.find(c => c.id === atendimento.clienteId);
-                const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
-                const servico = servicos.find(s => s.id === atendimento.servicoId);
+                const cliente = (clientes || []).find(c => c.id === atendimento.clienteId);
+                const profissional = (profissionais || []).find(p => p.id === atendimento.profissionalId);
+                const servico = (servicos || []).find(s => s.id === atendimento.servicoId);
 
                 return (
                   <Grid item xs={12} md={4} key={atendimento.id}>
@@ -812,7 +692,7 @@ function ModernAgendamentos() {
                   onChange={(e) => setSelectedProfessional(e.target.value)}
                 >
                   <MenuItem value="all">Todos</MenuItem>
-                  {profissionais.map(prof => (
+                  {(profissionais || []).map(prof => (
                     <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                   ))}
                 </Select>
@@ -922,9 +802,9 @@ function ModernAgendamentos() {
                           <AnimatePresence>
                             <Grid container spacing={2}>
                               {eventsAtTime.map(event => {
-                                const cliente = clientes.find(c => c.id === event.clienteId);
-                                const profissional = profissionais.find(p => p.id === event.profissionalId);
-                                const servico = servicos.find(s => s.id === event.servicoId);
+                                const cliente = (clientes || []).find(c => c.id === event.clienteId);
+                                const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
+                                const servico = (servicos || []).find(s => s.id === event.servicoId);
 
                                 return (
                                   <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
@@ -998,10 +878,7 @@ function ModernAgendamentos() {
                                                   variant="contained"
                                                   color="success"
                                                   startIcon={<PlayIcon />}
-                                                  onClick={() => {
-                                                    console.log('Botão Iniciar clicado para:', event);
-                                                    iniciarAtendimento(event);
-                                                  }}
+                                                  onClick={() => iniciarAtendimento(event)}
                                                 >
                                                   Iniciar
                                                 </Button>
@@ -1127,7 +1004,7 @@ function ModernAgendamentos() {
                       {day.events.length > 0 ? (
                         <Box>
                           {day.events.slice(0, 3).map(event => {
-                            const cliente = clientes.find(c => c.id === event.clienteId);
+                            const cliente = (clientes || []).find(c => c.id === event.clienteId);
                             return (
                               <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                 <Badge
@@ -1239,7 +1116,7 @@ function ModernAgendamentos() {
                             </Box>
                             
                             {day.events.slice(0, 2).map(event => {
-                              const cliente = clientes.find(c => c.id === event.clienteId);
+                              const cliente = (clientes || []).find(c => c.id === event.clienteId);
                               return (
                                 <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                   <Box
@@ -1295,9 +1172,9 @@ function ModernAgendamentos() {
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {selectedDayDetails?.events.map(event => {
-              const cliente = clientes.find(c => c.id === event.clienteId);
-              const profissional = profissionais.find(p => p.id === event.profissionalId);
-              const servico = servicos.find(s => s.id === event.servicoId);
+              const cliente = (clientes || []).find(c => c.id === event.clienteId);
+              const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
+              const servico = (servicos || []).find(s => s.id === event.servicoId);
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2 }}>
@@ -1426,7 +1303,7 @@ function ModernAgendamentos() {
                     label="Cliente"
                     onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
                   >
-                    {clientes.map(cliente => (
+                    {(clientes || []).map(cliente => (
                       <MenuItem key={cliente.id} value={cliente.id}>
                         {cliente.nome}
                       </MenuItem>
@@ -1443,7 +1320,7 @@ function ModernAgendamentos() {
                     label="Profissional"
                     onChange={(e) => setFormData({ ...formData, profissionalId: e.target.value })}
                   >
-                    {profissionais.map(prof => (
+                    {(profissionais || []).map(prof => (
                       <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                     ))}
                   </Select>
@@ -1458,7 +1335,7 @@ function ModernAgendamentos() {
                     label="Serviço"
                     onChange={(e) => setFormData({ ...formData, servicoId: e.target.value })}
                   >
-                    {servicos.map(service => (
+                    {(servicos || []).map(service => (
                       <MenuItem key={service.id} value={service.id}>
                         {service.nome} - R$ {service.preco}
                       </MenuItem>
