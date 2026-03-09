@@ -1,0 +1,1552 @@
+{
+  "usuarios": [
+    {
+      "id": 1,
+      "nome": "Michael Rodrigo Raimundo",
+      "email": "ana@salao.com",
+      "senha": "123456",
+      "avatar": null,
+      "cargo": "admin",
+      "permissoes": [
+        "admin",
+        "gerenciar_usuarios",
+        "gerenciar_clientes",
+        "gerenciar_agendamentos",
+        "gerenciar_servicos",
+        "gerenciar_profissionais",
+        "gerenciar_estoque",
+        "gerenciar_compras",
+        "financeiro",
+        "visualizar_relatorios",
+        "configurar_sistema",
+        "visualizar_notificacoes",
+        "visualizar_dashboard",
+        "gerenciar_atendimentos"
+      ],
+      "telefone": "(11) 99999-0001",
+      "dataCadastro": "2023-01-01T10:00:00.000Z",
+      "ultimoAcesso": "2024-03-20T08:30:00.000Z",
+      "updatedAt": "2026-03-08T03:04:35.232Z",
+      "status": "ativo"
+    },
+    {
+      "id": 2,
+      "nome": "João Gerente",
+      "email": "joao@salao.com",
+      "senha": "123456",
+      "avatar": null,
+      "cargo": "gerente",
+      "permissoes": [
+        "gerenciar_clientes",
+        "gerenciar_agendamentos",
+        "gerenciar_atendimentos",
+        "visualizar_relatorios",
+        "financeiro",
+        "gerenciar_estoque"
+      ],
+      "telefone": "(11) 99999-0002",
+      "dataCadastro": "2023-02-01T10:00:00.000Z",
+      "ultimoAcesso": "2024-03-20T08:45:00.000Z",
+      "status": "ativo"
+    },
+    {
+      "id": 3,
+      "nome": "Maria Atendente",
+      "email": "maria@salao.com",
+      "senha": "123456",
+      "avatar": null,
+      "cargo": "atendente",
+      "permissoes": [
+        "gerenciar_agendamentos",
+        "visualizar_clientes"
+      ],
+      "telefone": "(11) 99999-0003",
+      "dataCadastro": "2023-03-01T10:00:00.000Z",
+      "ultimoAcesso": "2024-03-20T09:00:00.000Z",
+      "status": "ativo"
+    }
+  ],
+  "notificacoes": [
+    {
+      "id": 1,
+      "usuarioId": 1,
+      "tipo": "agendamento",
+      "titulo": "Novo agendamento",
+      "mensagem": "Maria Silva agendou para hoje às 14h",
+      "lida": true,
+      "data": "2026-03-07T10:30:00.000Z",
+      "link": "/agendamentos/1",
+      "icone": "event",
+      "updatedAt": "2026-03-08T01:54:42.511Z"
+    },
+    {
+      "id": 2,
+      "usuarioId": 1,
+      "tipo": "lembrete",
+      "titulo": "Lembrete de agendamento",
+      "mensagem": "Você tem um agendamento amanhã às 09:00",
+      "lida": true,
+      "data": "2026-03-06T20:00:00.000Z",
+      "link": "/agendamentos/2",
+      "icone": "alarm"
+    },
+    {
+      "id": 3,
+      "usuarioId": 1,
+      "tipo": "cliente",
+      "titulo": "Novo cliente",
+      "mensagem": "João Santos se cadastrou no sistema",
+      "lida": true,
+      "data": "2026-03-07T09:15:00.000Z",
+      "link": "/clientes/2",
+      "icone": "person",
+      "updatedAt": "2026-03-08T01:54:57.305Z"
+    },
+    {
+      "id": 4,
+      "usuarioId": 1,
+      "tipo": "estoque",
+      "titulo": "Estoque baixo",
+      "mensagem": "Shampoo Profissional está com estoque baixo (8 unidades)",
+      "lida": true,
+      "data": "2026-03-08T01:30:00.000Z",
+      "link": "/estoque/1",
+      "icone": "warning",
+      "updatedAt": "2026-03-08T01:36:49.284Z"
+    },
+    {
+      "id": 5,
+      "usuarioId": 1,
+      "tipo": "pagamento",
+      "titulo": "Pagamento recebido",
+      "mensagem": "Pagamento de R$ 120,00 recebido de João Santos",
+      "lida": true,
+      "data": "2026-03-07T22:20:00.000Z",
+      "link": "/pagamentos/1",
+      "icone": "payment",
+      "updatedAt": "2026-03-08T01:37:11.245Z"
+    },
+    {
+      "id": 6,
+      "usuarioId": 1,
+      "tipo": "compra",
+      "titulo": "Compra aprovada",
+      "mensagem": "Pedido #PED-123 foi aprovado",
+      "lida": true,
+      "data": "2026-03-08T09:00:00.000Z",
+      "link": "/compras/1",
+      "icone": "shopping_cart",
+      "updatedAt": "2026-03-09T01:00:33.133Z"
+    },
+    {
+      "id": 7,
+      "usuarioId": 1,
+      "tipo": "financeiro",
+      "titulo": "Conta a pagar",
+      "mensagem": "Conta de luz vence amanhã",
+      "lida": true,
+      "data": "2026-03-08T10:00:00.000Z",
+      "link": "/financeiro/pagar",
+      "icone": "payment",
+      "updatedAt": "2026-03-09T00:53:13.675Z"
+    }
+  ],
+  "configuracoes": {
+    "id": 1,
+    "salao": {
+      "nome": "Serena",
+      "nomeFantasia": "Serena Beauty Studio",
+      "cnpj": "39.711.633/0001-50",
+      "ie": "123.456.789.000",
+      "endereco": {
+        "logradouro": "Rua Augusta, 1500",
+        "complemento": "Sala 45",
+        "bairro": "Consolação",
+        "cidade": "São Paulo",
+        "estado": "SP",
+        "cep": "01304-001"
+      },
+      "contato": {
+        "telefone": "(11) 3456-7890",
+        "celular": "(11) 98765-4321",
+        "email": "contato@serena.com.br",
+        "site": "www.serena.com.br",
+        "instagram": "@serenabeauty",
+        "facebook": "/serenabeauty",
+        "whatsapp": "5511987654321"
+      }
+    },
+    "horarioFuncionamento": {
+      "segunda": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "19:00"
+      },
+      "terca": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "19:00"
+      },
+      "quarta": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "19:00"
+      },
+      "quinta": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "19:00"
+      },
+      "sexta": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "19:00"
+      },
+      "sabado": {
+        "aberto": true,
+        "abertura": "09:00",
+        "fechamento": "17:00"
+      },
+      "domingo": {
+        "aberto": false,
+        "abertura": "00:00",
+        "fechamento": "00:00"
+      }
+    },
+    "notificacoes": {
+      "email": true,
+      "whatsapp": true,
+      "sms": false,
+      "lembreteAgendamento": 24,
+      "promocoes": true
+    },
+    "tema": {
+      "corPrimaria": "#9c27b0",
+      "corSecundaria": "#ff4081",
+      "modoEscuro": false
+    },
+    "updatedAt": "2026-03-08T23:13:09.770Z",
+    "createdAt": "2026-03-08T23:13:09.770Z"
+  },
+  "logs": [
+    {
+      "id": 1,
+      "usuarioId": 1,
+      "acao": "login",
+      "detalhes": "Usuário fez login",
+      "ip": "192.168.1.100",
+      "data": "2024-03-20T08:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "usuarioId": 1,
+      "acao": "criar_agendamento",
+      "detalhes": "Criou agendamento para Maria Silva",
+      "ip": "192.168.1.100",
+      "data": "2024-03-20T09:15:00.000Z"
+    },
+    {
+      "id": 3,
+      "usuarioId": 1,
+      "acao": "criar_usuario",
+      "detalhes": "Criou novo usuário: João Atendente",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T11:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "usuarioId": 1,
+      "acao": "criar_fornecedor",
+      "detalhes": "Criou fornecedor ENEL BRASIL S.A",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T21:59:04.650Z",
+      "entidade": "fornecedores",
+      "entidadeId": 1773007144246
+    }
+  ],
+  "clientes": [
+    {
+      "id": 1,
+      "nome": "Maria Silva",
+      "telefone": "(11) 99999-9999",
+      "email": "maria.silva@email.com",
+      "dataNascimento": "1985-05-15",
+      "endereco": "Rua das Flores, 123 - São Paulo, SP",
+      "observacoes": "Cliente VIP, prefere atendimento aos sábados",
+      "dataCadastro": "2023-01-10",
+      "ultimaVisita": "2026-03-09",
+      "totalGasto": 2915,
+      "status": "VIP",
+      "foto": null,
+      "indicadoPor": null,
+      "preferencias": {
+        "profissionalPreferido": 1,
+        "servicosPreferidos": [
+          1,
+          4
+        ],
+        "notificacoes": true
+      },
+      "updatedAt": "2026-03-09T00:58:26.507Z"
+    },
+    {
+      "id": 2,
+      "nome": "João Santos",
+      "telefone": "(11) 88888-8888",
+      "email": "joao.santos@email.com",
+      "dataNascimento": "1990-08-20",
+      "endereco": "Av. Paulista, 1000 - São Paulo, SP",
+      "observacoes": "Alérgico a alguns produtos",
+      "dataCadastro": "2023-02-15",
+      "ultimaVisita": "2026-03-08",
+      "totalGasto": 1010,
+      "status": "Regular",
+      "foto": null,
+      "indicadoPor": 1,
+      "preferencias": {
+        "profissionalPreferido": 2,
+        "servicosPreferidos": [
+          2,
+          3
+        ],
+        "notificacoes": true
+      },
+      "updatedAt": "2026-03-08T22:58:38.890Z"
+    },
+    {
+      "id": 3,
+      "nome": "Edilene Da Silva",
+      "email": "edilene.silvaamaro@gmail.com",
+      "telefone": "11989675268",
+      "telefone2": "",
+      "cpf": "331.200.588-40",
+      "rg": "",
+      "dataNascimento": "1983-02-08",
+      "cep": "04431080",
+      "logradouro": "Rua Lourenço Siqueira Preto",
+      "numero": "4",
+      "complemento": "A",
+      "bairro": "Jardim Selma",
+      "cidade": "São Paulo",
+      "estado": "SP",
+      "observacoes": "",
+      "status": "Novo",
+      "foto": null,
+      "preferencias": {
+        "profissionalPreferido": "",
+        "servicosPreferidos": [],
+        "notificacoes": true
+      },
+      "dataCadastro": "2026-03-08",
+      "ultimaVisita": "2026-03-08",
+      "totalGasto": 220,
+      "updatedAt": "2026-03-08T23:15:13.363Z"
+    }
+  ],
+  "profissionais": [
+    {
+      "id": 1,
+      "nome": "Ana Souza",
+      "especialidade": "Cabelo e Coloração",
+      "telefone": "(11) 99999-1111",
+      "email": "ana.souza@salao.com",
+      "dataContratacao": "2022-01-10",
+      "avaliacao": 4.8,
+      "status": "ativo",
+      "comissao": 40,
+      "servicosRealizados": 850,
+      "faturamento": 45000,
+      "foto": null,
+      "redes": {
+        "instagram": "@ana.souza",
+        "facebook": "ana.souza",
+        "whatsapp": "11999991111"
+      },
+      "horarioTrabalho": "09:00 - 18:00",
+      "diasTrabalho": [
+        "Segunda",
+        "Terça",
+        "Quarta",
+        "Quinta",
+        "Sexta"
+      ],
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 2,
+      "nome": "Carla Mendes",
+      "especialidade": "Manicure e Pedicure",
+      "telefone": "(11) 99999-2222",
+      "email": "carla.mendes@salao.com",
+      "dataContratacao": "2022-03-15",
+      "avaliacao": 4.9,
+      "status": "ativo",
+      "comissao": 35,
+      "servicosRealizados": 1200,
+      "faturamento": 38000,
+      "foto": null,
+      "redes": {
+        "instagram": "@carla.mendes",
+        "facebook": "carla.mendes",
+        "whatsapp": "11999992222"
+      },
+      "horarioTrabalho": "10:00 - 19:00",
+      "diasTrabalho": [
+        "Segunda",
+        "Terça",
+        "Quarta",
+        "Quinta",
+        "Sexta",
+        "Sábado"
+      ],
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    }
+  ],
+  "servicos": [
+    {
+      "id": 1,
+      "nome": "Corte de Cabelo Feminino",
+      "descricao": "Corte moderno com finalização",
+      "duracao": 60,
+      "preco": 120,
+      "categoria": "Cabelo",
+      "comissaoProfissional": 50,
+      "ativo": true,
+      "updatedAt": "2026-03-07T23:49:18.531Z"
+    },
+    {
+      "id": 2,
+      "nome": "Corte Masculino",
+      "descricao": "Corte tradicional",
+      "duracao": 45,
+      "preco": 60,
+      "categoria": "Cabelo",
+      "comissaoProfissional": 45,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 3,
+      "nome": "Manicure",
+      "descricao": "Manicure completa",
+      "duracao": 50,
+      "preco": 45,
+      "categoria": "Unhas",
+      "comissaoProfissional": 40,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 4,
+      "nome": "Pedicure",
+      "descricao": "Pedicure completa",
+      "duracao": 60,
+      "preco": 55,
+      "categoria": "Unhas",
+      "comissaoProfissional": 40,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 5,
+      "nome": "Escova",
+      "descricao": "Escova modeladora",
+      "duracao": 40,
+      "preco": 80,
+      "categoria": "Cabelo",
+      "comissaoProfissional": 40,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 6,
+      "nome": "Coloração",
+      "descricao": "Coloração completa",
+      "duracao": 120,
+      "preco": 250,
+      "categoria": "Cabelo",
+      "comissaoProfissional": 60,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 7,
+      "nome": "Hidratação",
+      "descricao": "Hidratação profunda",
+      "duracao": 60,
+      "preco": 150,
+      "categoria": "Cabelo",
+      "comissaoProfissional": 45,
+      "ativo": true,
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    }
+  ],
+  "agendamentos": [
+    {
+      "id": 1,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horario": "09:00",
+      "observacoes": "",
+      "status": "em_andamento",
+      "dataCriacao": "2026-03-07T10:30:00.000Z",
+      "updatedAt": "2026-03-08T22:57:21.498Z"
+    },
+    {
+      "id": 2,
+      "clienteId": 2,
+      "profissionalId": 1,
+      "servicoId": 2,
+      "data": "2026-03-08",
+      "horario": "10:00",
+      "status": "em_andamento",
+      "observacoes": "",
+      "dataCriacao": "2026-03-07T11:30:00.000Z",
+      "updatedAt": "2026-03-08T22:58:14.283Z"
+    },
+    {
+      "id": 3,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horario": "14:00",
+      "status": "confirmado",
+      "observacoes": "",
+      "dataCriacao": "2026-03-08T10:00:00.000Z",
+      "updatedAt": "2026-03-08T10:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "clienteId": 2,
+      "profissionalId": 1,
+      "servicoId": 4,
+      "data": "2026-03-08",
+      "horario": "14:00",
+      "status": "confirmado",
+      "observacoes": "",
+      "dataCriacao": "2026-03-07T13:30:00.000Z",
+      "updatedAt": "2026-03-07T13:30:00.000Z"
+    },
+    {
+      "id": 6,
+      "clienteId": 3,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horario": "13:30",
+      "observacoes": "",
+      "status": "em_andamento",
+      "dataCriacao": "2026-03-08T22:47:31.576Z",
+      "updatedAt": "2026-03-08T22:47:31.622Z"
+    }
+  ],
+  "atendimentos": [
+    {
+      "id": 1,
+      "agendamentoId": 1,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horaInicio": "09:05",
+      "horaFim": "10:00",
+      "status": "finalizado",
+      "observacoes": "Cliente satisfeita",
+      "createdAt": "2026-03-08T09:05:00.000Z",
+      "updatedAt": "2026-03-08T10:00:00.000Z",
+      "itensServico": [
+        {
+          "id": 1,
+          "nome": "Corte de Cabelo Feminino",
+          "preco": 120,
+          "duracao": 60,
+          "principal": true
+        }
+      ],
+      "itensProduto": [],
+      "valorTotal": 120
+    },
+    {
+      "id": 2,
+      "agendamentoId": 1,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horaInicio": "09:00",
+      "horaFim": null,
+      "status": "cancelado",
+      "observacoes": "Cliente não compareceu",
+      "createdAt": "2026-03-08T01:40:47.263Z",
+      "updatedAt": "2026-03-08T23:05:09.398Z",
+      "itensServico": [
+        {
+          "id": 1,
+          "nome": "Corte de Cabelo Feminino",
+          "preco": 120,
+          "duracao": 60,
+          "principal": true
+        }
+      ],
+      "itensProduto": [],
+      "valorTotal": 120
+    },
+    {
+      "id": 3,
+      "agendamentoId": 6,
+      "clienteId": 3,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horaInicio": "13:30",
+      "horaFim": "19:56",
+      "status": "finalizado",
+      "observacoes": "Atendimento longo",
+      "createdAt": "2026-03-08T22:47:31.576Z",
+      "updatedAt": "2026-03-08T22:56:06.395Z",
+      "itensServico": [
+        {
+          "id": 1,
+          "nome": "Corte de Cabelo Feminino",
+          "preco": 120,
+          "duracao": 60,
+          "principal": true
+        },
+        {
+          "id": 3,
+          "nome": "Manicure",
+          "preco": 45,
+          "duracao": 50,
+          "principal": false
+        },
+        {
+          "id": 4,
+          "nome": "Pedicure",
+          "preco": 55,
+          "duracao": 60,
+          "principal": false
+        }
+      ],
+      "itensProduto": [
+        {
+          "id": 1,
+          "nome": "Shampoo Profissional",
+          "preco": 35,
+          "quantidade": 1
+        }
+      ],
+      "valorTotal": 255
+    },
+    {
+      "id": 4,
+      "agendamentoId": 1,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-08",
+      "horaInicio": "09:00",
+      "horaFim": "19:57",
+      "status": "finalizado",
+      "observacoes": "",
+      "createdAt": "2026-03-08T22:57:21.471Z",
+      "updatedAt": "2026-03-08T22:57:45.418Z",
+      "itensServico": [
+        {
+          "id": 1,
+          "nome": "Corte de Cabelo Feminino",
+          "preco": 120,
+          "duracao": 60,
+          "principal": true
+        }
+      ],
+      "itensProduto": [],
+      "valorTotal": 120
+    },
+    {
+      "id": 5,
+      "agendamentoId": 2,
+      "clienteId": 2,
+      "profissionalId": 1,
+      "servicoId": 2,
+      "data": "2026-03-08",
+      "horaInicio": "10:00",
+      "horaFim": "19:58",
+      "status": "finalizado",
+      "observacoes": "",
+      "createdAt": "2026-03-08T22:58:12.859Z",
+      "updatedAt": "2026-03-08T22:58:38.871Z",
+      "itensServico": [
+        {
+          "id": 2,
+          "nome": "Corte Masculino",
+          "preco": 60,
+          "duracao": 45,
+          "principal": true
+        },
+        {
+          "id": 3,
+          "nome": "Manicure",
+          "preco": 45,
+          "duracao": 50,
+          "principal": false
+        }
+      ],
+      "itensProduto": [],
+      "valorTotal": 105
+    },
+    {
+      "id": 6,
+      "agendamentoId": 3,
+      "clienteId": 1,
+      "profissionalId": 1,
+      "servicoId": 1,
+      "data": "2026-03-09",
+      "horaInicio": "14:00",
+      "horaFim": "21:58",
+      "status": "finalizado",
+      "observacoes": "Pacote completo de beleza",
+      "createdAt": "2026-03-09T14:00:00.000Z",
+      "updatedAt": "2026-03-09T00:58:26.470Z",
+      "itensServico": [
+        {
+          "id": 1,
+          "nome": "Corte de Cabelo Feminino",
+          "preco": 120,
+          "duracao": 60,
+          "principal": true
+        },
+        {
+          "id": 3,
+          "nome": "Manicure",
+          "preco": 45,
+          "duracao": 50,
+          "principal": false
+        },
+        {
+          "id": 4,
+          "nome": "Pedicure",
+          "preco": 55,
+          "duracao": 60,
+          "principal": false
+        },
+        {
+          "id": 5,
+          "nome": "Escova",
+          "preco": 80,
+          "duracao": 40,
+          "principal": false
+        },
+        {
+          "id": 7,
+          "nome": "Hidratação",
+          "preco": 150,
+          "duracao": 60,
+          "principal": false
+        }
+      ],
+      "itensProduto": [
+        {
+          "id": 1,
+          "nome": "Shampoo Profissional",
+          "preco": 35,
+          "quantidade": 1
+        },
+        {
+          "id": 2,
+          "nome": "Condicionador Profissional",
+          "preco": 40,
+          "quantidade": 1
+        }
+      ],
+      "valorTotal": 525
+    }
+  ],
+  "pagamentos": [
+    {
+      "id": 1,
+      "atendimentoId": 1,
+      "clienteId": 1,
+      "valor": 120,
+      "formaPagamento": "pix",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-08T10:00:00.000Z",
+      "createdAt": "2026-03-08T10:00:00.000Z",
+      "updatedAt": "2026-03-08T10:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "atendimentoId": 2,
+      "clienteId": 1,
+      "valor": 120,
+      "formaPagamento": "pix",
+      "status": "pago",
+      "data": "2026-03-08T01:43:42.703Z",
+      "observacoes": ""
+    },
+    {
+      "id": 1773010086329,
+      "atendimentoId": 3,
+      "clienteId": 3,
+      "valor": 120,
+      "formaPagamento": "dinheiro",
+      "status": "pago",
+      "data": "2026-03-08T22:48:06.329Z",
+      "observacoes": ""
+    },
+    {
+      "id": 1773010565838,
+      "atendimentoId": 3,
+      "clienteId": 3,
+      "valor": 220,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-08T22:56:05.838Z",
+      "createdAt": "2026-03-08T22:56:05.884Z",
+      "updatedAt": "2026-03-08T22:56:05.884Z"
+    },
+    {
+      "id": 1773010665339,
+      "atendimentoId": 4,
+      "clienteId": 1,
+      "valor": 220,
+      "formaPagamento": "cartao_debito",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-08T22:57:45.339Z",
+      "createdAt": "2026-03-08T22:57:45.388Z",
+      "updatedAt": "2026-03-08T22:57:45.388Z"
+    },
+    {
+      "id": 1773010718814,
+      "atendimentoId": 5,
+      "clienteId": 2,
+      "valor": 160,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-08T22:58:38.814Z",
+      "createdAt": "2026-03-08T22:58:38.854Z",
+      "updatedAt": "2026-03-08T22:58:38.854Z"
+    },
+    {
+      "id": 1773016710450,
+      "atendimentoId": 7,
+      "clienteId": 1,
+      "valor": 80,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:38:30.450Z",
+      "createdAt": "2026-03-09T00:38:30.456Z",
+      "updatedAt": "2026-03-09T00:38:30.456Z"
+    },
+    {
+      "id": 1773016727177,
+      "atendimentoId": 7,
+      "clienteId": 1,
+      "valor": 330,
+      "formaPagamento": "cartao_debito",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:38:47.177Z",
+      "createdAt": "2026-03-09T00:38:47.184Z",
+      "updatedAt": "2026-03-09T00:38:47.184Z"
+    },
+    {
+      "id": 1773017333877,
+      "atendimentoId": 8,
+      "clienteId": 1,
+      "valor": 250,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:48:53.877Z",
+      "createdAt": "2026-03-09T00:48:53.882Z",
+      "updatedAt": "2026-03-09T00:48:53.882Z"
+    },
+    {
+      "id": 1773017339932,
+      "atendimentoId": 8,
+      "clienteId": 1,
+      "valor": 260,
+      "formaPagamento": "cartao_debito",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:48:59.932Z",
+      "createdAt": "2026-03-09T00:48:59.938Z",
+      "updatedAt": "2026-03-09T00:48:59.938Z"
+    },
+    {
+      "id": 1773017884449,
+      "atendimentoId": 6,
+      "clienteId": 1,
+      "valor": 500,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:58:10.273Z",
+      "createdAt": "2026-03-09T00:58:04.449Z",
+      "updatedAt": "2026-03-09T00:58:10.280Z"
+    },
+    {
+      "id": 1773017897616,
+      "atendimentoId": 6,
+      "clienteId": 1,
+      "valor": 25,
+      "formaPagamento": "cartao_debito",
+      "parcelas": 1,
+      "observacoes": "",
+      "status": "pago",
+      "data": "2026-03-09T00:58:17.616Z",
+      "createdAt": "2026-03-09T00:58:17.622Z",
+      "updatedAt": "2026-03-09T00:58:17.622Z"
+    }
+  ],
+  "produtos": [
+    {
+      "id": 1,
+      "nome": "Shampoo Profissional",
+      "descricao": "Shampoo para cabelos normais",
+      "categoria": "Higiene",
+      "precoCusto": 15,
+      "precoVenda": 35,
+      "quantidadeEstoque": 8,
+      "unidade": "un",
+      "fornecedor": "Beleza Distribuidora",
+      "estoqueMinimo": 10,
+      "localizacao": "Prateleira A1",
+      "codigoBarras": "7891234567890",
+      "updatedAt": "2026-03-08T00:06:05.774Z"
+    },
+    {
+      "id": 2,
+      "nome": "Condicionador Profissional",
+      "descricao": "Condicionador para todos os tipos de cabelo",
+      "categoria": "Higiene",
+      "precoCusto": 18,
+      "precoVenda": 40,
+      "quantidadeEstoque": 15,
+      "unidade": "un",
+      "fornecedor": "Beleza Distribuidora",
+      "estoqueMinimo": 5,
+      "localizacao": "Prateleira A1",
+      "codigoBarras": "7891234567891",
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    },
+    {
+      "id": 3,
+      "nome": "Máscara de Hidratação",
+      "descricao": "Máscara de tratamento intensivo",
+      "categoria": "Tratamento",
+      "precoCusto": 25,
+      "precoVenda": 60,
+      "quantidadeEstoque": 10,
+      "unidade": "un",
+      "fornecedor": "Beleza Distribuidora",
+      "estoqueMinimo": 5,
+      "localizacao": "Prateleira A2",
+      "codigoBarras": "7891234567892",
+      "updatedAt": "2026-03-09T00:48:45.656Z"
+    },
+    {
+      "id": 4,
+      "nome": "Esmalte Vermelho",
+      "descricao": "Esmalte vermelho cereja",
+      "categoria": "Esmaltes",
+      "precoCusto": 5,
+      "precoVenda": 15,
+      "quantidadeEstoque": 30,
+      "unidade": "un",
+      "fornecedor": "Distribuidora de Beleza",
+      "estoqueMinimo": 10,
+      "localizacao": "Prateleira B1",
+      "codigoBarras": "7891234567893",
+      "updatedAt": "2026-03-08T01:35:00.000Z"
+    }
+  ],
+  "vendas": [],
+  "caixa": {
+    "id": 1,
+    "dataAbertura": "2026-03-08T08:00:00.000Z",
+    "dataFechamento": null,
+    "saldoInicial": 500,
+    "saldoAtual": 620,
+    "movimentacoes": [
+      {
+        "id": 1,
+        "tipo": "entrada",
+        "valor": 120,
+        "descricao": "Pagamento do atendimento 1",
+        "data": "2026-03-08T10:00:00.000Z",
+        "forma": "pix"
+      },
+      {
+        "id": 2,
+        "tipo": "entrada",
+        "valor": 255,
+        "descricao": "Pagamento do atendimento 3",
+        "data": "2026-03-08T22:56:05.838Z",
+        "forma": "dinheiro"
+      },
+      {
+        "id": 3,
+        "tipo": "entrada",
+        "valor": 220,
+        "descricao": "Pagamento do atendimento 4",
+        "data": "2026-03-08T22:57:45.339Z",
+        "forma": "cartao_debito"
+      },
+      {
+        "id": 4,
+        "tipo": "entrada",
+        "valor": 160,
+        "descricao": "Pagamento do atendimento 5",
+        "data": "2026-03-08T22:58:38.814Z",
+        "forma": "dinheiro"
+      }
+    ],
+    "status": "aberto",
+    "responsavelId": 1,
+    "observacoes": ""
+  },
+  "fornecedores": [
+    {
+      "id": 1,
+      "nome": "Beleza Distribuidora",
+      "nomeFantasia": "Beleza Distribuidora",
+      "cnpj": "12.345.678/0001-90",
+      "ie": "123.456.789.000",
+      "telefone": "(11) 3333-4444",
+      "celular": "(11) 99999-0000",
+      "email": "contato@belezadistribuidora.com",
+      "site": "www.belezadistribuidora.com",
+      "categoria": "cosmeticos",
+      "rating": 4.5,
+      "endereco": {
+        "logradouro": "Av. Comercial, 500",
+        "numero": "500",
+        "complemento": "Sala 101",
+        "bairro": "Centro",
+        "cidade": "São Paulo",
+        "estado": "SP",
+        "cep": "01001-000"
+      },
+      "contato": {
+        "nome": "Carlos Silva",
+        "cargo": "Representante",
+        "telefone": "(11) 98888-7777",
+        "email": "carlos@belezadistribuidora.com"
+      },
+      "observacoes": "Fornecedor principal de cosméticos",
+      "status": "ativo",
+      "prazoEntrega": 5,
+      "formasPagamento": [
+        "boleto",
+        "pix",
+        "transferencia"
+      ],
+      "dataCadastro": "2023-01-15T10:00:00.000Z",
+      "totalCompras": 15,
+      "valorTotalCompras": 12500,
+      "updatedAt": "2026-03-08T10:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "nome": "Equipamentos Profissionais LTDA",
+      "nomeFantasia": "Equip Pro",
+      "cnpj": "98.765.432/0001-10",
+      "ie": "987.654.321.000",
+      "telefone": "(11) 4444-5555",
+      "celular": "(11) 97777-8888",
+      "email": "vendas@equippro.com",
+      "site": "www.equippro.com",
+      "categoria": "equipamentos",
+      "rating": 5,
+      "endereco": {
+        "logradouro": "Rua das Indústrias, 200",
+        "numero": "200",
+        "complemento": "Galpão 2",
+        "bairro": "Industrial",
+        "cidade": "São Paulo",
+        "estado": "SP",
+        "cep": "02002-000"
+      },
+      "contato": {
+        "nome": "Roberto Santos",
+        "cargo": "Gerente de Vendas",
+        "telefone": "(11) 96666-5555",
+        "email": "roberto@equippro.com"
+      },
+      "observacoes": "Fornecedor de cadeiras e equipamentos",
+      "status": "ativo",
+      "prazoEntrega": 10,
+      "formasPagamento": [
+        "boleto",
+        "cartao_credito",
+        "transferencia"
+      ],
+      "dataCadastro": "2023-02-20T10:00:00.000Z",
+      "totalCompras": 8,
+      "valorTotalCompras": 35000,
+      "updatedAt": "2026-03-08T10:00:00.000Z"
+    },
+    {
+      "id": 1773007144246,
+      "nome": "ENEL BRASIL S.A",
+      "nomeFantasia": "ENEL",
+      "cnpj": "07.523.555/0001-67",
+      "ie": "",
+      "telefone": "(21) 2716-1101 / (21) 2613-7037",
+      "celular": "",
+      "email": "fiscpro@enel.com",
+      "site": "https://www.enel.com.br/pt-saopaulo/servico/social-login.html",
+      "categoria": "materiais",
+      "rating": 0,
+      "endereco": {
+        "logradouro": "AVENIDA DAS NACOES UNIDAS",
+        "numero": "14401",
+        "complemento": "ANDAR 23 CONJ 231 TORRE B1 AROEIRA",
+        "bairro": "VILA GERTRUDES",
+        "cidade": "SAO PAULO",
+        "estado": "SP",
+        "cep": "04794-000"
+      },
+      "contato": {
+        "nome": "",
+        "cargo": "",
+        "telefone": "",
+        "email": ""
+      },
+      "observacoes": "",
+      "status": "ativo",
+      "prazoEntrega": 5,
+      "formasPagamento": [
+        "pix",
+        "cartao_debito",
+        "cartao_credito",
+        "dinheiro",
+        "boleto"
+      ],
+      "dataCadastro": "2026-03-08T21:59:04.246Z",
+      "totalCompras": 0,
+      "valorTotalCompras": 0,
+      "updatedAt": "2026-03-08T21:59:04.650Z",
+      "createdAt": "2026-03-08T21:59:04.650Z"
+    }
+  ],
+  "compras": [
+    {
+      "id": 1,
+      "numeroPedido": "PED-20230301",
+      "fornecedorId": 1,
+      "dataCompra": "2026-03-01",
+      "dataPrevista": "2026-03-06",
+      "dataEntrega": "2026-03-05",
+      "status": "entregue",
+      "itens": [
+        {
+          "produtoId": 1,
+          "produtoNome": "Shampoo Profissional",
+          "quantidade": 20,
+          "valorUnitario": 15,
+          "total": 300
+        },
+        {
+          "produtoId": 2,
+          "produtoNome": "Condicionador Profissional",
+          "quantidade": 15,
+          "valorUnitario": 18,
+          "total": 270
+        }
+      ],
+      "valorTotal": 570,
+      "formaPagamento": "boleto",
+      "parcelas": 1,
+      "observacoes": "Primeira compra do ano",
+      "dataCriacao": "2026-03-01T09:00:00.000Z",
+      "updatedAt": "2026-03-05T14:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "numeroPedido": "PED-20230315",
+      "fornecedorId": 2,
+      "dataCompra": "2026-03-15",
+      "dataPrevista": "2026-03-25",
+      "dataEntrega": null,
+      "status": "aprovada",
+      "itens": [
+        {
+          "produtoId": null,
+          "produtoNome": "Cadeira de Corte Profissional",
+          "quantidade": 2,
+          "valorUnitario": 850,
+          "total": 1700
+        }
+      ],
+      "valorTotal": 1700,
+      "formaPagamento": "transferencia",
+      "parcelas": 1,
+      "observacoes": "Compra de novas cadeiras",
+      "dataCriacao": "2026-03-15T10:00:00.000Z",
+      "updatedAt": "2026-03-15T10:30:00.000Z"
+    }
+  ],
+  "transacoes": [
+    {
+      "id": 1,
+      "tipo": "receita",
+      "descricao": "Pagamento de Atendimento - Maria Silva",
+      "valor": 120,
+      "data": "2026-03-08",
+      "dataVencimento": "2026-03-08",
+      "dataPagamento": "2026-03-08T10:00:00.000Z",
+      "categoria": "Serviços",
+      "formaPagamento": "pix",
+      "status": "pago",
+      "clienteId": 1,
+      "atendimentoId": 1,
+      "observacoes": "",
+      "recorrente": false
+    },
+    {
+      "id": 2,
+      "tipo": "receita",
+      "descricao": "Pagamento de Atendimento - João Santos",
+      "valor": 60,
+      "data": "2026-03-08",
+      "dataVencimento": "2026-03-08",
+      "dataPagamento": "2026-03-08T11:00:00.000Z",
+      "categoria": "Serviços",
+      "formaPagamento": "dinheiro",
+      "status": "pago",
+      "clienteId": 2,
+      "atendimentoId": 2,
+      "observacoes": "",
+      "recorrente": false
+    },
+    {
+      "id": 3,
+      "tipo": "despesa",
+      "descricao": "Compra de Produtos - Beleza Distribuidora",
+      "valor": 570,
+      "data": "2026-03-01",
+      "dataVencimento": "2026-03-10",
+      "dataPagamento": "2026-03-09T00:53:37.699Z",
+      "categoria": "Compras",
+      "formaPagamento": "boleto",
+      "status": "pago",
+      "fornecedorId": 1,
+      "compraId": 1,
+      "observacoes": "Boleto bancário",
+      "recorrente": false,
+      "updatedAt": "2026-03-09T00:53:37.705Z"
+    },
+    {
+      "id": 4,
+      "tipo": "despesa",
+      "descricao": "Aluguel",
+      "valor": 3000,
+      "data": "2026-03-01",
+      "dataVencimento": "2026-03-10",
+      "dataPagamento": "2026-03-05T09:00:00.000Z",
+      "categoria": "Aluguel",
+      "formaPagamento": "transferencia",
+      "status": "pago",
+      "observacoes": "Aluguel do salão",
+      "recorrente": true
+    },
+    {
+      "id": 5,
+      "tipo": "despesa",
+      "descricao": "Energia Elétrica",
+      "valor": 450,
+      "data": "2026-03-05",
+      "dataVencimento": "2026-03-15",
+      "dataPagamento": null,
+      "categoria": "Utilidades",
+      "formaPagamento": "boleto",
+      "status": "pendente",
+      "observacoes": "Conta de luz",
+      "recorrente": true
+    },
+    {
+      "id": 6,
+      "tipo": "receita",
+      "descricao": "Venda de Produto - Shampoo",
+      "valor": 35,
+      "data": "2026-03-08",
+      "dataVencimento": "2026-03-08",
+      "dataPagamento": "2026-03-08T15:00:00.000Z",
+      "categoria": "Vendas",
+      "formaPagamento": "dinheiro",
+      "status": "pago",
+      "clienteId": 1,
+      "observacoes": "Venda direta",
+      "recorrente": false
+    }
+  ],
+  "contas_pagar": [
+    {
+      "id": 1,
+      "descricao": "Aluguel - Março/2026",
+      "valor": 3000,
+      "dataVencimento": "2026-03-10",
+      "dataPagamento": "2026-03-05",
+      "categoria": "Aluguel",
+      "fornecedor": "Imobiliária Centro",
+      "status": "pago",
+      "recorrente": true,
+      "observacoes": "Aluguel do salão"
+    },
+    {
+      "id": 2,
+      "descricao": "Energia Elétrica",
+      "valor": 450,
+      "dataVencimento": "2026-03-15",
+      "dataPagamento": "2026-03-09T00:53:51.219Z",
+      "categoria": "Luz",
+      "fornecedor": "Enel",
+      "status": "pago",
+      "recorrente": true,
+      "observacoes": "Conta de luz - fevereiro",
+      "fornecedorId": 1773007144246,
+      "formaPagamento": "boleto",
+      "parcelas": 1,
+      "updatedAt": "2026-03-09T00:53:51.224Z"
+    },
+    {
+      "id": 3,
+      "descricao": "Compra de Produtos - Beleza Distribuidora",
+      "valor": 570,
+      "dataVencimento": "2026-03-10",
+      "dataPagamento": null,
+      "categoria": "Compras",
+      "fornecedor": "Beleza Distribuidora",
+      "status": "pendente",
+      "recorrente": false,
+      "observacoes": "Pedido #PED-20230301",
+      "fornecedorId": 1,
+      "formaPagamento": "boleto",
+      "parcelas": 1,
+      "updatedAt": "2026-03-08T21:55:11.123Z"
+    }
+  ],
+  "contas_receber": [
+    {
+      "id": 1,
+      "descricao": "Atendimento - Maria Silva",
+      "valor": 120,
+      "dataVencimento": "2026-03-08",
+      "dataRecebimento": "2026-03-08",
+      "categoria": "Serviços",
+      "cliente": "Maria Silva",
+      "status": "recebido",
+      "clienteId": 1,
+      "formaPagamento": "dinheiro",
+      "observacoes": "",
+      "parcelas": 1,
+      "updatedAt": "2026-03-08T21:52:59.992Z"
+    },
+    {
+      "id": 2,
+      "descricao": "Atendimento - João Santos",
+      "valor": 60,
+      "dataVencimento": "2026-03-08",
+      "dataRecebimento": "2026-03-08",
+      "categoria": "Serviços",
+      "cliente": "João Santos",
+      "status": "recebido",
+      "clienteId": 2,
+      "formaPagamento": "dinheiro",
+      "observacoes": "",
+      "parcelas": 1,
+      "updatedAt": "2026-03-08T21:53:08.850Z"
+    },
+    {
+      "id": 3,
+      "descricao": "Pacote de 5 cortes - Cliente VIP",
+      "valor": 500,
+      "dataVencimento": "2026-03-20",
+      "dataRecebimento": null,
+      "categoria": "Pacotes",
+      "cliente": "Maria Silva",
+      "status": "pendente",
+      "observacoes": "Pacote promocional",
+      "clienteId": 1,
+      "formaPagamento": "dinheiro",
+      "parcelas": 1,
+      "updatedAt": "2026-03-08T21:54:28.434Z"
+    }
+  ],
+  "fluxo_caixa": [
+    {
+      "id": 1,
+      "data": "2026-03-01",
+      "receitas": 0,
+      "despesas": 3000,
+      "saldo": -3000,
+      "descricao": "Aluguel"
+    },
+    {
+      "id": 2,
+      "data": "2026-03-05",
+      "receitas": 0,
+      "despesas": 570,
+      "saldo": -3570,
+      "descricao": "Compra de produtos"
+    },
+    {
+      "id": 3,
+      "data": "2026-03-08",
+      "receitas": 755,
+      "despesas": 0,
+      "saldo": -2815,
+      "descricao": "Atendimentos do dia"
+    }
+  ],
+  "historico_atendimentos": [
+    {
+      "id": 1,
+      "atendimentoId": 1,
+      "data": "2026-03-08",
+      "horaInicio": "09:05",
+      "horaFim": "10:00",
+      "cliente": "Maria Silva",
+      "profissional": "Ana Souza",
+      "servicos": [
+        "Corte de Cabelo Feminino"
+      ],
+      "valor": 120,
+      "formaPagamento": "pix",
+      "observacoes": ""
+    },
+    {
+      "id": 2,
+      "atendimentoId": 3,
+      "data": "2026-03-08",
+      "horaInicio": "13:30",
+      "horaFim": "19:56",
+      "cliente": "Edilene Da Silva",
+      "profissional": "Ana Souza",
+      "servicos": [
+        "Corte de Cabelo Feminino",
+        "Manicure",
+        "Pedicure"
+      ],
+      "valor": 255,
+      "formaPagamento": "dinheiro",
+      "observacoes": "Atendimento longo"
+    },
+    {
+      "id": 3,
+      "atendimentoId": 4,
+      "data": "2026-03-08",
+      "horaInicio": "09:00",
+      "horaFim": "19:57",
+      "cliente": "Maria Silva",
+      "profissional": "Ana Souza",
+      "servicos": [
+        "Corte de Cabelo Feminino"
+      ],
+      "valor": 120,
+      "formaPagamento": "cartao_debito",
+      "observacoes": ""
+    },
+    {
+      "id": 4,
+      "atendimentoId": 5,
+      "data": "2026-03-08",
+      "horaInicio": "10:00",
+      "horaFim": "19:58",
+      "cliente": "João Santos",
+      "profissional": "Ana Souza",
+      "servicos": [
+        "Corte Masculino",
+        "Manicure"
+      ],
+      "valor": 105,
+      "formaPagamento": "dinheiro",
+      "observacoes": ""
+    }
+  ],
+  "auditoria": [
+    {
+      "id": 1,
+      "usuario": "Michael Rodrigo Raimundo",
+      "usuarioId": 1,
+      "acao": "LOGIN",
+      "detalhes": "Usuário fez login no sistema",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T08:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "usuario": "Michael Rodrigo Raimundo",
+      "usuarioId": 1,
+      "acao": "CRIAR",
+      "detalhes": "Criou novo usuário: Maria Atendente",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T09:15:00.000Z",
+      "entidade": "usuarios",
+      "entidadeId": 3
+    },
+    {
+      "id": 3,
+      "usuario": "Michael Rodrigo Raimundo",
+      "usuarioId": 1,
+      "acao": "ATUALIZAR",
+      "detalhes": "Atualizou preço do serviço Corte Masculino",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T10:30:00.000Z",
+      "entidade": "servicos",
+      "entidadeId": 2
+    },
+    {
+      "id": 4,
+      "usuario": "João Gerente",
+      "usuarioId": 2,
+      "acao": "EXCLUIR",
+      "detalhes": "Excluiu agendamento #3",
+      "ip": "192.168.1.101",
+      "data": "2026-03-08T11:00:00.000Z",
+      "entidade": "agendamentos",
+      "entidadeId": 3
+    },
+    {
+      "id": 5,
+      "usuario": "Maria Atendente",
+      "usuarioId": 3,
+      "acao": "CRIAR",
+      "detalhes": "Criou novo atendimento para João Santos",
+      "ip": "192.168.1.102",
+      "data": "2026-03-08T14:00:00.000Z",
+      "entidade": "atendimentos",
+      "entidadeId": 2
+    },
+    {
+      "id": 6,
+      "usuario": "Michael Rodrigo Raimundo",
+      "usuarioId": 1,
+      "acao": "CRIAR",
+      "detalhes": "Criou fornecedor ENEL BRASIL S.A",
+      "ip": "192.168.1.100",
+      "data": "2026-03-08T21:59:04.650Z",
+      "entidade": "fornecedores",
+      "entidadeId": 1773007144246
+    }
+  ]
+}
