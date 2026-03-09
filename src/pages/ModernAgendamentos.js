@@ -50,6 +50,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useDados } from '../hooks/useDados';
 import { atendimentoService } from '../services/atendimentoService';
+import api from '../services/api';
 
 // Funções auxiliares de data
 const getDaysInMonth = (date) => {
@@ -84,7 +85,7 @@ const addMonths = (date, months) => {
 
 const getWeekDays = (date) => {
   const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay() + 1); // Segunda-feira
+  start.setDate(start.getDate() - start.getDay() + 1);
   const days = [];
   for (let i = 0; i < 7; i++) {
     days.push(addDays(start, i));
@@ -345,10 +346,16 @@ function ModernAgendamentos() {
       }
 
       if (selectedAppointment) {
-        await atualizar(selectedAppointment.id, formData);
+        await atualizar(selectedAppointment.id, {
+          ...formData,
+          updatedAt: new Date().toISOString()
+        });
         toast.success('Agendamento atualizado!');
       } else {
-        await adicionar(formData);
+        await adicionar({
+          ...formData,
+          dataCriacao: new Date().toISOString()
+        });
         toast.success('Agendamento criado!');
       }
       
@@ -358,18 +365,62 @@ function ModernAgendamentos() {
     }
   };
 
-  // Função para iniciar atendimento (agora dentro do componente)
+  // FUNÇÃO CORRIGIDA - iniciarAtendimento
   const iniciarAtendimento = async (agendamento) => {
+    console.log('🎯 Função iniciarAtendimento chamada com:', agendamento);
+    
     try {
+      // Validar se o agendamento existe
+      if (!agendamento) {
+        toast.error('Agendamento não encontrado');
+        return;
+      }
+
+      if (!agendamento.id) {
+        toast.error('ID do agendamento não encontrado');
+        return;
+      }
+
+      // Mostrar loading
+      const toastId = toast.loading('Iniciando atendimento...');
+
+      // Chamar o serviço para criar o atendimento
+      console.log('📞 Chamando atendimentoService.iniciarAtendimento com ID:', agendamento.id);
       const atendimento = await atendimentoService.iniciarAtendimento(agendamento.id);
+      
+      console.log('✅ Resposta do serviço:', atendimento);
+
+      // Verificar se o atendimento foi criado
+      if (!atendimento || !atendimento.id) {
+        throw new Error('Atendimento criado sem ID');
+      }
+
+      // Fechar loading e mostrar sucesso
+      toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
+      
+      // Navegar para a página do atendimento
+      console.log('➡️ Navegando para:', `/atendimento/${atendimento.id}`);
       navigate(`/atendimento/${atendimento.id}`);
+      
     } catch (error) {
-      toast.error('Erro ao iniciar atendimento');
+      console.error('❌ Erro detalhado:', error);
+      
+      let mensagem = 'Erro ao iniciar atendimento';
+      if (error.response) {
+        mensagem = error.response.data?.message || `Erro ${error.response.status}`;
+      } else if (error.request) {
+        mensagem = 'Erro de conexão. Verifique se o servidor está rodando.';
+      } else {
+        mensagem = error.message || mensagem;
+      }
+      
+      toast.error(mensagem);
     }
   };
 
   const continuarAtendimento = (atendimento) => {
+    console.log('Continuando atendimento:', atendimento);
     navigate(`/atendimento/${atendimento.agendamentoId || atendimento.id}`);
   };
 
@@ -811,7 +862,10 @@ function ModernAgendamentos() {
                                                   variant="contained"
                                                   color="success"
                                                   startIcon={<PlayIcon />}
-                                                  onClick={() => iniciarAtendimento(event)}
+                                                  onClick={() => {
+                                                    console.log('Botão Iniciar clicado para:', event);
+                                                    iniciarAtendimento(event);
+                                                  }}
                                                 >
                                                   Iniciar
                                                 </Button>
