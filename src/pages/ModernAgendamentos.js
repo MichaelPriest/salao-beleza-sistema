@@ -155,34 +155,96 @@ function ModernAgendamentos() {
     }
   };
 
-  // Funções CRUD
   const adicionarAgendamento = async (dados) => {
     try {
-      dados.id = Date.now();
-      dados.dataCriacao = new Date().toISOString();
-      dados.updatedAt = new Date().toISOString();
+      // Validar dados obrigatórios
+      if (!dados.clienteId || !dados.profissionalId || !dados.servicoId || !dados.data || !dados.horario) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+  
+      // Verificar se o ID já existe
+      const novoId = Date.now();
       
-      const response = await api.post('/agendamentos', dados);
-      setAgendamentos([...agendamentos, response.data]);
+      // Preparar dados no formato correto para o JSON Server
+      const novoAgendamento = {
+        id: novoId,
+        clienteId: parseInt(dados.clienteId),
+        profissionalId: parseInt(dados.profissionalId),
+        servicoId: parseInt(dados.servicoId),
+        data: dados.data,
+        horario: dados.horario,
+        observacoes: dados.observacoes || '',
+        status: dados.status || 'pendente',
+        dataCriacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+  
+      console.log('📝 Criando agendamento:', novoAgendamento);
+  
+      // Fazer a requisição POST
+      const response = await api.post('/agendamentos', novoAgendamento);
+      
+      console.log('✅ Agendamento criado:', response.data);
+      
+      // Atualizar a lista local
+      setAgendamentos(prev => [...prev, response.data]);
+      
       toast.success('Agendamento criado com sucesso!');
       return response.data;
+      
     } catch (error) {
-      console.error('Erro ao adicionar agendamento:', error);
-      toast.error('Erro ao criar agendamento');
+      console.error('❌ Erro detalhado ao adicionar agendamento:', error);
+      
+      // Mostrar mensagem de erro mais específica
+      if (error.response) {
+        console.error('Resposta do servidor:', error.response.data);
+        toast.error(`Erro ${error.response.status}: ${error.response.data?.message || 'Erro ao criar agendamento'}`);
+      } else if (error.request) {
+        toast.error('Erro de conexão. Verifique se o servidor está rodando.');
+      } else {
+        toast.error('Erro ao criar agendamento: ' + error.message);
+      }
+      
       throw error;
     }
   };
 
   const atualizarAgendamento = async (id, dados) => {
     try {
-      dados.updatedAt = new Date().toISOString();
-      const response = await api.patch(`/agendamentos/${id}`, dados);
-      setAgendamentos(agendamentos.map(item => item.id === id ? response.data : item));
+      // Preparar dados no formato correto
+      const dadosAtualizados = {
+        clienteId: parseInt(dados.clienteId),
+        profissionalId: parseInt(dados.profissionalId),
+        servicoId: parseInt(dados.servicoId),
+        data: dados.data,
+        horario: dados.horario,
+        observacoes: dados.observacoes || '',
+        status: dados.status || 'pendente',
+        updatedAt: new Date().toISOString()
+      };
+  
+      console.log('📝 Atualizando agendamento:', id, dadosAtualizados);
+  
+      const response = await api.patch(`/agendamentos/${id}`, dadosAtualizados);
+      
+      console.log('✅ Agendamento atualizado:', response.data);
+      
+      // Atualizar a lista local
+      setAgendamentos(prev => prev.map(item => item.id === id ? response.data : item));
+      
       toast.success('Agendamento atualizado com sucesso!');
       return response.data;
+      
     } catch (error) {
-      console.error('Erro ao atualizar agendamento:', error);
-      toast.error('Erro ao atualizar agendamento');
+      console.error('❌ Erro ao atualizar agendamento:', error);
+      
+      if (error.response) {
+        toast.error(`Erro ${error.response.status}: ${error.response.data?.message || 'Erro ao atualizar agendamento'}`);
+      } else {
+        toast.error('Erro ao atualizar agendamento');
+      }
+      
       throw error;
     }
   };
