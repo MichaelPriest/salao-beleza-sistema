@@ -164,7 +164,7 @@ function AnimatedRoutes() {
           <Route path="/usuarios" element={<GerenciarUsuarios />} />
           <Route path="/historico" element={<HistoricoAtendimentos />} />
           <Route path="/auditoria" element={<Auditoria />} />
-          <Route path="/debug" element={<Debug />} />
+
           {/* Perfil e Configurações */}
           <Route path="/perfil" element={<ModernPerfil />} />
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
