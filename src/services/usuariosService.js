@@ -3,50 +3,84 @@ import api from './api';
 export const usuariosService = {
   // Login
   login: async (email, senha) => {
-    const response = await api.get(`/usuarios?email=${email}&senha=${senha}`);
-    if (response.data.length > 0) {
-      localStorage.setItem('usuario', JSON.stringify(response.data[0]));
-      return response.data[0];
+    try {
+      console.log('Tentando login com:', email, senha);
+      
+      // Buscar usuário por email
+      const response = await api.get(`/usuarios?email=${email}`);
+      console.log('Resposta da API:', response.data);
+      
+      const usuarios = response.data;
+      
+      if (usuarios.length === 0) {
+        throw new Error('Usuário não encontrado');
+      }
+      
+      const usuario = usuarios[0];
+      
+      // Verificar senha
+      if (usuario.senha !== senha) {
+        throw new Error('Senha incorreta');
+      }
+      
+      // Remover senha antes de salvar
+      const { senha: _, ...usuarioSemSenha } = usuario;
+      
+      // Salvar no localStorage
+      localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
+      
+      // Disparar evento para notificar outros componentes
+      window.dispatchEvent(new Event('usuarioAtualizado'));
+      
+      return usuarioSemSenha;
+    } catch (error) {
+      console.error('Erro detalhado:', error);
+      throw error;
     }
-    throw new Error('Usuário ou senha inválidos');
   },
 
   // Logout
   logout: () => {
     localStorage.removeItem('usuario');
+    window.dispatchEvent(new Event('usuarioAtualizado'));
   },
 
-  // Usuário atual
+  // Obter usuário atual
   getUsuarioAtual: () => {
-    const usuario = localStorage.getItem('usuario');
-    return usuario ? JSON.parse(usuario) : null;
-  },
-
-  // Atualizar perfil
-  atualizarPerfil: async (id, dados) => {
-    const response = await api.patch(`/usuarios/${id}`, dados);
-    localStorage.setItem('usuario', JSON.stringify(response.data));
-    return response.data;
-  },
-
-  // Alterar senha
-  alterarSenha: async (id, senhaAtual, novaSenha) => {
-    const usuario = await api.get(`/usuarios/${id}`);
-    if (usuario.data.senha !== senhaAtual) {
-      throw new Error('Senha atual incorreta');
+    try {
+      const user = localStorage.getItem('usuario');
+      return user ? JSON.parse(user) : null;
+    } catch (error) {
+      console.error('Erro ao recuperar usuário:', error);
+      return null;
     }
-    const response = await api.patch(`/usuarios/${id}`, { senha: novaSenha });
-    return response.data;
   },
 
-  // Buscar permissões
-  getPermissoes: (usuario) => {
-    return usuario?.permissoes || [];
+  // Verificar se está logado
+  isLoggedIn: () => {
+    return !!localStorage.getItem('usuario');
   },
 
-  // Verificar permissão
-  temPermissao: (usuario, permissao) => {
-    const permissoes = usuario?.permissoes || [];
-    return permissoes.includes(permissao) || permissoes.includes('admin');
+  // Atualizar usuário
+  atualizar: async (id, dados) => {
+    try {
+      const response = await api.patch(`/usuarios/${id}`, dados);
+      const usuario = response.data;
+      
+      // Atualizar localStorage
+      const usuarioAtual = usuariosService.getUsuarioAtual();
+      if (usuarioAtual && usuarioAtual.id === id) {
+        const { senha, ...usuarioSemSenha } = usuario;
+        localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
+        window.dispatchEvent(new Event('usuarioAtualizado'));
+      }
+      
+      return usuario;
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      throw error;
+    }
   }
 };
+
+export default usuariosService;
