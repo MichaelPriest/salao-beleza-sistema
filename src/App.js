@@ -16,7 +16,6 @@ import ModernLogin from './pages/ModernLogin';
 import ModernPerfil from './pages/ModernPerfil';
 import ModernNotificacoes from './pages/ModernNotificacoes';
 import ModernConfiguracoes from './pages/ModernConfiguracoes';
-import TesteAPI from './pages/TesteAPI';
 
 // Pages Operacionais
 import ModernClientes from './pages/ModernClientes';
@@ -43,6 +42,9 @@ import Entradas from './pages/Entradas';
 import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
+
+// Página de Teste (opcional, pode remover depois)
+import TesteAPI from './pages/TesteAPI';
 
 const theme = createTheme({
   palette: {
@@ -134,7 +136,7 @@ function AnimatedRoutes() {
           <Route path="/login" element={<ModernLogin />} />
           <Route path="/teste" element={<TesteAPI />} />
           
-          {/* Rotas Privadas - Dashboard */}
+          {/* Rotas Privadas */}
           <Route path="/" element={<ModernDashboard />} />
           
           {/* Operacional */}
@@ -144,7 +146,7 @@ function AnimatedRoutes() {
           <Route path="/agendamentos" element={<ModernAgendamentos />} />
           <Route path="/atendimentos" element={<ModernAtendimentos />} />
           <Route path="/atendimento/:id" element={<ModernAtendimento />} />
-          <Route path="/teste-api" element={<TesteAPI />} />
+          
           {/* Financeiro */}
           <Route path="/financeiro" element={<ModernFinanceiro />} />
           <Route path="/financeiro/pagar" element={<ContasPagar />} />
@@ -167,6 +169,9 @@ function AnimatedRoutes() {
           <Route path="/perfil" element={<ModernPerfil />} />
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
+          
+          {/* Rota fallback - 404 */}
+          <Route path="*" element={<div>Página não encontrada</div>} />
         </Routes>
       </motion.div>
     </AnimatePresence>
