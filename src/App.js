@@ -43,6 +43,7 @@ import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import DiagnosticoCompleto from './pages/DiagnosticoCompleto';
+import DiagnosticoSimples from './pages/DiagnosticoSimples';
 
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
@@ -172,6 +173,8 @@ function AnimatedRoutes() {
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           // Adicione esta rota em AnimatedRoutes
           <Route path="/diagnostico" element={<DiagnosticoCompleto />} />
+          // Dentro do componente AnimatedRoutes, adicione a rota:
+          <Route path="/diagnostico" element={<DiagnosticoSimples />} />
 
           {/* Rota fallback - 404 */}
           <Route path="*" element={<div>Página não encontrada</div>} />
