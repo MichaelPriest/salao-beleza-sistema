@@ -1,4 +1,8 @@
-import api from './api';
+// src/services/usuariosService.js
+import { firebaseService } from './firebase';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 export const usuariosService = {
   // Login
@@ -6,45 +10,67 @@ export const usuariosService = {
     try {
       console.log('🔑 Tentando login com:', email);
       
-      // Buscar usuário por email
-      const response = await api.get(`/usuarios?email=${email}`);
-      console.log('📥 Resposta da API:', response.data);
+      const auth = getAuth();
       
-      const usuarios = response.data;
+      // Autenticar com Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
+      const user = userCredential.user;
+      
+      // Buscar dados adicionais do usuário no Firestore
+      const usuarios = await firebaseService.query('usuarios', [
+        { field: 'email', operator: '==', value: email }
+      ]);
       
       if (!usuarios || usuarios.length === 0) {
-        throw new Error('Usuário não encontrado');
+        throw new Error('Usuário não encontrado no banco de dados');
       }
       
-      const usuario = usuarios[0];
+      const usuarioData = usuarios[0];
       
-      // Verificar senha
-      if (usuario.senha !== senha) {
-        throw new Error('Senha incorreta');
-      }
-      
-      // Remover senha antes de salvar
-      const { senha: _, ...usuarioSemSenha } = usuario;
+      // Combinar dados do Firebase Auth com dados do Firestore
+      const usuarioCompleto = {
+        id: user.uid,
+        ...usuarioData,
+        email: user.email
+      };
       
       // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
+      localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
       
       // Disparar evento para notificar outros componentes
-      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioSemSenha }));
+      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioCompleto }));
       
-      console.log('✅ Login bem-sucedido:', usuarioSemSenha.nome);
-      return usuarioSemSenha;
+      console.log('✅ Login bem-sucedido:', usuarioCompleto.nome);
+      return usuarioCompleto;
+      
     } catch (error) {
       console.error('❌ Erro no login:', error);
+      
+      // Tratar erros específicos do Firebase
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        throw new Error('Email ou senha inválidos');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Muitas tentativas. Tente novamente mais tarde');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Erro de conexão. Verifique sua internet');
+      }
+      
       throw error;
     }
   },
 
   // Logout
-  logout: () => {
-    localStorage.removeItem('usuario');
-    window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: null }));
-    console.log('👋 Logout realizado');
+  logout: async () => {
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+      localStorage.removeItem('usuario');
+      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: null }));
+      console.log('👋 Logout realizado');
+    } catch (error) {
+      console.error('❌ Erro no logout:', error);
+      throw error;
+    }
   },
 
   // Obter usuário atual
@@ -66,20 +92,46 @@ export const usuariosService = {
   // Atualizar usuário
   atualizar: async (id, dados) => {
     try {
-      const response = await api.patch(`/usuarios/${id}`, dados);
-      const usuario = response.data;
+      // Atualizar no Firestore
+      await firebaseService.update('usuarios', id, dados);
       
       // Atualizar localStorage se for o usuário atual
       const usuarioAtual = usuariosService.getUsuarioAtual();
       if (usuarioAtual && usuarioAtual.id === id) {
-        const { senha, ...usuarioSemSenha } = usuario;
-        localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
-        window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioSemSenha }));
+        const usuarioAtualizado = { ...usuarioAtual, ...dados };
+        localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+        window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioAtualizado }));
       }
       
-      return usuario;
+      return { id, ...dados };
     } catch (error) {
       console.error('Erro ao atualizar usuário:', error);
+      throw error;
+    }
+  },
+
+  // Criar usuário (para cadastro)
+  criar: async (dados) => {
+    try {
+      const novoUsuario = await firebaseService.add('usuarios', dados);
+      return novoUsuario;
+    } catch (error) {
+      console.error('Erro ao criar usuário:', error);
+      throw error;
+    }
+  },
+
+  // Buscar usuário por ID
+  getById: async (id) => {
+    try {
+      const docRef = doc(db, 'usuarios', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao buscar usuário:', error);
       throw error;
     }
   }
