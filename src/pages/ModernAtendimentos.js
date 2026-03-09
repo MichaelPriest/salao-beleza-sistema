@@ -52,6 +52,9 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useDados } from '../hooks/useDados';
 
+// Importar o logo (certifique-se de que o caminho está correto)
+import logo from '../assets/logo.png';
+
 function ModernAtendimentos() {
   const navigate = useNavigate();
   const [page, setPage] = useState(0);
@@ -261,22 +264,95 @@ function ModernAtendimentos() {
       contato: { telefone: '', email: '' }
     };
 
+    // Converter logo para base64 se necessário
+    const logoUrl = logo || '';
+
     const estilo = `
       <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #9c27b0; padding-bottom: 20px; }
-        .empresa-nome { color: #9c27b0; font-size: 24px; font-weight: bold; margin: 0; }
-        .empresa-info { color: #666; font-size: 12px; margin: 5px 0; }
-        .titulo { color: #9c27b0; font-size: 18px; margin: 20px 0 10px; }
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
-        .info-item { margin: 5px 0; }
-        .info-label { color: #666; font-size: 12px; }
-        .info-value { font-weight: bold; margin: 0; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th { background-color: #9c27b0; color: white; padding: 10px; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #ddd; }
-        .total { font-size: 18px; font-weight: bold; color: #9c27b0; margin-top: 20px; text-align: right; }
-        .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 20px; }
+        .header { 
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 30px; 
+          border-bottom: 2px solid #9c27b0; 
+          padding-bottom: 20px;
+        }
+        .logo-container {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+        .logo {
+          max-height: 60px;
+          max-width: 150px;
+        }
+        .empresa-info {
+          text-align: right;
+        }
+        .empresa-nome { 
+          color: #9c27b0; 
+          font-size: 24px; 
+          font-weight: bold; 
+          margin: 0; 
+        }
+        .empresa-detalhe { 
+          color: #666; 
+          font-size: 12px; 
+          margin: 5px 0; 
+        }
+        .titulo { 
+          color: #9c27b0; 
+          font-size: 18px; 
+          margin: 20px 0 10px; 
+        }
+        .info-grid { 
+          display: grid; 
+          grid-template-columns: repeat(2, 1fr); 
+          gap: 10px; 
+          margin: 20px 0; 
+        }
+        .info-item { 
+          margin: 5px 0; 
+        }
+        .info-label { 
+          color: #666; 
+          font-size: 12px; 
+        }
+        .info-value { 
+          font-weight: bold; 
+          margin: 0; 
+        }
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          margin: 20px 0; 
+        }
+        th { 
+          background-color: #9c27b0; 
+          color: white; 
+          padding: 10px; 
+          text-align: left; 
+        }
+        td { 
+          padding: 10px; 
+          border-bottom: 1px solid #ddd; 
+        }
+        .total { 
+          font-size: 18px; 
+          font-weight: bold; 
+          color: #9c27b0; 
+          margin-top: 20px; 
+          text-align: right; 
+        }
+        .footer { 
+          margin-top: 50px; 
+          text-align: center; 
+          color: #666; 
+          font-size: 12px; 
+          border-top: 1px solid #ddd; 
+          padding-top: 20px; 
+        }
       </style>
     `;
 
@@ -288,10 +364,18 @@ function ModernAtendimentos() {
         </head>
         <body>
           <div class="header">
-            <h1 class="empresa-nome">${empresa.nome || 'Serena'}</h1>
-            ${empresa.cnpj ? `<p class="empresa-info">CNPJ: ${empresa.cnpj}</p>` : ''}
-            ${empresa.endereco?.logradouro ? `<p class="empresa-info">${empresa.endereco.logradouro}</p>` : ''}
-            ${empresa.contato?.telefone ? `<p class="empresa-info">Tel: ${empresa.contato.telefone}</p>` : ''}
+            <div class="logo-container">
+              <img src="${logoUrl}" alt="Logo" class="logo" onerror="this.style.display='none'">
+              <div>
+                <h1 class="empresa-nome">${empresa.nome || 'Serena'}</h1>
+                ${empresa.nomeFantasia ? `<p class="empresa-detalhe">${empresa.nomeFantasia}</p>` : ''}
+              </div>
+            </div>
+            <div class="empresa-info">
+              ${empresa.cnpj ? `<p class="empresa-detalhe">CNPJ: ${empresa.cnpj}</p>` : ''}
+              ${empresa.endereco?.logradouro ? `<p class="empresa-detalhe">${empresa.endereco.logradouro}</p>` : ''}
+              ${empresa.contato?.telefone ? `<p class="empresa-detalhe">Tel: ${empresa.contato.telefone}</p>` : ''}
+            </div>
           </div>
 
           <h2 class="titulo">COMPROVANTE DE ATENDIMENTO</h2>
