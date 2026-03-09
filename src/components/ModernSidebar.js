@@ -28,7 +28,6 @@ import {
   Inventory as InventoryIcon,
   Settings as SettingsIcon,
   Receipt as ReceiptIcon,
-  Store as StoreIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Group as GroupIcon,
@@ -36,24 +35,12 @@ import {
   Security as SecurityIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
-  PointOfSale as PointOfSaleIcon,
   AccountBalance as AccountBalanceIcon,
   ShoppingCart as ShoppingCartIcon,
   LocalShipping as LocalShippingIcon,
   History as HistoryIcon,
-  BarChart as BarChartIcon,
   Timeline as TimelineIcon,
-  ReceiptLong as ReceiptLongIcon,
-  CreditCard as CreditCardIcon,
   AttachMoney as AttachMoneyIcon,
-  Description as DescriptionIcon,
-  Assignment as AssignmentIcon,
-  Business as BusinessIcon,
-  Contacts as ContactsIcon,
-  Work as WorkIcon,
-  Event as EventIcon,
-  AccessTime as AccessTimeIcon,
-  Star as StarIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Warehouse as WarehouseIcon,
@@ -140,14 +127,11 @@ function ModernSidebar() {
   const carregarUsuario = () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      console.log('Sidebar - Usuário carregado:', user);
       setUsuario(user);
       
       if (user?.avatar && user.avatar !== 'null' && user.avatar !== 'undefined' && user.avatar.trim() !== '') {
-        console.log('Sidebar - Foto encontrada:', user.avatar);
         setFotoUrl(user.avatar);
       } else {
-        console.log('Sidebar - Sem foto válida');
         setFotoUrl(null);
       }
     } catch (error) {
@@ -226,19 +210,13 @@ function ModernSidebar() {
     setCollapsed(!collapsed);
   };
 
-  // Função simples para alternar grupos
   const toggleGroup = (groupTitle) => {
-    setOpenGroups(prev => {
-      const newState = {
-        ...prev,
-        [groupTitle]: !prev[groupTitle]
-      };
-      console.log('Alternando grupo:', groupTitle, 'Novo estado:', newState);
-      return newState;
-    });
+    setOpenGroups(prev => ({
+      ...prev,
+      [groupTitle]: !prev[groupTitle]
+    }));
   };
 
-  // Verificar se grupo está ativo
   const isGroupActive = (group) => {
     return group.items.some(item => 
       location.pathname === item.path || 
@@ -347,10 +325,8 @@ function ModernSidebar() {
                 key={fotoUrl}
                 imgProps={{
                   onError: (e) => {
-                    console.log('Erro ao carregar imagem:', fotoUrl);
                     e.target.style.display = 'none';
                   },
-                  onLoad: () => console.log('Imagem carregada com sucesso')
                 }}
                 sx={{ 
                   width: collapsed ? 40 : 56, 
@@ -403,7 +379,6 @@ function ModernSidebar() {
             <Box key={group.title} sx={{ mb: 2 }}>
               {!collapsed ? (
                 <>
-                  {/* Cabeçalho do grupo - USANDO LISTITEMBUTTON COM ONCLICK DIRETO */}
                   <ListItemButton
                     onClick={() => toggleGroup(group.title)}
                     sx={{
@@ -429,7 +404,6 @@ function ModernSidebar() {
                     {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                   </ListItemButton>
 
-                  {/* Itens do grupo */}
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {group.items.map((item) => {
@@ -486,7 +460,6 @@ function ModernSidebar() {
                   </Collapse>
                 </>
               ) : (
-                // Modo colapsado - apenas ícones
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                   <Tooltip title={group.title} placement="right">
                     <IconButton
