@@ -48,8 +48,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { useDados } from '../hooks/useDados';
-import { atendimentoService } from '../services/atendimentoService';
 import api from '../services/api';
 
 // Funções auxiliares de data
@@ -115,15 +113,91 @@ function ModernAgendamentos() {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Carregar dados reais da API
-  const { dados: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useDados('agendamentos');
-  const { dados: atendimentos, loading: loadingAtendimentos } = useDados('atendimentos');
-  const { dados: clientes } = useDados('clientes');
-  const { dados: profissionais } = useDados('profissionais');
-  const { dados: servicos } = useDados('servicos');
+  // Dados da API
+  const [agendamentos, setAgendamentos] = useState([]);
+  const [atendimentos, setAtendimentos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
 
-  const loading = loadingAgendamentos || loadingAtendimentos;
+  // Carregar dados da API
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const [agendamentosRes, atendimentosRes, clientesRes, profissionaisRes, servicosRes] = await Promise.all([
+        api.get('/agendamentos'),
+        api.get('/atendimentos'),
+        api.get('/clientes'),
+        api.get('/profissionais'),
+        api.get('/servicos'),
+      ]);
+      
+      setAgendamentos(agendamentosRes.data || []);
+      setAtendimentos(atendimentosRes.data || []);
+      setClientes(clientesRes.data || []);
+      setProfissionais(profissionaisRes.data || []);
+      setServicos(servicosRes.data || []);
+      
+      console.log('✅ Dados carregados');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      setError('Erro ao carregar dados');
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funções CRUD
+  const adicionarAgendamento = async (dados) => {
+    try {
+      dados.id = Date.now();
+      dados.dataCriacao = new Date().toISOString();
+      dados.updatedAt = new Date().toISOString();
+      
+      const response = await api.post('/agendamentos', dados);
+      setAgendamentos([...agendamentos, response.data]);
+      toast.success('Agendamento criado com sucesso!');
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao adicionar agendamento:', error);
+      toast.error('Erro ao criar agendamento');
+      throw error;
+    }
+  };
+
+  const atualizarAgendamento = async (id, dados) => {
+    try {
+      dados.updatedAt = new Date().toISOString();
+      const response = await api.patch(`/agendamentos/${id}`, dados);
+      setAgendamentos(agendamentos.map(item => item.id === id ? response.data : item));
+      toast.success('Agendamento atualizado com sucesso!');
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao atualizar agendamento:', error);
+      toast.error('Erro ao atualizar agendamento');
+      throw error;
+    }
+  };
+
+  const excluirAgendamento = async (id) => {
+    try {
+      await api.delete(`/agendamentos/${id}`);
+      setAgendamentos(agendamentos.filter(item => item.id !== id));
+      toast.success('Agendamento excluído com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir agendamento:', error);
+      toast.error('Erro ao excluir agendamento');
+      throw error;
+    }
+  };
 
   // Combinar agendamentos e atendimentos
   const todosEventos = [
@@ -305,10 +379,9 @@ function ModernAgendamentos() {
 
   const confirmDelete = async () => {
     try {
-      await excluir(appointmentToDelete);
-      toast.success('Agendamento cancelado com sucesso!');
+      await excluirAgendamento(appointmentToDelete);
     } catch (error) {
-      toast.error('Erro ao cancelar agendamento');
+      // Erro já tratado na função
     }
     setOpenDeleteDialog(false);
     setAppointmentToDelete(null);
@@ -316,10 +389,9 @@ function ModernAgendamentos() {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      await atualizar(id, { status: newStatus });
-      toast.success(`Status alterado para ${getStatusLabel(newStatus)}!`);
+      await atualizarAgendamento(id, { status: newStatus });
     } catch (error) {
-      toast.error('Erro ao alterar status');
+      // Erro já tratado na função
     }
   };
 
@@ -346,76 +418,78 @@ function ModernAgendamentos() {
       }
 
       if (selectedAppointment) {
-        await atualizar(selectedAppointment.id, {
-          ...formData,
-          updatedAt: new Date().toISOString()
-        });
-        toast.success('Agendamento atualizado!');
+        await atualizarAgendamento(selectedAppointment.id, formData);
       } else {
-        await adicionar({
-          ...formData,
-          dataCriacao: new Date().toISOString()
-        });
-        toast.success('Agendamento criado!');
+        await adicionarAgendamento(formData);
       }
       
       setOpenDialog(false);
     } catch (error) {
-      toast.error('Erro ao salvar agendamento');
+      // Erro já tratado nas funções
     }
   };
 
-  // FUNÇÃO CORRIGIDA - iniciarAtendimento
   const iniciarAtendimento = async (agendamento) => {
     console.log('🎯 Função iniciarAtendimento chamada com:', agendamento);
     
     try {
-      // Validar se o agendamento existe
-      if (!agendamento) {
+      if (!agendamento || !agendamento.id) {
         toast.error('Agendamento não encontrado');
         return;
       }
 
-      if (!agendamento.id) {
-        toast.error('ID do agendamento não encontrado');
+      const toastId = toast.loading('Iniciando atendimento...');
+
+      // Verificar se já existe um atendimento para este agendamento
+      const atendimentoExistente = atendimentos.find(a => a.agendamentoId === agendamento.id);
+      
+      if (atendimentoExistente) {
+        toast.dismiss(toastId);
+        toast.success('Atendimento já existe!');
+        navigate(`/atendimento/${atendimentoExistente.id}`);
         return;
       }
 
-      // Mostrar loading
-      const toastId = toast.loading('Iniciando atendimento...');
+      // Criar novo atendimento
+      const novoAtendimento = {
+        id: Date.now(),
+        agendamentoId: agendamento.id,
+        clienteId: agendamento.clienteId,
+        profissionalId: agendamento.profissionalId,
+        servicoId: agendamento.servicoId,
+        data: agendamento.data,
+        horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        horaFim: null,
+        status: 'em_andamento',
+        observacoes: '',
+        itensServico: [{
+          id: agendamento.servicoId,
+          nome: servicos.find(s => s.id === agendamento.servicoId)?.nome || 'Serviço',
+          preco: servicos.find(s => s.id === agendamento.servicoId)?.preco || 0,
+          principal: true
+        }],
+        itensProduto: [],
+        valorTotal: servicos.find(s => s.id === agendamento.servicoId)?.preco || 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-      // Chamar o serviço para criar o atendimento
-      console.log('📞 Chamando atendimentoService.iniciarAtendimento com ID:', agendamento.id);
-      const atendimento = await atendimentoService.iniciarAtendimento(agendamento.id);
+      const response = await api.post('/atendimentos', novoAtendimento);
       
-      console.log('✅ Resposta do serviço:', atendimento);
+      // Atualizar status do agendamento
+      await api.patch(`/agendamentos/${agendamento.id}`, { 
+        status: 'em_andamento',
+        updatedAt: new Date().toISOString()
+      });
 
-      // Verificar se o atendimento foi criado
-      if (!atendimento || !atendimento.id) {
-        throw new Error('Atendimento criado sem ID');
-      }
-
-      // Fechar loading e mostrar sucesso
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
       
-      // Navegar para a página do atendimento
-      console.log('➡️ Navegando para:', `/atendimento/${atendimento.id}`);
-      navigate(`/atendimento/${atendimento.id}`);
+      navigate(`/atendimento/${response.data.id}`);
       
     } catch (error) {
       console.error('❌ Erro detalhado:', error);
-      
-      let mensagem = 'Erro ao iniciar atendimento';
-      if (error.response) {
-        mensagem = error.response.data?.message || `Erro ${error.response.status}`;
-      } else if (error.request) {
-        mensagem = 'Erro de conexão. Verifique se o servidor está rodando.';
-      } else {
-        mensagem = error.message || mensagem;
-      }
-      
-      toast.error(mensagem);
+      toast.error('Erro ao iniciar atendimento');
     }
   };
 
@@ -512,10 +586,10 @@ function ModernAgendamentos() {
     );
   }
 
-  if (errorAgendamentos) {
+  if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">{errorAgendamentos}</Alert>
+        <Alert severity="error">{error}</Alert>
       </Box>
     );
   }
