@@ -1,750 +1,498 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Card,
   CardContent,
   Typography,
-  Grid,
   Button,
+  Grid,
   IconButton,
-  Avatar,
   Chip,
-  TextField,
-  InputAdornment,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Alert,
-  CircularProgress,
-  Tooltip,
+  Avatar,
   Paper,
-  Divider,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon,
-  Refresh as RefreshIcon,
   CalendarToday as CalendarIcon,
-  Schedule as ScheduleIcon,
+  AccessTime as TimeIcon,
   Person as PersonIcon,
-  CheckCircle as CheckCircleIcon,
+  ContentCut as CutIcon,
+  CheckCircle as CheckIcon,
   Cancel as CancelIcon,
-  Warning as WarningIcon,
-  Event as EventIcon,
+  Schedule as ScheduleIcon,
   Today as TodayIcon,
-  DateRange as DateRangeIcon,
+  ViewWeek as WeekIcon,
+  ViewModule as MonthIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import ptBR from 'date-fns/locale/pt-BR';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import api from '../services/api';
 
-const statusColors = {
-  confirmado: { color: '#4caf50', label: 'Confirmado', icon: <CheckCircleIcon /> },
-  pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
-  cancelado: { color: '#f44336', label: 'Cancelado', icon: <CancelIcon /> },
-  realizado: { color: '#9c27b0', label: 'Realizado', icon: <CheckCircleIcon /> },
-};
+// Dados mockados
+const initialAppointments = [
+  {
+    id: 1,
+    cliente: 'Maria Silva',
+    servico: 'Corte de Cabelo',
+    profissional: 'Ana Souza',
+    data: '2024-03-15',
+    horario: '09:00',
+    status: 'confirmado',
+    duracao: '60 min',
+    preco: 'R$ 120,00',
+    telefone: '(11) 99999-9999',
+  },
+  {
+    id: 2,
+    cliente: 'João Santos',
+    servico: 'Barba',
+    profissional: 'Carlos Lima',
+    data: '2024-03-15',
+    horario: '10:30',
+    status: 'pendente',
+    duracao: '30 min',
+    preco: 'R$ 50,00',
+    telefone: '(11) 88888-8888',
+  },
+  {
+    id: 3,
+    cliente: 'Ana Oliveira',
+    servico: 'Manicure',
+    profissional: 'Maria Clara',
+    data: '2024-03-15',
+    horario: '14:00',
+    status: 'confirmado',
+    duracao: '50 min',
+    preco: 'R$ 80,00',
+    telefone: '(11) 77777-7777',
+  },
+  {
+    id: 4,
+    cliente: 'Carlos Lima',
+    servico: 'Tintura',
+    profissional: 'Ana Souza',
+    data: '2024-03-15',
+    horario: '15:30',
+    status: 'cancelado',
+    duracao: '120 min',
+    preco: 'R$ 250,00',
+    telefone: '(11) 66666-6666',
+  },
+  {
+    id: 5,
+    cliente: 'Patrícia Santos',
+    servico: 'Pedicure',
+    profissional: 'Maria Clara',
+    data: '2024-03-16',
+    horario: '09:30',
+    status: 'confirmado',
+    duracao: '60 min',
+    preco: 'R$ 90,00',
+    telefone: '(11) 55555-5555',
+  },
+  {
+    id: 6,
+    cliente: 'Roberto Alves',
+    servico: 'Corte Masculino',
+    profissional: 'Carlos Lima',
+    data: '2024-03-16',
+    horario: '11:00',
+    status: 'confirmado',
+    duracao: '45 min',
+    preco: 'R$ 70,00',
+    telefone: '(11) 44444-4444',
+  },
+];
+
+const professionals = [
+  { id: 1, nome: 'Ana Souza', especialidade: 'Cabelo e Coloração' },
+  { id: 2, nome: 'Carlos Lima', especialidade: 'Barba e Corte Masculino' },
+  { id: 3, nome: 'Maria Clara', especialidade: 'Unhas' },
+  { id: 4, nome: 'Joana Oliveira', especialidade: 'Maquiagem' },
+];
+
+const services = [
+  { id: 1, nome: 'Corte de Cabelo', duracao: 60, preco: 120 },
+  { id: 2, nome: 'Barba', duracao: 30, preco: 50 },
+  { id: 3, nome: 'Manicure', duracao: 50, preco: 80 },
+  { id: 4, nome: 'Pedicure', duracao: 60, preco: 90 },
+  { id: 5, nome: 'Tintura', duracao: 120, preco: 250 },
+  { id: 6, nome: 'Corte Masculino', duracao: 45, preco: 70 },
+];
+
+const timeSlots = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+];
 
 function ModernAgendamentos() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [agendamentos, setAgendamentos] = useState([]);
-  const [clientes, setClientes] = useState([]);
-  const [profissionais, setProfissionais] = useState([]);
-  const [servicos, setServicos] = useState([]);
-  
-  // Filtros
-  const [filtro, setFiltro] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState('todos');
-  const [filtroProfissional, setFiltroProfissional] = useState('todos');
-  const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
-  const [dataInicio, setDataInicio] = useState(new Date());
-  const [dataFim, setDataFim] = useState(new Date());
-  
-  // Paginação
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  
-  // Dialog
+  const [appointments, setAppointments] = useState(initialAppointments);
   const [openDialog, setOpenDialog] = useState(false);
-  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
-  const [agendamentoEditando, setAgendamentoEditando] = useState(null);
-  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState(null);
-  const [formData, setFormData] = useState({
-    clienteId: '',
-    profissionalId: '',
-    servicoId: '',
-    data: format(new Date(), 'yyyy-MM-dd'),
-    horario: '09:00',
-    observacoes: '',
-    status: 'pendente',
-  });
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [viewMode, setViewMode] = useState('day');
+  const [selectedDate, setSelectedDate] = useState('2024-03-15');
+  const [selectedProfessional, setSelectedProfessional] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  const carregarDados = async () => {
-    try {
-      setLoading(true);
-      const [agendamentosRes, clientesRes, profissionaisRes, servicosRes] = await Promise.all([
-        api.get('/agendamentos'),
-        api.get('/clientes'),
-        api.get('/profissionais'),
-        api.get('/servicos'),
-      ]);
-      
-      setAgendamentos(agendamentosRes.data || []);
-      setClientes(clientesRes.data || []);
-      setProfissionais(profissionaisRes.data || []);
-      setServicos(servicosRes.data || []);
-      
-      console.log('✅ Dados carregados');
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOpenDialog = (agendamento = null) => {
-    if (agendamento) {
-      setAgendamentoEditando(agendamento);
-      setFormData({
-        clienteId: agendamento.clienteId || '',
-        profissionalId: agendamento.profissionalId || '',
-        servicoId: agendamento.servicoId || '',
-        data: agendamento.data || format(new Date(), 'yyyy-MM-dd'),
-        horario: agendamento.horario || '09:00',
-        observacoes: agendamento.observacoes || '',
-        status: agendamento.status || 'pendente',
-      });
-    } else {
-      setAgendamentoEditando(null);
-      setFormData({
-        clienteId: '',
-        profissionalId: '',
-        servicoId: '',
-        data: format(new Date(), 'yyyy-MM-dd'),
-        horario: '09:00',
-        observacoes: '',
-        status: 'pendente',
-      });
-    }
+  const handleAdd = () => {
+    setSelectedAppointment(null);
     setOpenDialog(true);
   };
 
-  const handleCloseDialog = () => {
+  const handleEdit = (appointment) => {
+    setSelectedAppointment(appointment);
+    setOpenDialog(true);
+  };
+
+  const handleDelete = (id) => {
+    if (window.confirm('Tem certeza que deseja cancelar este agendamento?')) {
+      setAppointments(appointments.filter(apt => apt.id !== id));
+      toast.success('Agendamento cancelado com sucesso!');
+    }
+  };
+
+  const handleStatusChange = (id, newStatus) => {
+    setAppointments(appointments.map(apt => 
+      apt.id === id ? { ...apt, status: newStatus } : apt
+    ));
+    toast.success(`Status alterado para ${newStatus}!`);
+  };
+
+  const handleSave = (event) => {
+    event.preventDefault();
+    toast.success(selectedAppointment ? 'Agendamento atualizado!' : 'Agendamento criado!');
     setOpenDialog(false);
-    setAgendamentoEditando(null);
-  };
-
-  const handleOpenDetalhes = (agendamento) => {
-    setAgendamentoSelecionado(agendamento);
-    setOpenDetalhesDialog(true);
-  };
-
-  const handleCloseDetalhes = () => {
-    setOpenDetalhesDialog(false);
-    setAgendamentoSelecionado(null);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSalvar = async () => {
-    try {
-      if (!formData.clienteId) {
-        toast.error('Selecione um cliente');
-        return;
-      }
-      if (!formData.profissionalId) {
-        toast.error('Selecione um profissional');
-        return;
-      }
-      if (!formData.servicoId) {
-        toast.error('Selecione um serviço');
-        return;
-      }
-
-      const dadosParaSalvar = {
-        ...formData,
-        clienteId: parseInt(formData.clienteId),
-        profissionalId: parseInt(formData.profissionalId),
-        servicoId: parseInt(formData.servicoId),
-        dataCriacao: agendamentoEditando ? agendamentoEditando.dataCriacao : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (agendamentoEditando) {
-        await api.patch(`/agendamentos/${agendamentoEditando.id}`, dadosParaSalvar);
-        toast.success('Agendamento atualizado com sucesso!');
-      } else {
-        dadosParaSalvar.id = Date.now();
-        await api.post('/agendamentos', dadosParaSalvar);
-        toast.success('Agendamento criado com sucesso!');
-      }
-
-      handleCloseDialog();
-      carregarDados();
-    } catch (error) {
-      console.error('Erro ao salvar agendamento:', error);
-      toast.error('Erro ao salvar agendamento');
-    }
-  };
-
-  const handleAtualizarStatus = async (id, novoStatus) => {
-    try {
-      await api.patch(`/agendamentos/${id}`, { 
-        status: novoStatus,
-        updatedAt: new Date().toISOString()
-      });
-      toast.success(`Status atualizado para ${statusColors[novoStatus].label}`);
-      carregarDados();
-    } catch (error) {
-      console.error('Erro ao atualizar status:', error);
-      toast.error('Erro ao atualizar status');
-    }
-  };
-
-  const handleIniciarAtendimento = (id) => {
-    navigate(`/atendimento/${id}`);
   };
 
   // Filtrar agendamentos
-  const agendamentosFiltrados = agendamentos.filter(ag => {
-    const cliente = clientes.find(c => c.id === ag.clienteId);
-    const profissional = profissionais.find(p => p.id === ag.profissionalId);
-    const servico = servicos.find(s => s.id === ag.servicoId);
-    const dataAg = new Date(ag.data);
-    const hoje = new Date();
-
-    // Filtro de busca
-    const matchesSearch = filtro === '' || 
-      cliente?.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
-      profissional?.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
-      servico?.nome?.toLowerCase().includes(filtro.toLowerCase());
-
-    // Filtro de status
-    const matchesStatus = filtroStatus === 'todos' || ag.status === filtroStatus;
-
-    // Filtro de profissional
-    const matchesProfissional = filtroProfissional === 'todos' || ag.profissionalId === parseInt(filtroProfissional);
-
-    // Filtro de período
-    let matchesPeriodo = true;
-    if (filtroPeriodo === 'hoje') {
-      matchesPeriodo = format(dataAg, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd');
-    } else if (filtroPeriodo === 'semana') {
-      const inicio = startOfWeek(hoje, { weekStartsOn: 0 });
-      const fim = endOfWeek(hoje, { weekStartsOn: 0 });
-      matchesPeriodo = dataAg >= inicio && dataAg <= fim;
-    } else if (filtroPeriodo === 'mes') {
-      const inicio = startOfMonth(hoje);
-      const fim = endOfMonth(hoje);
-      matchesPeriodo = dataAg >= inicio && dataAg <= fim;
-    } else if (filtroPeriodo === 'personalizado') {
-      matchesPeriodo = dataAg >= dataInicio && dataAg <= dataFim;
-    }
-
-    return matchesSearch && matchesStatus && matchesProfissional && matchesPeriodo;
+  const filteredAppointments = appointments.filter(apt => {
+    const dateMatch = apt.data === selectedDate;
+    const professionalMatch = selectedProfessional === 'all' || apt.profissional === selectedProfessional;
+    const statusMatch = selectedStatus === 'all' || apt.status === selectedStatus;
+    return dateMatch && professionalMatch && statusMatch;
   });
 
-  // Ordenar por data e horário
-  const agendamentosOrdenados = [...agendamentosFiltrados].sort((a, b) => {
-    if (a.data !== b.data) {
-      return new Date(a.data) - new Date(b.data);
+  // Agrupar por horário para visualização
+  const appointmentsByTime = timeSlots.reduce((acc, time) => {
+    const apts = filteredAppointments.filter(apt => apt.horario === time);
+    if (apts.length > 0) {
+      acc[time] = apts;
     }
-    return a.horario.localeCompare(b.horario);
-  });
+    return acc;
+  }, {});
 
-  // Paginação
-  const paginatedAgendamentos = agendamentosOrdenados.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
-
-  // Estatísticas
-  const stats = {
-    total: agendamentos.length,
-    hoje: agendamentos.filter(a => a.data === format(new Date(), 'yyyy-MM-dd')).length,
-    confirmados: agendamentos.filter(a => a.status === 'confirmado').length,
-    pendentes: agendamentos.filter(a => a.status === 'pendente').length,
-    cancelados: agendamentos.filter(a => a.status === 'cancelado').length,
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'confirmado': return 'success';
+      case 'pendente': return 'warning';
+      case 'cancelado': return 'error';
+      case 'concluido': return 'info';
+      default: return 'default';
+    }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const getStatusIcon = (status) => {
+    switch(status) {
+      case 'confirmado': return <CheckIcon />;
+      case 'pendente': return <ScheduleIcon />;
+      case 'cancelado': return <CancelIcon />;
+      default: return null;
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch(status) {
+      case 'confirmado': return 'Confirmado';
+      case 'pendente': return 'Pendente';
+      case 'cancelado': return 'Cancelado';
+      case 'concluido': return 'Concluído';
+      default: return status;
+    }
+  };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Box>
-        {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              Agendamentos
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Gerencie todos os agendamentos do salão
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={carregarDados}
-            >
-              Atualizar
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-            >
-              Novo Agendamento
-            </Button>
-          </Box>
-        </Box>
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          Agendamentos
+        </Typography>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAdd}
+            sx={{
+              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+              color: 'white',
+              boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+            }}
+          >
+            Novo Agendamento
+          </Button>
+        </motion.div>
+      </Box>
 
-        {/* Cards de Estatísticas */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                    {stats.total}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card sx={{ bgcolor: '#e3f2fd' }}>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Hoje
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                    {stats.hoje}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card sx={{ bgcolor: '#e8f5e9' }}>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Confirmados
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                    {stats.confirmados}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card sx={{ bgcolor: '#fff3e0' }}>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Pendentes
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                    {stats.pendentes}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card sx={{ bgcolor: '#ffebee' }}>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Cancelados
-                  </Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
-                    {stats.cancelados}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        </Grid>
-
-        {/* Filtros */}
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="Buscar por cliente, profissional ou serviço..."
-                  value={filtro}
-                  onChange={(e) => setFiltro(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Período</InputLabel>
-                  <Select
-                    value={filtroPeriodo}
-                    label="Período"
-                    onChange={(e) => setFiltroPeriodo(e.target.value)}
-                  >
-                    <MenuItem value="hoje">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TodayIcon fontSize="small" />
-                        Hoje
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="semana">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DateRangeIcon fontSize="small" />
-                        Esta semana
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="mes">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <CalendarIcon fontSize="small" />
-                        Este mês
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="personalizado">Personalizado</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {filtroPeriodo === 'personalizado' && (
-                <>
-                  <Grid item xs={12} md={2}>
-                    <DatePicker
-                      label="Data Início"
-                      value={dataInicio}
-                      onChange={setDataInicio}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <DatePicker
-                      label="Data Fim"
-                      value={dataFim}
-                      onChange={setDataFim}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                    />
-                  </Grid>
-                </>
-              )}
-
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={filtroStatus}
-                    label="Status"
-                    onChange={(e) => setFiltroStatus(e.target.value)}
-                  >
-                    <MenuItem value="todos">Todos</MenuItem>
-                    <MenuItem value="confirmado">Confirmado</MenuItem>
-                    <MenuItem value="pendente">Pendente</MenuItem>
-                    <MenuItem value="cancelado">Cancelado</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Profissional</InputLabel>
-                  <Select
-                    value={filtroProfissional}
-                    label="Profissional"
-                    onChange={(e) => setFiltroProfissional(e.target.value)}
-                  >
-                    <MenuItem value="todos">Todos</MenuItem>
-                    {profissionais.map(prof => (
-                      <MenuItem key={prof.id} value={prof.id.toString()}>{prof.nome}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+      {/* Filtros e Controles */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Data"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
             </Grid>
-          </CardContent>
-        </Card>
+            
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Profissional</InputLabel>
+                <Select
+                  value={selectedProfessional}
+                  label="Profissional"
+                  onChange={(e) => setSelectedProfessional(e.target.value)}
+                >
+                  <MenuItem value="all">Todos</MenuItem>
+                  {professionals.map(prof => (
+                    <MenuItem key={prof.id} value={prof.nome}>{prof.nome}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
 
-        {/* Tabela de Agendamentos */}
-        <Card>
-          <CardContent>
-            <TableContainer component={Paper} elevation={0}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#faf5ff' }}>
-                    <TableCell><strong>Cliente</strong></TableCell>
-                    <TableCell><strong>Profissional</strong></TableCell>
-                    <TableCell><strong>Serviço</strong></TableCell>
-                    <TableCell><strong>Data</strong></TableCell>
-                    <TableCell><strong>Horário</strong></TableCell>
-                    <TableCell><strong>Status</strong></TableCell>
-                    <TableCell align="center"><strong>Ações</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <AnimatePresence>
-                    {paginatedAgendamentos.map((agendamento, index) => {
-                      const cliente = clientes.find(c => c.id === agendamento.clienteId);
-                      const profissional = profissionais.find(p => p.id === agendamento.profissionalId);
-                      const servico = servicos.find(s => s.id === agendamento.servicoId);
-                      
-                      return (
-                        <motion.tr
-                          key={agendamento.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar src={cliente?.foto} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
-                                {cliente?.nome?.charAt(0)}
-                              </Avatar>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {cliente?.nome || 'N/A'}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{profissional?.nome || 'N/A'}</TableCell>
-                          <TableCell>{servico?.nome || 'N/A'}</TableCell>
-                          <TableCell>
-                            {new Date(agendamento.data).toLocaleDateString('pt-BR')}
-                          </TableCell>
-                          <TableCell>{agendamento.horario}</TableCell>
-                          <TableCell>
-                            <Chip
-                              icon={statusColors[agendamento.status]?.icon}
-                              label={statusColors[agendamento.status]?.label || agendamento.status}
-                              size="small"
-                              sx={{
-                                bgcolor: `${statusColors[agendamento.status]?.color}20`,
-                                color: statusColors[agendamento.status]?.color,
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              <Tooltip title="Ver detalhes">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenDetalhes(agendamento)}
-                                >
-                                  <EventIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={selectedStatus}
+                  label="Status"
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                >
+                  <MenuItem value="all">Todos</MenuItem>
+                  <MenuItem value="confirmado">Confirmado</MenuItem>
+                  <MenuItem value="pendente">Pendente</MenuItem>
+                  <MenuItem value="cancelado">Cancelado</MenuItem>
+                  <MenuItem value="concluido">Concluído</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
 
-                              {agendamento.status === 'pendente' && (
-                                <Tooltip title="Confirmar">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleAtualizarStatus(agendamento.id, 'confirmado')}
-                                    sx={{ color: '#4caf50' }}
-                                  >
-                                    <CheckCircleIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
+            <Grid item xs={12} md={3}>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(e, newView) => newView && setViewMode(newView)}
+                sx={{ width: '100%' }}
+              >
+                <ToggleButton value="day" sx={{ flex: 1 }}>
+                  <TodayIcon sx={{ mr: 1 }} /> Dia
+                </ToggleButton>
+                <ToggleButton value="week" sx={{ flex: 1 }}>
+                  <WeekIcon sx={{ mr: 1 }} /> Semana
+                </ToggleButton>
+                <ToggleButton value="month" sx={{ flex: 1 }}>
+                  <MonthIcon sx={{ mr: 1 }} /> Mês
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
-                              {agendamento.status === 'confirmado' && (
-                                <Tooltip title="Iniciar atendimento">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleIniciarAtendimento(agendamento.id)}
-                                    sx={{ color: '#9c27b0' }}
-                                  >
-                                    <ScheduleIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
+      {/* Timeline de Agendamentos */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+            Agenda - {new Date(selectedDate).toLocaleDateString('pt-BR')}
+          </Typography>
 
-                              {agendamento.status !== 'cancelado' && agendamento.status !== 'realizado' && (
-                                <Tooltip title="Cancelar">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleAtualizarStatus(agendamento.id, 'cancelado')}
-                                    sx={{ color: '#f44336' }}
-                                  >
-                                    <CancelIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {timeSlots.map(time => {
+              const appointmentsAtTime = filteredAppointments.filter(apt => apt.horario === time);
+              if (appointmentsAtTime.length === 0 && viewMode === 'day') return null;
 
-                              <Tooltip title="Editar">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenDialog(agendamento)}
-                                  sx={{ color: '#ff4081' }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </TableCell>
-                        </motion.tr>
-                      );
-                    })}
-                  </AnimatePresence>
+              return (
+                <motion.div
+                  key={time}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Paper 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 2,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      backgroundColor: appointmentsAtTime.length > 0 ? '#faf5ff' : 'transparent',
+                    }}
+                  >
+                    <Box sx={{ minWidth: 80 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                        {time}
+                      </Typography>
+                    </Box>
 
-                  {paginatedAgendamentos.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
-                        <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography variant="body1" color="textSecondary">
-                          Nenhum agendamento encontrado
+                    <Box sx={{ flex: 1 }}>
+                      {appointmentsAtTime.length > 0 ? (
+                        <Grid container spacing={2}>
+                          {appointmentsAtTime.map(apt => (
+                            <Grid item xs={12} key={apt.id}>
+                              <Card variant="outlined" sx={{ p: 2 }}>
+                                <Grid container spacing={2} alignItems="center">
+                                  <Grid item xs={12} sm={6} md={3}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <Avatar sx={{ bgcolor: '#9c27b0', width: 32, height: 32 }}>
+                                        {apt.cliente.charAt(0)}
+                                      </Avatar>
+                                      <Box>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                          {apt.cliente}
+                                        </Typography>
+                                        <Typography variant="caption" color="textSecondary">
+                                          {apt.telefone}
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                  </Grid>
+
+                                  <Grid item xs={12} sm={6} md={2}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <CutIcon fontSize="small" color="action" />
+                                      <Typography variant="body2">{apt.servico}</Typography>
+                                    </Box>
+                                  </Grid>
+
+                                  <Grid item xs={12} sm={6} md={2}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <PersonIcon fontSize="small" color="action" />
+                                      <Typography variant="body2">{apt.profissional}</Typography>
+                                    </Box>
+                                  </Grid>
+
+                                  <Grid item xs={12} sm={6} md={2}>
+                                    <Chip
+                                      icon={getStatusIcon(apt.status)}
+                                      label={getStatusLabel(apt.status)}
+                                      size="small"
+                                      color={getStatusColor(apt.status)}
+                                      sx={{ fontWeight: 500 }}
+                                    />
+                                  </Grid>
+
+                                  <Grid item xs={12} md={3}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={() => handleStatusChange(apt.id, 'confirmado')}
+                                        color="success"
+                                        title="Confirmar"
+                                      >
+                                        <CheckIcon />
+                                      </IconButton>
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={() => handleEdit(apt)}
+                                        color="primary"
+                                      >
+                                        <EditIcon />
+                                      </IconButton>
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={() => handleDelete(apt.id)}
+                                        color="error"
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Box>
+                                  </Grid>
+                                </Grid>
+                              </Card>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
+                          Horário disponível
                         </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      )}
+                    </Box>
+                  </Paper>
+                </motion.div>
+              );
+            })}
+          </Box>
+        </CardContent>
+      </Card>
 
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={agendamentosOrdenados.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={(e, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              labelRowsPerPage="Linhas por página"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Dialog de Cadastro/Edição */}
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-            {agendamentoEditando ? 'Editar Agendamento' : 'Novo Agendamento'}
-          </DialogTitle>
+      {/* Dialog de Agendamento */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+          {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
+        </DialogTitle>
+        <form onSubmit={handleSave}>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Cliente *</InputLabel>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Cliente</InputLabel>
                   <Select
-                    name="clienteId"
-                    value={formData.clienteId}
-                    label="Cliente *"
-                    onChange={handleInputChange}
+                    defaultValue={selectedAppointment?.cliente || ''}
+                    label="Cliente"
+                    required
                   >
-                    {clientes.map(c => (
-                      <MenuItem key={c.id} value={c.id}>{c.nome}</MenuItem>
+                    <MenuItem value="Maria Silva">Maria Silva</MenuItem>
+                    <MenuItem value="João Santos">João Santos</MenuItem>
+                    <MenuItem value="Ana Oliveira">Ana Oliveira</MenuItem>
+                    <MenuItem value="Carlos Lima">Carlos Lima</MenuItem>
+                    <MenuItem value="Patrícia Santos">Patrícia Santos</MenuItem>
+                    <MenuItem value="Roberto Alves">Roberto Alves</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Profissional</InputLabel>
+                  <Select
+                    defaultValue={selectedAppointment?.profissional || ''}
+                    label="Profissional"
+                    required
+                  >
+                    {professionals.map(prof => (
+                      <MenuItem key={prof.id} value={prof.nome}>{prof.nome}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Profissional *</InputLabel>
+                <FormControl fullWidth>
+                  <InputLabel>Serviço</InputLabel>
                   <Select
-                    name="profissionalId"
-                    value={formData.profissionalId}
-                    label="Profissional *"
-                    onChange={handleInputChange}
+                    defaultValue={selectedAppointment?.servico || ''}
+                    label="Serviço"
+                    required
                   >
-                    {profissionais.map(p => (
-                      <MenuItem key={p.id} value={p.id}>{p.nome}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Serviço *</InputLabel>
-                  <Select
-                    name="servicoId"
-                    value={formData.servicoId}
-                    label="Serviço *"
-                    onChange={handleInputChange}
-                  >
-                    {servicos.map(s => (
-                      <MenuItem key={s.id} value={s.id}>{s.nome}</MenuItem>
+                    {services.map(service => (
+                      <MenuItem key={service.id} value={service.nome}>{service.nome}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -755,45 +503,38 @@ function ModernAgendamentos() {
                   fullWidth
                   type="date"
                   label="Data"
-                  name="data"
-                  value={formData.data}
-                  onChange={handleInputChange}
+                  defaultValue={selectedAppointment?.data || selectedDate}
                   InputLabelProps={{ shrink: true }}
-                  size="small"
+                  required
                 />
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
+                <FormControl fullWidth>
                   <InputLabel>Horário</InputLabel>
                   <Select
-                    name="horario"
-                    value={formData.horario}
+                    defaultValue={selectedAppointment?.horario || ''}
                     label="Horário"
-                    onChange={handleInputChange}
+                    required
                   >
-                    {Array.from({ length: 19 }, (_, i) => {
-                      const hora = String(i + 8).padStart(2, '0');
-                      return (
-                        <MenuItem key={hora} value={`${hora}:00`}>{`${hora}:00`}</MenuItem>
-                      );
-                    })}
+                    {timeSlots.map(time => (
+                      <MenuItem key={time} value={time}>{time}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12}>
-                <FormControl fullWidth size="small">
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
                   <InputLabel>Status</InputLabel>
                   <Select
-                    name="status"
-                    value={formData.status}
+                    defaultValue={selectedAppointment?.status || 'pendente'}
                     label="Status"
-                    onChange={handleInputChange}
                   >
                     <MenuItem value="pendente">Pendente</MenuItem>
                     <MenuItem value="confirmado">Confirmado</MenuItem>
                     <MenuItem value="cancelado">Cancelado</MenuItem>
+                    <MenuItem value="concluido">Concluído</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -802,109 +543,28 @@ function ModernAgendamentos() {
                 <TextField
                   fullWidth
                   label="Observações"
-                  name="observacoes"
-                  value={formData.observacoes}
-                  onChange={handleInputChange}
                   multiline
                   rows={3}
-                  size="small"
-                  placeholder="Observações sobre o agendamento..."
+                  placeholder="Alguma observação especial?"
                 />
               </Grid>
             </Grid>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-            <Button
-              onClick={handleSalvar}
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
+            <Button 
+              type="submit" 
               variant="contained"
-              sx={{ bgcolor: '#9c27b0' }}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+              }}
             >
-              {agendamentoEditando ? 'Atualizar' : 'Salvar'}
+              Salvar
             </Button>
           </DialogActions>
-        </Dialog>
-
-        {/* Dialog de Detalhes */}
-        <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-            Detalhes do Agendamento
-          </DialogTitle>
-          <DialogContent>
-            {agendamentoSelecionado && (
-              <Box sx={{ mt: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ width: 56, height: 56, bgcolor: '#9c27b0' }}>
-                        {clientes.find(c => c.id === agendamentoSelecionado.clienteId)?.nome?.charAt(0)}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="h6">
-                          {clientes.find(c => c.id === agendamentoSelecionado.clienteId)?.nome}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          Cliente
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
-                    <Typography variant="body1">
-                      {profissionais.find(p => p.id === agendamentoSelecionado.profissionalId)?.nome}
-                    </Typography>
-                  </Grid>
-
-                  <Grid item xs={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Serviço</Typography>
-                    <Typography variant="body1">
-                      {servicos.find(s => s.id === agendamentoSelecionado.servicoId)?.nome}
-                    </Typography>
-                  </Grid>
-
-                  <Grid item xs={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Data</Typography>
-                    <Typography variant="body1">
-                      {new Date(agendamentoSelecionado.data).toLocaleDateString('pt-BR')}
-                    </Typography>
-                  </Grid>
-
-                  <Grid item xs={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
-                    <Typography variant="body1">{agendamentoSelecionado.horario}</Typography>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" color="textSecondary">Status</Typography>
-                    <Chip
-                      icon={statusColors[agendamentoSelecionado.status]?.icon}
-                      label={statusColors[agendamentoSelecionado.status]?.label || agendamentoSelecionado.status}
-                      size="small"
-                      sx={{
-                        bgcolor: `${statusColors[agendamentoSelecionado.status]?.color}20`,
-                        color: statusColors[agendamentoSelecionado.status]?.color,
-                      }}
-                    />
-                  </Grid>
-
-                  {agendamentoSelecionado.observacoes && (
-                    <Grid item xs={12}>
-                      <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
-                      <Typography variant="body2">{agendamentoSelecionado.observacoes}</Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDetalhes}>Fechar</Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    </LocalizationProvider>
+        </form>
+      </Dialog>
+    </Box>
   );
 }
 
