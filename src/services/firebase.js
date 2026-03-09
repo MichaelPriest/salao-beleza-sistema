@@ -14,6 +14,7 @@ import {
   orderBy,
   Timestamp
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // Suas configurações do Firebase (substitua com os dados do seu projeto)
 const firebaseConfig = {
@@ -28,6 +29,7 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 // Funções genéricas CRUD
 export const firebaseService = {
@@ -63,7 +65,6 @@ export const firebaseService = {
   // Adicionar um documento
   add: async (collectionName, data) => {
     try {
-      // Adicionar timestamps
       const dataWithTimestamps = {
         ...data,
         createdAt: Timestamp.now(),
@@ -111,7 +112,6 @@ export const firebaseService = {
     try {
       let q = collection(db, collectionName);
       
-      // Aplicar condições
       if (conditions.length > 0) {
         const constraints = conditions.map(({ field, operator, value }) => 
           where(field, operator, value)
@@ -119,7 +119,6 @@ export const firebaseService = {
         q = query(q, ...constraints);
       }
       
-      // Aplicar ordenação
       if (orderByField) {
         q = query(q, orderBy(orderByField));
       }
