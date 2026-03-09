@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { toast } from 'react-hot-toast';
 
 export function useDados(endpoint) {
   const [dados, setDados] = useState([]);
@@ -10,40 +9,42 @@ export function useDados(endpoint) {
   const carregar = async () => {
     try {
       setLoading(true);
+      console.log(`🔄 Carregando ${endpoint}...`);
       const response = await api.get(`/${endpoint}`);
-      setDados(response.data);
+      console.log(`✅ ${endpoint} carregados:`, response.data);
+      setDados(response.data || []);
       setError(null);
     } catch (err) {
-      console.error(`Erro ao carregar ${endpoint}:`, err);
-      setError(`Erro ao carregar ${endpoint}`);
-      toast.error(`Erro ao carregar ${endpoint}`);
+      console.error(`❌ Erro ao carregar ${endpoint}:`, err);
+      setError(err.message);
+      setDados([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const adicionar = async (novoDado) => {
+  useEffect(() => {
+    carregar();
+  }, [endpoint]);
+
+  const adicionar = async (novoItem) => {
     try {
-      const response = await api.post(`/${endpoint}`, novoDado);
+      const response = await api.post(`/${endpoint}`, novoItem);
       setDados([...dados, response.data]);
-      toast.success(`${endpoint.slice(0,-1)} adicionado com sucesso!`);
       return response.data;
     } catch (err) {
-      console.error(`Erro ao adicionar ${endpoint}:`, err);
-      toast.error(`Erro ao adicionar ${endpoint.slice(0,-1)}`);
+      console.error(`Erro ao adicionar em ${endpoint}:`, err);
       throw err;
     }
   };
 
   const atualizar = async (id, dadosAtualizados) => {
     try {
-      const response = await api.put(`/${endpoint}/${id}`, dadosAtualizados);
+      const response = await api.patch(`/${endpoint}/${id}`, dadosAtualizados);
       setDados(dados.map(item => item.id === id ? response.data : item));
-      toast.success(`${endpoint.slice(0,-1)} atualizado com sucesso!`);
       return response.data;
     } catch (err) {
-      console.error(`Erro ao atualizar ${endpoint}:`, err);
-      toast.error(`Erro ao atualizar ${endpoint.slice(0,-1)}`);
+      console.error(`Erro ao atualizar em ${endpoint}:`, err);
       throw err;
     }
   };
@@ -52,17 +53,11 @@ export function useDados(endpoint) {
     try {
       await api.delete(`/${endpoint}/${id}`);
       setDados(dados.filter(item => item.id !== id));
-      toast.success(`${endpoint.slice(0,-1)} excluído com sucesso!`);
     } catch (err) {
-      console.error(`Erro ao excluir ${endpoint}:`, err);
-      toast.error(`Erro ao excluir ${endpoint.slice(0,-1)}`);
+      console.error(`Erro ao excluir em ${endpoint}:`, err);
       throw err;
     }
   };
-
-  useEffect(() => {
-    carregar();
-  }, [endpoint]);
 
   return { dados, loading, error, carregar, adicionar, atualizar, excluir };
 }
