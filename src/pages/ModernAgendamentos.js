@@ -5,20 +5,12 @@ import {
   CardContent,
   Typography,
   Grid,
-  Chip,
+  Button,
   IconButton,
   Avatar,
+  Chip,
   TextField,
   InputAdornment,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  TablePagination,
-  Button,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,468 +21,280 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
-  LinearProgress,
   Tooltip,
+  Paper,
   Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
   Stack,
 } from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  Refresh as RefreshIcon,
+  CalendarToday as CalendarIcon,
+  Schedule as ScheduleIcon,
+  Person as PersonIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Warning as WarningIcon,
+  Event as EventIcon,
+  Today as TodayIcon,
+  DateRange as DateRangeIcon,
+} from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ptBR from 'date-fns/locale/pt-BR';
-import {
-  Search as SearchIcon,
-  Payment as PaymentIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  Visibility as ViewIcon,
-  Timer as TimerIcon,
-  Schedule as ScheduleIcon,
-  AttachMoney as MoneyIcon,
-  Refresh as RefreshIcon,
-  Print as PrintIcon,
-  WhatsApp as WhatsAppIcon,
-  Business as BusinessIcon,
-  Receipt as ReceiptIcon,
-  CalendarToday as CalendarIcon,
-  DateRange as DateRangeIcon,
-  Today as TodayIcon,
-} from '@mui/icons-material';
-import { motion } from 'framer-motion';
-import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { useDados } from '../hooks/useDados';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import api from '../services/api';
 
-function ModernAtendimentos() {
+const statusColors = {
+  confirmado: { color: '#4caf50', label: 'Confirmado', icon: <CheckCircleIcon /> },
+  pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
+  cancelado: { color: '#f44336', label: 'Cancelado', icon: <CancelIcon /> },
+  realizado: { color: '#9c27b0', label: 'Realizado', icon: <CheckCircleIcon /> },
+};
+
+function ModernAgendamentos() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [agendamentos, setAgendamentos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
+  
+  // Filtros
+  const [filtro, setFiltro] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroProfissional, setFiltroProfissional] = useState('todos');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
+  const [dataInicio, setDataInicio] = useState(new Date());
+  const [dataFim, setDataFim] = useState(new Date());
+  
+  // Paginação
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [openFilter, setOpenFilter] = useState(false);
-  const [openDetails, setOpenDetails] = useState(false);
-  const [selectedAtendimento, setSelectedAtendimento] = useState(null);
-  const [config, setConfig] = useState(null);
-  const [filtros, setFiltros] = useState({
-    status: 'todos',
-    profissional: 'todos',
-    periodo: 'todos',
-    dataInicio: null,
-    dataFim: null,
+  
+  // Dialog
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
+  const [agendamentoEditando, setAgendamentoEditando] = useState(null);
+  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState(null);
+  const [formData, setFormData] = useState({
+    clienteId: '',
+    profissionalId: '',
+    servicoId: '',
+    data: format(new Date(), 'yyyy-MM-dd'),
+    horario: '09:00',
+    observacoes: '',
+    status: 'pendente',
   });
 
-  const { dados: atendimentos, loading, error, carregar } = useDados('atendimentos');
-  const { dados: clientes } = useDados('clientes');
-  const { dados: profissionais } = useDados('profissionais');
-  const { dados: servicos } = useDados('servicos');
-  const { dados: pagamentos } = useDados('pagamentos');
-
-  // Carregar configurações da empresa
   useEffect(() => {
-    const carregarConfig = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/configuracoes');
-        const data = await response.json();
-        setConfig(data);
-      } catch (error) {
-        console.error('Erro ao carregar configurações:', error);
-      }
-    };
-    carregarConfig();
+    carregarDados();
   }, []);
 
-  // Função para obter o serviço por ID
-  const getServicoById = (id) => {
-    return servicos.find(s => s.id === id);
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const [agendamentosRes, clientesRes, profissionaisRes, servicosRes] = await Promise.all([
+        api.get('/agendamentos'),
+        api.get('/clientes'),
+        api.get('/profissionais'),
+        api.get('/servicos'),
+      ]);
+      
+      setAgendamentos(agendamentosRes.data || []);
+      setClientes(clientesRes.data || []);
+      setProfissionais(profissionaisRes.data || []);
+      setServicos(servicosRes.data || []);
+      
+      console.log('✅ Dados carregados');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Função para obter todos os serviços do atendimento
-  const getTodosServicos = (atendimento) => {
-    const servicosLista = [];
-    
-    if (atendimento.itensServico && atendimento.itensServico.length > 0) {
-      atendimento.itensServico.forEach(item => {
-        servicosLista.push({
-          id: item.id,
-          nome: item.nome,
-          preco: item.preco,
-          principal: item.principal || false
-        });
+  const handleOpenDialog = (agendamento = null) => {
+    if (agendamento) {
+      setAgendamentoEditando(agendamento);
+      setFormData({
+        clienteId: agendamento.clienteId || '',
+        profissionalId: agendamento.profissionalId || '',
+        servicoId: agendamento.servicoId || '',
+        data: agendamento.data || format(new Date(), 'yyyy-MM-dd'),
+        horario: agendamento.horario || '09:00',
+        observacoes: agendamento.observacoes || '',
+        status: agendamento.status || 'pendente',
       });
-    } 
-    else if (atendimento.servicoId) {
-      const servico = getServicoById(atendimento.servicoId);
-      if (servico) {
-        servicosLista.push({
-          id: servico.id,
-          nome: servico.nome,
-          preco: servico.preco,
-          principal: true
-        });
+    } else {
+      setAgendamentoEditando(null);
+      setFormData({
+        clienteId: '',
+        profissionalId: '',
+        servicoId: '',
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '09:00',
+        observacoes: '',
+        status: 'pendente',
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setAgendamentoEditando(null);
+  };
+
+  const handleOpenDetalhes = (agendamento) => {
+    setAgendamentoSelecionado(agendamento);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setAgendamentoSelecionado(null);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSalvar = async () => {
+    try {
+      if (!formData.clienteId) {
+        toast.error('Selecione um cliente');
+        return;
       }
-    }
-    
-    return servicosLista;
-  };
+      if (!formData.profissionalId) {
+        toast.error('Selecione um profissional');
+        return;
+      }
+      if (!formData.servicoId) {
+        toast.error('Selecione um serviço');
+        return;
+      }
 
-  // Função para obter todos os pagamentos do atendimento
-  const getPagamentosAtendimento = (atendimentoId) => {
-    return pagamentos?.filter(p => p.atendimentoId === atendimentoId) || [];
-  };
+      const dadosParaSalvar = {
+        ...formData,
+        clienteId: parseInt(formData.clienteId),
+        profissionalId: parseInt(formData.profissionalId),
+        servicoId: parseInt(formData.servicoId),
+        dataCriacao: agendamentoEditando ? agendamentoEditando.dataCriacao : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-  // Função para obter resumo dos pagamentos
-  const getResumoPagamentos = (atendimentoId) => {
-    const pagamentosAtendimento = getPagamentosAtendimento(atendimentoId);
-    if (pagamentosAtendimento.length === 0) return null;
-    
-    const total = pagamentosAtendimento.reduce((acc, p) => acc + (p.valor || 0), 0);
-    const formas = pagamentosAtendimento.map(p => p.formaPagamento);
-    
-    return {
-      total,
-      formas,
-      quantidade: pagamentosAtendimento.length,
-      pagamentos: pagamentosAtendimento
-    };
-  };
+      if (agendamentoEditando) {
+        await api.patch(`/agendamentos/${agendamentoEditando.id}`, dadosParaSalvar);
+        toast.success('Agendamento atualizado com sucesso!');
+      } else {
+        dadosParaSalvar.id = Date.now();
+        await api.post('/agendamentos', dadosParaSalvar);
+        toast.success('Agendamento criado com sucesso!');
+      }
 
-  // Função para obter ícone da forma de pagamento
-  const getFormaPagamentoIcon = (forma) => {
-    switch(forma) {
-      case 'dinheiro': return '💵';
-      case 'cartao_credito': return '💳';
-      case 'cartao_debito': return '💳';
-      case 'pix': return '📱';
-      default: return '💰';
+      handleCloseDialog();
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao salvar agendamento:', error);
+      toast.error('Erro ao salvar agendamento');
     }
   };
 
-  // Função para obter label da forma de pagamento
-  const getFormaPagamentoLabel = (forma) => {
-    switch(forma) {
-      case 'dinheiro': return 'Dinheiro';
-      case 'cartao_credito': return 'Cartão Crédito';
-      case 'cartao_debito': return 'Cartão Débito';
-      case 'pix': return 'PIX';
-      default: return forma;
+  const handleAtualizarStatus = async (id, novoStatus) => {
+    try {
+      await api.patch(`/agendamentos/${id}`, { 
+        status: novoStatus,
+        updatedAt: new Date().toISOString()
+      });
+      toast.success(`Status atualizado para ${statusColors[novoStatus].label}`);
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      toast.error('Erro ao atualizar status');
     }
   };
 
-  // Calcular valor total do atendimento
-  const calcularValorTotal = (atendimento) => {
-    if (atendimento.valorTotal) {
-      return atendimento.valorTotal;
-    }
-    
-    let total = 0;
-    const servicos = getTodosServicos(atendimento);
-    total += servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
-    
-    if (atendimento.itensProduto && atendimento.itensProduto.length > 0) {
-      total += atendimento.itensProduto.reduce((acc, item) => 
-        acc + ((item.preco || 0) * (item.quantidade || 1)), 0);
-    }
-    
-    return total;
-  };
-
-  // Obter lista de serviços para exibição resumida
-  const getServicosResumo = (atendimento) => {
-    const servicos = getTodosServicos(atendimento);
-    return servicos.map(s => s.nome).join(', ');
-  };
-
-  // Calcular estatísticas
-  const stats = {
-    total: atendimentos.length,
-    finalizados: atendimentos.filter(a => a.status === 'finalizado').length,
-    em_andamento: atendimentos.filter(a => a.status === 'em_andamento').length,
-    agendados: atendimentos.filter(a => a.status === 'agendado').length,
-    cancelados: atendimentos.filter(a => a.status === 'cancelado').length,
-    totalFaturado: atendimentos
-      .filter(a => a.status === 'finalizado')
-      .reduce((acc, a) => acc + calcularValorTotal(a), 0),
-  };
-
-  // Filtrar atendimentos com base nos critérios
-  const filteredAtendimentos = atendimentos.filter(atendimento => {
-    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
-    const servicosResumo = getServicosResumo(atendimento);
-    const dataAtendimento = new Date(atendimento.data);
-    const hoje = new Date();
-    
-    // Filtro de busca textual
-    const matchesSearch = searchTerm === '' || 
-      cliente?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profissional?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      servicosResumo.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Filtro de status
-    const matchesStatus = filtros.status === 'todos' || atendimento.status === filtros.status;
-    
-    // Filtro de profissional
-    const matchesProfissional = filtros.profissional === 'todos' || atendimento.profissionalId === parseInt(filtros.profissional);
-    
-    // Filtro de período
-    let matchesPeriodo = true;
-    
-    if (filtros.periodo === 'hoje') {
-      matchesPeriodo = format(dataAtendimento, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd');
-    } 
-    else if (filtros.periodo === 'ontem') {
-      const ontem = subDays(hoje, 1);
-      matchesPeriodo = format(dataAtendimento, 'yyyy-MM-dd') === format(ontem, 'yyyy-MM-dd');
-    }
-    else if (filtros.periodo === 'semana') {
-      const inicio = startOfWeek(hoje, { weekStartsOn: 0 });
-      const fim = endOfWeek(hoje, { weekStartsOn: 0 });
-      matchesPeriodo = dataAtendimento >= inicio && dataAtendimento <= fim;
-    }
-    else if (filtros.periodo === 'mes') {
-      const inicio = startOfMonth(hoje);
-      const fim = endOfMonth(hoje);
-      matchesPeriodo = dataAtendimento >= inicio && dataAtendimento <= fim;
-    }
-    else if (filtros.periodo === 'personalizado' && filtros.dataInicio && filtros.dataFim) {
-      matchesPeriodo = dataAtendimento >= filtros.dataInicio && dataAtendimento <= filtros.dataFim;
-    }
-    
-    return matchesSearch && matchesStatus && matchesProfissional && matchesPeriodo;
-  });
-
-  const handleFinalizar = (id) => {
+  const handleIniciarAtendimento = (id) => {
     navigate(`/atendimento/${id}`);
   };
 
-  const handleVerDetalhes = (atendimento) => {
-    console.log('Abrindo detalhes do atendimento:', atendimento);
-    setSelectedAtendimento(atendimento);
-    setOpenDetails(true);
-  };
+  // Filtrar agendamentos
+  const agendamentosFiltrados = agendamentos.filter(ag => {
+    const cliente = clientes.find(c => c.id === ag.clienteId);
+    const profissional = profissionais.find(p => p.id === ag.profissionalId);
+    const servico = servicos.find(s => s.id === ag.servicoId);
+    const dataAg = new Date(ag.data);
+    const hoje = new Date();
 
-  const handleCancelar = async (id) => {
-    if (window.confirm('Tem certeza que deseja cancelar este atendimento?')) {
-      try {
-        await fetch(`http://localhost:3001/atendimentos/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'cancelado' })
-        });
-        toast.success('Atendimento cancelado com sucesso!');
-        carregar();
-      } catch (error) {
-        toast.error('Erro ao cancelar atendimento');
-      }
+    // Filtro de busca
+    const matchesSearch = filtro === '' || 
+      cliente?.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      profissional?.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      servico?.nome?.toLowerCase().includes(filtro.toLowerCase());
+
+    // Filtro de status
+    const matchesStatus = filtroStatus === 'todos' || ag.status === filtroStatus;
+
+    // Filtro de profissional
+    const matchesProfissional = filtroProfissional === 'todos' || ag.profissionalId === parseInt(filtroProfissional);
+
+    // Filtro de período
+    let matchesPeriodo = true;
+    if (filtroPeriodo === 'hoje') {
+      matchesPeriodo = format(dataAg, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd');
+    } else if (filtroPeriodo === 'semana') {
+      const inicio = startOfWeek(hoje, { weekStartsOn: 0 });
+      const fim = endOfWeek(hoje, { weekStartsOn: 0 });
+      matchesPeriodo = dataAg >= inicio && dataAg <= fim;
+    } else if (filtroPeriodo === 'mes') {
+      const inicio = startOfMonth(hoje);
+      const fim = endOfMonth(hoje);
+      matchesPeriodo = dataAg >= inicio && dataAg <= fim;
+    } else if (filtroPeriodo === 'personalizado') {
+      matchesPeriodo = dataAg >= dataInicio && dataAg <= dataFim;
     }
-  };
 
-  const handleReabrir = async (id) => {
-    if (window.confirm('Deseja reabrir este atendimento?')) {
-      try {
-        await fetch(`http://localhost:3001/atendimentos/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'em_andamento' })
-        });
-        toast.success('Atendimento reaberto!');
-        carregar();
-      } catch (error) {
-        toast.error('Erro ao reabrir atendimento');
-      }
+    return matchesSearch && matchesStatus && matchesProfissional && matchesPeriodo;
+  });
+
+  // Ordenar por data e horário
+  const agendamentosOrdenados = [...agendamentosFiltrados].sort((a, b) => {
+    if (a.data !== b.data) {
+      return new Date(a.data) - new Date(b.data);
     }
-  };
+    return a.horario.localeCompare(b.horario);
+  });
 
-  const handleImprimir = (atendimento) => {
-    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
-    const todosServicos = getTodosServicos(atendimento);
-    const produtos = atendimento.itensProduto || [];
-    const valorTotal = calcularValorTotal(atendimento);
-    const resumoPagamentos = getResumoPagamentos(atendimento.id);
-    
-    const empresa = config?.salao || {
-      nome: 'Serena',
-      cnpj: '3971163300015',
-      endereco: { logradouro: '', bairro: '', cidade: '', estado: '', cep: '' },
-      contato: { telefone: '', email: '' }
-    };
+  // Paginação
+  const paginatedAgendamentos = agendamentosOrdenados.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
-    const estilo = `
-      <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #9c27b0; padding-bottom: 20px; }
-        .empresa-nome { color: #9c27b0; font-size: 24px; font-weight: bold; margin: 0; }
-        .empresa-info { color: #666; font-size: 12px; margin: 5px 0; }
-        .titulo { color: #9c27b0; font-size: 18px; margin: 20px 0 10px; }
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0; }
-        .info-item { margin: 5px 0; }
-        .info-label { color: #666; font-size: 12px; }
-        .info-value { font-weight: bold; margin: 0; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th { background-color: #9c27b0; color: white; padding: 10px; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #ddd; }
-        .total { font-size: 18px; font-weight: bold; color: #9c27b0; margin-top: 20px; text-align: right; }
-        .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 20px; }
-      </style>
-    `;
-
-    const conteudo = `
-      <html>
-        <head>
-          <title>Comprovante de Atendimento</title>
-          ${estilo}
-        </head>
-        <body>
-          <div class="header">
-            <h1 class="empresa-nome">${empresa.nome || 'Serena'}</h1>
-            ${empresa.cnpj ? `<p class="empresa-info">CNPJ: ${empresa.cnpj}</p>` : ''}
-            ${empresa.endereco?.logradouro ? `<p class="empresa-info">${empresa.endereco.logradouro}</p>` : ''}
-            ${empresa.contato?.telefone ? `<p class="empresa-info">Tel: ${empresa.contato.telefone}</p>` : ''}
-          </div>
-
-          <h2 class="titulo">COMPROVANTE DE ATENDIMENTO</h2>
-          
-          <div class="info-grid">
-            <div class="info-item">
-              <p class="info-label">Cliente</p>
-              <p class="info-value">${cliente?.nome || 'N/A'}</p>
-              <p class="info-label">Telefone: ${cliente?.telefone || ''}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Profissional</p>
-              <p class="info-value">${profissional?.nome || 'N/A'}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Data</p>
-              <p class="info-value">${new Date(atendimento.data).toLocaleDateString('pt-BR')}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Horário</p>
-              <p class="info-value">${atendimento.horaInicio || ''} - ${atendimento.horaFim || ''}</p>
-            </div>
-          </div>
-
-          <h3 class="titulo">Serviços Realizados</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Serviço</th>
-                <th align="right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${todosServicos.map(s => `
-                <tr>
-                  <td>${s.nome} ${s.principal ? '(Principal)' : ''}</td>
-                  <td align="right">R$ ${(s.preco || 0).toFixed(2)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          ${produtos.length > 0 ? `
-            <h3 class="titulo">Produtos Utilizados</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Produto</th>
-                  <th align="right">Qtd</th>
-                  <th align="right">Preço Unit.</th>
-                  <th align="right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${produtos.map(p => `
-                  <tr>
-                    <td>${p.nome}</td>
-                    <td align="right">${p.quantidade}</td>
-                    <td align="right">R$ ${(p.preco || 0).toFixed(2)}</td>
-                    <td align="right">R$ ${((p.preco || 0) * (p.quantidade || 1)).toFixed(2)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : ''}
-
-          <div class="total">
-            <p>Total: R$ ${valorTotal.toFixed(2)}</p>
-            
-            ${resumoPagamentos ? `
-              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc;">
-                <p style="font-weight: bold; color: #9c27b0;">Detalhamento dos Pagamentos:</p>
-                ${resumoPagamentos.pagamentos.map(p => `
-                  <div style="display: flex; justify-content: space-between; font-size: 13px; margin: 5px 0;">
-                    <span>${getFormaPagamentoLabel(p.formaPagamento)} ${p.parcelas > 1 ? `(${p.parcelas}x)` : ''}</span>
-                    <span>R$ ${p.valor.toFixed(2)}</span>
-                  </div>
-                `).join('')}
-                <div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 5px;">
-                  <span>Total Pago:</span>
-                  <span>R$ ${resumoPagamentos.total.toFixed(2)}</span>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-
-          ${atendimento.observacoes ? `
-            <div style="margin-top: 20px;">
-              <p class="info-label">Observações</p>
-              <p>${atendimento.observacoes}</p>
-            </div>
-          ` : ''}
-
-          <div class="footer">
-            <p>Documento gerado em ${new Date().toLocaleString('pt-BR')}</p>
-            <p>Obrigado pela preferência!</p>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    const janela = window.open('', '_blank');
-    janela.document.write(conteudo);
-    janela.print();
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'finalizado': return 'success';
-      case 'em_andamento': return 'warning';
-      case 'agendado': return 'info';
-      case 'cancelado': return 'error';
-      default: return 'default';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'finalizado': return <CheckIcon />;
-      case 'em_andamento': return <TimerIcon />;
-      case 'agendado': return <ScheduleIcon />;
-      case 'cancelado': return <CancelIcon />;
-      default: return null;
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    switch(status) {
-      case 'finalizado': return 'Finalizado';
-      case 'em_andamento': return 'Em Andamento';
-      case 'agendado': return 'Agendado';
-      case 'cancelado': return 'Cancelado';
-      default: return status;
-    }
-  };
-
-  const calcularDuracao = (inicio, fim) => {
-    if (!inicio || !fim) return '---';
-    const [h1, m1] = inicio.split(':').map(Number);
-    const [h2, m2] = fim.split(':').map(Number);
-    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
-    const horas = Math.floor(diff / 60);
-    const minutos = diff % 60;
-    return `${horas}h ${minutos}min`;
+  // Estatísticas
+  const stats = {
+    total: agendamentos.length,
+    hoje: agendamentos.filter(a => a.data === format(new Date(), 'yyyy-MM-dd')).length,
+    confirmados: agendamentos.filter(a => a.status === 'confirmado').length,
+    pendentes: agendamentos.filter(a => a.status === 'pendente').length,
+    cancelados: agendamentos.filter(a => a.status === 'cancelado').length,
   };
 
   if (loading) {
@@ -501,28 +305,36 @@ function ModernAtendimentos() {
     );
   }
 
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
-
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box>
+        {/* Cabeçalho */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            Atendimentos
-          </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => carregar()}
-          >
-            Atualizar
-          </Button>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              Agendamentos
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Gerencie todos os agendamentos do salão
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={carregarDados}
+            >
+              Atualizar
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            >
+              Novo Agendamento
+            </Button>
+          </Box>
         </Box>
 
         {/* Cards de Estatísticas */}
@@ -533,72 +345,76 @@ function ModernAtendimentos() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              <Card sx={{ bgcolor: '#f3e5f5' }}>
+              <Card>
                 <CardContent>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  <Typography color="textSecondary" gutterBottom>
                     Total
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
                     {stats.total}
                   </Typography>
                 </CardContent>
               </Card>
             </motion.div>
           </Grid>
+
           <Grid item xs={12} sm={6} md={2.4}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <Card sx={{ bgcolor: '#e8f5e8' }}>
+              <Card sx={{ bgcolor: '#e3f2fd' }}>
                 <CardContent>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Finalizados
+                  <Typography color="textSecondary" gutterBottom>
+                    Hoje
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                    {stats.finalizados}
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                    {stats.hoje}
                   </Typography>
                 </CardContent>
               </Card>
             </motion.div>
           </Grid>
+
           <Grid item xs={12} sm={6} md={2.4}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <Card sx={{ bgcolor: '#fff3e0' }}>
+              <Card sx={{ bgcolor: '#e8f5e9' }}>
                 <CardContent>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Em Andamento
+                  <Typography color="textSecondary" gutterBottom>
+                    Confirmados
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                    {stats.em_andamento}
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                    {stats.confirmados}
                   </Typography>
                 </CardContent>
               </Card>
             </motion.div>
           </Grid>
+
           <Grid item xs={12} sm={6} md={2.4}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card sx={{ bgcolor: '#e3f2fd' }}>
+              <Card sx={{ bgcolor: '#fff3e0' }}>
                 <CardContent>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Agendados
+                  <Typography color="textSecondary" gutterBottom>
+                    Pendentes
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                    {stats.agendados}
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                    {stats.pendentes}
                   </Typography>
                 </CardContent>
               </Card>
             </motion.div>
           </Grid>
+
           <Grid item xs={12} sm={6} md={2.4}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -607,10 +423,10 @@ function ModernAtendimentos() {
             >
               <Card sx={{ bgcolor: '#ffebee' }}>
                 <CardContent>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  <Typography color="textSecondary" gutterBottom>
                     Cancelados
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
                     {stats.cancelados}
                   </Typography>
                 </CardContent>
@@ -619,109 +435,17 @@ function ModernAtendimentos() {
           </Grid>
         </Grid>
 
-        {/* Card de Faturamento */}
-        <Card sx={{ mb: 4, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
-          <CardContent>
-            <Grid container alignItems="center" justifyContent="space-between">
-              <Grid item>
-                <Typography variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
-                  Faturamento Total
-                </Typography>
-                <Typography variant="h3" sx={{ color: 'white', fontWeight: 700 }}>
-                  R$ {stats.totalFaturado.toFixed(2)}
-                </Typography>
-              </Grid>
-              <Grid item>
-                <MoneyIcon sx={{ fontSize: 80, color: 'rgba(255,255,255,0.3)' }} />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Atendimentos em Andamento em Destaque */}
-        {stats.em_andamento > 0 && (
-          <Card sx={{ mb: 4, border: '2px solid #ff9800' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <TimerIcon sx={{ color: '#ff9800', mr: 1 }} />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                  Atendimentos em Andamento ({stats.em_andamento})
-                </Typography>
-              </Box>
-              
-              <Grid container spacing={2}>
-                {atendimentos
-                  .filter(a => a.status === 'em_andamento')
-                  .slice(0, 3)
-                  .map(atendimento => {
-                    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-                    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
-                    const servicosResumo = getServicosResumo(atendimento);
-
-                    return (
-                      <Grid item xs={12} md={4} key={atendimento.id}>
-                        <Card variant="outlined" sx={{ p: 2 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Avatar src={cliente?.foto} sx={{ bgcolor: '#ff9800', mr: 2, width: 48, height: 48 }}>
-                              {cliente?.nome?.charAt(0)}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                {cliente?.nome}
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                {servicosResumo.length > 30 ? servicosResumo.substring(0, 30) + '...' : servicosResumo}
-                              </Typography>
-                            </Box>
-                          </Box>
-                          
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2">
-                              <strong>Profissional:</strong> {profissional?.nome}
-                            </Typography>
-                            <Typography variant="body2">
-                              <strong>Início:</strong> {atendimento.horaInicio}
-                            </Typography>
-                            <Typography variant="body2">
-                              <strong>Duração:</strong> {calcularDuracao(atendimento.horaInicio, atendimento.horaFim)}
-                            </Typography>
-                          </Box>
-
-                          <LinearProgress 
-                            variant="determinate" 
-                            value={75} 
-                            sx={{ mb: 2, height: 6, borderRadius: 3 }}
-                          />
-                          
-                          <Button
-                            fullWidth
-                            variant="contained"
-                            color="warning"
-                            startIcon={<TimerIcon />}
-                            onClick={() => handleFinalizar(atendimento.id)}
-                          >
-                            Continuar
-                          </Button>
-                        </Card>
-                      </Grid>
-                    );
-                  })}
-              </Grid>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Barra de Pesquisa e Filtros */}
+        {/* Filtros */}
         <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
                 <TextField
                   fullWidth
-                  variant="outlined"
+                  size="small"
                   placeholder="Buscar por cliente, profissional ou serviço..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -729,468 +453,21 @@ function ModernAtendimentos() {
                       </InputAdornment>
                     ),
                   }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
-                    },
-                  }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<DateRangeIcon />}
-                  onClick={() => setOpenFilter(true)}
-                  sx={{ height: '56px' }}
-                >
-                  Filtrar por Período, Status e Profissional
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
 
-        {/* Tabela de Atendimentos */}
-        <Card>
-          <CardContent>
-            <TableContainer component={Paper} elevation={0}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#faf5ff' }}>
-                    <TableCell><strong>Cliente</strong></TableCell>
-                    <TableCell><strong>Profissional</strong></TableCell>
-                    <TableCell><strong>Serviços</strong></TableCell>
-                    <TableCell><strong>Data</strong></TableCell>
-                    <TableCell><strong>Horário</strong></TableCell>
-                    <TableCell><strong>Duração</strong></TableCell>
-                    <TableCell><strong>Valor</strong></TableCell>
-                    <TableCell><strong>Pagamento</strong></TableCell>
-                    <TableCell><strong>Status</strong></TableCell>
-                    <TableCell align="center"><strong>Ações</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredAtendimentos
-                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((atendimento) => {
-                      const cliente = clientes.find(c => c.id === atendimento.clienteId);
-                      const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
-                      const todosServicos = getTodosServicos(atendimento);
-                      const servicosResumo = todosServicos.map(s => s.nome).join(', ');
-                      const valorTotal = calcularValorTotal(atendimento);
-                      const resumoPagamentos = getResumoPagamentos(atendimento.id);
-
-                      return (
-                        <TableRow key={atendimento.id} hover>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar src={cliente?.foto} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
-                                {cliente?.nome?.charAt(0)}
-                              </Avatar>
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                  {cliente?.nome || 'N/A'}
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                  {cliente?.telefone || ''}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{profissional?.nome || 'N/A'}</TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
-                              {servicosResumo.length > 30 ? servicosResumo.substring(0, 30) + '...' : servicosResumo}
-                            </Typography>
-                            {todosServicos.length > 1 && (
-                              <Chip 
-                                label={`${todosServicos.length} serviços`} 
-                                size="small" 
-                                variant="outlined"
-                                sx={{ mt: 0.5 }}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {atendimento.data ? format(new Date(atendimento.data), 'dd/MM/yyyy') : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {atendimento.horaInicio || '-'}
-                            {atendimento.horaFim && ` - ${atendimento.horaFim}`}
-                          </TableCell>
-                          <TableCell>
-                            {calcularDuracao(atendimento.horaInicio, atendimento.horaFim)}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                              R$ {valorTotal.toFixed(2)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {resumoPagamentos ? (
-                              <Box>
-                                <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
-                                  {resumoPagamentos.formas.map((forma, index) => (
-                                    <Chip
-                                      key={index}
-                                      icon={<span>{getFormaPagamentoIcon(forma)}</span>}
-                                      label={getFormaPagamentoLabel(forma)}
-                                      size="small"
-                                      variant="outlined"
-                                      sx={{ 
-                                        fontSize: '0.7rem',
-                                        height: 24,
-                                        '& .MuiChip-icon': { fontSize: '1rem', ml: 0.5 }
-                                      }}
-                                    />
-                                  ))}
-                                </Stack>
-                                <Typography variant="caption" color="textSecondary">
-                                  {resumoPagamentos.quantidade} pagamento(s) · R$ {resumoPagamentos.total.toFixed(2)}
-                                </Typography>
-                              </Box>
-                            ) : (
-                              <Typography variant="caption" color="textSecondary">
-                                Sem pagamento
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              icon={getStatusIcon(atendimento.status)}
-                              label={getStatusLabel(atendimento.status)}
-                              size="small"
-                              color={getStatusColor(atendimento.status)}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                              <Tooltip title="Ver detalhes">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleVerDetalhes(atendimento)}
-                                >
-                                  <ViewIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              
-                              {atendimento.status === 'em_andamento' && (
-                                <Tooltip title="Continuar">
-                                  <IconButton
-                                    size="small"
-                                    color="warning"
-                                    onClick={() => handleFinalizar(atendimento.id)}
-                                  >
-                                    <TimerIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {atendimento.status === 'agendado' && (
-                                <Tooltip title="Iniciar">
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    onClick={() => handleFinalizar(atendimento.id)}
-                                  >
-                                    <ScheduleIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {atendimento.status === 'finalizado' && (
-                                <Tooltip title="Imprimir">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleImprimir(atendimento)}
-                                  >
-                                    <PrintIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {atendimento.status === 'finalizado' && (
-                                <Tooltip title="Reabrir">
-                                  <IconButton
-                                    size="small"
-                                    color="info"
-                                    onClick={() => handleReabrir(atendimento.id)}
-                                  >
-                                    <RefreshIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              {atendimento.status !== 'cancelado' && atendimento.status !== 'finalizado' && (
-                                <Tooltip title="Cancelar">
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleCancelar(atendimento.id)}
-                                  >
-                                    <CancelIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  {filteredAtendimentos.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 8 }}>
-                        <ScheduleIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography variant="body1" color="textSecondary">
-                          Nenhum atendimento encontrado
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={filteredAtendimentos.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={(e, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              labelRowsPerPage="Linhas por página"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Dialog de Detalhes */}
-        <Dialog open={openDetails} onClose={() => setOpenDetails(false)} maxWidth="md" fullWidth>
-          {selectedAtendimento && (
-            <>
-              <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-                Detalhes do Atendimento #{selectedAtendimento.id}
-              </DialogTitle>
-              <DialogContent>
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                      {clientes.find(c => c.id === selectedAtendimento.clienteId)?.nome}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      {clientes.find(c => c.id === selectedAtendimento.clienteId)?.telefone}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                      {profissionais.find(p => p.id === selectedAtendimento.profissionalId)?.nome}
-                    </Typography>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                      Serviços Realizados
-                    </Typography>
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                      {getTodosServicos(selectedAtendimento).map((item, idx) => (
-                        <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="body2">
-                            {item.nome} {item.principal && '(Principal)'}
-                          </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            R$ {(item.preco || 0).toFixed(2)}
-                          </Typography>
-                        </Box>
-                      ))}
-                      
-                      {selectedAtendimento.itensProduto && selectedAtendimento.itensProduto.length > 0 && (
-                        <>
-                          <Divider sx={{ my: 2 }} />
-                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                            Produtos Utilizados
-                          </Typography>
-                          {selectedAtendimento.itensProduto.map((item, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                              <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </>
-                      )}
-                      
-                      <Divider sx={{ my: 2 }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Total</Typography>
-                        <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 700 }}>
-                          R$ {calcularValorTotal(selectedAtendimento).toFixed(2)}
-                        </Typography>
-                      </Box>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Data</Typography>
-                    <Typography variant="body1">
-                      {new Date(selectedAtendimento.data).toLocaleDateString('pt-BR')}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
-                    <Typography variant="body1">
-                      {selectedAtendimento.horaInicio} - {selectedAtendimento.horaFim || 'Em andamento'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Duração</Typography>
-                    <Typography variant="body1">
-                      {calcularDuracao(selectedAtendimento.horaInicio, selectedAtendimento.horaFim)}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Status</Typography>
-                    <Chip
-                      icon={getStatusIcon(selectedAtendimento.status)}
-                      label={getStatusLabel(selectedAtendimento.status)}
-                      color={getStatusColor(selectedAtendimento.status)}
-                    />
-                  </Grid>
-                  
-                  {pagamentos && (
-                    (() => {
-                      const pagamentosAtendimento = getPagamentosAtendimento(selectedAtendimento.id);
-                      if (pagamentosAtendimento.length > 0) {
-                        const totalPago = pagamentosAtendimento.reduce((acc, p) => acc + (p.valor || 0), 0);
-                        
-                        return (
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                              Pagamentos ({pagamentosAtendimento.length})
-                            </Typography>
-                            <Paper variant="outlined" sx={{ p: 2 }}>
-                              {pagamentosAtendimento.map((pagamento, idx) => (
-                                <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Chip
-                                      icon={<span>{getFormaPagamentoIcon(pagamento.formaPagamento)}</span>}
-                                      label={getFormaPagamentoLabel(pagamento.formaPagamento)}
-                                      size="small"
-                                      sx={{ 
-                                        bgcolor: '#f3e5f5',
-                                        '& .MuiChip-icon': { fontSize: '1rem', ml: 0.5 }
-                                      }}
-                                    />
-                                    {pagamento.parcelas > 1 && (
-                                      <Typography variant="caption" color="textSecondary">
-                                        {pagamento.parcelas}x
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                    R$ {pagamento.valor.toFixed(2)}
-                                  </Typography>
-                                </Box>
-                              ))}
-                              <Divider sx={{ my: 1 }} />
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="subtitle2">Total Pago</Typography>
-                                <Typography variant="subtitle1" sx={{ color: '#4caf50', fontWeight: 700 }}>
-                                  R$ {totalPago.toFixed(2)}
-                                </Typography>
-                              </Box>
-                            </Paper>
-                          </Grid>
-                        );
-                      }
-                      return null;
-                    })()
-                  )}
-
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
-                    <Typography variant="body1">
-                      {selectedAtendimento.observacoes || 'Sem observações'}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </DialogContent>
-              <DialogActions sx={{ p: 3 }}>
-                <Button onClick={() => setOpenDetails(false)}>Fechar</Button>
-                {selectedAtendimento.status === 'agendado' && (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => {
-                      setOpenDetails(false);
-                      handleFinalizar(selectedAtendimento.id);
-                    }}
-                  >
-                    Iniciar Atendimento
-                  </Button>
-                )}
-                {selectedAtendimento.status === 'em_andamento' && (
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    onClick={() => {
-                      setOpenDetails(false);
-                      handleFinalizar(selectedAtendimento.id);
-                    }}
-                  >
-                    Continuar
-                  </Button>
-                )}
-              </DialogActions>
-            </>
-          )}
-        </Dialog>
-
-        {/* Dialog de Filtros com Calendário */}
-        <Dialog open={openFilter} onClose={() => setOpenFilter(false)} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DateRangeIcon />
-              Filtrar Atendimentos
-            </Box>
-          </DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Período</InputLabel>
                   <Select
-                    value={filtros.periodo}
+                    value={filtroPeriodo}
                     label="Período"
-                    onChange={(e) => {
-                      const novoPeriodo = e.target.value;
-                      setFiltros({ 
-                        ...filtros, 
-                        periodo: novoPeriodo,
-                        dataInicio: novoPeriodo === 'personalizado' ? filtros.dataInicio : null,
-                        dataFim: novoPeriodo === 'personalizado' ? filtros.dataFim : null,
-                      });
-                    }}
+                    onChange={(e) => setFiltroPeriodo(e.target.value)}
                   >
-                    <MenuItem value="todos">Todos</MenuItem>
                     <MenuItem value="hoje">
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <TodayIcon fontSize="small" />
                         Hoje
-                      </Box>
-                    </MenuItem>
-                    <MenuItem value="ontem">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TodayIcon fontSize="small" />
-                        Ontem
                       </Box>
                     </MenuItem>
                     <MenuItem value="semana">
@@ -1205,61 +482,55 @@ function ModernAtendimentos() {
                         Este mês
                       </Box>
                     </MenuItem>
-                    <MenuItem value="personalizado">
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DateRangeIcon fontSize="small" />
-                        Personalizado
-                      </Box>
-                    </MenuItem>
+                    <MenuItem value="personalizado">Personalizado</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
 
-              {filtros.periodo === 'personalizado' && (
+              {filtroPeriodo === 'personalizado' && (
                 <>
-                  <Grid item xs={12} md={6}>
+                  <Grid item xs={12} md={2}>
                     <DatePicker
                       label="Data Início"
-                      value={filtros.dataInicio}
-                      onChange={(newValue) => setFiltros({ ...filtros, dataInicio: newValue })}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      value={dataInicio}
+                      onChange={setDataInicio}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid item xs={12} md={2}>
                     <DatePicker
                       label="Data Fim"
-                      value={filtros.dataFim}
-                      onChange={(newValue) => setFiltros({ ...filtros, dataFim: newValue })}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      value={dataFim}
+                      onChange={setDataFim}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </Grid>
                 </>
               )}
 
-              <Grid item xs={12}>
-                <FormControl fullWidth>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
                   <Select
-                    value={filtros.status}
+                    value={filtroStatus}
                     label="Status"
-                    onChange={(e) => setFiltros({ ...filtros, status: e.target.value })}
+                    onChange={(e) => setFiltroStatus(e.target.value)}
                   >
                     <MenuItem value="todos">Todos</MenuItem>
-                    <MenuItem value="agendado">Agendado</MenuItem>
-                    <MenuItem value="em_andamento">Em Andamento</MenuItem>
-                    <MenuItem value="finalizado">Finalizado</MenuItem>
+                    <MenuItem value="confirmado">Confirmado</MenuItem>
+                    <MenuItem value="pendente">Pendente</MenuItem>
                     <MenuItem value="cancelado">Cancelado</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12}>
-                <FormControl fullWidth>
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Profissional</InputLabel>
                   <Select
-                    value={filtros.profissional}
+                    value={filtroProfissional}
                     label="Profissional"
-                    onChange={(e) => setFiltros({ ...filtros, profissional: e.target.value })}
+                    onChange={(e) => setFiltroProfissional(e.target.value)}
                   >
                     <MenuItem value="todos">Todos</MenuItem>
                     {profissionais.map(prof => (
@@ -1269,32 +540,367 @@ function ModernAtendimentos() {
                 </FormControl>
               </Grid>
             </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Tabela de Agendamentos */}
+        <Card>
+          <CardContent>
+            <TableContainer component={Paper} elevation={0}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: '#faf5ff' }}>
+                    <TableCell><strong>Cliente</strong></TableCell>
+                    <TableCell><strong>Profissional</strong></TableCell>
+                    <TableCell><strong>Serviço</strong></TableCell>
+                    <TableCell><strong>Data</strong></TableCell>
+                    <TableCell><strong>Horário</strong></TableCell>
+                    <TableCell><strong>Status</strong></TableCell>
+                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <AnimatePresence>
+                    {paginatedAgendamentos.map((agendamento, index) => {
+                      const cliente = clientes.find(c => c.id === agendamento.clienteId);
+                      const profissional = profissionais.find(p => p.id === agendamento.profissionalId);
+                      const servico = servicos.find(s => s.id === agendamento.servicoId);
+                      
+                      return (
+                        <motion.tr
+                          key={agendamento.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Avatar src={cliente?.foto} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
+                                {cliente?.nome?.charAt(0)}
+                              </Avatar>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {cliente?.nome || 'N/A'}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>{profissional?.nome || 'N/A'}</TableCell>
+                          <TableCell>{servico?.nome || 'N/A'}</TableCell>
+                          <TableCell>
+                            {new Date(agendamento.data).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell>{agendamento.horario}</TableCell>
+                          <TableCell>
+                            <Chip
+                              icon={statusColors[agendamento.status]?.icon}
+                              label={statusColors[agendamento.status]?.label || agendamento.status}
+                              size="small"
+                              sx={{
+                                bgcolor: `${statusColors[agendamento.status]?.color}20`,
+                                color: statusColors[agendamento.status]?.color,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                              <Tooltip title="Ver detalhes">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenDetalhes(agendamento)}
+                                >
+                                  <EventIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+
+                              {agendamento.status === 'pendente' && (
+                                <Tooltip title="Confirmar">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleAtualizarStatus(agendamento.id, 'confirmado')}
+                                    sx={{ color: '#4caf50' }}
+                                  >
+                                    <CheckCircleIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {agendamento.status === 'confirmado' && (
+                                <Tooltip title="Iniciar atendimento">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleIniciarAtendimento(agendamento.id)}
+                                    sx={{ color: '#9c27b0' }}
+                                  >
+                                    <ScheduleIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {agendamento.status !== 'cancelado' && agendamento.status !== 'realizado' && (
+                                <Tooltip title="Cancelar">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleAtualizarStatus(agendamento.id, 'cancelado')}
+                                    sx={{ color: '#f44336' }}
+                                  >
+                                    <CancelIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              <Tooltip title="Editar">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenDialog(agendamento)}
+                                  sx={{ color: '#ff4081' }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+
+                  {paginatedAgendamentos.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                        <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <Typography variant="body1" color="textSecondary">
+                          Nenhum agendamento encontrado
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={agendamentosOrdenados.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(e, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Linhas por página"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Dialog de Cadastro/Edição */}
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+            {agendamentoEditando ? 'Editar Agendamento' : 'Novo Agendamento'}
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Cliente *</InputLabel>
+                  <Select
+                    name="clienteId"
+                    value={formData.clienteId}
+                    label="Cliente *"
+                    onChange={handleInputChange}
+                  >
+                    {clientes.map(c => (
+                      <MenuItem key={c.id} value={c.id}>{c.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Profissional *</InputLabel>
+                  <Select
+                    name="profissionalId"
+                    value={formData.profissionalId}
+                    label="Profissional *"
+                    onChange={handleInputChange}
+                  >
+                    {profissionais.map(p => (
+                      <MenuItem key={p.id} value={p.id}>{p.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Serviço *</InputLabel>
+                  <Select
+                    name="servicoId"
+                    value={formData.servicoId}
+                    label="Serviço *"
+                    onChange={handleInputChange}
+                  >
+                    {servicos.map(s => (
+                      <MenuItem key={s.id} value={s.id}>{s.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data"
+                  name="data"
+                  value={formData.data}
+                  onChange={handleInputChange}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Horário</InputLabel>
+                  <Select
+                    name="horario"
+                    value={formData.horario}
+                    label="Horário"
+                    onChange={handleInputChange}
+                  >
+                    {Array.from({ length: 19 }, (_, i) => {
+                      const hora = String(i + 8).padStart(2, '0');
+                      return (
+                        <MenuItem key={hora} value={`${hora}:00`}>{`${hora}:00`}</MenuItem>
+                      );
+                    })}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    name="status"
+                    value={formData.status}
+                    label="Status"
+                    onChange={handleInputChange}
+                  >
+                    <MenuItem value="pendente">Pendente</MenuItem>
+                    <MenuItem value="confirmado">Confirmado</MenuItem>
+                    <MenuItem value="cancelado">Cancelado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Observações"
+                  name="observacoes"
+                  value={formData.observacoes}
+                  onChange={handleInputChange}
+                  multiline
+                  rows={3}
+                  size="small"
+                  placeholder="Observações sobre o agendamento..."
+                />
+              </Grid>
+            </Grid>
           </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button 
-              onClick={() => {
-                setFiltros({
-                  status: 'todos',
-                  profissional: 'todos',
-                  periodo: 'todos',
-                  dataInicio: null,
-                  dataFim: null,
-                });
-                setOpenFilter(false);
-              }}
-            >
-              Limpar Filtros
-            </Button>
-            <Button onClick={() => setOpenFilter(false)}>Cancelar</Button>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancelar</Button>
             <Button
+              onClick={handleSalvar}
               variant="contained"
-              onClick={() => setOpenFilter(false)}
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              }}
+              sx={{ bgcolor: '#9c27b0' }}
             >
-              Aplicar Filtros
+              {agendamentoEditando ? 'Atualizar' : 'Salvar'}
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog de Detalhes */}
+        <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+            Detalhes do Agendamento
+          </DialogTitle>
+          <DialogContent>
+            {agendamentoSelecionado && (
+              <Box sx={{ mt: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar sx={{ width: 56, height: 56, bgcolor: '#9c27b0' }}>
+                        {clientes.find(c => c.id === agendamentoSelecionado.clienteId)?.nome?.charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6">
+                          {clientes.find(c => c.id === agendamentoSelecionado.clienteId)?.nome}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Cliente
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
+                    <Typography variant="body1">
+                      {profissionais.find(p => p.id === agendamentoSelecionado.profissionalId)?.nome}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="textSecondary">Serviço</Typography>
+                    <Typography variant="body1">
+                      {servicos.find(s => s.id === agendamentoSelecionado.servicoId)?.nome}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="textSecondary">Data</Typography>
+                    <Typography variant="body1">
+                      {new Date(agendamentoSelecionado.data).toLocaleDateString('pt-BR')}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
+                    <Typography variant="body1">{agendamentoSelecionado.horario}</Typography>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="textSecondary">Status</Typography>
+                    <Chip
+                      icon={statusColors[agendamentoSelecionado.status]?.icon}
+                      label={statusColors[agendamentoSelecionado.status]?.label || agendamentoSelecionado.status}
+                      size="small"
+                      sx={{
+                        bgcolor: `${statusColors[agendamentoSelecionado.status]?.color}20`,
+                        color: statusColors[agendamentoSelecionado.status]?.color,
+                      }}
+                    />
+                  </Grid>
+
+                  {agendamentoSelecionado.observacoes && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
+                      <Typography variant="body2">{agendamentoSelecionado.observacoes}</Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDetalhes}>Fechar</Button>
           </DialogActions>
         </Dialog>
       </Box>
@@ -1302,4 +908,4 @@ function ModernAtendimentos() {
   );
 }
 
-export default ModernAtendimentos;
+export default ModernAgendamentos;
