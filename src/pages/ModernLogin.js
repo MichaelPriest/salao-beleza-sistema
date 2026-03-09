@@ -1,4 +1,4 @@
-import { firebaseService } from './firebase';
+import { firebaseService } from '../services/firebase';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 export const usuariosService = {
