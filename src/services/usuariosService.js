@@ -4,15 +4,15 @@ export const usuariosService = {
   // Login
   login: async (email, senha) => {
     try {
-      console.log('Tentando login com:', email, senha);
+      console.log('🔑 Tentando login com:', email);
       
       // Buscar usuário por email
       const response = await api.get(`/usuarios?email=${email}`);
-      console.log('Resposta da API:', response.data);
+      console.log('📥 Resposta da API:', response.data);
       
       const usuarios = response.data;
       
-      if (usuarios.length === 0) {
+      if (!usuarios || usuarios.length === 0) {
         throw new Error('Usuário não encontrado');
       }
       
@@ -30,11 +30,12 @@ export const usuariosService = {
       localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
       
       // Disparar evento para notificar outros componentes
-      window.dispatchEvent(new Event('usuarioAtualizado'));
+      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioSemSenha }));
       
+      console.log('✅ Login bem-sucedido:', usuarioSemSenha.nome);
       return usuarioSemSenha;
     } catch (error) {
-      console.error('Erro detalhado:', error);
+      console.error('❌ Erro no login:', error);
       throw error;
     }
   },
@@ -42,7 +43,8 @@ export const usuariosService = {
   // Logout
   logout: () => {
     localStorage.removeItem('usuario');
-    window.dispatchEvent(new Event('usuarioAtualizado'));
+    window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: null }));
+    console.log('👋 Logout realizado');
   },
 
   // Obter usuário atual
@@ -67,12 +69,12 @@ export const usuariosService = {
       const response = await api.patch(`/usuarios/${id}`, dados);
       const usuario = response.data;
       
-      // Atualizar localStorage
+      // Atualizar localStorage se for o usuário atual
       const usuarioAtual = usuariosService.getUsuarioAtual();
       if (usuarioAtual && usuarioAtual.id === id) {
         const { senha, ...usuarioSemSenha } = usuario;
         localStorage.setItem('usuario', JSON.stringify(usuarioSemSenha));
-        window.dispatchEvent(new Event('usuarioAtualizado'));
+        window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioSemSenha }));
       }
       
       return usuario;
