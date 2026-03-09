@@ -144,7 +144,7 @@ function AnimatedRoutes() {
           <Route path="/agendamentos" element={<ModernAgendamentos />} />
           <Route path="/atendimentos" element={<ModernAtendimentos />} />
           <Route path="/atendimento/:id" element={<ModernAtendimento />} />
-          
+          <Route path="/teste-api" element={<TesteAPI />} />
           {/* Financeiro */}
           <Route path="/financeiro" element={<ModernFinanceiro />} />
           <Route path="/financeiro/pagar" element={<ContasPagar />} />
