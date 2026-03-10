@@ -33,8 +33,9 @@ import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { notificacoesService } from '../services/notificacoesService';
+import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
+import { getAuth } from 'firebase/auth';
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -84,7 +85,6 @@ function ModernHeader() {
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   
-  // Usar useRef para armazenar o estado atual sem causar re-renders
   const usuarioRef = useRef(usuario);
 
   // Função para carregar usuário do localStorage
@@ -93,12 +93,10 @@ function ModernHeader() {
       const user = usuariosService.getUsuarioAtual();
       console.log('Header - Usuário carregado:', user);
       
-      // Verificar se o usuário mudou antes de atualizar o estado
       if (JSON.stringify(user) !== JSON.stringify(usuarioRef.current)) {
         setUsuario(user);
         usuarioRef.current = user;
         
-        // Verificar e setar a foto
         if (user?.avatar && user.avatar !== 'null' && user.avatar !== 'undefined' && user.avatar.trim() !== '') {
           console.log('Header - Foto encontrada:', user.avatar);
           setFotoUrl(user.avatar);
@@ -115,11 +113,9 @@ function ModernHeader() {
   };
 
   useEffect(() => {
-    // Carregar dados iniciais
     carregarUsuario();
     carregarNotificacoes();
 
-    // Listener para eventos personalizados
     const handleUsuarioAtualizado = () => {
       console.log('Header - Evento usuarioAtualizado recebido');
       carregarUsuario();
@@ -135,18 +131,21 @@ function ModernHeader() {
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('usuarioAtualizado', handleUsuarioAtualizado);
 
-    // Cleanup
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('usuarioAtualizado', handleUsuarioAtualizado);
     };
-  }, []); // Array vazio - executa apenas uma vez na montagem
+  }, []);
 
   const carregarNotificacoes = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
       if (user) {
-        const data = await notificacoesService.listar(user.id);
+        // Buscar notificações do Firebase filtrando por usuarioId
+        const data = await firebaseService.query('notificacoes', [
+          { field: 'usuarioId', operator: '==', value: user.id }
+        ], 'data');
+        
         setNotifications(data);
         setUnreadCount(data.filter(n => !n.lida).length);
       }
@@ -174,7 +173,10 @@ function ModernHeader() {
   const handleNotificationClick = async (notification) => {
     try {
       if (!notification.lida) {
-        await notificacoesService.marcarComoLida(notification.id);
+        await firebaseService.update('notificacoes', notification.id, { 
+          lida: true,
+          updatedAt: new Date().toISOString()
+        });
         await carregarNotificacoes();
       }
       
@@ -184,6 +186,7 @@ function ModernHeader() {
       
       handleNotificationsClose();
     } catch (error) {
+      console.error('Erro ao processar notificação:', error);
       toast.error('Erro ao processar notificação');
     }
   };
@@ -191,22 +194,33 @@ function ModernHeader() {
   const handleMarkAllAsRead = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      await notificacoesService.marcarTodasComoLidas(user.id);
+      const naoLidas = notifications.filter(n => !n.lida);
+      
+      const promises = naoLidas.map(n => 
+        firebaseService.update('notificacoes', n.id, { 
+          lida: true,
+          updatedAt: new Date().toISOString()
+        })
+      );
+      
+      await Promise.all(promises);
       await carregarNotificacoes();
       toast.success('Todas as notificações marcadas como lidas');
     } catch (error) {
+      console.error('Erro ao marcar notificações:', error);
       toast.error('Erro ao marcar notificações');
     }
   };
 
   const handleClearAll = async () => {
     try {
-      const promises = notifications.map(n => notificacoesService.excluir(n.id));
+      const promises = notifications.map(n => firebaseService.delete('notificacoes', n.id));
       await Promise.all(promises);
       await carregarNotificacoes();
       toast.success('Notificações removidas');
       handleNotificationsClose();
     } catch (error) {
+      console.error('Erro ao remover notificações:', error);
       toast.error('Erro ao remover notificações');
     }
   };
@@ -224,13 +238,26 @@ function ModernHeader() {
     }
   };
 
-  const handleLogout = () => {
-    usuariosService.logout();
-    setUsuario(null);
-    setFotoUrl(null);
-    usuarioRef.current = null;
-    navigate('/login');
-    toast.success('Logout realizado com sucesso!');
+  const formatDate = (date) => {
+    if (!date) return '';
+    if (date.toDate) {
+      return date.toDate().toLocaleString('pt-BR');
+    }
+    return new Date(date).toLocaleString('pt-BR');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await usuariosService.logout();
+      setUsuario(null);
+      setFotoUrl(null);
+      usuarioRef.current = null;
+      navigate('/login');
+      toast.success('Logout realizado com sucesso!');
+    } catch (error) {
+      console.error('Erro no logout:', error);
+      toast.error('Erro ao fazer logout');
+    }
   };
 
   const handlePerfil = () => {
@@ -401,7 +428,7 @@ function ModernHeader() {
                               {notification.mensagem}
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
-                              {new Date(notification.data).toLocaleString('pt-BR')}
+                              {formatDate(notification.data)}
                             </Typography>
                           </>
                         }
