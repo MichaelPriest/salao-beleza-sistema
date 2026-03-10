@@ -18,6 +18,7 @@ export const FeedbackProvider = ({ children }) => {
     severity: 'success'
   });
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Carregando...');
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -27,13 +28,21 @@ export const FeedbackProvider = ({ children }) => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const showLoading = () => setLoading(true);
-  const hideLoading = () => setLoading(false);
+  const showLoading = (message = 'Carregando...') => {
+    setLoadingMessage(message);
+    setLoading(true);
+  };
+
+  const hideLoading = () => {
+    setLoading(false);
+    setLoadingMessage('Carregando...');
+  };
 
   return (
     <FeedbackContext.Provider value={{
       snackbar,
       loading,
+      loadingMessage,
       showSnackbar,
       hideSnackbar,
       showLoading,
