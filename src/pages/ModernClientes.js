@@ -728,8 +728,20 @@ function ModernClientes() {
                   cidade: formData.cidade,
                   estado: formData.estado,
                 }}
-                onChange={(campo, valor) => setFormData({ ...formData, [campo]: valor })}
-                onCepFound={handleCepFound}
+                onChange={(campo, valor) => {
+                  setFormData(prev => ({ ...prev, [campo]: valor }));
+                }}
+                onCepFound={(dados) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    logradouro: dados.logradouro || prev.logradouro,
+                    bairro: dados.bairro || prev.bairro,
+                    cidade: dados.cidade || prev.cidade,
+                    estado: dados.estado || prev.estado,
+                    complemento: dados.complemento || prev.complemento,
+                  }));
+                  toast.success('Endereço preenchido automaticamente!');
+                }}
               />
             </TabPanel>
 
