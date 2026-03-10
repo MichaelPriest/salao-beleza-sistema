@@ -48,6 +48,7 @@ import Entradas from './pages/Entradas';
 import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
+import MinhasComissoes from './pages/MinhasComissoes';
 
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
@@ -202,6 +203,7 @@ function AnimatedRoutes() {
           <Route path="/perfil" element={<ModernPerfil />} />
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
+          <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
 
           {/* Rota fallback - 404 */}
           <Route path="*" element={<div>Página não encontrada</div>} />
