@@ -1,3 +1,4 @@
+// src/pages/ModernProfissionais.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -23,6 +24,8 @@ import {
   Alert,
   CircularProgress,
   Badge,
+  Snackbar,
+  LinearProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,7 +43,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useDados } from '../hooks/useDados';
+import { firebaseService } from '../services/firebase';
 import {
   AreaChart,
   Area,
@@ -78,17 +81,10 @@ const diasSemana = [
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3'];
 
 function ModernProfissionais() {
-  const { 
-    dados: profissionais, 
-    loading: loadingProfissionais, 
-    error: errorProfissionais, 
-    adicionar, 
-    atualizar, 
-    excluir 
-  } = useDados('profissionais');
-  
-  const { dados: atendimentos, loading: loadingAtendimentos } = useDados('atendimentos');
-  const { dados: servicos, loading: loadingServicos } = useDados('servicos');
+  const [loading, setLoading] = useState(true);
+  const [profissionais, setProfissionais] = useState([]);
+  const [atendimentos, setAtendimentos] = useState([]);
+  const [servicos, setServicos] = useState([]);
   
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
@@ -98,6 +94,7 @@ function ModernProfissionais() {
   const [professionalToDelete, setProfessionalToDelete] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [fotoFile, setFotoFile] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -118,7 +115,39 @@ function ModernProfissionais() {
     diasTrabalho: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
   });
 
-  const loading = loadingProfissionais || loadingAtendimentos || loadingServicos;
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      
+      const [profissionaisData, atendimentosData, servicosData] = await Promise.all([
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('atendimentos').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+      ]);
+      
+      setProfissionais(profissionaisData || []);
+      setAtendimentos(atendimentosData || []);
+      setServicos(servicosData || []);
+      toast.success('Dados carregados!');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   // Reset form quando abrir modal
   useEffect(() => {
@@ -212,7 +241,7 @@ function ModernProfissionais() {
       const ano = dataMes.getFullYear();
       
       const atendimentosMes = atendimentosProfissional.filter(a => {
-        const dataAtendimento = new Date(a.data);
+        const dataAtendimento = a.data?.toDate ? a.data.toDate() : new Date(a.data);
         return dataAtendimento.getMonth() === mesIndex && 
                dataAtendimento.getFullYear() === ano;
       });
@@ -270,10 +299,12 @@ function ModernProfissionais() {
 
   const confirmDelete = async () => {
     try {
-      await excluir(professionalToDelete);
-      toast.success('Profissional removido com sucesso!');
+      await firebaseService.delete('profissionais', professionalToDelete);
+      setProfissionais(profissionais.filter(p => p.id !== professionalToDelete));
+      mostrarSnackbar('Profissional removido com sucesso!');
     } catch (error) {
-      toast.error('Erro ao remover profissional');
+      console.error('Erro ao remover profissional:', error);
+      mostrarSnackbar('Erro ao remover profissional', 'error');
     }
     setOpenDeleteDialog(false);
     setProfessionalToDelete(null);
@@ -289,13 +320,13 @@ function ModernProfissionais() {
     if (file) {
       // Validar tipo de arquivo
       if (!file.type.startsWith('image/')) {
-        toast.error('Por favor, selecione uma imagem válida');
+        mostrarSnackbar('Por favor, selecione uma imagem válida', 'error');
         return;
       }
       
       // Validar tamanho (máximo 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        toast.error('A imagem deve ter no máximo 5MB');
+        mostrarSnackbar('A imagem deve ter no máximo 5MB', 'error');
         return;
       }
 
@@ -322,7 +353,7 @@ function ModernProfissionais() {
     try {
       // Validar campos obrigatórios
       if (!formData.nome || !formData.especialidade || !formData.telefone || !formData.email) {
-        toast.error('Preencha todos os campos obrigatórios');
+        mostrarSnackbar('Preencha todos os campos obrigatórios', 'error');
         return;
       }
 
@@ -341,16 +372,21 @@ function ModernProfissionais() {
       };
 
       if (selectedProfessional) {
-        await atualizar(selectedProfessional.id, profissionalData);
-        toast.success('Profissional atualizado com sucesso!');
+        await firebaseService.update('profissionais', selectedProfessional.id, profissionalData);
+        setProfissionais(profissionais.map(p => 
+          p.id === selectedProfessional.id ? { ...profissionalData, id: selectedProfessional.id } : p
+        ));
+        mostrarSnackbar('Profissional atualizado com sucesso!');
       } else {
-        await adicionar(profissionalData);
-        toast.success('Profissional adicionado com sucesso!');
+        const novoId = await firebaseService.add('profissionais', profissionalData);
+        setProfissionais([...profissionais, { ...profissionalData, id: novoId }]);
+        mostrarSnackbar('Profissional adicionado com sucesso!');
       }
       
       setOpenDialog(false);
     } catch (error) {
-      toast.error('Erro ao salvar profissional');
+      console.error('Erro ao salvar profissional:', error);
+      mostrarSnackbar('Erro ao salvar profissional', 'error');
     }
   };
 
@@ -380,16 +416,8 @@ function ModernProfissionais() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (errorProfissionais) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{errorProfissionais}</Alert>
+      <Box sx={{ width: '100%' }}>
+        <LinearProgress />
       </Box>
     );
   }
@@ -397,7 +425,7 @@ function ModernProfissionais() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Profissionais
         </Typography>
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -537,7 +565,7 @@ function ModernProfissionais() {
                               <Typography variant="caption" color="textSecondary">
                                 Faturamento
                               </Typography>
-                              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                              <Typography variant="h6" sx={{ fontWeight: 600, color: '#4caf50' }}>
                                 {formatarFaturamento(stats.faturamento)}
                               </Typography>
                             </Paper>
@@ -607,6 +635,7 @@ function ModernProfissionais() {
                               e.stopPropagation();
                               handleEdit(professional);
                             }}
+                            sx={{ color: '#9c27b0' }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -616,6 +645,7 @@ function ModernProfissionais() {
                               e.stopPropagation();
                               handleDelete(professional.id);
                             }}
+                            sx={{ color: '#f44336' }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -733,7 +763,7 @@ function ModernProfissionais() {
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="textSecondary">Faturamento Total:</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 500, color: '#9c27b0' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500, color: '#4caf50' }}>
                               {formatarFaturamento(stats.faturamento)}
                             </Typography>
                           </Box>
@@ -1145,6 +1175,12 @@ function ModernProfissionais() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
