@@ -61,7 +61,8 @@ import {
 } from '@mui/lab';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
+import { Timestamp } from 'firebase/firestore';
 
 const statusColors = {
   realizado: { color: '#4caf50', label: 'Realizado' },
@@ -99,17 +100,18 @@ function HistoricoAtendimentos() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [atendimentosRes, clientesRes, profissionaisRes, servicosRes] = await Promise.all([
-        api.get('/historico_atendimentos').catch(() => ({ data: [] })),
-        api.get('/clientes').catch(() => ({ data: [] })),
-        api.get('/profissionais').catch(() => ({ data: [] })),
-        api.get('/servicos').catch(() => ({ data: [] })),
+      
+      const [atendimentosData, clientesData, profissionaisData, servicosData] = await Promise.all([
+        firebaseService.getAll('historico_atendimentos').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
       ]);
       
-      setAtendimentos(atendimentosRes.data || []);
-      setClientes(clientesRes.data || []);
-      setProfissionais(profissionaisRes.data || []);
-      setServicos(servicosRes.data || []);
+      setAtendimentos(atendimentosData || []);
+      setClientes(clientesData || []);
+      setProfissionais(profissionaisData || []);
+      setServicos(servicosData || []);
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -172,10 +174,10 @@ function HistoricoAtendimentos() {
     const matchesTexto = filtro === '' || 
       atendimento.cliente?.toLowerCase().includes(filtro.toLowerCase()) ||
       atendimento.profissional?.toLowerCase().includes(filtro.toLowerCase()) ||
-      atendimento.servicos?.some(s => s.toLowerCase().includes(filtro.toLowerCase()));
+      atendimento.servicos?.some(s => s?.toLowerCase().includes(filtro.toLowerCase()));
 
-    const matchesCliente = filtroCliente === 'todos' || atendimento.clienteId === parseInt(filtroCliente);
-    const matchesProfissional = filtroProfissional === 'todos' || atendimento.profissionalId === parseInt(filtroProfissional);
+    const matchesCliente = filtroCliente === 'todos' || atendimento.clienteId === filtroCliente;
+    const matchesProfissional = filtroProfissional === 'todos' || atendimento.profissionalId === filtroProfissional;
 
     let matchesPeriodo = true;
     if (filtroPeriodo === 'hoje') {
@@ -224,6 +226,22 @@ function HistoricoAtendimentos() {
     valorTotal: atendimentosFiltrados
       .filter(a => a.status === 'realizado')
       .reduce((acc, a) => acc + (a.valor || 0), 0),
+  };
+
+  const formatarDataFirebase = (data) => {
+    if (!data) return '';
+    if (data.toDate) {
+      return data.toDate().toLocaleDateString('pt-BR');
+    }
+    return new Date(data).toLocaleDateString('pt-BR');
+  };
+
+  const formatarHoraFirebase = (hora) => {
+    if (!hora) return '';
+    if (hora.toDate) {
+      return hora.toDate().toLocaleTimeString('pt-BR');
+    }
+    return hora;
   };
 
   if (loading) {
@@ -488,7 +506,7 @@ function HistoricoAtendimentos() {
                 <TimelineContent>
                   <Paper elevation={3} sx={{ p: 2 }}>
                     <Typography variant="subtitle2">
-                      {new Date(atendimento.data).toLocaleDateString('pt-BR')}
+                      {formatarDataFirebase(atendimento.data)}
                     </Typography>
                     <Typography variant="body2">
                       <strong>{atendimento.cliente}</strong> - {atendimento.profissional}
@@ -536,7 +554,7 @@ function HistoricoAtendimentos() {
                     transition={{ delay: index * 0.05 }}
                   >
                     <TableCell>
-                      {new Date(atendimento.data).toLocaleDateString('pt-BR')}
+                      {formatarDataFirebase(atendimento.data)}
                       <Typography variant="caption" display="block" color="textSecondary">
                         {atendimento.horaInicio} - {atendimento.horaFim}
                       </Typography>
@@ -657,7 +675,7 @@ function HistoricoAtendimentos() {
                       <Grid item xs={6}>
                         <Typography variant="caption" color="textSecondary">Data</Typography>
                         <Typography variant="body2">
-                          {new Date(atendimentoSelecionado.data).toLocaleDateString('pt-BR')}
+                          {formatarDataFirebase(atendimentoSelecionado.data)}
                         </Typography>
                       </Grid>
                       <Grid item xs={6}>
