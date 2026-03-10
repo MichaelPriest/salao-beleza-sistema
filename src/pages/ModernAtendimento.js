@@ -443,45 +443,49 @@ function ModernAtendimento() {
     setPagamentoEditando(null);
   };
 
-  const handleFinalizarAtendimento = async () => {
-    try {
-      setSaving(true);
-      
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
+const handleFinalizarAtendimento = async () => {
+  try {
+    setSaving(true);
+    
+    const valorTotal = calcularValorTotal();
+    const totalPago = calcularTotalPago();
+    const saldoRestante = valorTotal - totalPago;
 
-      if (totalPago < valorTotal) {
-        toast.error('Valor total ainda não foi pago!');
-        return;
-      }
-
-      // Finalizar atendimento
-      await firebaseService.update('atendimentos', id, {
-        status: 'finalizado',
-        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        valorTotal,
-        itensServico, // Garantir que os arrays são salvos
-        itensProduto,
-        updatedAt: Timestamp.now()
-      });
-
-      // Atualizar último acesso do cliente
-      const hoje = new Date().toISOString().split('T')[0];
-      await firebaseService.update('clientes', cliente.id, {
-        ultimaVisita: hoje,
-        totalGasto: (cliente.totalGasto || 0) + valorTotal,
-        updatedAt: Timestamp.now()
-      });
-
-      setActiveStep(3);
-      toast.success('Atendimento finalizado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao finalizar atendimento:', error);
-      toast.error('Erro ao finalizar atendimento');
-    } finally {
-      setSaving(false);
+    // 🔥 CORREÇÃO: Usar uma margem de erro para evitar problemas com arredondamento
+    const MARGEM_ERRO = 0.01; // 1 centavo de tolerância
+    
+    if (Math.abs(saldoRestante) > MARGEM_ERRO) {
+      toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
+      return;
     }
-  };
+
+    // Finalizar atendimento
+    await firebaseService.update('atendimentos', id, {
+      status: 'finalizado',
+      horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      valorTotal,
+      itensServico, // Garantir que os arrays são salvos
+      itensProduto,
+      updatedAt: Timestamp.now()
+    });
+
+    // Atualizar último acesso do cliente
+    const hoje = new Date().toISOString().split('T')[0];
+    await firebaseService.update('clientes', cliente.id, {
+      ultimaVisita: hoje,
+      totalGasto: (cliente.totalGasto || 0) + valorTotal,
+      updatedAt: Timestamp.now()
+    });
+
+    setActiveStep(3);
+    toast.success('Atendimento finalizado com sucesso!');
+  } catch (error) {
+    console.error('Erro ao finalizar atendimento:', error);
+    toast.error('Erro ao finalizar atendimento');
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleEnviarComprovante = async (metodo) => {
     try {
@@ -1090,11 +1094,15 @@ function ModernAtendimento() {
                         variant="contained"
                         onClick={handleFinalizarAtendimento}
                         startIcon={<CheckIcon />}
-                        disabled={saving || saldoRestante > 0}
+                        disabled={saving || Math.abs(calcularSaldoRestante()) > 0.01} // 🔥 CORREÇÃO: Usar Math.abs
                         sx={{
-                          background: saldoRestante === 0 ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' : 'grey',
+                          background: Math.abs(calcularSaldoRestante()) <= 0.01 
+                            ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' 
+                            : 'grey',
                           '&:hover': {
-                            background: saldoRestante === 0 ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)' : 'grey',
+                            background: Math.abs(calcularSaldoRestante()) <= 0.01 
+                              ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)' 
+                              : 'grey',
                           },
                         }}
                       >
