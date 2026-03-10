@@ -33,7 +33,6 @@ import {
   LinearProgress,
   TablePagination,
   Avatar,
-  AvatarGroup,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -55,8 +54,6 @@ import {
   Visibility as VisibilityIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  FilterList as FilterIcon,
-  DateRange as DateRangeIcon,
 } from '@mui/icons-material';
 import {
   Timeline,
@@ -70,7 +67,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 const acoesColors = {
   login: { color: '#4caf50', icon: <LoginIcon />, label: 'Login' },
@@ -137,13 +134,15 @@ function Auditoria() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [logsRes, usuariosRes] = await Promise.all([
-        api.get('/auditoria').catch(() => ({ data: [] })),
-        api.get('/usuarios').catch(() => ({ data: [] })),
+      
+      const [logsData, usuariosData] = await Promise.all([
+        firebaseService.getAll('auditoria').catch(() => []),
+        firebaseService.getAll('usuarios').catch(() => []),
       ]);
       
-      setLogs(logsRes.data || []);
-      setUsuarios(usuariosRes.data || []);
+      setLogs(logsData || []);
+      setUsuarios(usuariosData || []);
+      
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -155,8 +154,8 @@ function Auditoria() {
 
   const calcularEstatisticas = () => {
     const hoje = new Date().toISOString().split('T')[0];
-    const seteDiasAtras = subDays(new Date(), 7).toISOString().split('T')[0];
-    const trintaDiasAtras = subDays(new Date(), 30).toISOString().split('T')[0];
+    const seteDiasAtras = subDays(new Date(), 7).toISOString();
+    const trintaDiasAtras = subDays(new Date(), 30).toISOString();
 
     const stats = {
       total: logs.length,
@@ -231,13 +230,13 @@ function Auditoria() {
     try {
       const headers = ['Data/Hora', 'Usuário', 'Ação', 'Entidade', 'ID', 'IP', 'Detalhes'];
       const data = logsFiltrados.map(log => [
-        new Date(log.data).toLocaleString('pt-BR'),
+        log.data ? new Date(log.data).toLocaleString('pt-BR') : '',
         log.usuario || 'Sistema',
         acoesColors[log.acao]?.label || log.acao,
         entidadesLabels[log.entidade] || log.entidade || '-',
         log.entidadeId || '-',
         log.ip || '-',
-        log.detalhes || '',
+        (log.detalhes || '').replace(/"/g, '""'),
       ]);
 
       const csvContent = [headers, ...data]
@@ -260,9 +259,9 @@ function Auditoria() {
   // Filtrar logs
   const logsFiltrados = logs.filter(log => {
     const matchesTexto = filtro === '' || 
-      log.usuario?.toLowerCase().includes(filtro.toLowerCase()) ||
-      log.detalhes?.toLowerCase().includes(filtro.toLowerCase()) ||
-      log.ip?.includes(filtro);
+      (log.usuario && log.usuario.toLowerCase().includes(filtro.toLowerCase())) ||
+      (log.detalhes && log.detalhes.toLowerCase().includes(filtro.toLowerCase())) ||
+      (log.ip && log.ip.includes(filtro));
 
     const matchesAcao = filtroAcao === 'todos' || log.acao === filtroAcao;
     const matchesUsuario = filtroUsuario === 'todos' || log.usuario === filtroUsuario;
@@ -290,9 +289,11 @@ function Auditoria() {
   });
 
   // Ordenar por data (mais recentes primeiro)
-  const logsOrdenados = [...logsFiltrados].sort((a, b) => 
-    new Date(b.data) - new Date(a.data)
-  );
+  const logsOrdenados = [...logsFiltrados].sort((a, b) => {
+    if (!a.data) return 1;
+    if (!b.data) return -1;
+    return new Date(b.data) - new Date(a.data);
+  });
 
   // Paginação
   const paginatedLogs = logsOrdenados.slice(
@@ -320,7 +321,7 @@ function Auditoria() {
   return (
     <Box>
       {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
             Auditoria do Sistema
@@ -329,7 +330,7 @@ function Auditoria() {
             Visualize todas as ações realizadas no sistema
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
@@ -348,7 +349,7 @@ function Auditoria() {
             variant="contained"
             startIcon={<RefreshIcon />}
             onClick={carregarDados}
-            sx={{ bgcolor: '#9c27b0' }}
+            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
           >
             Atualizar
           </Button>
@@ -489,6 +490,7 @@ function Auditoria() {
                   label="Usuário"
                 >
                   <MenuItem value="todos">Todos</MenuItem>
+                  <MenuItem value="Sistema">Sistema</MenuItem>
                   {usuarios.map(u => (
                     <MenuItem key={u.id} value={u.nome}>{u.nome}</MenuItem>
                   ))}
@@ -559,39 +561,41 @@ function Auditoria() {
         </CardContent>
       </Card>
 
-      {/* Timeline de Atividades RecentESTOQUE */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Atividades Recentes
-          </Typography>
-          <Timeline position="alternate">
-            {logsOrdenados.slice(0, 5).map((log, index) => (
-              <TimelineItem key={log.id}>
-                <TimelineSeparator>
-                  <TimelineDot sx={{ bgcolor: acoesColors[log.acao]?.color || '#999' }}>
-                    {acoesColors[log.acao]?.icon || <InfoIcon />}
-                  </TimelineDot>
-                  {index < 4 && <TimelineConnector />}
-                </TimelineSeparator>
-                <TimelineContent>
-                  <Paper elevation={3} sx={{ p: 2 }}>
-                    <Typography variant="subtitle2">
-                      {new Date(log.data).toLocaleString('pt-BR')}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>{log.usuario || 'Sistema'}</strong> - {acoesColors[log.acao]?.label || log.acao}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      {log.detalhes}
-                    </Typography>
-                  </Paper>
-                </TimelineContent>
-              </TimelineItem>
-            ))}
-          </Timeline>
-        </CardContent>
-      </Card>
+      {/* Timeline de Atividades Recentes */}
+      {logsOrdenados.length > 0 && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0', fontWeight: 600 }}>
+              Atividades Recentes
+            </Typography>
+            <Timeline position="alternate">
+              {logsOrdenados.slice(0, 5).map((log, index) => (
+                <TimelineItem key={log.id}>
+                  <TimelineSeparator>
+                    <TimelineDot sx={{ bgcolor: acoesColors[log.acao]?.color || '#999' }}>
+                      {acoesColors[log.acao]?.icon || <InfoIcon />}
+                    </TimelineDot>
+                    {index < 4 && <TimelineConnector />}
+                  </TimelineSeparator>
+                  <TimelineContent>
+                    <Paper elevation={3} sx={{ p: 2 }}>
+                      <Typography variant="subtitle2">
+                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : 'Data não informada'}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>{log.usuario || 'Sistema'}</strong> - {acoesColors[log.acao]?.label || log.acao}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {log.detalhes}
+                      </Typography>
+                    </Paper>
+                  </TimelineContent>
+                </TimelineItem>
+              ))}
+            </Timeline>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabela de Logs */}
       <Card>
@@ -599,13 +603,13 @@ function Auditoria() {
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell>Data/Hora</TableCell>
-                <TableCell>Usuário</TableCell>
-                <TableCell>Ação</TableCell>
-                <TableCell>Entidade</TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell>IP</TableCell>
-                <TableCell align="center">Ações</TableCell>
+                <TableCell><strong>Data/Hora</strong></TableCell>
+                <TableCell><strong>Usuário</strong></TableCell>
+                <TableCell><strong>Ação</strong></TableCell>
+                <TableCell><strong>Entidade</strong></TableCell>
+                <TableCell><strong>ID</strong></TableCell>
+                <TableCell><strong>IP</strong></TableCell>
+                <TableCell align="center"><strong>Ações</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -619,10 +623,16 @@ function Auditoria() {
                     transition={{ delay: index * 0.02 }}
                   >
                     <TableCell>
-                      {new Date(log.data).toLocaleDateString('pt-BR')}
-                      <Typography variant="caption" display="block" color="textSecondary">
-                        {new Date(log.data).toLocaleTimeString('pt-BR')}
-                      </Typography>
+                      {log.data ? (
+                        <>
+                          {new Date(log.data).toLocaleDateString('pt-BR')}
+                          <Typography variant="caption" display="block" color="textSecondary">
+                            {new Date(log.data).toLocaleTimeString('pt-BR')}
+                          </Typography>
+                        </>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -710,7 +720,7 @@ function Auditoria() {
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Data/Hora</Typography>
                   <Typography variant="body2">
-                    {new Date(logSelecionado.data).toLocaleString('pt-BR')}
+                    {logSelecionado.data ? new Date(logSelecionado.data).toLocaleString('pt-BR') : 'Não informada'}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -791,7 +801,12 @@ function Auditoria() {
       </Dialog>
 
       {/* Snackbar */}
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
