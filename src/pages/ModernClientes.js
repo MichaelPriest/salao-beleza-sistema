@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -48,7 +48,8 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useDados } from '../hooks/useDados';
+import { firebaseService } from '../services/firebase';
+import { Timestamp } from 'firebase/firestore';
 import { 
   masks, 
   MaskedInput, 
@@ -74,6 +75,10 @@ function ModernClientes() {
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [tabValue, setTabValue] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [clientes, setClientes] = useState([]);
+
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
@@ -99,7 +104,25 @@ function ModernClientes() {
     },
   });
 
-  const { dados: clientes, loading, error, adicionar, atualizar, excluir } = useDados('clientes');
+  // Carregar clientes do Firebase
+  useEffect(() => {
+    carregarClientes();
+  }, []);
+
+  const carregarClientes = async () => {
+    try {
+      setLoading(true);
+      const data = await firebaseService.getAll('clientes');
+      setClientes(data || []);
+      setError(null);
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+      setError('Erro ao carregar clientes');
+      toast.error('Erro ao carregar clientes');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredClientes = clientes.filter(cliente =>
     cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -175,8 +198,14 @@ function ModernClientes() {
 
   const handleDelete = async (id) => {
     if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
-      await excluir(id);
-      toast.success('Cliente excluído com sucesso!');
+      try {
+        await firebaseService.delete('clientes', id);
+        await carregarClientes();
+        toast.success('Cliente excluído com sucesso!');
+      } catch (err) {
+        console.error('Erro ao excluir cliente:', err);
+        toast.error('Erro ao excluir cliente');
+      }
     }
   };
 
@@ -197,24 +226,33 @@ function ModernClientes() {
       return;
     }
 
+    const agora = Timestamp.now();
+    const hoje = new Date().toISOString().split('T')[0];
+
     const dadosParaSalvar = {
       ...formData,
-      dataCadastro: selectedCliente ? selectedCliente.dataCadastro : new Date().toISOString().split('T')[0],
+      dataCadastro: selectedCliente ? selectedCliente.dataCadastro : hoje,
       ultimaVisita: selectedCliente ? selectedCliente.ultimaVisita : null,
       totalGasto: selectedCliente ? selectedCliente.totalGasto : 0,
-      updatedAt: new Date().toISOString(),
+      updatedAt: agora,
     };
 
-    if (selectedCliente) {
-      await atualizar(selectedCliente.id, dadosParaSalvar);
-      toast.success('Cliente atualizado com sucesso!');
-    } else {
-      dadosParaSalvar.id = Date.now();
-      await adicionar(dadosParaSalvar);
-      toast.success('Cliente cadastrado com sucesso!');
+    try {
+      if (selectedCliente) {
+        await firebaseService.update('clientes', selectedCliente.id, dadosParaSalvar);
+        toast.success('Cliente atualizado com sucesso!');
+      } else {
+        dadosParaSalvar.createdAt = agora;
+        await firebaseService.add('clientes', dadosParaSalvar);
+        toast.success('Cliente cadastrado com sucesso!');
+      }
+      
+      setOpenDialog(false);
+      carregarClientes();
+    } catch (err) {
+      console.error('Erro ao salvar cliente:', err);
+      toast.error('Erro ao salvar cliente');
     }
-    
-    setOpenDialog(false);
   };
 
   const handleCepFound = (dados) => {
