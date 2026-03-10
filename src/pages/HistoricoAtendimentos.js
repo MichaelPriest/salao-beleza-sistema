@@ -76,7 +76,7 @@ const statusColors = {
 };
 
 function HistoricoAtendimentos() {
-  const componentRef = useRef();
+  const componentRef = useRef(null); // 🔥 INICIALIZAR COMO NULL
   const [loading, setLoading] = useState(true);
   const [atendimentos, setAtendimentos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -102,9 +102,9 @@ function HistoricoAtendimentos() {
     carregarDados();
   }, []);
 
-  // Função de impressão
+  // 🔥 FUNÇÃO DE IMPRESSÃO CORRIGIDA
   const handlePrint = useReactToPrint({
-    content: () => componentRef.current,
+    contentRef: componentRef, // 🔥 USAR contentRef EM VEZ DE content
     documentTitle: `historico_atendimentos_${new Date().toISOString().split('T')[0]}`,
     onBeforeGetContent: () => {
       toast.loading('Preparando impressão...', { id: 'print' });
@@ -346,7 +346,14 @@ function HistoricoAtendimentos() {
           <Button
             variant="outlined"
             startIcon={<PrintIcon />}
-            onClick={handlePrint}
+            onClick={() => {
+              // 🔥 VERIFICAR SE HÁ CONTEÚDO PARA IMPRIMIR
+              if (atendimentosFiltrados.length === 0) {
+                toast.error('Não há dados para imprimir');
+                return;
+              }
+              handlePrint();
+            }}
           >
             Imprimir
           </Button>
@@ -819,7 +826,7 @@ function HistoricoAtendimentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Componente oculto para impressão */}
+      {/* Componente oculto para impressão - DEVE FICAR FORA DO DIALOG */}
       <Box sx={{ display: 'none' }}>
         <ImprimirHistorico
           ref={componentRef}
