@@ -1,4 +1,4 @@
-// src/pages/ModernPerfil.js
+// src/pages/ModernPerfil.js (versão corrigida)
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -33,7 +33,7 @@ import {
   PhotoCamera as PhotoCameraIcon,
   Lock as LockIcon,
   History as HistoryIcon,
-  ExitToApp as LogoutIcon,
+  ExitToApp as ExitToAppIcon,
   Close as CloseIcon,
   Login as LoginIcon,
   Create as CreateIcon,
@@ -211,7 +211,7 @@ function ModernPerfil() {
         acao: 'atualizar_perfil',
         detalhes: 'Perfil atualizado',
         data: new Date().toISOString(),
-        ip: '127.0.0.1', // Em produção, pegaria o IP real
+        ip: '127.0.0.1',
       });
       
       setEditando(false);
