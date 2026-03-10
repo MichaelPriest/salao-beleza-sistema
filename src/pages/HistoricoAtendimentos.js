@@ -1,5 +1,5 @@
 // src/pages/HistoricoAtendimentos.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -61,19 +61,22 @@ import {
 } from '@mui/lab';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useReactToPrint } from 'react-to-print';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
+import { ImprimirHistorico } from '../components/ImprimirHistorico';
 
 const statusColors = {
   realizado: { color: '#4caf50', label: 'Realizado' },
   cancelado: { color: '#f44336', label: 'Cancelado' },
   remarcado: { color: '#ff9800', label: 'Remarcado' },
   faltou: { color: '#9e9e9e', label: 'Faltou' },
-  finalizado: { color: '#4caf50', label: 'Finalizado' }, // Adicionado
-  em_andamento: { color: '#ff9800', label: 'Em Andamento' }, // Adicionado
+  finalizado: { color: '#4caf50', label: 'Finalizado' },
+  em_andamento: { color: '#ff9800', label: 'Em Andamento' },
 };
 
 function HistoricoAtendimentos() {
+  const componentRef = useRef();
   const [loading, setLoading] = useState(true);
   const [atendimentos, setAtendimentos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -99,19 +102,33 @@ function HistoricoAtendimentos() {
     carregarDados();
   }, []);
 
-  // 🔥 FUNÇÃO CORRIGIDA - Buscar de atendimentos em vez de historico_atendimentos
+  // Função de impressão
+  const handlePrint = useReactToPrint({
+    content: () => componentRef.current,
+    documentTitle: `historico_atendimentos_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando impressão...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Impressão enviada!', { id: 'print' });
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir', { id: 'print' });
+    }
+  });
+
   const carregarDados = async () => {
     try {
       setLoading(true);
       
       const [atendimentosData, clientesData, profissionaisData, servicosData] = await Promise.all([
-        firebaseService.getAll('atendimentos').catch(() => []), // Mudado de 'historico_atendimentos' para 'atendimentos'
+        firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('servicos').catch(() => []),
       ]);
       
-      // Filtrar apenas atendimentos finalizados (ou mostrar todos se preferir)
       const atendimentosFinalizados = atendimentosData.filter(a => 
         a.status === 'finalizado' || a.status === 'cancelado'
       );
@@ -136,21 +153,18 @@ function HistoricoAtendimentos() {
     }
   };
 
-  // 🔥 FUNÇÃO AUXILIAR - Buscar nome do cliente
   const getClienteNome = (clienteId) => {
     if (!clienteId) return 'Cliente não identificado';
     const cliente = clientes.find(c => c.id === clienteId);
     return cliente?.nome || 'Cliente não encontrado';
   };
 
-  // 🔥 FUNÇÃO AUXILIAR - Buscar nome do profissional
   const getProfissionalNome = (profissionalId) => {
     if (!profissionalId) return 'Profissional não identificado';
     const profissional = profissionais.find(p => p.id === profissionalId);
     return profissional?.nome || 'Profissional não encontrado';
   };
 
-  // 🔥 FUNÇÃO AUXILIAR - Buscar nomes dos serviços
   const getServicosNomes = (atendimento) => {
     if (atendimento.itensServico && atendimento.itensServico.length > 0) {
       return atendimento.itensServico.map(item => item.nome);
@@ -161,7 +175,6 @@ function HistoricoAtendimentos() {
     return [];
   };
 
-  // 🔥 FUNÇÃO AUXILIAR - Calcular valor total
   const getValorTotal = (atendimento) => {
     if (atendimento.valorTotal) return atendimento.valorTotal;
     
@@ -301,6 +314,14 @@ function HistoricoAtendimentos() {
     return hora;
   };
 
+  const getPeriodoTexto = () => {
+    if (filtroPeriodo === 'hoje') return 'Hoje';
+    if (filtroPeriodo === 'semana') return 'Últimos 7 dias';
+    if (filtroPeriodo === 'mes') return 'Últimos 30 dias';
+    if (filtroPeriodo === 'personalizado') return `${dataInicio} a ${dataFim}`;
+    return 'Todos os períodos';
+  };
+
   if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
@@ -321,13 +342,22 @@ function HistoricoAtendimentos() {
             Visualize todo o histórico de atendimentos realizados
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<DownloadIcon />}
-          onClick={handleExportCSV}
-        >
-          Exportar Relatório
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={handlePrint}
+          >
+            Imprimir
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCSV}
+          >
+            Exportar
+          </Button>
+        </Box>
       </Box>
 
       {/* Cards de Estatísticas */}
@@ -786,15 +816,18 @@ function HistoricoAtendimentos() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetalhes}>Fechar</Button>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={() => window.print()}
-          >
-            Imprimir
-          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <ImprimirHistorico
+          ref={componentRef}
+          atendimentos={atendimentosFiltrados}
+          clienteNome="Todos os Clientes"
+          periodo={getPeriodoTexto()}
+        />
+      </Box>
 
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
