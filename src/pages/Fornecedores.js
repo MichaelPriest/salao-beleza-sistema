@@ -52,11 +52,11 @@ import {
   StarBorder as StarBorderIcon,
   Receipt as ReceiptIcon,
   ShoppingCart as ShoppingCartIcon,
-  CheckCircle as CheckIcon, // Corrigido: importando CheckCircle como CheckIcon
+  CheckCircle as CheckIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 function Fornecedores() {
   const [loading, setLoading] = useState(true);
@@ -69,8 +69,10 @@ function Fornecedores() {
   const [openDialog, setOpenDialog] = useState(false);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [openComprasDialog, setOpenComprasDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [fornecedorEditando, setFornecedorEditando] = useState(null);
   const [fornecedorSelecionado, setFornecedorSelecionado] = useState(null);
+  const [fornecedorToDelete, setFornecedorToDelete] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const [formData, setFormData] = useState({
@@ -131,15 +133,19 @@ function Fornecedores() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [fornecedoresRes, comprasRes] = await Promise.all([
-        api.get('/fornecedores'),
-        api.get('/compras'),
+      
+      const [fornecedoresData, comprasData] = await Promise.all([
+        firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('compras').catch(() => []),
       ]);
-      setFornecedores(fornecedoresRes.data || []);
-      setCompras(comprasRes.data || []);
+      
+      setFornecedores(fornecedoresData || []);
+      setCompras(comprasData || []);
+      
+      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      mostrarSnackbar('Erro ao carregar dados', 'error');
+      toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -231,6 +237,24 @@ function Fornecedores() {
     setFornecedorSelecionado(null);
   };
 
+  const handleDelete = (id) => {
+    setFornecedorToDelete(id);
+    setOpenDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await firebaseService.delete('fornecedores', fornecedorToDelete);
+      setFornecedores(fornecedores.filter(f => f.id !== fornecedorToDelete));
+      mostrarSnackbar('Fornecedor excluído com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir fornecedor:', error);
+      mostrarSnackbar('Erro ao excluir fornecedor', 'error');
+    }
+    setOpenDeleteDialog(false);
+    setFornecedorToDelete(null);
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name.includes('.')) {
@@ -268,25 +292,49 @@ function Fornecedores() {
         return;
       }
 
+      // Preparar dados para salvar
       const dadosParaSalvar = {
-        ...formData,
+        nome: String(formData.nome).trim(),
+        nomeFantasia: formData.nomeFantasia ? String(formData.nomeFantasia).trim() : null,
+        cnpj: String(formData.cnpj).replace(/[^\d]/g, ''),
+        ie: formData.ie ? String(formData.ie) : null,
+        telefone: formData.telefone ? String(formData.telefone) : null,
+        celular: formData.celular ? String(formData.celular) : null,
+        email: formData.email ? String(formData.email).toLowerCase() : null,
+        site: formData.site ? String(formData.site).toLowerCase() : null,
+        categoria: String(formData.categoria),
+        rating: Number(formData.rating) || 0,
+        endereco: formData.endereco,
+        contato: formData.contato,
+        observacoes: formData.observacoes ? String(formData.observacoes).trim() : null,
+        status: String(formData.status),
+        prazoEntrega: Number(formData.prazoEntrega) || 5,
+        formasPagamento: formData.formasPagamento,
         updatedAt: new Date().toISOString(),
       };
 
       if (fornecedorEditando) {
-        await api.patch(`/fornecedores/${fornecedorEditando.id}`, dadosParaSalvar);
+        await firebaseService.update('fornecedores', fornecedorEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        const fornecedoresAtualizados = fornecedores.map(f => 
+          f.id === fornecedorEditando.id ? { ...f, ...dadosParaSalvar, id: fornecedorEditando.id } : f
+        );
+        setFornecedores(fornecedoresAtualizados);
+        
         mostrarSnackbar('Fornecedor atualizado com sucesso!');
       } else {
-        dadosParaSalvar.id = Date.now();
         dadosParaSalvar.dataCadastro = new Date().toISOString();
         dadosParaSalvar.totalCompras = 0;
         dadosParaSalvar.valorTotalCompras = 0;
-        await api.post('/fornecedores', dadosParaSalvar);
+        
+        const novoId = await firebaseService.add('fornecedores', dadosParaSalvar);
+        setFornecedores([...fornecedores, { ...dadosParaSalvar, id: novoId }]);
+        
         mostrarSnackbar('Fornecedor cadastrado com sucesso!');
       }
 
       handleCloseDialog();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao salvar fornecedor:', error);
       mostrarSnackbar('Erro ao salvar fornecedor', 'error');
@@ -296,12 +344,18 @@ function Fornecedores() {
   const handleToggleStatus = async (fornecedor) => {
     try {
       const novoStatus = fornecedor.status === 'ativo' ? 'inativo' : 'ativo';
-      await api.patch(`/fornecedores/${fornecedor.id}`, {
+      
+      await firebaseService.update('fornecedores', fornecedor.id, {
         status: novoStatus,
         updatedAt: new Date().toISOString(),
       });
+
+      // Atualizar estado local
+      setFornecedores(prev => prev.map(f => 
+        f.id === fornecedor.id ? { ...f, status: novoStatus } : f
+      ));
+
       mostrarSnackbar(`Fornecedor ${novoStatus === 'ativo' ? 'ativado' : 'desativado'} com sucesso!`);
-      carregarDados();
     } catch (error) {
       console.error('Erro ao alterar status:', error);
       mostrarSnackbar('Erro ao alterar status', 'error');
@@ -313,7 +367,7 @@ function Fornecedores() {
     const comprasFornecedor = compras.filter(c => c.fornecedorId === fornecedorId);
     return {
       totalCompras: comprasFornecedor.length,
-      valorTotal: comprasFornecedor.reduce((acc, c) => acc + (c.valorTotal || 0), 0),
+      valorTotal: comprasFornecedor.reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0),
       ultimaCompra: comprasFornecedor.length > 0 
         ? new Date(Math.max(...comprasFornecedor.map(c => new Date(c.dataCompra))))
         : null,
@@ -325,7 +379,7 @@ function Fornecedores() {
     const matchesTexto = filtro === '' || 
       f.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
       f.nomeFantasia?.toLowerCase().includes(filtro.toLowerCase()) ||
-      f.cnpj?.includes(filtro) ||
+      f.cnpj?.includes(filtro.replace(/[^\d]/g, '')) ||
       f.email?.toLowerCase().includes(filtro.toLowerCase());
 
     const matchesCategoria = filtroCategoria === 'todos' || f.categoria === filtroCategoria;
@@ -582,7 +636,7 @@ function Fornecedores() {
                       </TableCell>
                       <TableCell align="center">
                         <Rating
-                          value={fornecedor.rating || 0}
+                          value={Number(fornecedor.rating) || 0}
                           readOnly
                           size="small"
                           precision={0.5}
@@ -751,7 +805,7 @@ function Fornecedores() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0' }}>
                 Endereço
               </Typography>
             </Grid>
@@ -832,7 +886,7 @@ function Fornecedores() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 1, color: '#9c27b0' }}>
                 Contato
               </Typography>
             </Grid>
@@ -905,7 +959,7 @@ function Fornecedores() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, mt: 1, color: '#9c27b0' }}>
                 Informações Comerciais
               </Typography>
             </Grid>
@@ -928,7 +982,7 @@ function Fornecedores() {
                 <Typography>Avaliação:</Typography>
                 <Rating
                   name="rating"
-                  value={formData.rating}
+                  value={Number(formData.rating)}
                   onChange={(event, newValue) => {
                     setFormData(prev => ({ ...prev, rating: newValue }));
                   }}
@@ -937,7 +991,7 @@ function Fornecedores() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: '#9c27b0' }}>
                 Formas de Pagamento Aceitas
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -949,6 +1003,10 @@ function Fornecedores() {
                     color={formData.formasPagamento.includes(forma) ? 'primary' : 'default'}
                     variant={formData.formasPagamento.includes(forma) ? 'filled' : 'outlined'}
                     size="small"
+                    sx={{
+                      bgcolor: formData.formasPagamento.includes(forma) ? '#9c27b0' : 'transparent',
+                      color: formData.formasPagamento.includes(forma) ? 'white' : 'inherit',
+                    }}
                   />
                 ))}
               </Box>
@@ -1000,14 +1058,14 @@ function Fornecedores() {
                       {fornecedorSelecionado.cnpj}
                     </Typography>
                     <Box sx={{ mt: 1 }}>
-                      <Rating value={fornecedorSelecionado.rating || 0} readOnly size="small" />
+                      <Rating value={Number(fornecedorSelecionado.rating) || 0} readOnly size="small" />
                     </Box>
                   </Paper>
                 </Grid>
 
                 <Grid item xs={12} md={8}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                       Informações de Contato
                     </Typography>
                     
@@ -1032,7 +1090,7 @@ function Fornecedores() {
 
                     <Divider sx={{ my: 2 }} />
 
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0' }}>
                       Endereço
                     </Typography>
                     <Typography variant="body2">
@@ -1048,7 +1106,7 @@ function Fornecedores() {
 
                 <Grid item xs={12}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0' }}>
                       Informações Comerciais
                     </Typography>
                     <Grid container spacing={2}>
@@ -1073,13 +1131,13 @@ function Fornecedores() {
                       <Grid item xs={6} md={3}>
                         <Typography variant="caption" color="textSecondary">Cadastro</Typography>
                         <Typography variant="body2">
-                          {new Date(fornecedorSelecionado.dataCadastro).toLocaleDateString('pt-BR')}
+                          {fornecedorSelecionado.dataCadastro ? new Date(fornecedorSelecionado.dataCadastro).toLocaleDateString('pt-BR') : '—'}
                         </Typography>
                       </Grid>
                     </Grid>
 
                     <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0' }}>
                         Formas de Pagamento
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1091,12 +1149,17 @@ function Fornecedores() {
                             variant="outlined"
                           />
                         ))}
+                        {(!fornecedorSelecionado.formasPagamento || fornecedorSelecionado.formasPagamento.length === 0) && (
+                          <Typography variant="caption" color="textSecondary">
+                            Nenhuma forma de pagamento informada
+                          </Typography>
+                        )}
                       </Box>
                     </Box>
 
                     {fornecedorSelecionado.observacoes && (
                       <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0' }}>
                           Observações
                         </Typography>
                         <Typography variant="body2">{fornecedorSelecionado.observacoes}</Typography>
@@ -1125,10 +1188,10 @@ function Fornecedores() {
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                      <TableCell>Nº Pedido</TableCell>
-                      <TableCell>Data</TableCell>
-                      <TableCell align="right">Valor</TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell><strong>Nº Pedido</strong></TableCell>
+                      <TableCell><strong>Data</strong></TableCell>
+                      <TableCell align="right"><strong>Valor</strong></TableCell>
+                      <TableCell><strong>Status</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1138,14 +1201,14 @@ function Fornecedores() {
                         <TableRow key={compra.id}>
                           <TableCell>{compra.numeroPedido}</TableCell>
                           <TableCell>
-                            {new Date(compra.dataCompra).toLocaleDateString('pt-BR')}
+                            {compra.dataCompra ? new Date(compra.dataCompra).toLocaleDateString('pt-BR') : '—'}
                           </TableCell>
                           <TableCell align="right">
-                            R$ {compra.valorTotal?.toFixed(2)}
+                            R$ {Number(compra.valorTotal || 0).toFixed(2)}
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={compra.status}
+                              label={compra.status || '—'}
                               size="small"
                               color={
                                 compra.status === 'entregue' ? 'success' :
@@ -1175,25 +1238,25 @@ function Fornecedores() {
                   <Grid container spacing={2}>
                     <Grid item xs={4}>
                       <Typography variant="caption" color="textSecondary">Total de Compras</Typography>
-                      <Typography variant="h6">
+                      <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
                         {compras.filter(c => c.fornecedorId === fornecedorSelecionado.id).length}
                       </Typography>
                     </Grid>
                     <Grid item xs={4}>
                       <Typography variant="caption" color="textSecondary">Valor Total</Typography>
-                      <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                      <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 600 }}>
                         R$ {compras
                           .filter(c => c.fornecedorId === fornecedorSelecionado.id)
-                          .reduce((acc, c) => acc + (c.valorTotal || 0), 0)
+                          .reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0)
                           .toFixed(2)}
                       </Typography>
                     </Grid>
                     <Grid item xs={4}>
                       <Typography variant="caption" color="textSecondary">Ticket Médio</Typography>
-                      <Typography variant="h6" sx={{ color: '#ff4081' }}>
+                      <Typography variant="h6" sx={{ color: '#ff4081', fontWeight: 600 }}>
                         R$ {(compras
                           .filter(c => c.fornecedorId === fornecedorSelecionado.id)
-                          .reduce((acc, c) => acc + (c.valorTotal || 0), 0) / 
+                          .reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0) / 
                           Math.max(1, compras.filter(c => c.fornecedorId === fornecedorSelecionado.id).length)
                         ).toFixed(2)}
                       </Typography>
@@ -1206,6 +1269,31 @@ function Fornecedores() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseCompras}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Confirmar Exclusão
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Tem certeza que deseja excluir este fornecedor?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Esta ação não poderá ser desfeita.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenDeleteDialog(false)}>Cancelar</Button>
+          <Button 
+            variant="contained" 
+            color="error"
+            onClick={confirmDelete}
+          >
+            Excluir
+          </Button>
         </DialogActions>
       </Dialog>
 
