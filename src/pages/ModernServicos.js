@@ -1,3 +1,4 @@
+// src/pages/ModernServicos.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -18,7 +19,8 @@ import {
   Select,
   MenuItem,
   Alert,
-  CircularProgress,
+  LinearProgress,
+  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,26 +31,20 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useDados } from '../hooks/useDados';
+import { firebaseService } from '../services/firebase';
 
 const categories = ['Cabelo', 'Unhas', 'Barba', 'Maquiagem', 'Estética', 'Depilação', 'Massagem'];
 
 function ModernServicos() {
-  const { 
-    dados: servicos, 
-    loading, 
-    error, 
-    adicionar, 
-    atualizar, 
-    excluir 
-  } = useDados('servicos');
-  
-  const { dados: profissionais } = useDados('profissionais');
+  const [loading, setLoading] = useState(true);
+  const [servicos, setServicos] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
   
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -60,6 +56,38 @@ function ModernServicos() {
     comissaoProfissional: 50,
     ativo: true
   });
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      
+      const [servicosData, profissionaisData] = await Promise.all([
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+      ]);
+      
+      setServicos(servicosData || []);
+      setProfissionais(profissionaisData || []);
+      toast.success('Dados carregados!');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   // Reset form quando abrir modal
   useEffect(() => {
@@ -105,10 +133,12 @@ function ModernServicos() {
 
   const confirmDelete = async () => {
     try {
-      await excluir(serviceToDelete);
-      toast.success('Serviço excluído com sucesso!');
+      await firebaseService.delete('servicos', serviceToDelete);
+      setServicos(servicos.filter(s => s.id !== serviceToDelete));
+      mostrarSnackbar('Serviço excluído com sucesso!');
     } catch (error) {
-      toast.error('Erro ao excluir serviço');
+      console.error('Erro ao excluir serviço:', error);
+      mostrarSnackbar('Erro ao excluir serviço', 'error');
     }
     setOpenDeleteDialog(false);
     setServiceToDelete(null);
@@ -120,14 +150,14 @@ function ModernServicos() {
     try {
       // Validar campos obrigatórios
       if (!formData.nome || !formData.duracao || !formData.preco) {
-        toast.error('Preencha todos os campos obrigatórios');
+        mostrarSnackbar('Preencha todos os campos obrigatórios', 'error');
         return;
       }
 
       // Validar preço
       const precoNumerico = parseFloat(formData.preco.toString().replace(',', '.'));
       if (isNaN(precoNumerico) || precoNumerico <= 0) {
-        toast.error('Preço inválido');
+        mostrarSnackbar('Preço inválido', 'error');
         return;
       }
 
@@ -140,16 +170,21 @@ function ModernServicos() {
       };
 
       if (selectedService) {
-        await atualizar(selectedService.id, serviceData);
-        toast.success('Serviço atualizado com sucesso!');
+        await firebaseService.update('servicos', selectedService.id, serviceData);
+        setServicos(servicos.map(s => 
+          s.id === selectedService.id ? { ...serviceData, id: selectedService.id } : s
+        ));
+        mostrarSnackbar('Serviço atualizado com sucesso!');
       } else {
-        await adicionar(serviceData);
-        toast.success('Serviço adicionado com sucesso!');
+        const novoId = await firebaseService.add('servicos', serviceData);
+        setServicos([...servicos, { ...serviceData, id: novoId }]);
+        mostrarSnackbar('Serviço adicionado com sucesso!');
       }
       
       setOpenDialog(false);
     } catch (error) {
-      toast.error('Erro ao salvar serviço');
+      console.error('Erro ao salvar serviço:', error);
+      mostrarSnackbar('Erro ao salvar serviço', 'error');
     }
   };
 
@@ -175,7 +210,7 @@ function ModernServicos() {
       return true;
     }
     
-    // Verificar pelo nome (simulação - em um sistema real, teria um campo específico)
+    // Verificar pelo nome
     if (servico.nome.toLowerCase().includes('cabelo') && 
         profissional.especialidade?.toLowerCase().includes('cabelo')) {
       return true;
@@ -186,26 +221,13 @@ function ModernServicos() {
       return true;
     }
     
-    // Para simplificar, vamos considerar que alguns profissionais fazem alguns serviços
-    // Em um sistema real, você teria uma relação muitos-para-muitos
-    if (profissional.id === 1 && servico.categoria === 'Cabelo') return true;
-    if (profissional.id === 2 && servico.categoria === 'Barba') return true;
-    
     return false;
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+      <Box sx={{ width: '100%' }}>
+        <LinearProgress />
       </Box>
     );
   }
@@ -213,7 +235,7 @@ function ModernServicos() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Serviços
         </Typography>
         
@@ -279,10 +301,18 @@ function ModernServicos() {
                             }}
                           />
                           <Box>
-                            <IconButton size="small" onClick={() => handleEdit(service)}>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleEdit(service)}
+                              sx={{ color: '#9c27b0' }}
+                            >
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleDelete(service.id)}>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleDelete(service.id)}
+                              sx={{ color: '#f44336' }}
+                            >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Box>
@@ -505,6 +535,12 @@ function ModernServicos() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
