@@ -272,165 +272,227 @@ function ModernFinanceiro() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSalvar = async () => {
-    try {
-      // Validações
-      if (!formData.descricao.trim()) {
-        mostrarSnackbar('Descrição é obrigatória', 'error');
-        return;
-      }
-
-      if (!formData.valor || formData.valor <= 0) {
-        mostrarSnackbar('Valor deve ser maior que zero', 'error');
-        return;
-      }
-
-      const dadosParaSalvar = {
-        ...formData,
-        valor: parseFloat(formData.valor),
-        data: formData.data,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (formData.status === 'pago') {
-        dadosParaSalvar.dataPagamento = new Date().toISOString();
-      }
-
-      if (transacaoEditando) {
-        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
-        setTransacoes(transacoes.map(t => 
-          t.id === transacaoEditando.id ? { ...dadosParaSalvar, id: transacaoEditando.id } : t
-        ));
-        mostrarSnackbar('Transação atualizada com sucesso!');
-      } else {
-        const novoId = await firebaseService.add('transacoes', {
-          ...dadosParaSalvar,
-          dataCriacao: new Date().toISOString(),
-        });
-        setTransacoes([...transacoes, { ...dadosParaSalvar, id: novoId, dataCriacao: new Date().toISOString() }]);
-        mostrarSnackbar('Transação criada com sucesso!');
-      }
-
-      handleCloseDialog();
-      
-      // Atualizar listas filtradas
-      const todasTransacoes = transacaoEditando 
-        ? transacoes.map(t => t.id === transacaoEditando.id ? { ...dadosParaSalvar, id: transacaoEditando.id } : t)
-        : [...transacoes, { ...dadosParaSalvar, id: Date.now() }];
-      
-      setContasPagar(todasTransacoes.filter(t => t.tipo === 'despesa'));
-      setContasReceber(todasTransacoes.filter(t => t.tipo === 'receita'));
-      
-    } catch (error) {
-      console.error('Erro ao salvar transação:', error);
-      mostrarSnackbar('Erro ao salvar transação', 'error');
+const handleSalvar = async () => {
+  try {
+    // Validações
+    if (!formData.descricao?.trim()) {
+      mostrarSnackbar('Descrição é obrigatória', 'error');
+      return;
     }
-  };
 
-  const handleAbrirFecharCaixa = async () => {
-    try {
-      if (!caixa || caixa.status === 'fechado') {
-        // Abrir caixa
-        // Buscar usuário do localStorage com segurança
-        let usuarioId = null;
-        try {
-          const usuarioStr = localStorage.getItem('usuario');
-          if (usuarioStr) {
-            const usuario = JSON.parse(usuarioStr);
-            usuarioId = usuario?.id || null;
-          }
-        } catch (e) {
-          console.warn('Erro ao parsear usuário do localStorage:', e);
-        }
-  
-        const novoCaixa = {
-          dataAbertura: new Date().toISOString(),
-          saldoInicial: 0,
-          saldoAtual: 0,
-          movimentacoes: [],
-          status: 'aberto',
-          responsavelId: usuarioId || 'sistema', // Fallback para 'sistema' se não encontrar usuário
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        
-        const novoId = await firebaseService.add('caixa', novoCaixa);
-        setCaixa({ ...novoCaixa, id: novoId });
-        mostrarSnackbar('Caixa aberto com sucesso!');
-      } else {
-        // Fechar caixa
-        const caixaFechado = {
-          ...caixa,
-          status: 'fechado',
-          dataFechamento: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await firebaseService.update('caixa', caixa.id, {
-          status: 'fechado',
-          dataFechamento: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        
-        setCaixa(caixaFechado);
-        mostrarSnackbar('Caixa fechado com sucesso!');
-      }
-      handleCloseCaixaDialog();
-    } catch (error) {
-      console.error('Erro ao abrir/fechar caixa:', error);
-      mostrarSnackbar('Erro ao operar caixa', 'error');
+    const valorNumerico = parseFloat(formData.valor);
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      mostrarSnackbar('Valor deve ser maior que zero', 'error');
+      return;
     }
-  };
 
-  const handleMarcarComoPago = async (transacao) => {
-    try {
-      await firebaseService.update('transacoes', transacao.id, {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-  
+    // Preparar dados para salvar
+    const dadosParaSalvar = {
+      tipo: String(formData.tipo),
+      descricao: String(formData.descricao).trim(),
+      valor: Number(valorNumerico),
+      data: String(formData.data),
+      dataVencimento: formData.dataVencimento ? String(formData.dataVencimento) : null,
+      categoria: formData.categoria ? String(formData.categoria) : null,
+      formaPagamento: String(formData.formaPagamento),
+      status: String(formData.status),
+      clienteId: formData.clienteId ? String(formData.clienteId) : null,
+      fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+      observacoes: formData.observacoes ? String(formData.observacoes) : null,
+      parcelas: Number(formData.parcelas) || 1,
+      recorrente: Boolean(formData.recorrente),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Adicionar data de pagamento se status for pago
+    if (formData.status === 'pago') {
+      dadosParaSalvar.dataPagamento = new Date().toISOString();
+    }
+
+    // Remover campos undefined
+    Object.keys(dadosParaSalvar).forEach(key => {
+      if (dadosParaSalvar[key] === undefined) {
+        delete dadosParaSalvar[key];
+      }
+    });
+
+    if (transacaoEditando) {
+      await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+      
       // Atualizar estado local
       const transacoesAtualizadas = transacoes.map(t => 
-        t.id === transacao.id ? { ...t, status: 'pago', dataPagamento: new Date().toISOString() } : t
+        t.id === transacaoEditando.id ? { ...t, ...dadosParaSalvar, id: transacaoEditando.id } : t
       );
       setTransacoes(transacoesAtualizadas);
       setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa'));
       setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita'));
-  
-      // Atualizar saldo do caixa se estiver aberto
-      if (caixa && caixa.status === 'aberto' && caixa.id) {
-        const novoSaldo = caixa.saldoAtual + (transacao.tipo === 'receita' ? transacao.valor : -transacao.valor);
-        const novaMovimentacao = {
-          id: Date.now().toString(),
-          tipo: transacao.tipo,
-          valor: transacao.valor,
-          descricao: transacao.descricao,
-          data: new Date().toISOString(),
-          transacaoId: transacao.id,
-        };
-        
-        const movimentacoes = [...(caixa.movimentacoes || []), novaMovimentacao];
-        
-        await firebaseService.update('caixa', caixa.id, {
-          saldoAtual: novoSaldo,
-          movimentacoes,
-          updatedAt: new Date().toISOString(),
-        });
-        
-        setCaixa({ 
-          ...caixa, 
-          saldoAtual: novoSaldo, 
-          movimentacoes 
-        });
-      }
-  
-      mostrarSnackbar('Transação marcada como paga!');
-    } catch (error) {
-      console.error('Erro ao marcar como pago:', error);
-      mostrarSnackbar('Erro ao processar pagamento', 'error');
+      
+      mostrarSnackbar('Transação atualizada com sucesso!');
+    } else {
+      dadosParaSalvar.dataCriacao = new Date().toISOString();
+      
+      const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
+      
+      const novaTransacao = { ...dadosParaSalvar, id: novoId };
+      const novasTransacoes = [...transacoes, novaTransacao];
+      setTransacoes(novasTransacoes);
+      setContasPagar(novasTransacoes.filter(t => t.tipo === 'despesa'));
+      setContasReceber(novasTransacoes.filter(t => t.tipo === 'receita'));
+      
+      mostrarSnackbar('Transação criada com sucesso!');
     }
-  };
+
+    handleCloseDialog();
+  } catch (error) {
+    console.error('Erro ao salvar transação:', error);
+    mostrarSnackbar('Erro ao salvar transação', 'error');
+  }
+};
+
+const handleAbrirFecharCaixa = async () => {
+  try {
+    if (!caixa || caixa.status === 'fechado') {
+      // Abrir caixa
+      // Buscar usuário do localStorage com segurança
+      let usuarioId = 'sistema'; // Valor padrão
+      try {
+        const usuarioStr = localStorage.getItem('usuario');
+        if (usuarioStr) {
+          const usuario = JSON.parse(usuarioStr);
+          usuarioId = usuario?.id || 'sistema';
+        }
+      } catch (e) {
+        console.warn('Erro ao parsear usuário do localStorage:', e);
+      }
+
+      // Garantir que todos os campos têm valores válidos
+      const novoCaixa = {
+        dataAbertura: new Date().toISOString(),
+        saldoInicial: 0,
+        saldoAtual: 0,
+        movimentacoes: [], // Array vazio, não null
+        status: 'aberto',
+        responsavelId: String(usuarioId), // Converter para string
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // Validar se não há undefined
+      Object.keys(novoCaixa).forEach(key => {
+        if (novoCaixa[key] === undefined) {
+          novoCaixa[key] = null; // Substituir undefined por null
+        }
+      });
+      
+      const novoId = await firebaseService.add('caixa', novoCaixa);
+      setCaixa({ ...novoCaixa, id: novoId });
+      mostrarSnackbar('Caixa aberto com sucesso!');
+    } else {
+      // Fechar caixa - garantir que só enviamos os campos necessários
+      const dadosAtualizacao = {
+        status: 'fechado',
+        dataFechamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // Validar se não há undefined
+      Object.keys(dadosAtualizacao).forEach(key => {
+        if (dadosAtualizacao[key] === undefined) {
+          dadosAtualizacao[key] = null;
+        }
+      });
+      
+      await firebaseService.update('caixa', caixa.id, dadosAtualizacao);
+      
+      setCaixa({ 
+        ...caixa, 
+        status: 'fechado',
+        dataFechamento: new Date().toISOString() 
+      });
+      
+      mostrarSnackbar('Caixa fechado com sucesso!');
+    }
+    handleCloseCaixaDialog();
+  } catch (error) {
+    console.error('Erro ao abrir/fechar caixa:', error);
+    mostrarSnackbar('Erro ao operar caixa', 'error');
+  }
+};
+
+const handleMarcarComoPago = async (transacao) => {
+  try {
+    // Validar dados da transação
+    if (!transacao || !transacao.id) {
+      mostrarSnackbar('Transação inválida', 'error');
+      return;
+    }
+
+    // Atualizar transação
+    const dadosTransacao = {
+      status: 'pago',
+      dataPagamento: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    await firebaseService.update('transacoes', transacao.id, dadosTransacao);
+
+    // Atualizar estado local
+    const transacoesAtualizadas = transacoes.map(t => 
+      t.id === transacao.id ? { ...t, ...dadosTransacao } : t
+    );
+    setTransacoes(transacoesAtualizadas);
+    setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa'));
+    setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita'));
+
+    // Atualizar saldo do caixa se estiver aberto
+    if (caixa && caixa.status === 'aberto' && caixa.id) {
+      // Calcular novo saldo
+      const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
+      const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
+      
+      // Criar nova movimentação
+      const novaMovimentacao = {
+        id: Date.now().toString(),
+        tipo: transacao.tipo,
+        valor: Number(transacao.valor), // Garantir que é número
+        descricao: String(transacao.descricao || ''),
+        data: new Date().toISOString(),
+        transacaoId: String(transacao.id),
+      };
+      
+      // Garantir que movimentacoes é um array
+      const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+      const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+      
+      // Dados para atualizar o caixa
+      const dadosCaixa = {
+        saldoAtual: Number(novoSaldo), // Garantir que é número
+        movimentacoes: novasMovimentacoes,
+        updatedAt: new Date().toISOString(),
+      };
+      
+      // Validar dados antes de enviar
+      Object.keys(dadosCaixa).forEach(key => {
+        if (dadosCaixa[key] === undefined) {
+          dadosCaixa[key] = null;
+        }
+      });
+      
+      await firebaseService.update('caixa', caixa.id, dadosCaixa);
+      
+      setCaixa({ 
+        ...caixa, 
+        saldoAtual: novoSaldo, 
+        movimentacoes: novasMovimentacoes 
+      });
+    }
+
+    mostrarSnackbar('Transação marcada como paga!');
+  } catch (error) {
+    console.error('Erro ao marcar como pago:', error);
+    mostrarSnackbar('Erro ao processar pagamento', 'error');
+  }
+};
 
   // Cálculo das estatísticas
   const calcularEstatisticas = () => {
