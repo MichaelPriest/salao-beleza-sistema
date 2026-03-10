@@ -225,10 +225,19 @@ function ModernClientes() {
       toast.error('Telefone é obrigatório');
       return;
     }
-
-    const agora = Timestamp.now();
+  
+    // Verificar tamanho da foto (segurança)
+    if (formData.foto) {
+      const size = imageCompressor.getImageSize(formData.foto);
+      if (size > 250) { // 250KB de margem de segurança
+        toast.error(`Foto muito grande (${size.toFixed(0)}KB). Máximo 200KB.`);
+        return;
+      }
+    }
+  
+    const agora = new Date().toISOString();
     const hoje = new Date().toISOString().split('T')[0];
-
+  
     const dadosParaSalvar = {
       ...formData,
       dataCadastro: selectedCliente ? selectedCliente.dataCadastro : hoje,
@@ -236,7 +245,7 @@ function ModernClientes() {
       totalGasto: selectedCliente ? selectedCliente.totalGasto : 0,
       updatedAt: agora,
     };
-
+  
     try {
       if (selectedCliente) {
         await firebaseService.update('clientes', selectedCliente.id, dadosParaSalvar);
@@ -251,7 +260,13 @@ function ModernClientes() {
       carregarClientes();
     } catch (err) {
       console.error('Erro ao salvar cliente:', err);
-      toast.error('Erro ao salvar cliente');
+      
+      // Mensagem de erro específica para tamanho
+      if (err.code === 'invalid-argument' && err.message.includes('too large')) {
+        toast.error('Foto muito grande. Escolha uma imagem menor.');
+      } else {
+        toast.error('Erro ao salvar cliente');
+      }
     }
   };
 
@@ -594,6 +609,7 @@ function ModernClientes() {
                     value={formData.foto}
                     onChange={(value) => setFormData({ ...formData, foto: value })}
                     label="Foto do Cliente"
+                    maxSizeKB={150} // Opcional: define tamanho máximo (padrão: 200KB)
                   />
                 </Grid>
 
@@ -707,7 +723,15 @@ function ModernClientes() {
                   estado: formData.estado,
                 }}
                 onChange={(campo, valor) => setFormData({ ...formData, [campo]: valor })}
-                onCepFound={handleCepFound}
+                onCepFound={(dados) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    logradouro: dados.logradouro || prev.logradouro,
+                    bairro: dados.bairro || prev.bairro,
+                    cidade: dados.cidade || prev.cidade,
+                    estado: dados.estado || prev.estado,
+                  }));
+                }}
               />
             </TabPanel>
 
