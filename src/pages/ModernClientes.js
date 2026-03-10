@@ -46,11 +46,11 @@ import {
   AttachMoney as MoneyIcon,
   Visibility as VisibilityIcon,
   History as HistoryIcon,
-  Print as PrintIcon, // 🔥 NOVO ÍCONE
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useReactToPrint } from 'react-to-print'; // 🔥 NOVO
+import { useReactToPrint } from 'react-to-print';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { 
@@ -62,7 +62,7 @@ import {
   HistoricoAtendimentosCliente,
   imageCompressor
 } from '../utils/plugins';
-import { ImprimirCliente } from '../components/ImprimirCliente'; // 🔥 NOVO COMPONENTE
+import { ImprimirCliente } from '../components/ImprimirCliente';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -73,7 +73,7 @@ function TabPanel({ children, value, index }) {
 }
 
 function ModernClientes() {
-  const componentRef = useRef(); // 🔥 REF PARA IMPRESSÃO
+  const componentRef = useRef(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,11 +110,17 @@ function ModernClientes() {
     },
   });
 
-  // 🔥 FUNÇÃO DE IMPRESSÃO
+  // 🔥 FUNÇÃO DE IMPRESSÃO CORRIGIDA
   const handlePrintCliente = useReactToPrint({
-    content: () => componentRef.current,
-    documentTitle: `cliente_${selectedCliente?.nome?.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}`,
+    contentRef: componentRef,
+    documentTitle: selectedCliente 
+      ? `cliente_${selectedCliente.nome?.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}`
+      : `cliente_${new Date().toISOString().split('T')[0]}`,
     onBeforeGetContent: () => {
+      if (!selectedCliente) {
+        toast.error('Nenhum cliente selecionado para impressão');
+        return;
+      }
       toast.loading('Preparando impressão...', { id: 'print' });
     },
     onAfterPrint: () => {
@@ -966,24 +972,28 @@ function ModernClientes() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenViewDialog(false)}>Fechar</Button>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrintCliente}
-            sx={{ mr: 1 }}
-          >
-            Imprimir Ficha
-          </Button>
+          {selectedCliente && (
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintCliente}
+              sx={{ mr: 1 }}
+            >
+              Imprimir Ficha
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
-      {/* Componente oculto para impressão */}
-      <Box sx={{ display: 'none' }}>
-        <ImprimirCliente
-          ref={componentRef}
-          cliente={selectedCliente}
-        />
-      </Box>
+      {/* Componente oculto para impressão - SÓ APARECE QUANDO selectedCliente EXISTE */}
+      {selectedCliente && (
+        <Box sx={{ display: 'none' }}>
+          <ImprimirCliente
+            ref={componentRef}
+            cliente={selectedCliente}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
