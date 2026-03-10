@@ -49,6 +49,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useFirebase } from '../hooks/useFirebase';
+import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 
 // Funções auxiliares de data
@@ -415,15 +416,19 @@ function ModernAgendamentos() {
           principal: true
         }],
         itensProduto: [],
-        valorTotal: servico?.preco || 0
+        valorTotal: servico?.preco || 0,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       };
 
-      // Usar o serviço de atendimentos do Firebase
-      const { adicionar: adicionarAtendimento } = useFirebase('atendimentos');
-      const atendimentoCriado = await adicionarAtendimento(novoAtendimento);
+      // Usar firebaseService diretamente
+      const atendimentoCriado = await firebaseService.add('atendimentos', novoAtendimento);
       
       // Atualizar status do agendamento
-      await atualizar(agendamento.id, { status: 'em_andamento' });
+      await atualizar(agendamento.id, { 
+        status: 'em_andamento',
+        updatedAt: Timestamp.now()
+      });
 
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
