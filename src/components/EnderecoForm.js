@@ -1,9 +1,15 @@
 // src/components/EnderecoForm.js
 import React from 'react';
 import { Grid, TextField } from '@mui/material';
-import { CepInput, masks } from '../utils/plugins';
+import { CepInput } from '../utils/plugins'; // Removido masks da importação
 
 export const EnderecoForm = ({ endereco, onChange, onCepFound }) => {
+  
+  const handleCepChange = (e) => {
+    // O CepInput já aplica a máscara, então só passamos o valor
+    onChange('cep', e.target.value);
+  };
+
   return (
     <Grid container spacing={2}>
       <Grid item xs={12} md={4}>
@@ -12,7 +18,7 @@ export const EnderecoForm = ({ endereco, onChange, onCepFound }) => {
           label="CEP"
           name="cep"
           value={endereco.cep || ''}
-          onChange={(e) => onChange('cep', masks.cep(e.target.value))}
+          onChange={handleCepChange} // 🔥 CORRIGIDO: não aplicar máscara duplicada
           onCepFound={onCepFound}
           size="small"
         />
