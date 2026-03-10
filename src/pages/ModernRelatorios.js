@@ -1,3 +1,4 @@
+// src/pages/ModernRelatorios.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -21,7 +22,8 @@ import {
   Chip,
   CircularProgress,
   Avatar,
-  Divider,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
@@ -31,13 +33,14 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { firebaseService } from '../services/firebase';
 import {
   AreaChart,
   Area,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -49,7 +52,6 @@ import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import api from '../services/api';
 
 // Tenta importar o logo, com fallback
 let logo;
@@ -243,9 +245,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 ))}
                 <TableRow sx={{ bgcolor: '#f3e5f5' }}>
                   <TableCell sx={{ fontWeight: 700 }}>TOTAL</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + row.dinheiro, 0) || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + row.cartao, 0) || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + row.pix, 0) || 0)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.dinheiro || 0), 0) || 0)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.cartao || 0), 0) || 0)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.pix || 0), 0) || 0)}</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.total || 0)}</TableCell>
                 </TableRow>
               </TableBody>
@@ -509,6 +511,7 @@ function ModernRelatorios() {
     mediaDia: 0,
     mediaPorProfissional: 0
   });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const componentRef = useRef();
   const [isPrintReady, setIsPrintReady] = useState(false);
@@ -523,6 +526,14 @@ function ModernRelatorios() {
       setIsPrintReady(true);
     }
   }, [dados]);
+
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   const carregarDados = async () => {
     try {
@@ -552,10 +563,10 @@ function ModernRelatorios() {
         ...response
       }));
       
-      toast.success('Dados carregados com sucesso!');
+      mostrarSnackbar('Dados carregados com sucesso!');
     } catch (error) {
       console.error('Erro ao carregar relatório:', error);
-      toast.error('Erro ao carregar dados do relatório');
+      mostrarSnackbar('Erro ao carregar dados do relatório', 'error');
     } finally {
       setLoading(false);
     }
@@ -563,14 +574,14 @@ function ModernRelatorios() {
 
   const gerarRelatorioFinanceiro = async () => {
     try {
-      const response = await api.get('/pagamentos');
-      const pagamentos = response.data || [];
+      const pagamentos = await firebaseService.getAll('transacoes').catch(() => []);
 
       const dataInicioObj = new Date(dataInicio);
       const dataFimObj = new Date(dataFim);
       dataFimObj.setHours(23, 59, 59);
 
       const pagamentosFiltrados = pagamentos.filter(p => {
+        if (!p.data || p.status !== 'pago') return false;
         const dataPagamento = new Date(p.data);
         return dataPagamento >= dataInicioObj && dataPagamento <= dataFimObj;
       });
@@ -584,16 +595,18 @@ function ModernRelatorios() {
           dias[dia] = { total: 0, dinheiro: 0, cartao: 0, pix: 0 };
         }
         
-        const valor = p.valor || 0;
+        const valor = Number(p.valor) || 0;
         dias[dia].total += valor;
         
-        const forma = p.formaPagamento?.toLowerCase() || '';
+        const forma = (p.formaPagamento || '').toLowerCase();
         if (forma === 'dinheiro') {
           dias[dia].dinheiro += valor;
         } else if (forma === 'pix') {
           dias[dia].pix += valor;
         } else if (forma?.includes('cartao')) {
           dias[dia].cartao += valor;
+        } else {
+          dias[dia].cartao += valor; // Default para cartão
         }
       });
 
@@ -603,14 +616,18 @@ function ModernRelatorios() {
         dinheiro: dias[dia].dinheiro,
         cartao: dias[dia].cartao,
         pix: dias[dia].pix,
-      }));
+      })).sort((a, b) => {
+        const [diaA, mesA, anoA] = a.dia.split('/');
+        const [diaB, mesB, anoB] = b.dia.split('/');
+        return new Date(anoA, mesA - 1, diaA) - new Date(anoB, mesB - 1, diaB);
+      });
 
-      const totalPeriodo = pagamentosFiltrados.reduce((acc, p) => acc + (p.valor || 0), 0);
+      const totalPeriodo = pagamentosFiltrados.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
       
       const formasMap = {};
       pagamentosFiltrados.forEach(p => {
-        const forma = p.formaPagamento?.toLowerCase() || 'outros';
-        const valor = p.valor || 0;
+        const forma = (p.formaPagamento || 'outros').toLowerCase();
+        const valor = Number(p.valor) || 0;
         
         if (forma === 'dinheiro') {
           formasMap['Dinheiro'] = (formasMap['Dinheiro'] || 0) + valor;
@@ -648,41 +665,36 @@ function ModernRelatorios() {
 
   const gerarRelatorioAtendimentos = async () => {
     try {
-      const [atendimentosRes, servicosRes] = await Promise.all([
-        api.get('/atendimentos').catch(() => ({ data: [] })),
-        api.get('/servicos').catch(() => ({ data: [] })),
+      const [atendimentos, servicos] = await Promise.all([
+        firebaseService.getAll('historico_atendimentos').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
       ]);
-
-      const atendimentos = atendimentosRes.data || [];
-      const servicos = servicosRes.data || [];
 
       const dataInicioObj = new Date(dataInicio);
       const dataFimObj = new Date(dataFim);
       dataFimObj.setHours(23, 59, 59);
 
       const atendimentosFiltrados = atendimentos.filter(a => {
+        if (!a.data) return false;
         const dataAtendimento = new Date(a.data);
         return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
       });
 
       const porServico = {};
       atendimentosFiltrados.forEach(a => {
-        if (a.itensServico && a.itensServico.length > 0) {
-          a.itensServico.forEach(item => {
-            const nomeServico = item.nome || 'Serviço';
+        if (a.servicos && a.servicos.length > 0) {
+          a.servicos.forEach(nomeServico => {
             porServico[nomeServico] = (porServico[nomeServico] || 0) + 1;
           });
         } else {
-          const servico = servicos.find(s => s.id === a.servicoId);
-          const nomeServico = servico?.nome || 'Não identificado';
-          porServico[nomeServico] = (porServico[nomeServico] || 0) + 1;
+          porServico['Não identificado'] = (porServico['Não identificado'] || 0) + 1;
         }
       });
 
       const dadosGrafico = Object.keys(porServico).map(nome => ({
         name: nome,
         value: porServico[nome],
-      }));
+      })).sort((a, b) => b.value - a.value);
 
       const diffTime = Math.abs(new Date(dataFim) - new Date(dataInicio));
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
@@ -704,19 +716,17 @@ function ModernRelatorios() {
 
   const gerarRelatorioClientes = async () => {
     try {
-      const [clientesRes, atendimentosRes] = await Promise.all([
-        api.get('/clientes').catch(() => ({ data: [] })),
-        api.get('/atendimentos').catch(() => ({ data: [] })),
+      const [clientes, atendimentos] = await Promise.all([
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('historico_atendimentos').catch(() => []),
       ]);
-
-      const clientes = clientesRes.data || [];
-      const atendimentos = atendimentosRes.data || [];
 
       const dataInicioObj = new Date(dataInicio);
       const dataFimObj = new Date(dataFim);
       dataFimObj.setHours(23, 59, 59);
 
       const atendimentosFiltrados = atendimentos.filter(a => {
+        if (!a.data) return false;
         const dataAtendimento = new Date(a.data);
         return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
       });
@@ -724,12 +734,14 @@ function ModernRelatorios() {
       const frequencia = {};
       atendimentosFiltrados.forEach(a => {
         const clienteId = a.clienteId;
-        frequencia[clienteId] = (frequencia[clienteId] || 0) + 1;
+        if (clienteId) {
+          frequencia[clienteId] = (frequencia[clienteId] || 0) + 1;
+        }
       });
 
       const topClientes = Object.keys(frequencia)
         .map(id => {
-          const cliente = clientes.find(c => c.id === parseInt(id));
+          const cliente = clientes.find(c => c.id === id);
           return {
             cliente: cliente?.nome || 'Cliente não encontrado',
             atendimentos: frequencia[id],
@@ -763,19 +775,17 @@ function ModernRelatorios() {
 
   const gerarRelatorioProfissionais = async () => {
     try {
-      const [profissionaisRes, atendimentosRes] = await Promise.all([
-        api.get('/profissionais').catch(() => ({ data: [] })),
-        api.get('/atendimentos').catch(() => ({ data: [] })),
+      const [profissionais, atendimentos] = await Promise.all([
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('historico_atendimentos').catch(() => []),
       ]);
-
-      const profissionais = profissionaisRes.data || [];
-      const atendimentos = atendimentosRes.data || [];
 
       const dataInicioObj = new Date(dataInicio);
       const dataFimObj = new Date(dataFim);
       dataFimObj.setHours(23, 59, 59);
 
       const atendimentosFiltrados = atendimentos.filter(a => {
+        if (!a.data) return false;
         const dataAtendimento = new Date(a.data);
         return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
       });
@@ -783,16 +793,18 @@ function ModernRelatorios() {
       const desempenho = {};
       atendimentosFiltrados.forEach(a => {
         const profissionalId = a.profissionalId;
-        desempenho[profissionalId] = (desempenho[profissionalId] || 0) + 1;
+        if (profissionalId) {
+          desempenho[profissionalId] = (desempenho[profissionalId] || 0) + 1;
+        }
       });
 
       const dadosGrafico = Object.keys(desempenho).map(id => {
-        const profissional = profissionais.find(p => p.id === parseInt(id));
+        const profissional = profissionais.find(p => p.id === id);
         return {
           name: profissional?.nome?.split(' ')[0] || 'Profissional',
           atendimentos: desempenho[id],
         };
-      });
+      }).sort((a, b) => b.atendimentos - a.atendimentos);
 
       return {
         grafico: dadosGrafico,
@@ -909,10 +921,10 @@ function ModernRelatorios() {
           head: [['Data', 'Dinheiro (R$)', 'Cartão (R$)', 'PIX (R$)', 'Total (R$)']],
           body: dados.graficoLinha?.map(row => [
             row.dia,
-            row.dinheiro.toFixed(2),
-            row.cartao.toFixed(2),
-            row.pix.toFixed(2),
-            row.total.toFixed(2),
+            Number(row.dinheiro || 0).toFixed(2),
+            Number(row.cartao || 0).toFixed(2),
+            Number(row.pix || 0).toFixed(2),
+            Number(row.total || 0).toFixed(2),
           ]),
           theme: 'striped',
           headStyles: { fillColor: [156, 39, 176], textColor: 255 },
@@ -942,7 +954,7 @@ function ModernRelatorios() {
           head: [['Forma de Pagamento', 'Valor (R$)', '%']],
           body: dados.graficoPizza?.map(row => [
             row.name,
-            row.value.toFixed(2),
+            Number(row.value || 0).toFixed(2),
             dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
           ]),
           theme: 'striped',
@@ -1127,10 +1139,10 @@ function ModernRelatorios() {
         dados.graficoLinha?.forEach(row => {
           worksheetData.push([
             row.dia,
-            row.dinheiro,
-            row.cartao,
-            row.pix,
-            row.total,
+            Number(row.dinheiro || 0).toFixed(2),
+            Number(row.cartao || 0).toFixed(2),
+            Number(row.pix || 0).toFixed(2),
+            Number(row.total || 0).toFixed(2),
           ]);
         });
         worksheetData.push([]);
@@ -1139,7 +1151,7 @@ function ModernRelatorios() {
         dados.graficoPizza?.forEach(row => {
           worksheetData.push([
             row.name,
-            row.value,
+            Number(row.value || 0).toFixed(2),
             dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
           ]);
         });
@@ -1248,7 +1260,7 @@ function ModernRelatorios() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Relatórios
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1451,7 +1463,7 @@ function ModernRelatorios() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="dia" />
                           <YAxis />
-                          <Tooltip 
+                          <RechartsTooltip 
                             formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
                           />
                           <Area type="monotone" dataKey="dinheiro" stackId="1" stroke="#4caf50" fill="#4caf50" />
@@ -1493,7 +1505,7 @@ function ModernRelatorios() {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip 
+                          <RechartsTooltip 
                             formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
                           />
                         </PieChart>
@@ -1524,7 +1536,7 @@ function ModernRelatorios() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis />
-                        <Tooltip />
+                        <RechartsTooltip />
                         <Bar dataKey="value" fill="#9c27b0" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -1547,6 +1559,18 @@ function ModernRelatorios() {
           dataFim={dataFim}
         />
       </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
