@@ -74,7 +74,7 @@ function ModernNotificacoes() {
   const carregarNotificacoes = async (usuarioId) => {
     try {
       setLoading(true);
-      // Buscar notificações do Firebase filtrando por usuarioId
+      // Usar o ID do usuário passado como parâmetro
       const data = await firebaseService.query('notificacoes', [
         { field: 'usuarioId', operator: '==', value: usuarioId }
       ], 'data');
@@ -87,6 +87,15 @@ function ModernNotificacoes() {
       setLoading(false);
     }
   };
+  
+  // No useEffect
+  useEffect(() => {
+    const user = usuariosService.getUsuarioAtual();
+    setUsuario(user);
+    if (user && user.uid) { // Usar user.uid
+      carregarNotificacoes(user.uid);
+    }
+  }, []);
 
   const filtrarNotificacoes = () => {
     let filtered = [...notifications];
