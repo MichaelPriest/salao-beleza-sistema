@@ -69,6 +69,8 @@ const statusColors = {
   cancelado: { color: '#f44336', label: 'Cancelado' },
   remarcado: { color: '#ff9800', label: 'Remarcado' },
   faltou: { color: '#9e9e9e', label: 'Faltou' },
+  finalizado: { color: '#4caf50', label: 'Finalizado' }, // Adicionado
+  em_andamento: { color: '#ff9800', label: 'Em Andamento' }, // Adicionado
 };
 
 function HistoricoAtendimentos() {
@@ -97,28 +99,79 @@ function HistoricoAtendimentos() {
     carregarDados();
   }, []);
 
+  // 🔥 FUNÇÃO CORRIGIDA - Buscar de atendimentos em vez de historico_atendimentos
   const carregarDados = async () => {
     try {
       setLoading(true);
       
       const [atendimentosData, clientesData, profissionaisData, servicosData] = await Promise.all([
-        firebaseService.getAll('historico_atendimentos').catch(() => []),
+        firebaseService.getAll('atendimentos').catch(() => []), // Mudado de 'historico_atendimentos' para 'atendimentos'
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('servicos').catch(() => []),
       ]);
       
-      setAtendimentos(atendimentosData || []);
+      // Filtrar apenas atendimentos finalizados (ou mostrar todos se preferir)
+      const atendimentosFinalizados = atendimentosData.filter(a => 
+        a.status === 'finalizado' || a.status === 'cancelado'
+      );
+      
+      console.log('📊 Atendimentos carregados:', atendimentosFinalizados.length);
+      
+      setAtendimentos(atendimentosFinalizados || []);
       setClientes(clientesData || []);
       setProfissionais(profissionaisData || []);
       setServicos(servicosData || []);
-      toast.success('Dados carregados!');
+      
+      if (atendimentosFinalizados.length === 0) {
+        toast.info('Nenhum atendimento finalizado encontrado');
+      } else {
+        toast.success(`${atendimentosFinalizados.length} atendimentos carregados!`);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🔥 FUNÇÃO AUXILIAR - Buscar nome do cliente
+  const getClienteNome = (clienteId) => {
+    if (!clienteId) return 'Cliente não identificado';
+    const cliente = clientes.find(c => c.id === clienteId);
+    return cliente?.nome || 'Cliente não encontrado';
+  };
+
+  // 🔥 FUNÇÃO AUXILIAR - Buscar nome do profissional
+  const getProfissionalNome = (profissionalId) => {
+    if (!profissionalId) return 'Profissional não identificado';
+    const profissional = profissionais.find(p => p.id === profissionalId);
+    return profissional?.nome || 'Profissional não encontrado';
+  };
+
+  // 🔥 FUNÇÃO AUXILIAR - Buscar nomes dos serviços
+  const getServicosNomes = (atendimento) => {
+    if (atendimento.itensServico && atendimento.itensServico.length > 0) {
+      return atendimento.itensServico.map(item => item.nome);
+    } else if (atendimento.servicoId) {
+      const servico = servicos.find(s => s.id === atendimento.servicoId);
+      return [servico?.nome || 'Serviço não encontrado'];
+    }
+    return [];
+  };
+
+  // 🔥 FUNÇÃO AUXILIAR - Calcular valor total
+  const getValorTotal = (atendimento) => {
+    if (atendimento.valorTotal) return atendimento.valorTotal;
+    
+    if (atendimento.itensServico && atendimento.itensServico.length > 0) {
+      return atendimento.itensServico.reduce((acc, item) => acc + (item.preco || 0), 0);
+    } else if (atendimento.servicoId) {
+      const servico = servicos.find(s => s.id === atendimento.servicoId);
+      return servico?.preco || 0;
+    }
+    return 0;
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -144,10 +197,10 @@ function HistoricoAtendimentos() {
       const headers = ['Data', 'Cliente', 'Profissional', 'Serviços', 'Valor', 'Status', 'Observações'];
       const data = atendimentosFiltrados.map(a => [
         new Date(a.data).toLocaleDateString('pt-BR'),
-        a.cliente,
-        a.profissional,
-        a.servicos?.join(', '),
-        a.valor?.toFixed(2),
+        getClienteNome(a.clienteId),
+        getProfissionalNome(a.profissionalId),
+        getServicosNomes(a).join(', '),
+        getValorTotal(a).toFixed(2),
         a.status,
         a.observacoes || '',
       ]);
@@ -171,10 +224,14 @@ function HistoricoAtendimentos() {
 
   // Filtrar atendimentos
   const atendimentosFiltrados = atendimentos.filter(atendimento => {
+    const clienteNome = getClienteNome(atendimento.clienteId);
+    const profissionalNome = getProfissionalNome(atendimento.profissionalId);
+    const servicosNomes = getServicosNomes(atendimento);
+    
     const matchesTexto = filtro === '' || 
-      atendimento.cliente?.toLowerCase().includes(filtro.toLowerCase()) ||
-      atendimento.profissional?.toLowerCase().includes(filtro.toLowerCase()) ||
-      atendimento.servicos?.some(s => s?.toLowerCase().includes(filtro.toLowerCase()));
+      clienteNome.toLowerCase().includes(filtro.toLowerCase()) ||
+      profissionalNome.toLowerCase().includes(filtro.toLowerCase()) ||
+      servicosNomes.some(s => s?.toLowerCase().includes(filtro.toLowerCase()));
 
     const matchesCliente = filtroCliente === 'todos' || atendimento.clienteId === filtroCliente;
     const matchesProfissional = filtroProfissional === 'todos' || atendimento.profissionalId === filtroProfissional;
@@ -219,13 +276,13 @@ function HistoricoAtendimentos() {
   // Estatísticas
   const stats = {
     total: atendimentosFiltrados.length,
-    realizados: atendimentosFiltrados.filter(a => a.status === 'realizado').length,
+    realizados: atendimentosFiltrados.filter(a => a.status === 'finalizado' || a.status === 'realizado').length,
     cancelados: atendimentosFiltrados.filter(a => a.status === 'cancelado').length,
     remarcados: atendimentosFiltrados.filter(a => a.status === 'remarcado').length,
     faltas: atendimentosFiltrados.filter(a => a.status === 'faltou').length,
     valorTotal: atendimentosFiltrados
-      .filter(a => a.status === 'realizado')
-      .reduce((acc, a) => acc + (a.valor || 0), 0),
+      .filter(a => a.status === 'finalizado' || a.status === 'realizado')
+      .reduce((acc, a) => acc + (getValorTotal(a) || 0), 0),
   };
 
   const formatarDataFirebase = (data) => {
@@ -284,7 +341,7 @@ function HistoricoAtendimentos() {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  Total
+                  Total no Período
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
                   {stats.total}
@@ -339,25 +396,6 @@ function HistoricoAtendimentos() {
             transition={{ delay: 0.4 }}
           >
             <Card sx={{ bgcolor: '#fff3e0' }}>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Remarcados
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  {stats.remarcados}
-                </Typography>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Faturamento
@@ -483,50 +521,55 @@ function HistoricoAtendimentos() {
       </Card>
 
       {/* Timeline de Atendimentos */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Linha do Tempo
-          </Typography>
-          <Timeline position="alternate">
-            {paginatedAtendimentos.slice(0, 5).map((atendimento, index) => (
-              <TimelineItem key={atendimento.id}>
-                <TimelineSeparator>
-                  <TimelineDot color={
-                    atendimento.status === 'realizado' ? 'success' :
-                    atendimento.status === 'cancelado' ? 'error' :
-                    atendimento.status === 'remarcado' ? 'warning' : 'grey'
-                  }>
-                    {atendimento.status === 'realizado' ? <CheckCircleIcon /> :
-                     atendimento.status === 'cancelado' ? <CancelIcon /> :
-                     <ScheduleIcon />}
-                  </TimelineDot>
-                  {index < paginatedAtendimentos.length - 1 && <TimelineConnector />}
-                </TimelineSeparator>
-                <TimelineContent>
-                  <Paper elevation={3} sx={{ p: 2 }}>
-                    <Typography variant="subtitle2">
-                      {formatarDataFirebase(atendimento.data)}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>{atendimento.cliente}</strong> - {atendimento.profissional}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={statusColors[atendimento.status]?.label}
-                      sx={{
-                        mt: 1,
-                        bgcolor: `${statusColors[atendimento.status]?.color}20`,
-                        color: statusColors[atendimento.status]?.color,
-                      }}
-                    />
-                  </Paper>
-                </TimelineContent>
-              </TimelineItem>
-            ))}
-          </Timeline>
-        </CardContent>
-      </Card>
+      {paginatedAtendimentos.length > 0 && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Linha do Tempo
+            </Typography>
+            <Timeline position="alternate">
+              {paginatedAtendimentos.slice(0, 5).map((atendimento, index) => {
+                const status = atendimento.status === 'finalizado' ? 'realizado' : atendimento.status;
+                return (
+                  <TimelineItem key={atendimento.id}>
+                    <TimelineSeparator>
+                      <TimelineDot color={
+                        status === 'realizado' ? 'success' :
+                        status === 'cancelado' ? 'error' :
+                        status === 'remarcado' ? 'warning' : 'grey'
+                      }>
+                        {status === 'realizado' ? <CheckCircleIcon /> :
+                         status === 'cancelado' ? <CancelIcon /> :
+                         <ScheduleIcon />}
+                      </TimelineDot>
+                      {index < paginatedAtendimentos.length - 1 && <TimelineConnector />}
+                    </TimelineSeparator>
+                    <TimelineContent>
+                      <Paper elevation={3} sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">
+                          {formatarDataFirebase(atendimento.data)}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>{getClienteNome(atendimento.clienteId)}</strong> - {getProfissionalNome(atendimento.profissionalId)}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={statusColors[status]?.label || status}
+                          sx={{
+                            mt: 1,
+                            bgcolor: `${statusColors[status]?.color}20`,
+                            color: statusColors[status]?.color,
+                          }}
+                        />
+                      </Paper>
+                    </TimelineContent>
+                  </TimelineItem>
+                );
+              })}
+            </Timeline>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabela de Atendimentos */}
       <Card>
@@ -545,74 +588,75 @@ function HistoricoAtendimentos() {
             </TableHead>
             <TableBody>
               <AnimatePresence>
-                {paginatedAtendimentos.map((atendimento, index) => (
-                  <motion.tr
-                    key={atendimento.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <TableCell>
-                      {formatarDataFirebase(atendimento.data)}
-                      <Typography variant="caption" display="block" color="textSecondary">
-                        {atendimento.horaInicio} - {atendimento.horaFim}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
-                          <PersonIcon sx={{ fontSize: 16 }} />
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2">{atendimento.cliente}</Typography>
-                          {atendimento.avaliacao && (
-                            <Rating value={atendimento.avaliacao} size="small" readOnly />
-                          )}
+                {paginatedAtendimentos.map((atendimento, index) => {
+                  const status = atendimento.status === 'finalizado' ? 'realizado' : atendimento.status;
+                  
+                  return (
+                    <motion.tr
+                      key={atendimento.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <TableCell>
+                        {formatarDataFirebase(atendimento.data)}
+                        <Typography variant="caption" display="block" color="textSecondary">
+                          {atendimento.horaInicio} - {atendimento.horaFim}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
+                            <PersonIcon sx={{ fontSize: 16 }} />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2">{getClienteNome(atendimento.clienteId)}</Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{atendimento.profissional}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {atendimento.servicos?.map((servico, i) => (
-                          <Chip
-                            key={i}
-                            label={servico}
-                            size="small"
-                            variant="outlined"
-                          />
-                        ))}
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                        R$ {atendimento.valor?.toFixed(2)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={statusColors[atendimento.status]?.label}
-                        size="small"
-                        sx={{
-                          bgcolor: `${statusColors[atendimento.status]?.color}20`,
-                          color: statusColors[atendimento.status]?.color,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Ver Detalhes">
-                        <IconButton
+                      </TableCell>
+                      <TableCell>{getProfissionalNome(atendimento.profissionalId)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                          {getServicosNomes(atendimento).map((servico, i) => (
+                            <Chip
+                              key={i}
+                              label={servico}
+                              size="small"
+                              variant="outlined"
+                            />
+                          ))}
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                          R$ {getValorTotal(atendimento).toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={statusColors[status]?.label || status}
                           size="small"
-                          onClick={() => handleOpenDetalhes(atendimento)}
-                          sx={{ color: '#9c27b0' }}
-                        >
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </motion.tr>
-                ))}
+                          sx={{
+                            bgcolor: `${statusColors[status]?.color}20`,
+                            color: statusColors[status]?.color,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Ver Detalhes">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenDetalhes(atendimento)}
+                            sx={{ color: '#9c27b0' }}
+                          >
+                            <VisibilityIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })}
               </AnimatePresence>
 
               {paginatedAtendimentos.length === 0 && (
@@ -662,10 +706,7 @@ function HistoricoAtendimentos() {
                         <PersonIcon />
                       </Avatar>
                       <Box>
-                        <Typography variant="h6">{atendimentoSelecionado.cliente}</Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {atendimentoSelecionado.clienteEmail}
-                        </Typography>
+                        <Typography variant="h6">{getClienteNome(atendimentoSelecionado.clienteId)}</Typography>
                       </Box>
                     </Box>
 
@@ -686,13 +727,13 @@ function HistoricoAtendimentos() {
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant="caption" color="textSecondary">Profissional</Typography>
-                        <Typography variant="body2">{atendimentoSelecionado.profissional}</Typography>
+                        <Typography variant="body2">{getProfissionalNome(atendimentoSelecionado.profissionalId)}</Typography>
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant="caption" color="textSecondary">Status</Typography>
                         <Chip
                           size="small"
-                          label={statusColors[atendimentoSelecionado.status]?.label}
+                          label={statusColors[atendimentoSelecionado.status]?.label || atendimentoSelecionado.status}
                           sx={{
                             bgcolor: `${statusColors[atendimentoSelecionado.status]?.color}20`,
                             color: statusColors[atendimentoSelecionado.status]?.color,
@@ -709,11 +750,11 @@ function HistoricoAtendimentos() {
                       Serviços Realizados
                     </Typography>
                     
-                    {atendimentoSelecionado.servicos?.map((servico, index) => (
+                    {atendimentoSelecionado.itensServico?.map((servico, index) => (
                       <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2">{servico}</Typography>
+                        <Typography variant="body2">{servico.nome}</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          R$ {atendimentoSelecionado.valores?.[index]?.toFixed(2)}
+                          R$ {servico.preco?.toFixed(2)}
                         </Typography>
                       </Box>
                     ))}
@@ -723,13 +764,8 @@ function HistoricoAtendimentos() {
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="subtitle1">Total</Typography>
                       <Typography variant="h6" sx={{ color: '#4caf50' }}>
-                        R$ {atendimentoSelecionado.valor?.toFixed(2)}
+                        R$ {getValorTotal(atendimentoSelecionado).toFixed(2)}
                       </Typography>
-                    </Box>
-
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="caption" color="textSecondary">Forma de Pagamento</Typography>
-                      <Typography variant="body2">{atendimentoSelecionado.formaPagamento}</Typography>
                     </Box>
                   </Paper>
                 </Grid>
@@ -742,20 +778,6 @@ function HistoricoAtendimentos() {
                     <Typography variant="body2">
                       {atendimentoSelecionado.observacoes || 'Sem observações'}
                     </Typography>
-
-                    {atendimentoSelecionado.avaliacao && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                          Avaliação do Cliente
-                        </Typography>
-                        <Rating value={atendimentoSelecionado.avaliacao} readOnly />
-                        {atendimentoSelecionado.comentario && (
-                          <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                            "{atendimentoSelecionado.comentario}"
-                          </Typography>
-                        )}
-                      </Box>
-                    )}
                   </Paper>
                 </Grid>
               </Grid>
