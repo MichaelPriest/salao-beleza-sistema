@@ -1397,6 +1397,8 @@ function ModernAgendamentos() {
                     <MenuItem value="pendente">Pendente</MenuItem>
                     <MenuItem value="confirmado">Confirmado</MenuItem>
                     <MenuItem value="cancelado">Cancelado</MenuItem>
+                    <MenuItem value="em_andamennto">Em andamento</MenuItem>   
+                    <MenuItem value="finalizado">Finalizado</MenuItem>  
                   </Select>
                 </FormControl>
               </Grid>
