@@ -1,11 +1,16 @@
-import api from './api';
+// src/services/atendimentoService.js
+import { firebaseService } from './firebase';
 
 export const atendimentoService = {
   // Buscar todos os atendimentos
   listarTodos: async () => {
     try {
-      const response = await api.get('/atendimentos');
-      return response.data;
+      const atendimentos = await firebaseService.getAll('atendimentos');
+      
+      // Ordenar por data (mais recentes primeiro)
+      atendimentos.sort((a, b) => new Date(b.data) - new Date(a.data));
+      
+      return atendimentos;
     } catch (error) {
       console.error('Erro ao listar atendimentos:', error);
       throw error;
@@ -15,8 +20,8 @@ export const atendimentoService = {
   // Buscar atendimento por ID
   buscarPorId: async (id) => {
     try {
-      const response = await api.get(`/atendimentos/${id}`);
-      return response.data;
+      const atendimento = await firebaseService.getById('atendimentos', id);
+      return atendimento;
     } catch (error) {
       console.error('Erro ao buscar atendimento:', error);
       throw error;
@@ -26,8 +31,11 @@ export const atendimentoService = {
   // Buscar atendimentos por cliente
   buscarPorCliente: async (clienteId) => {
     try {
-      const response = await api.get(`/atendimentos?clienteId=${clienteId}`);
-      return response.data;
+      const atendimentos = await firebaseService.getAll('atendimentos');
+      
+      return atendimentos
+        .filter(a => a.clienteId === clienteId)
+        .sort((a, b) => new Date(b.data) - new Date(a.data));
     } catch (error) {
       console.error('Erro ao buscar atendimentos do cliente:', error);
       throw error;
@@ -37,8 +45,11 @@ export const atendimentoService = {
   // Buscar atendimentos por profissional
   buscarPorProfissional: async (profissionalId) => {
     try {
-      const response = await api.get(`/atendimentos?profissionalId=${profissionalId}`);
-      return response.data;
+      const atendimentos = await firebaseService.getAll('atendimentos');
+      
+      return atendimentos
+        .filter(a => a.profissionalId === profissionalId)
+        .sort((a, b) => new Date(b.data) - new Date(a.data));
     } catch (error) {
       console.error('Erro ao buscar atendimentos do profissional:', error);
       throw error;
@@ -48,10 +59,34 @@ export const atendimentoService = {
   // Buscar atendimentos por data
   buscarPorData: async (data) => {
     try {
-      const response = await api.get(`/atendimentos?data=${data}`);
-      return response.data;
+      const atendimentos = await firebaseService.getAll('atendimentos');
+      const dataFiltro = data.split('T')[0];
+      
+      return atendimentos
+        .filter(a => a.data && a.data.split('T')[0] === dataFiltro)
+        .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
     } catch (error) {
       console.error('Erro ao buscar atendimentos por data:', error);
+      throw error;
+    }
+  },
+
+  // Buscar atendimentos por período
+  buscarPorPeriodo: async (dataInicio, dataFim) => {
+    try {
+      const atendimentos = await firebaseService.getAll('atendimentos');
+      const inicio = new Date(dataInicio);
+      const fim = new Date(dataFim);
+      fim.setHours(23, 59, 59, 999);
+      
+      return atendimentos
+        .filter(a => {
+          const dataAtendimento = new Date(a.data);
+          return dataAtendimento >= inicio && dataAtendimento <= fim;
+        })
+        .sort((a, b) => new Date(a.data) - new Date(b.data));
+    } catch (error) {
+      console.error('Erro ao buscar atendimentos por período:', error);
       throw error;
     }
   },
@@ -59,8 +94,28 @@ export const atendimentoService = {
   // Criar atendimento
   criar: async (dados) => {
     try {
-      const response = await api.post('/atendimentos', dados);
-      return response.data;
+      const dadosParaSalvar = {
+        ...dados,
+        agendamentoId: dados.agendamentoId ? String(dados.agendamentoId) : null,
+        clienteId: String(dados.clienteId),
+        profissionalId: String(dados.profissionalId),
+        servicoId: String(dados.servicoId),
+        data: String(dados.data),
+        horaInicio: String(dados.horaInicio),
+        horaFim: dados.horaFim ? String(dados.horaFim) : null,
+        status: dados.status || 'em_andamento',
+        observacoes: dados.observacoes ? String(dados.observacoes) : '',
+        valorTotal: Number(dados.valorTotal) || 0,
+        dataCriacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const novoId = await firebaseService.add('atendimentos', dadosParaSalvar);
+      
+      // Registrar log de auditoria
+      await registrarLog('criar', 'atendimentos', novoId, 'Atendimento criado');
+
+      return { ...dadosParaSalvar, id: novoId };
     } catch (error) {
       console.error('Erro ao criar atendimento:', error);
       throw error;
@@ -70,104 +125,102 @@ export const atendimentoService = {
   // Atualizar atendimento
   atualizar: async (id, dados) => {
     try {
-      const response = await api.patch(`/atendimentos/${id}`, dados);
-      return response.data;
+      const dadosParaSalvar = {
+        ...dados,
+        clienteId: dados.clienteId ? String(dados.clienteId) : undefined,
+        profissionalId: dados.profissionalId ? String(dados.profissionalId) : undefined,
+        servicoId: dados.servicoId ? String(dados.servicoId) : undefined,
+        valorTotal: dados.valorTotal ? Number(dados.valorTotal) : undefined,
+        updatedAt: new Date().toISOString()
+      };
+
+      await firebaseService.update('atendimentos', id, dadosParaSalvar);
+      
+      // Registrar log
+      await registrarLog('atualizar', 'atendimentos', id, 'Atendimento atualizado');
+
+      return { ...dadosParaSalvar, id };
     } catch (error) {
       console.error('Erro ao atualizar atendimento:', error);
       throw error;
     }
   },
 
-  // INICIAR ATENDIMENTO - VERSÃO CORRIGIDA USANDO A ROTA PERSONALIZADA
+  // INICIAR ATENDIMENTO
   iniciarAtendimento: async (agendamentoId) => {
     console.log('🚀 Iniciando atendimento para agendamento:', agendamentoId);
     
     try {
-      // Validar ID
       if (!agendamentoId) {
         throw new Error('ID do agendamento não fornecido');
       }
 
-      // Buscar o agendamento primeiro para verificar se existe
+      // Buscar o agendamento
       console.log('📋 Buscando agendamento...');
-      const agendamentoResponse = await api.get(`/agendamentos/${agendamentoId}`);
-      const agendamento = agendamentoResponse.data;
+      const agendamento = await firebaseService.getById('agendamentos', agendamentoId);
+      
+      if (!agendamento) {
+        throw new Error('Agendamento não encontrado');
+      }
       
       console.log('✅ Agendamento encontrado:', agendamento);
 
-      // Validar dados do agendamento
+      // Validar dados
       if (!agendamento.clienteId) throw new Error('Cliente não informado no agendamento');
       if (!agendamento.profissionalId) throw new Error('Profissional não informado no agendamento');
       if (!agendamento.servicoId) throw new Error('Serviço não informado no agendamento');
 
       // Verificar se já existe um atendimento para este agendamento
-      console.log('🔍 Verificando atendimentos existentes...');
-      const atendimentosExistentes = await api.get(`/atendimentos?agendamentoId=${agendamentoId}`);
+      const todosAtendimentos = await firebaseService.getAll('atendimentos');
+      const atendimentoExistente = todosAtendimentos.find(a => a.agendamentoId === agendamentoId);
       
-      if (atendimentosExistentes.data.length > 0) {
-        console.log('⚠️ Atendimento já existe:', atendimentosExistentes.data[0]);
-        
-        // Se o atendimento existente não estiver finalizado, retornar ele
-        if (atendimentosExistentes.data[0].status !== 'finalizado') {
-          return atendimentosExistentes.data[0];
+      if (atendimentoExistente) {
+        console.log('⚠️ Atendimento já existe:', atendimentoExistente);
+        if (atendimentoExistente.status !== 'finalizado') {
+          return atendimentoExistente;
         }
       }
 
-      // NOTA: O servidor tem uma rota personalizada /agendamentos/:id/finalizar
-      // Mas vamos usar a rota padrão POST /atendimentos que é mais flexível
+      console.log('📝 Criando novo atendimento...');
       
-      console.log('📝 Criando novo atendimento via POST /atendimentos...');
-      
-      // Criar novo atendimento - o servidor adicionará createdAt e updatedAt automaticamente
+      // Criar novo atendimento
       const novoAtendimento = {
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
+        clienteNome: agendamento.clienteNome || 'Cliente',
         profissionalId: agendamento.profissionalId,
+        profissionalNome: agendamento.profissionalNome || 'Profissional',
         servicoId: agendamento.servicoId,
+        servicoNome: agendamento.servicoNome || 'Serviço',
         data: agendamento.data,
-        horaInicio: agendamento.horario || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        horaInicio: agendamento.horaInicio || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
-        observacoes: agendamento.observacoes || ''
+        observacoes: agendamento.observacoes || '',
+        valorTotal: agendamento.valor || 0,
+        dataCriacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       console.log('📦 Dados do atendimento:', novoAtendimento);
       
-      const response = await api.post('/atendimentos', novoAtendimento);
-      console.log('✅ Atendimento criado:', response.data);
-
-      // Atualizar status do agendamento para 'em_andamento'
+      const atendimentoId = await firebaseService.add('atendimentos', novoAtendimento);
+      
+      // Atualizar status do agendamento
       console.log('🔄 Atualizando status do agendamento...');
-      await api.patch(`/agendamentos/${agendamentoId}`, { 
-        status: 'em_andamento'
+      await firebaseService.update('agendamentos', agendamentoId, { 
+        status: 'em_andamento',
+        updatedAt: new Date().toISOString()
       });
       
       console.log('✅ Agendamento atualizado para em_andamento');
 
-      return response.data;
+      // Registrar log
+      await registrarLog('iniciar', 'atendimentos', atendimentoId, 'Atendimento iniciado a partir de agendamento');
+
+      return { ...novoAtendimento, id: atendimentoId };
     } catch (error) {
-      console.error('❌ Erro detalhado:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        stack: error.stack
-      });
-      
-      // Se falhar com POST /atendimentos, tente a rota personalizada como fallback
-      if (error.response?.status === 404) {
-        console.log('🔄 Tentando rota personalizada /agendamentos/:id/finalizar como fallback...');
-        try {
-          const fallbackResponse = await api.post(`/agendamentos/${agendamentoId}/finalizar`, {
-            observacoes: 'Atendimento iniciado via fallback'
-          });
-          console.log('✅ Atendimento criado via fallback:', fallbackResponse.data);
-          return fallbackResponse.data;
-        } catch (fallbackError) {
-          console.error('❌ Fallback também falhou:', fallbackError);
-          throw fallbackError;
-        }
-      }
-      
+      console.error('❌ Erro ao iniciar atendimento:', error);
       throw error;
     }
   },
@@ -183,7 +236,11 @@ export const atendimentoService = {
       console.log('🏁 Finalizando atendimento:', atendimentoId);
       
       // Buscar o atendimento
-      const atendimento = await api.get(`/atendimentos/${atendimentoId}`);
+      const atendimento = await firebaseService.getById('atendimentos', atendimentoId);
+      
+      if (!atendimento) {
+        throw new Error('Atendimento não encontrado');
+      }
       
       const horaFim = new Date().toLocaleTimeString('pt-BR', { 
         hour: '2-digit', 
@@ -191,23 +248,30 @@ export const atendimentoService = {
       });
 
       // Atualizar atendimento
-      const response = await api.patch(`/atendimentos/${atendimentoId}`, {
+      const dadosAtualizados = {
         horaFim: horaFim,
         status: 'finalizado',
-        observacoes: dados?.observacoes || atendimento.data.observacoes || '',
-        valorTotal: dados?.valorTotal || 0
-      });
+        observacoes: dados?.observacoes || atendimento.observacoes || '',
+        valorTotal: Number(dados?.valorTotal) || atendimento.valorTotal || 0,
+        updatedAt: new Date().toISOString()
+      };
+
+      await firebaseService.update('atendimentos', atendimentoId, dadosAtualizados);
 
       // Atualizar agendamento relacionado
-      if (atendimento.data.agendamentoId) {
+      if (atendimento.agendamentoId) {
         console.log('🔄 Atualizando agendamento relacionado...');
-        await api.patch(`/agendamentos/${atendimento.data.agendamentoId}`, {
-          status: 'finalizado'
+        await firebaseService.update('agendamentos', atendimento.agendamentoId, {
+          status: 'finalizado',
+          updatedAt: new Date().toISOString()
         });
       }
 
-      console.log('✅ Atendimento finalizado:', response.data);
-      return response.data;
+      // Registrar log
+      await registrarLog('finalizar', 'atendimentos', atendimentoId, 'Atendimento finalizado');
+
+      console.log('✅ Atendimento finalizado');
+      return { ...atendimento, ...dadosAtualizados, id: atendimentoId };
     } catch (error) {
       console.error('Erro ao finalizar atendimento:', error);
       throw error;
@@ -224,20 +288,31 @@ export const atendimentoService = {
     try {
       console.log('❌ Cancelando atendimento:', atendimentoId);
       
-      const atendimento = await api.get(`/atendimentos/${atendimentoId}`);
+      const atendimento = await firebaseService.getById('atendimentos', atendimentoId);
       
-      const response = await api.patch(`/atendimentos/${atendimentoId}`, {
-        status: 'cancelado'
-      });
+      if (!atendimento) {
+        throw new Error('Atendimento não encontrado');
+      }
+      
+      const dadosAtualizados = {
+        status: 'cancelado',
+        updatedAt: new Date().toISOString()
+      };
 
-      if (atendimento.data.agendamentoId) {
-        await api.patch(`/agendamentos/${atendimento.data.agendamentoId}`, {
-          status: 'cancelado'
+      await firebaseService.update('atendimentos', atendimentoId, dadosAtualizados);
+
+      if (atendimento.agendamentoId) {
+        await firebaseService.update('agendamentos', atendimento.agendamentoId, {
+          status: 'cancelado',
+          updatedAt: new Date().toISOString()
         });
       }
 
-      console.log('✅ Atendimento cancelado:', response.data);
-      return response.data;
+      // Registrar log
+      await registrarLog('cancelar', 'atendimentos', atendimentoId, 'Atendimento cancelado');
+
+      console.log('✅ Atendimento cancelado');
+      return { ...atendimento, ...dadosAtualizados, id: atendimentoId };
     } catch (error) {
       console.error('Erro ao cancelar atendimento:', error);
       throw error;
@@ -249,44 +324,48 @@ export const atendimentoService = {
     return this.cancelarAtendimento(id);
   },
 
-  // Registrar pagamento - USANDO A ROTA PERSONALIZADA
+  // Registrar pagamento
   registrarPagamento: async (atendimentoId, dados) => {
     try {
       console.log('💰 Registrando pagamento para atendimento:', atendimentoId);
       
-      // Usar a rota personalizada /atendimentos/:id/pagamento
-      const response = await api.post(`/atendimentos/${atendimentoId}/pagamento`, {
-        formaPagamento: dados.formaPagamento,
-        observacoes: dados.observacoes || ''
-      });
+      // Buscar atendimento
+      const atendimento = await firebaseService.getById('atendimentos', atendimentoId);
       
-      console.log('✅ Pagamento registrado:', response.data);
-      return response.data;
+      if (!atendimento) {
+        throw new Error('Atendimento não encontrado');
+      }
+
+      // Criar pagamento
+      const pagamento = {
+        atendimentoId: atendimento.id,
+        clienteId: atendimento.clienteId,
+        clienteNome: atendimento.clienteNome,
+        valor: Number(atendimento.valorTotal) || 0,
+        formaPagamento: String(dados.formaPagamento),
+        parcelas: Number(dados.parcelas) || 1,
+        observacoes: dados.observacoes ? String(dados.observacoes) : '',
+        status: 'pago',
+        data: new Date().toISOString(),
+        dataCriacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const pagamentoId = await firebaseService.add('pagamentos', pagamento);
+      
+      // Atualizar status do atendimento
+      await firebaseService.update('atendimentos', atendimentoId, {
+        status: 'pago',
+        updatedAt: new Date().toISOString()
+      });
+
+      // Registrar log
+      await registrarLog('pagar', 'atendimentos', atendimentoId, 'Pagamento registrado');
+
+      console.log('✅ Pagamento registrado');
+      return { ...pagamento, id: pagamentoId };
     } catch (error) {
       console.error('Erro ao registrar pagamento:', error);
-      
-      // Fallback: criar pagamento manualmente se a rota personalizada falhar
-      if (error.response?.status === 404) {
-        console.log('🔄 Tentando criar pagamento manualmente...');
-        
-        const atendimento = await api.get(`/atendimentos/${atendimentoId}`);
-        const servico = await api.get(`/servicos/${atendimento.data.servicoId}`);
-        
-        const pagamento = {
-          atendimentoId,
-          clienteId: atendimento.data.clienteId,
-          valor: servico.data.preco,
-          formaPagamento: dados.formaPagamento,
-          parcelas: dados.parcelas || 1,
-          observacoes: dados.observacoes || '',
-          status: 'pago',
-          data: new Date().toISOString()
-        };
-        
-        const response = await api.post('/pagamentos', pagamento);
-        return response.data;
-      }
-      
       throw error;
     }
   },
@@ -294,8 +373,8 @@ export const atendimentoService = {
   // Buscar pagamentos do atendimento
   buscarPagamentos: async (atendimentoId) => {
     try {
-      const response = await api.get(`/pagamentos?atendimentoId=${atendimentoId}`);
-      return response.data;
+      const pagamentos = await firebaseService.getAll('pagamentos');
+      return pagamentos.filter(p => p.atendimentoId === atendimentoId);
     } catch (error) {
       console.error('Erro ao buscar pagamentos:', error);
       throw error;
@@ -305,14 +384,14 @@ export const atendimentoService = {
   // Buscar estatísticas
   buscarEstatisticas: async () => {
     try {
-      const atendimentos = await api.get('/atendimentos');
-      const data = atendimentos.data;
+      const atendimentos = await firebaseService.getAll('atendimentos');
       
       return {
-        total: data.length,
-        emAndamento: data.filter(a => a.status === 'em_andamento').length,
-        finalizados: data.filter(a => a.status === 'finalizado').length,
-        cancelados: data.filter(a => a.status === 'cancelado').length
+        total: atendimentos.length,
+        emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
+        finalizados: atendimentos.filter(a => a.status === 'finalizado').length,
+        cancelados: atendimentos.filter(a => a.status === 'cancelado').length,
+        pagos: atendimentos.filter(a => a.status === 'pago').length
       };
     } catch (error) {
       console.error('Erro ao buscar estatísticas:', error);
@@ -320,3 +399,22 @@ export const atendimentoService = {
     }
   }
 };
+
+// Função auxiliar para registrar logs
+async function registrarLog(acao, entidade, entidadeId, detalhes) {
+  try {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    
+    await firebaseService.add('auditoria', {
+      acao,
+      entidade,
+      entidadeId,
+      usuario: usuario.nome || 'Sistema',
+      usuarioId: usuario.id || null,
+      data: new Date().toISOString(),
+      detalhes
+    });
+  } catch (error) {
+    console.warn('Erro ao registrar log:', error);
+  }
+}
