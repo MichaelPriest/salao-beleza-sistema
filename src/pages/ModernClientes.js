@@ -1,5 +1,5 @@
 // src/pages/ModernClientes.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -46,9 +46,11 @@ import {
   AttachMoney as MoneyIcon,
   Visibility as VisibilityIcon,
   History as HistoryIcon,
+  Print as PrintIcon, // 🔥 NOVO ÍCONE
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useReactToPrint } from 'react-to-print'; // 🔥 NOVO
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { 
@@ -60,6 +62,7 @@ import {
   HistoricoAtendimentosCliente,
   imageCompressor
 } from '../utils/plugins';
+import { ImprimirCliente } from '../components/ImprimirCliente'; // 🔥 NOVO COMPONENTE
 
 function TabPanel({ children, value, index }) {
   return (
@@ -70,6 +73,7 @@ function TabPanel({ children, value, index }) {
 }
 
 function ModernClientes() {
+  const componentRef = useRef(); // 🔥 REF PARA IMPRESSÃO
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -104,6 +108,22 @@ function ModernClientes() {
       servicosPreferidos: [],
       notificacoes: true,
     },
+  });
+
+  // 🔥 FUNÇÃO DE IMPRESSÃO
+  const handlePrintCliente = useReactToPrint({
+    content: () => componentRef.current,
+    documentTitle: `cliente_${selectedCliente?.nome?.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando impressão...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Impressão enviada!', { id: 'print' });
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir', { id: 'print' });
+    }
   });
 
   // Carregar clientes do Firebase
@@ -228,7 +248,6 @@ function ModernClientes() {
       return;
     }
   
-    // 🔥 Verificar tamanho da foto apenas se tiver imageCompressor
     if (formData.foto && imageCompressor) {
       try {
         const size = imageCompressor.getImageSize(formData.foto);
@@ -947,8 +966,24 @@ function ModernClientes() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenViewDialog(false)}>Fechar</Button>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={handlePrintCliente}
+            sx={{ mr: 1 }}
+          >
+            Imprimir Ficha
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <ImprimirCliente
+          ref={componentRef}
+          cliente={selectedCliente}
+        />
+      </Box>
     </Box>
   );
 }
