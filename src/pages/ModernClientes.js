@@ -1,3 +1,4 @@
+// src/pages/ModernClientes.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -56,7 +57,8 @@ import {
   CepInput, 
   ImageUpload, 
   EnderecoForm,
-  HistoricoAtendimentosCliente 
+  HistoricoAtendimentosCliente,
+  imageCompressor
 } from '../utils/plugins';
 
 function TabPanel({ children, value, index }) {
@@ -226,12 +228,16 @@ function ModernClientes() {
       return;
     }
   
-    // Verificar tamanho da foto (segurança)
-    if (formData.foto) {
-      const size = imageCompressor.getImageSize(formData.foto);
-      if (size > 250) { // 250KB de margem de segurança
-        toast.error(`Foto muito grande (${size.toFixed(0)}KB). Máximo 200KB.`);
-        return;
+    // 🔥 Verificar tamanho da foto apenas se tiver imageCompressor
+    if (formData.foto && imageCompressor) {
+      try {
+        const size = imageCompressor.getImageSize(formData.foto);
+        if (size > 250) {
+          toast.error(`Foto muito grande (${size.toFixed(0)}KB). Máximo 200KB.`);
+          return;
+        }
+      } catch (err) {
+        console.warn('Erro ao verificar tamanho da imagem:', err);
       }
     }
   
@@ -261,7 +267,6 @@ function ModernClientes() {
     } catch (err) {
       console.error('Erro ao salvar cliente:', err);
       
-      // Mensagem de erro específica para tamanho
       if (err.code === 'invalid-argument' && err.message.includes('too large')) {
         toast.error('Foto muito grande. Escolha uma imagem menor.');
       } else {
@@ -277,6 +282,7 @@ function ModernClientes() {
       bairro: dados.bairro || prev.bairro,
       cidade: dados.cidade || prev.cidade,
       estado: dados.estado || prev.estado,
+      complemento: dados.complemento || prev.complemento,
     }));
   };
 
@@ -489,7 +495,7 @@ function ModernClientes() {
                               {cliente.nome}
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
-                              ID: {cliente.id}
+                              ID: {cliente.id?.substring(0, 8)}
                             </Typography>
                           </Box>
                         </Box>
@@ -609,7 +615,7 @@ function ModernClientes() {
                     value={formData.foto}
                     onChange={(value) => setFormData({ ...formData, foto: value })}
                     label="Foto do Cliente"
-                    maxSizeKB={150} // Opcional: define tamanho máximo (padrão: 200KB)
+                    maxSizeKB={150}
                   />
                 </Grid>
 
@@ -723,17 +729,7 @@ function ModernClientes() {
                   estado: formData.estado,
                 }}
                 onChange={(campo, valor) => setFormData({ ...formData, [campo]: valor })}
-                onCepFound={(dados) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    logradouro: dados.logradouro || prev.logradouro,
-                    bairro: dados.bairro || prev.bairro,
-                    cidade: dados.cidade || prev.cidade,
-                    estado: dados.estado || prev.estado,
-                    complemento: dados.complemento || prev.complemento,
-                  }));
-                  toast.success('Endereço preenchido automaticamente!');
-                }}
+                onCepFound={handleCepFound}
               />
             </TabPanel>
 
@@ -788,7 +784,7 @@ function ModernClientes() {
                       value={formData.preferencias.notificacoes}
                       onChange={(e) => setFormData({
                         ...formData,
-                        preferencias: { ...formData.preferencias, notificacoes: e.target.value }
+                        preferencias: { ...formData.preferencias, notificacoes: e.target.value === 'true' }
                       })}
                       label="Receber Notificações"
                     >
@@ -822,7 +818,7 @@ function ModernClientes() {
                 background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
               }}
             >
-              Salvar
+              {selectedCliente ? 'Atualizar' : 'Cadastrar'}
             </Button>
           </DialogActions>
         </form>
