@@ -27,10 +27,13 @@ import {
 } from '@mui/icons-material';
 import InputMask from 'react-input-mask';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase'; // 🔥 IMPORTANTE: usar Firebase
+import { firebaseService } from '../services/firebase';
 
-// Máscaras para inputs
+// ===========================================
+// MÁSCARAS
+// ===========================================
 export const masks = {
+  // CPF: 000.000.000-00
   cpf: (value) => {
     if (!value) return '';
     return value
@@ -41,6 +44,19 @@ export const masks = {
       .replace(/(-\d{2})\d+?$/, '$1');
   },
   
+  // RG: 00.000.000-0 ou 00.000.000-X
+  rg: (value) => {
+    if (!value) return '';
+    return value
+      .replace(/[^\dXx]/g, '')
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})([\dXx]{1})/, '$1-$2')
+      .replace(/(-\d{1})\d+?$/, '$1')
+      .toUpperCase();
+  },
+  
+  // CNPJ: 00.000.000/0000-00
   cnpj: (value) => {
     if (!value) return '';
     return value
@@ -52,6 +68,7 @@ export const masks = {
       .replace(/(-\d{2})\d+?$/, '$1');
   },
   
+  // Telefone Celular: (00) 00000-0000
   telefone: (value) => {
     if (!value) return '';
     return value
@@ -61,6 +78,7 @@ export const masks = {
       .replace(/(-\d{4})\d+?$/, '$1');
   },
   
+  // Telefone Fixo: (00) 0000-0000
   telefoneFixo: (value) => {
     if (!value) return '';
     return value
@@ -70,6 +88,7 @@ export const masks = {
       .replace(/(-\d{4})\d+?$/, '$1');
   },
   
+  // CEP: 00000-000
   cep: (value) => {
     if (!value) return '';
     return value
@@ -78,6 +97,7 @@ export const masks = {
       .replace(/(-\d{3})\d+?$/, '$1');
   },
   
+  // Data: 00/00/0000
   data: (value) => {
     if (!value) return '';
     return value
@@ -87,6 +107,7 @@ export const masks = {
       .replace(/(\d{4})\d+?$/, '$1');
   },
   
+  // Hora: 00:00
   hora: (value) => {
     if (!value) return '';
     return value
@@ -95,6 +116,7 @@ export const masks = {
       .replace(/(:\d{2})\d+?$/, '$1');
   },
   
+  // Cartão de Crédito: 0000 0000 0000 0000
   cartao: (value) => {
     if (!value) return '';
     return value
@@ -105,19 +127,45 @@ export const masks = {
       .replace(/(\d{4})\d+?$/, '$1');
   },
   
+  // Dinheiro: 0,00 → 1.000,00
   dinheiro: (value) => {
     if (!value) return '';
     const apenasNumeros = value.replace(/\D/g, '');
-    const valor = (parseInt(apenasNumeros) / 100).toFixed(2);
+    const valor = (parseInt(apenasNumeros || '0') / 100).toFixed(2);
     return valor.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  },
+  
+  // Número: apenas números
+  numero: (value) => {
+    if (!value) return '';
+    return value.replace(/\D/g, '');
+  },
+  
+  // Letras: apenas letras
+  letras: (value) => {
+    if (!value) return '';
+    return value.replace(/[^a-zA-ZÀ-ÿ\s]/g, '');
+  },
+  
+  // Placa de Carro: ABC-1234
+  placa: (value) => {
+    if (!value) return '';
+    return value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .replace(/([A-Z]{3})(\d{4})/, '$1-$2')
+      .replace(/(-\d{4})\d+?$/, '$1');
   },
 };
 
-// Componente de input com máscara
+// ===========================================
+// COMPONENTE DE INPUT COM MÁSCARA
+// ===========================================
 export const MaskedInput = ({ mask, value, onChange, ...props }) => {
   const getMaskFormat = (mask) => {
     const masks = {
       cpf: '999.999.999-99',
+      rg: '99.999.999-9',
       cnpj: '99.999.999/9999-99',
       telefone: '(99) 99999-9999',
       telefoneFixo: '(99) 9999-9999',
@@ -125,6 +173,7 @@ export const MaskedInput = ({ mask, value, onChange, ...props }) => {
       data: '99/99/9999',
       hora: '99:99',
       cartao: '9999 9999 9999 9999',
+      placa: 'AAA-9999',
     };
     return masks[mask] || '';
   };
@@ -141,13 +190,16 @@ export const MaskedInput = ({ mask, value, onChange, ...props }) => {
       value={value || ''}
       onChange={handleChange}
       disabled={props.disabled}
+      maskChar={null}
     >
       {(inputProps) => <TextField {...inputProps} {...props} fullWidth />}
     </InputMask>
   );
 };
 
-// Serviço de busca de CEP
+// ===========================================
+// SERVIÇO DE BUSCA DE CEP
+// ===========================================
 export const buscarCep = async (cep) => {
   try {
     const cepLimpo = cep.replace(/\D/g, '');
@@ -156,7 +208,6 @@ export const buscarCep = async (cep) => {
       return { erro: 'CEP deve ter 8 dígitos' };
     }
 
-    // Tenta ViaCEP
     const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
     const data = await response.json();
     
@@ -179,7 +230,9 @@ export const buscarCep = async (cep) => {
   }
 };
 
-// Componente de input com busca de CEP
+// ===========================================
+// COMPONENTE DE INPUT COM BUSCA DE CEP
+// ===========================================
 export const CepInput = ({ value, onChange, onCepFound, ...props }) => {
   const [loading, setLoading] = useState(false);
 
@@ -201,11 +254,12 @@ export const CepInput = ({ value, onChange, onCepFound, ...props }) => {
 
   return (
     <Box sx={{ position: 'relative' }}>
-      <TextField
-        {...props}
-        value={value || ''}
+      <MaskedInput
+        mask="cep"
+        value={value}
         onChange={onChange}
         onBlur={handleCepBlur}
+        {...props}
         InputProps={{
           endAdornment: loading && (
             <InputAdornment position="end">
@@ -218,20 +272,20 @@ export const CepInput = ({ value, onChange, onCepFound, ...props }) => {
   );
 };
 
-// Componente de upload de imagem
+// ===========================================
+// COMPONENTE DE UPLOAD DE IMAGEM
+// ===========================================
 export const ImageUpload = ({ value, onChange, label, ...props }) => {
   const [preview, setPreview] = useState(value);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validar tamanho (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Imagem muito grande. Máximo 5MB');
         return;
       }
 
-      // Validar tipo
       if (!file.type.startsWith('image/')) {
         toast.error('Arquivo deve ser uma imagem');
         return;
@@ -292,7 +346,9 @@ export const ImageUpload = ({ value, onChange, label, ...props }) => {
   );
 };
 
-// Componente de endereço completo
+// ===========================================
+// COMPONENTE DE FORMULÁRIO DE ENDEREÇO
+// ===========================================
 export const EnderecoForm = ({ endereco, onChange, onCepFound }) => {
   return (
     <Grid container spacing={2}>
@@ -379,7 +435,9 @@ export const EnderecoForm = ({ endereco, onChange, onCepFound }) => {
   );
 };
 
-// 🔥 HISTÓRICO DE ATENDIMENTOS DO CLIENTE - CORRIGIDO COM FIREBASE
+// ===========================================
+// HISTÓRICO DE ATENDIMENTOS DO CLIENTE
+// ===========================================
 export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   const [atendimentos, setAtendimentos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
@@ -399,16 +457,13 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   const carregarHistorico = async () => {
     setLoading(true);
     try {
-      // Buscar todos os atendimentos
       const todosAtendimentos = await firebaseService.getAll('atendimentos').catch(() => []);
       
-      // Filtrar por cliente e status finalizado/cancelado
       const atendimentosCliente = todosAtendimentos.filter(a => 
         a.clienteId === clienteId && 
         (a.status === 'finalizado' || a.status === 'cancelado')
       );
 
-      // Buscar profissionais e serviços para enriquecer os dados
       const [profissionaisData, servicosData] = await Promise.all([
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('servicos').catch(() => []),
@@ -418,7 +473,6 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
       setProfissionais(profissionaisData);
       setServicos(servicosData);
 
-      // Calcular estatísticas
       const valorTotal = atendimentosCliente.reduce((acc, a) => {
         if (a.status === 'finalizado') {
           return acc + (a.valorTotal || 0);
@@ -483,7 +537,6 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
           </Typography>
         ) : (
           <>
-            {/* Cards de resumo */}
             <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
               <Card variant="outlined" sx={{ flex: 1, p: 2 }}>
                 <Typography variant="subtitle2" color="textSecondary">
