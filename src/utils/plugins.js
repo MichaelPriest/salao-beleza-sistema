@@ -24,10 +24,99 @@ import {
 import {
   Person as PersonIcon,
   Delete as DeleteIcon,
+  PhotoCamera as PhotoCameraIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import InputMask from 'react-input-mask';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+
+// ===========================================
+// SERVIÇO DE COMPRESSÃO DE IMAGEM
+// ===========================================
+export const imageCompressor = {
+  /**
+   * Comprimir imagem Base64
+   * @param {string} base64String - Imagem em formato Base64
+   * @param {number} maxWidth - Largura máxima (padrão: 800px)
+   * @param {number} quality - Qualidade (0-1, padrão: 0.6)
+   * @returns {Promise<string>} - Imagem comprimida em Base64
+   */
+  compressImage: (base64String, maxWidth = 800, quality = 0.6) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = base64String;
+      
+      img.onload = () => {
+        // Calcular novas dimensões mantendo proporção
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (maxWidth * height) / width;
+          width = maxWidth;
+        }
+        
+        // Criar canvas para redimensionar
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Desenhar imagem redimensionada
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Converter para Base64 com qualidade reduzida
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+        
+        // Verificar tamanho
+        const sizeInBytes = Math.round((compressedBase64.length * 3) / 4);
+        const sizeInKB = sizeInBytes / 1024;
+        
+        console.log(`📸 Imagem comprimida: ${sizeInKB.toFixed(2)}KB`);
+        
+        resolve(compressedBase64);
+      };
+      
+      img.onerror = (error) => {
+        reject(error);
+      };
+    });
+  },
+  
+  /**
+   * Validar tamanho da imagem
+   * @param {string} base64String - Imagem em Base64
+   * @returns {number} - Tamanho em KB
+   */
+  getImageSize: (base64String) => {
+    if (!base64String) return 0;
+    const sizeInBytes = Math.round((base64String.length * 3) / 4);
+    return sizeInBytes / 1024;
+  },
+  
+  /**
+   * Comprimir imagem até atingir tamanho alvo
+   * @param {string} base64String - Imagem original
+   * @param {number} targetSizeKB - Tamanho alvo em KB (padrão: 200KB)
+   * @returns {Promise<string>} - Imagem comprimida
+   */
+  compressToTargetSize: async (base64String, targetSizeKB = 200) => {
+    let quality = 0.9;
+    let compressed = base64String;
+    let size = imageCompressor.getImageSize(compressed);
+    
+    // Reduz qualidade progressivamente até atingir tamanho alvo
+    while (size > targetSizeKB && quality > 0.1) {
+      compressed = await imageCompressor.compressImage(base64String, 800, quality);
+      size = imageCompressor.getImageSize(compressed);
+      quality -= 0.1;
+    }
+    
+    console.log(`✅ Imagem otimizada: ${size.toFixed(2)}KB (qualidade final: ${(quality + 0.1).toFixed(1)})`);
+    return compressed;
+  }
+};
 
 // ===========================================
 // MÁSCARAS
@@ -273,31 +362,90 @@ export const CepInput = ({ value, onChange, onCepFound, ...props }) => {
 };
 
 // ===========================================
-// COMPONENTE DE UPLOAD DE IMAGEM
+// COMPONENTE DE UPLOAD DE IMAGEM COM COMPRESSÃO
 // ===========================================
-export const ImageUpload = ({ value, onChange, label, ...props }) => {
+export const ImageUpload = ({ 
+  value, 
+  onChange, 
+  label, 
+  maxSizeKB = 200, // Tamanho máximo em KB (padrão: 200KB)
+  ...props 
+}) => {
   const [preview, setPreview] = useState(value);
+  const [uploading, setUploading] = useState(false);
+  const [imageSize, setImageSize] = useState(null);
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Imagem muito grande. Máximo 5MB');
-        return;
-      }
+    if (!file) return;
 
+    try {
+      setUploading(true);
+      toast.loading('Processando imagem...', { id: 'image-processing' });
+
+      // Validar tipo
       if (!file.type.startsWith('image/')) {
-        toast.error('Arquivo deve ser uma imagem');
+        toast.error('Arquivo deve ser uma imagem', { id: 'image-processing' });
         return;
       }
 
+      // Validar tamanho original (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Imagem muito grande. Máximo 5MB', { id: 'image-processing' });
+        return;
+      }
+
+      // Converter File para Base64
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result);
-        onChange(reader.result);
-      };
       reader.readAsDataURL(file);
+      
+      reader.onload = async () => {
+        try {
+          const base64String = reader.result;
+          
+          // Verificar tamanho original
+          const originalSize = imageCompressor.getImageSize(base64String);
+          console.log(`📸 Tamanho original: ${originalSize.toFixed(2)}KB`);
+
+          // Comprimir imagem
+          let finalImage = base64String;
+          
+          if (originalSize > maxSizeKB) {
+            toast.loading(`Comprimindo imagem (${originalSize.toFixed(0)}KB → ${maxSizeKB}KB)...`, 
+              { id: 'image-processing' });
+            
+            finalImage = await imageCompressor.compressToTargetSize(base64String, maxSizeKB);
+          }
+
+          // Verificar tamanho final
+          const finalSize = imageCompressor.getImageSize(finalImage);
+          setImageSize(finalSize);
+
+          // Atualizar preview e valor
+          setPreview(finalImage);
+          onChange(finalImage);
+          
+          toast.success(`Imagem processada: ${finalSize.toFixed(1)}KB`, 
+            { id: 'image-processing' });
+          
+        } catch (error) {
+          console.error('Erro ao processar imagem:', error);
+          toast.error('Erro ao processar imagem', { id: 'image-processing' });
+        } finally {
+          setUploading(false);
+        }
+      };
+    } catch (error) {
+      console.error('Erro:', error);
+      toast.error('Erro ao processar imagem');
+      setUploading(false);
     }
+  };
+
+  const handleRemoveImage = () => {
+    setPreview(null);
+    setImageSize(null);
+    onChange(null);
   };
 
   return (
@@ -308,36 +456,66 @@ export const ImageUpload = ({ value, onChange, label, ...props }) => {
         id="image-upload"
         type="file"
         onChange={handleImageChange}
+        disabled={uploading}
       />
       <label htmlFor="image-upload">
-        <Avatar
-          src={preview}
-          sx={{
-            width: 120,
-            height: 120,
-            mx: 'auto',
-            mb: 2,
-            cursor: 'pointer',
-            border: '2px dashed #9c27b0',
-            '&:hover': {
-              opacity: 0.8,
-            },
-          }}
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+          <Avatar
+            src={preview}
+            sx={{
+              width: 120,
+              height: 120,
+              mx: 'auto',
+              mb: 2,
+              cursor: uploading ? 'wait' : 'pointer',
+              border: '2px dashed #9c27b0',
+              opacity: uploading ? 0.7 : 1,
+              '&:hover': {
+                opacity: 0.8,
+              },
+            }}
+          >
+            {!preview && <PersonIcon sx={{ fontSize: 60 }} />}
+          </Avatar>
+          {uploading && (
+            <CircularProgress
+              size={40}
+              sx={{
+                position: 'absolute',
+                top: '40%',
+                left: '40%',
+                color: '#9c27b0',
+              }}
+            />
+          )}
+        </Box>
+        <Button
+          variant="outlined"
+          component="span"
+          size="small"
+          disabled={uploading}
+          startIcon={<PhotoCameraIcon />}
+          sx={{ mb: 1 }}
         >
-          {!preview && <PersonIcon sx={{ fontSize: 60 }} />}
-        </Avatar>
-        <Button variant="outlined" component="span" size="small" sx={{ mb: 1 }}>
           {value ? 'Trocar Foto' : 'Adicionar Foto'}
         </Button>
       </label>
+      
+      {imageSize && (
+        <Typography variant="caption" display="block" color="textSecondary">
+          Tamanho: {imageSize.toFixed(1)}KB
+          {imageSize > maxSizeKB && (
+            <WarningIcon fontSize="inherit" sx={{ ml: 0.5, color: 'warning.main', verticalAlign: 'middle' }} />
+          )}
+        </Typography>
+      )}
+      
       {value && (
         <IconButton
           size="small"
           color="error"
-          onClick={() => {
-            setPreview(null);
-            onChange(null);
-          }}
+          onClick={handleRemoveImage}
+          disabled={uploading}
         >
           <DeleteIcon />
         </IconButton>
