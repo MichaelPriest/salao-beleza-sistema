@@ -1,5 +1,6 @@
 // src/services/atendimentoService.js
 import { firebaseService } from './firebase';
+import { comissoesService } from './comissoesService'; // NOVO: importar serviço de comissões
 
 export const atendimentoService = {
   // Buscar todos os atendimentos
@@ -165,6 +166,12 @@ export const atendimentoService = {
       
       console.log('✅ Agendamento encontrado:', agendamento);
 
+      // Buscar dados completos do profissional e serviço
+      const [profissional, servico] = await Promise.all([
+        firebaseService.getById('profissionais', agendamento.profissionalId),
+        firebaseService.getById('servicos', agendamento.servicoId)
+      ]);
+
       // Validar dados
       if (!agendamento.clienteId) throw new Error('Cliente não informado no agendamento');
       if (!agendamento.profissionalId) throw new Error('Profissional não informado no agendamento');
@@ -189,15 +196,15 @@ export const atendimentoService = {
         clienteId: agendamento.clienteId,
         clienteNome: agendamento.clienteNome || 'Cliente',
         profissionalId: agendamento.profissionalId,
-        profissionalNome: agendamento.profissionalNome || 'Profissional',
+        profissionalNome: profissional?.nome || agendamento.profissionalNome || 'Profissional',
         servicoId: agendamento.servicoId,
-        servicoNome: agendamento.servicoNome || 'Serviço',
+        servicoNome: servico?.nome || agendamento.servicoNome || 'Serviço',
         data: agendamento.data,
         horaInicio: agendamento.horaInicio || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
         observacoes: agendamento.observacoes || '',
-        valorTotal: agendamento.valor || 0,
+        valorTotal: Number(agendamento.valor) || Number(servico?.preco) || 0,
         dataCriacao: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -265,6 +272,18 @@ export const atendimentoService = {
           status: 'finalizado',
           updatedAt: new Date().toISOString()
         });
+      }
+
+      // REGISTRAR COMISSÃO AUTOMATICAMENTE
+      if (atendimento.profissionalId && dadosAtualizados.status === 'finalizado') {
+        try {
+          console.log('💰 Registrando comissão para o profissional:', atendimento.profissionalId);
+          await comissoesService.registrar(atendimentoId);
+          console.log('✅ Comissão registrada com sucesso');
+        } catch (comissaoError) {
+          console.error('⚠️ Erro ao registrar comissão (não crítico):', comissaoError);
+          // Não interrompe o fluxo principal se a comissão falhar
+        }
       }
 
       // Registrar log
@@ -381,17 +400,49 @@ export const atendimentoService = {
     }
   },
 
+  // Buscar atendimentos com comissões
+  buscarComComissoes: async (atendimentoId) => {
+    try {
+      const [atendimento, comissoes] = await Promise.all([
+        firebaseService.getById('atendimentos', atendimentoId),
+        firebaseService.getAll('comissoes')
+      ]);
+
+      const comissao = comissoes.find(c => c.atendimentoId === atendimentoId);
+
+      return {
+        ...atendimento,
+        comissao: comissao || null
+      };
+    } catch (error) {
+      console.error('Erro ao buscar atendimento com comissão:', error);
+      throw error;
+    }
+  },
+
   // Buscar estatísticas
   buscarEstatisticas: async () => {
     try {
-      const atendimentos = await firebaseService.getAll('atendimentos');
+      const [atendimentos, comissoes] = await Promise.all([
+        firebaseService.getAll('atendimentos'),
+        firebaseService.getAll('comissoes')
+      ]);
       
+      const atendimentosFinalizados = atendimentos.filter(a => a.status === 'finalizado');
+      const valorTotal = atendimentosFinalizados.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
+      const totalComissoes = comissoes.reduce((acc, c) => acc + (c.valor || 0), 0);
+
       return {
         total: atendimentos.length,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
-        finalizados: atendimentos.filter(a => a.status === 'finalizado').length,
+        finalizados: atendimentosFinalizados.length,
         cancelados: atendimentos.filter(a => a.status === 'cancelado').length,
-        pagos: atendimentos.filter(a => a.status === 'pago').length
+        pagos: atendimentos.filter(a => a.status === 'pago').length,
+        valorTotal,
+        totalComissoes,
+        mediaPorAtendimento: atendimentosFinalizados.length > 0 
+          ? valorTotal / atendimentosFinalizados.length 
+          : 0
       };
     } catch (error) {
       console.error('Erro ao buscar estatísticas:', error);
