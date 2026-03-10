@@ -8,43 +8,24 @@ import {
   Grid,
   Button,
   TextField,
-  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
   Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Tooltip,
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   LinearProgress,
-  TablePagination,
   Avatar,
 } from '@mui/material';
 import {
-  Search as SearchIcon,
-  Clear as ClearIcon,
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   AccountBalance as AccountBalanceIcon,
-  AttachMoney as MoneyIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -60,39 +41,52 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 const COLORS = ['#4caf50', '#f44336', '#ff9800', '#2196f3', '#9c27b0'];
 
 function FluxoCaixa() {
   const [loading, setLoading] = useState(true);
   const [transacoes, setTransacoes] = useState([]);
-  const [fluxo, setFluxo] = useState([]);
+  const [caixa, setCaixa] = useState(null);
   const [dataInicio, setDataInicio] = useState(
     new Date(new Date().setDate(1)).toISOString().split('T')[0]
   );
   const [dataFim, setDataFim] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [caixa, setCaixa] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     carregarDados();
-  }, [dataInicio, dataFim]);
+  }, []);
+
+  useEffect(() => {
+    if (transacoes.length > 0) {
+      // Recarregar quando as datas mudarem (filtro local)
+      setLoading(false);
+    }
+  }, [dataInicio, dataFim, transacoes]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [transacoesRes, fluxoRes, caixaRes] = await Promise.all([
-        api.get('/transacoes').catch(() => ({ data: [] })),
-        api.get('/fluxo_caixa').catch(() => ({ data: [] })),
-        api.get('/caixa').catch(() => ({ data: null })),
+      
+      const [transacoesData, caixaData] = await Promise.all([
+        firebaseService.getAll('transacoes').catch(() => []),
+        firebaseService.getAll('caixa').catch(() => []),
       ]);
       
-      setTransacoes(transacoesRes.data || []);
-      setFluxo(fluxoRes.data || []);
-      setCaixa(caixaRes.data || null);
+      setTransacoes(transacoesData || []);
+      
+      // Pega o caixa atual (último caixa aberto)
+      const caixaAtual = caixaData?.length > 0 
+        ? caixaData.filter(c => c && c.status === 'aberto')
+            .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0]
+        : null;
+      setCaixa(caixaAtual);
+      
+      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
@@ -103,61 +97,78 @@ function FluxoCaixa() {
 
   // Filtrar transações por período
   const transacoesFiltradas = transacoes.filter(t => {
+    if (!t.data) return false;
     const data = new Date(t.data);
-    return data >= new Date(dataInicio) && data <= new Date(dataFim);
+    const inicio = new Date(dataInicio);
+    const fim = new Date(dataFim);
+    fim.setHours(23, 59, 59, 999); // Incluir todo o dia final
+    return data >= inicio && data <= fim;
   });
 
   // Calcular totais
   const totalReceitas = transacoesFiltradas
     .filter(t => t.tipo === 'receita' && t.status === 'pago')
-    .reduce((acc, t) => acc + (t.valor || 0), 0);
+    .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
   const totalDespesas = transacoesFiltradas
     .filter(t => t.tipo === 'despesa' && t.status === 'pago')
-    .reduce((acc, t) => acc + (t.valor || 0), 0);
+    .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
   const saldoPeriodo = totalReceitas - totalDespesas;
 
   // Dados para gráfico de linha
-  const dadosGrafico = [];
-  const dataAtual = new Date(dataInicio);
-  const dataFinal = new Date(dataFim);
+  const gerarDadosGrafico = () => {
+    const dados = [];
+    const dataAtual = new Date(dataInicio);
+    const dataFinal = new Date(dataFim);
+    dataFinal.setHours(23, 59, 59, 999);
 
-  while (dataAtual <= dataFinal) {
-    const diaStr = dataAtual.toISOString().split('T')[0];
-    const receitasDia = transacoesFiltradas
-      .filter(t => t.tipo === 'receita' && t.status === 'pago' && t.data === diaStr)
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
-    const despesasDia = transacoesFiltradas
-      .filter(t => t.tipo === 'despesa' && t.status === 'pago' && t.data === diaStr)
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
+    while (dataAtual <= dataFinal) {
+      const diaStr = dataAtual.toISOString().split('T')[0];
+      
+      const receitasDia = transacoesFiltradas
+        .filter(t => t.tipo === 'receita' && t.status === 'pago' && t.data?.startsWith(diaStr))
+        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+        
+      const despesasDia = transacoesFiltradas
+        .filter(t => t.tipo === 'despesa' && t.status === 'pago' && t.data?.startsWith(diaStr))
+        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
-    dadosGrafico.push({
-      dia: dataAtual.toLocaleDateString('pt-BR'),
-      receitas: receitasDia,
-      despesas: despesasDia,
-      saldo: receitasDia - despesasDia,
-    });
+      dados.push({
+        dia: dataAtual.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        receitas: receitasDia,
+        despesas: despesasDia,
+        saldo: receitasDia - despesasDia,
+      });
 
-    dataAtual.setDate(dataAtual.getDate() + 1);
-  }
+      dataAtual.setDate(dataAtual.getDate() + 1);
+    }
+
+    return dados;
+  };
 
   // Dados para gráfico de pizza por categoria
-  const categorias = {};
-  transacoesFiltradas
-    .filter(t => t.status === 'pago')
-    .forEach(t => {
-      const cat = t.categoria || 'Outros';
-      if (!categorias[cat]) {
-        categorias[cat] = 0;
-      }
-      categorias[cat] += t.valor || 0;
-    });
+  const gerarDadosPizza = () => {
+    const categorias = {};
+    
+    transacoesFiltradas
+      .filter(t => t.status === 'pago')
+      .forEach(t => {
+        const cat = t.categoria || 'Outros';
+        if (!categorias[cat]) {
+          categorias[cat] = 0;
+        }
+        categorias[cat] += Number(t.valor) || 0;
+      });
 
-  const dadosPizza = Object.keys(categorias).map(cat => ({
-    name: cat,
-    value: categorias[cat],
-  }));
+    return Object.keys(categorias).map(cat => ({
+      name: cat,
+      value: categorias[cat],
+    }));
+  };
+
+  const dadosGrafico = gerarDadosGrafico();
+  const dadosPizza = gerarDadosPizza();
 
   if (loading) {
     return (
@@ -316,7 +327,7 @@ function FluxoCaixa() {
           >
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Evolução Diária
                 </Typography>
                 <Box sx={{ height: 300 }}>
@@ -326,7 +337,7 @@ function FluxoCaixa() {
                       <XAxis dataKey="dia" />
                       <YAxis />
                       <RechartsTooltip 
-                        formatter={(value) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value) => `R$ ${Number(value).toFixed(2)}`}
                       />
                       <Area 
                         type="monotone" 
@@ -335,6 +346,7 @@ function FluxoCaixa() {
                         stroke="#4caf50" 
                         fill="#4caf50" 
                         fillOpacity={0.6} 
+                        name="Receitas"
                       />
                       <Area 
                         type="monotone" 
@@ -343,6 +355,7 @@ function FluxoCaixa() {
                         stroke="#f44336" 
                         fill="#f44336" 
                         fillOpacity={0.6} 
+                        name="Despesas"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -360,7 +373,7 @@ function FluxoCaixa() {
           >
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                   Distribuição por Categoria
                 </Typography>
                 <Box sx={{ height: 300 }}>
@@ -371,7 +384,9 @@ function FluxoCaixa() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => 
+                          percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : ''
+                        }
                         outerRadius={80}
                         dataKey="value"
                       >
@@ -380,7 +395,7 @@ function FluxoCaixa() {
                         ))}
                       </Pie>
                       <RechartsTooltip 
-                        formatter={(value) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value) => `R$ ${Number(value).toFixed(2)}`}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -394,18 +409,18 @@ function FluxoCaixa() {
       {/* Tabela de Movimentações */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
             Movimentações do Período
           </Typography>
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                  <TableCell>Data</TableCell>
-                  <TableCell>Descrição</TableCell>
-                  <TableCell>Categoria</TableCell>
-                  <TableCell align="right">Valor</TableCell>
-                  <TableCell>Tipo</TableCell>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Descrição</strong></TableCell>
+                  <TableCell><strong>Categoria</strong></TableCell>
+                  <TableCell align="right"><strong>Valor</strong></TableCell>
+                  <TableCell><strong>Tipo</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -413,16 +428,17 @@ function FluxoCaixa() {
                   .filter(t => t.status === 'pago')
                   .sort((a, b) => new Date(b.data) - new Date(a.data))
                   .map((transacao) => (
-                    <TableRow key={transacao.id}>
+                    <TableRow key={transacao.id} hover>
                       <TableCell>
                         {new Date(transacao.data).toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell>{transacao.descricao}</TableCell>
                       <TableCell>
                         <Chip
-                          label={transacao.categoria || '—'}
+                          label={transacao.categoria || 'Sem categoria'}
                           size="small"
                           variant="outlined"
+                          sx={{ fontSize: '0.75rem' }}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -432,7 +448,7 @@ function FluxoCaixa() {
                             fontWeight: 600,
                           }}
                         >
-                          {transacao.tipo === 'receita' ? '+' : '-'} R$ {transacao.valor?.toFixed(2)}
+                          {transacao.tipo === 'receita' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -440,17 +456,33 @@ function FluxoCaixa() {
                           label={transacao.tipo === 'receita' ? 'Receita' : 'Despesa'}
                           size="small"
                           color={transacao.tipo === 'receita' ? 'success' : 'error'}
+                          sx={{ fontWeight: 500 }}
                         />
                       </TableCell>
                     </TableRow>
                   ))}
+
+                {transacoesFiltradas.filter(t => t.status === 'pago').length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <Typography variant="body2" color="textSecondary">
+                        Nenhuma movimentação encontrada no período
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         </CardContent>
       </Card>
 
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
