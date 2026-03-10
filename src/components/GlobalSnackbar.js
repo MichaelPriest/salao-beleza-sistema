@@ -3,7 +3,7 @@ import React from 'react';
 import { Snackbar, Alert } from '@mui/material';
 import { useFeedback } from '../contexts/FeedbackContext';
 
-export const GlobalSnackbar = () => {
+const GlobalSnackbar = () => {
   const { snackbar, hideSnackbar } = useFeedback();
 
   return (
@@ -13,9 +13,15 @@ export const GlobalSnackbar = () => {
       onClose={hideSnackbar}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
     >
-      <Alert onClose={hideSnackbar} severity={snackbar.severity}>
+      <Alert 
+        onClose={hideSnackbar} 
+        severity={snackbar.severity}
+        sx={{ width: '100%' }}
+      >
         {snackbar.message}
       </Alert>
     </Snackbar>
   );
 };
+
+export default GlobalSnackbar;
