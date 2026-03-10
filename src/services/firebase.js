@@ -113,10 +113,14 @@ export const firebaseService = {
       let q = collection(db, collectionName);
       
       if (conditions.length > 0) {
-        const constraints = conditions.map(({ field, operator, value }) => 
-          where(field, operator, value)
-        );
-        q = query(q, ...constraints);
+        // Validar que nenhum valor é undefined
+        const constraints = conditions
+          .filter(({ value }) => value !== undefined && value !== null)
+          .map(({ field, operator, value }) => where(field, operator, value));
+        
+        if (constraints.length > 0) {
+          q = query(q, ...constraints);
+        }
       }
       
       if (orderByField) {
@@ -132,7 +136,6 @@ export const firebaseService = {
       console.error(`Erro na query de ${collectionName}:`, error);
       throw error;
     }
-  }
-};
+  },
 
 export default firebaseService;
