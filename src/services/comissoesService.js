@@ -5,6 +5,8 @@ export const comissoesService = {
   // Buscar comissões do profissional
   buscarMinhasComissoes: async (profissionalId, filtros = {}) => {
     try {
+      console.log('📊 Buscando comissões para profissional:', profissionalId);
+      
       const [comissoes, atendimentos, servicos] = await Promise.all([
         firebaseService.getAll('comissoes'),
         firebaseService.getAll('atendimentos'),
@@ -13,7 +15,6 @@ export const comissoesService = {
 
       let minhasComissoes = comissoes.filter(c => c.profissionalId === profissionalId);
 
-      // Aplicar filtros
       if (filtros.mes && filtros.ano) {
         minhasComissoes = minhasComissoes.filter(c => {
           const data = new Date(c.data);
@@ -26,7 +27,6 @@ export const comissoesService = {
         minhasComissoes = minhasComissoes.filter(c => c.status === filtros.status);
       }
 
-      // Enriquecer com dados dos atendimentos
       const comissoesEnriquecidas = await Promise.all(
         minhasComissoes.map(async (comissao) => {
           const atendimento = atendimentos.find(a => a.id === comissao.atendimentoId);
@@ -58,26 +58,20 @@ export const comissoesService = {
       const mesAtual = hoje.getMonth() + 1;
       const anoAtual = hoje.getFullYear();
 
-      // Comissões do mês atual
       const comissoesMes = minhasComissoes.filter(c => {
         const data = new Date(c.data);
         return data.getMonth() + 1 === mesAtual && 
                data.getFullYear() === anoAtual;
       });
 
-      // Comissões pendentes
       const pendentes = minhasComissoes.filter(c => c.status === 'pendente');
-      
-      // Comissões pagas
       const pagas = minhasComissoes.filter(c => c.status === 'pago');
 
-      // Totais
       const totalMes = comissoesMes.reduce((acc, c) => acc + (c.valor || 0), 0);
       const totalPendente = pendentes.reduce((acc, c) => acc + (c.valor || 0), 0);
       const totalPago = pagas.reduce((acc, c) => acc + (c.valor || 0), 0);
       const totalGeral = minhasComissoes.reduce((acc, c) => acc + (c.valor || 0), 0);
 
-      // Comissões por serviço
       const servicos = {};
       minhasComissoes.forEach(c => {
         if (c.servicoNome) {
@@ -116,17 +110,18 @@ export const comissoesService = {
   // Calcular comissão de um atendimento
   calcularComissao: async (atendimentoId) => {
     try {
-      const atendimento = await firebaseService.getById('atendimentos', atendimentoId);
-      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
-      const servico = await firebaseService.getById('servicos', atendimento.servicoId);
-
-      if (!atendimento || !profissional || !servico) {
-        throw new Error('Dados incompletos para calcular comissão');
-      }
-
-      // Percentual de comissão (pode vir do profissional ou do serviço)
-      const percentual = profissional.comissao || servico.comissaoProfissional || 40;
+      console.log('📊 Calculando comissão para atendimento:', atendimentoId);
       
+      const atendimento = await firebaseService.getById('atendimentos', atendimentoId);
+      if (!atendimento) throw new Error('Atendimento não encontrado');
+
+      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
+      if (!profissional) throw new Error('Profissional não encontrado');
+
+      const servico = await firebaseService.getById('servicos', atendimento.servicoId);
+      if (!servico) throw new Error('Serviço não encontrado');
+
+      const percentual = profissional.comissao || servico.comissaoProfissional || 40;
       const valorAtendimento = atendimento.valorTotal || servico.preco || 0;
       const valorComissao = (valorAtendimento * percentual) / 100;
 
@@ -150,17 +145,19 @@ export const comissoesService = {
 
   // Registrar comissão
   registrar: async (atendimentoId) => {
+    console.log('💰 Registrando comissão para atendimento:', atendimentoId);
+    
     try {
-      // Verificar se já existe comissão para este atendimento
       const comissoes = await firebaseService.getAll('comissoes');
       const existe = comissoes.find(c => c.atendimentoId === atendimentoId);
 
       if (existe) {
-        return existe; // Já registrada
+        console.log('⚠️ Comissão já existe:', existe);
+        return existe;
       }
 
-      // Calcular comissão
       const dadosComissao = await comissoesService.calcularComissao(atendimentoId);
+      console.log('📊 Dados da comissão calculada:', dadosComissao);
 
       const dadosParaSalvar = {
         ...dadosComissao,
@@ -169,19 +166,19 @@ export const comissoesService = {
       };
 
       const novaComissaoId = await firebaseService.add('comissoes', dadosParaSalvar);
+      console.log('✅ Comissão registrada com ID:', novaComissaoId);
 
-      // Registrar log
       await registrarLog('criar', 'comissoes', novaComissaoId, 
         `Comissão de R$ ${dadosComissao.valor.toFixed(2)} registrada`);
 
       return { ...dadosParaSalvar, id: novaComissaoId };
     } catch (error) {
-      console.error('Erro ao registrar comissão:', error);
+      console.error('❌ Erro ao registrar comissão:', error);
       throw error;
     }
   },
 
-  // Marcar comissão como paga (admin)
+  // Marcar comissão como paga
   marcarComoPaga: async (comissaoId) => {
     try {
       await firebaseService.update('comissoes', comissaoId, {
@@ -191,7 +188,6 @@ export const comissoesService = {
       });
 
       await registrarLog('pagar', 'comissoes', comissaoId, 'Comissão paga');
-
       return { id: comissaoId, status: 'pago' };
     } catch (error) {
       console.error('Erro ao marcar comissão como paga:', error);
@@ -199,7 +195,7 @@ export const comissoesService = {
     }
   },
 
-  // Cancelar comissão (admin)
+  // Cancelar comissão
   cancelar: async (comissaoId, motivo) => {
     try {
       await firebaseService.update('comissoes', comissaoId, {
@@ -209,7 +205,6 @@ export const comissoesService = {
       });
 
       await registrarLog('cancelar', 'comissoes', comissaoId, `Comissão cancelada: ${motivo}`);
-
       return { id: comissaoId, status: 'cancelado' };
     } catch (error) {
       console.error('Erro ao cancelar comissão:', error);
@@ -217,13 +212,12 @@ export const comissoesService = {
     }
   },
 
-  // Buscar estatísticas para o profissional
+  // Buscar estatísticas
   buscarEstatisticas: async (profissionalId) => {
     try {
       const comissoes = await firebaseService.getAll('comissoes');
       const minhasComissoes = comissoes.filter(c => c.profissionalId === profissionalId);
 
-      // Agrupar por mês
       const porMes = {};
       minhasComissoes.forEach(c => {
         const data = new Date(c.data);
@@ -250,7 +244,6 @@ export const comissoesService = {
         }
       });
 
-      // Calcular médias
       const totalGeral = minhasComissoes.reduce((acc, c) => acc + (c.valor || 0), 0);
       const mediaPorAtendimento = minhasComissoes.length > 0 
         ? totalGeral / minhasComissoes.length 
@@ -275,7 +268,6 @@ export const comissoesService = {
 async function registrarLog(acao, entidade, entidadeId, detalhes) {
   try {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
-    
     await firebaseService.add('auditoria', {
       acao,
       entidade,
