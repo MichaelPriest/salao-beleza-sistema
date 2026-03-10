@@ -170,10 +170,19 @@ function ModernFinanceiro() {
       setContasReceber((transacoesData || []).filter(t => t.tipo === 'receita'));
       
       // Pega o caixa atual (último caixa aberto)
-      const caixaAtual = caixaData?.length > 0 
-        ? caixaData.sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0]
-        : null;
-      setCaixa(caixaAtual || { saldoAtual: 0, status: 'fechado' });
+      let caixaAtual = null;
+      if (caixaData && caixaData.length > 0) {
+        // Ordenar por data de abertura (mais recente primeiro)
+        caixaAtual = caixaData
+          .filter(c => c && c.dataAbertura) // Filtrar caixas válidos
+          .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0];
+      }
+      
+      setCaixa(caixaAtual || { 
+        saldoAtual: 0, 
+        status: 'fechado',
+        movimentacoes: [] 
+      });
       
       toast.success('Dados carregados!');
     } catch (error) {
@@ -322,13 +331,27 @@ function ModernFinanceiro() {
     try {
       if (!caixa || caixa.status === 'fechado') {
         // Abrir caixa
+        // Buscar usuário do localStorage com segurança
+        let usuarioId = null;
+        try {
+          const usuarioStr = localStorage.getItem('usuario');
+          if (usuarioStr) {
+            const usuario = JSON.parse(usuarioStr);
+            usuarioId = usuario?.id || null;
+          }
+        } catch (e) {
+          console.warn('Erro ao parsear usuário do localStorage:', e);
+        }
+  
         const novoCaixa = {
           dataAbertura: new Date().toISOString(),
           saldoInicial: 0,
           saldoAtual: 0,
           movimentacoes: [],
           status: 'aberto',
-          responsavelId: JSON.parse(localStorage.getItem('usuario') || '{}').id,
+          responsavelId: usuarioId || 'sistema', // Fallback para 'sistema' se não encontrar usuário
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
         
         const novoId = await firebaseService.add('caixa', novoCaixa);
@@ -336,11 +359,20 @@ function ModernFinanceiro() {
         mostrarSnackbar('Caixa aberto com sucesso!');
       } else {
         // Fechar caixa
+        const caixaFechado = {
+          ...caixa,
+          status: 'fechado',
+          dataFechamento: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        
         await firebaseService.update('caixa', caixa.id, {
           status: 'fechado',
           dataFechamento: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         });
-        setCaixa({ ...caixa, status: 'fechado' });
+        
+        setCaixa(caixaFechado);
         mostrarSnackbar('Caixa fechado com sucesso!');
       }
       handleCloseCaixaDialog();
@@ -357,7 +389,7 @@ function ModernFinanceiro() {
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-
+  
       // Atualizar estado local
       const transacoesAtualizadas = transacoes.map(t => 
         t.id === transacao.id ? { ...t, status: 'pago', dataPagamento: new Date().toISOString() } : t
@@ -365,30 +397,34 @@ function ModernFinanceiro() {
       setTransacoes(transacoesAtualizadas);
       setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa'));
       setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita'));
-
+  
       // Atualizar saldo do caixa se estiver aberto
-      if (caixa && caixa.status === 'aberto') {
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
         const novoSaldo = caixa.saldoAtual + (transacao.tipo === 'receita' ? transacao.valor : -transacao.valor);
-        const movimentacoes = [
-          ...(caixa.movimentacoes || []),
-          {
-            id: Date.now(),
-            tipo: transacao.tipo,
-            valor: transacao.valor,
-            descricao: transacao.descricao,
-            data: new Date().toISOString(),
-            transacaoId: transacao.id,
-          },
-        ];
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: transacao.tipo,
+          valor: transacao.valor,
+          descricao: transacao.descricao,
+          data: new Date().toISOString(),
+          transacaoId: transacao.id,
+        };
+        
+        const movimentacoes = [...(caixa.movimentacoes || []), novaMovimentacao];
         
         await firebaseService.update('caixa', caixa.id, {
           saldoAtual: novoSaldo,
           movimentacoes,
+          updatedAt: new Date().toISOString(),
         });
         
-        setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes });
+        setCaixa({ 
+          ...caixa, 
+          saldoAtual: novoSaldo, 
+          movimentacoes 
+        });
       }
-
+  
       mostrarSnackbar('Transação marcada como paga!');
     } catch (error) {
       console.error('Erro ao marcar como pago:', error);
