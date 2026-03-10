@@ -15,17 +15,17 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Divider,
   Grid,
   Avatar,
+  LinearProgress,
 } from '@mui/material';
 import {
   CalendarToday as CalendarIcon,
   AttachMoney as MoneyIcon,
-  Person as PersonIcon,
   Receipt as ReceiptIcon,
 } from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
+import { toast } from 'react-hot-toast';
 
 export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   const [loading, setLoading] = useState(true);
@@ -42,20 +42,29 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   useEffect(() => {
     if (clienteId) {
       carregarHistorico();
+    } else {
+      setLoading(false);
     }
   }, [clienteId]);
 
   const carregarHistorico = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('📊 Carregando histórico para cliente:', clienteId);
       
       // Buscar atendimentos do cliente
       const todosAtendimentos = await firebaseService.getAll('atendimentos').catch(() => []);
+      console.log('📊 Total de atendimentos:', todosAtendimentos.length);
+      
       const atendimentosCliente = todosAtendimentos.filter(a => 
         a.clienteId === clienteId && 
         (a.status === 'finalizado' || a.status === 'cancelado')
       );
       
+      console.log('📊 Atendimentos do cliente:', atendimentosCliente.length);
+
       // Buscar profissionais e serviços para enriquecer os dados
       const [profissionaisData, servicosData] = await Promise.all([
         firebaseService.getAll('profissionais').catch(() => []),
@@ -69,7 +78,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
       // Calcular estatísticas
       const valorTotal = atendimentosCliente.reduce((acc, a) => {
         if (a.status === 'finalizado') {
-          return acc + (a.valorTotal || 0);
+          return acc + (Number(a.valorTotal) || 0);
         }
         return acc;
       }, 0);
@@ -85,8 +94,9 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
       });
 
     } catch (err) {
-      console.error('Erro ao carregar histórico:', err);
+      console.error('❌ Erro ao carregar histórico:', err);
       setError('Erro ao carregar histórico do cliente');
+      toast.error('Erro ao carregar histórico');
     } finally {
       setLoading(false);
     }
@@ -105,7 +115,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
       const servico = servicos.find(s => s.id === atendimento.servicoId);
       return servico?.nome || 'Serviço não encontrado';
     }
-    return '-';
+    return 'Serviço não especificado';
   };
 
   const getStatusColor = (status) => {
@@ -120,26 +130,40 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
     switch(status) {
       case 'finalizado': return 'Finalizado';
       case 'cancelado': return 'Cancelado';
-      default: return status;
+      default: status || 'Desconhecido';
     }
   };
 
   const formatarData = (data) => {
     if (!data) return '-';
-    return new Date(data).toLocaleDateString('pt-BR');
+    try {
+      return new Date(data).toLocaleDateString('pt-BR');
+    } catch (e) {
+      return '-';
+    }
+  };
+
+  const formatarMoeda = (valor) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor || 0);
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress size={30} />
+      <Box sx={{ width: '100%', mt: 2 }}>
+        <LinearProgress color="secondary" />
+        <Typography variant="body2" align="center" sx={{ mt: 1, color: '#9c27b0' }}>
+          Carregando histórico...
+        </Typography>
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
+      <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
         {error}
       </Alert>
     );
@@ -148,13 +172,13 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   return (
     <Box sx={{ mt: 3 }}>
       <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
-        Histórico de Atendimentos
+        Histórico de Atendimentos {clienteNome && `- ${clienteNome}`}
       </Typography>
 
       {/* Cards de resumo */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ height: '100%' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
@@ -174,7 +198,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ height: '100%' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: '#4caf50', width: 48, height: 48 }}>
@@ -185,7 +209,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
                     Total Gasto
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                    R$ {stats.valorTotal.toFixed(2)}
+                    {formatarMoeda(stats.valorTotal)}
                   </Typography>
                 </Box>
               </Box>
@@ -194,7 +218,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ height: '100%' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
@@ -231,19 +255,22 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
               {atendimentos.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <ReceiptIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
                     <Typography variant="body2" color="textSecondary">
                       Nenhum atendimento encontrado para este cliente
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                atendimentos.map((atendimento, index) => (
+                atendimentos.map((atendimento) => (
                   <TableRow key={atendimento.id} hover>
                     <TableCell>
                       {formatarData(atendimento.data)}
-                      <Typography variant="caption" display="block" color="textSecondary">
-                        {atendimento.horaInicio || ''}
-                      </Typography>
+                      {atendimento.horaInicio && (
+                        <Typography variant="caption" display="block" color="textSecondary">
+                          {atendimento.horaInicio}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       {getProfissionalNome(atendimento.profissionalId)}
@@ -253,7 +280,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                        R$ {atendimento.valorTotal?.toFixed(2) || '0,00'}
+                        {formatarMoeda(atendimento.valorTotal)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -271,9 +298,10 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
         </TableContainer>
       </Card>
 
-      {atendimentos.length === 0 && (
+      {atendimentos.length > 0 && (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Este cliente ainda não possui atendimentos registrados.
+          <strong>{stats.total}</strong> atendimento{stats.total !== 1 ? 's' : ''} encontrado{stats.total !== 1 ? 's' : ''}.
+          Valor médio por atendimento: {formatarMoeda(stats.valorTotal / stats.total)}
         </Alert>
       )}
     </Box>
