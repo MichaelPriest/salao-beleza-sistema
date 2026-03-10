@@ -50,9 +50,10 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { useDados } from '../hooks/useDados';
+import { firebaseService } from '../services/firebase';
+import { Timestamp } from 'firebase/firestore';
 
-// Importar o logo (certifique-se de que o caminho está correto)
+// Importar o logo
 import logo from '../assets/logo.png';
 
 function ModernAtendimentos() {
@@ -70,25 +71,59 @@ function ModernAtendimentos() {
     periodo: 'todos',
   });
 
-  const { dados: atendimentos, loading, error, carregar } = useDados('atendimentos');
-  const { dados: clientes } = useDados('clientes');
-  const { dados: profissionais } = useDados('profissionais');
-  const { dados: servicos } = useDados('servicos');
-  const { dados: pagamentos } = useDados('pagamentos');
+  // Estados para dados do Firebase
+  const [atendimentos, setAtendimentos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
+  const [pagamentos, setPagamentos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Carregar configurações da empresa
+  // Carregar todos os dados do Firebase
   useEffect(() => {
-    const carregarConfig = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/configuracoes');
-        const data = await response.json();
-        setConfig(data);
-      } catch (error) {
-        console.error('Erro ao carregar configurações:', error);
-      }
-    };
-    carregarConfig();
+    carregarTodosDados();
   }, []);
+
+  const carregarTodosDados = async () => {
+    try {
+      setLoading(true);
+      
+      const [atendimentosData, clientesData, profissionaisData, servicosData, pagamentosData, configData] = await Promise.all([
+        firebaseService.getAll('atendimentos'),
+        firebaseService.getAll('clientes'),
+        firebaseService.getAll('profissionais'),
+        firebaseService.getAll('servicos'),
+        firebaseService.getAll('pagamentos'),
+        carregarConfiguracoes()
+      ]);
+
+      setAtendimentos(atendimentosData || []);
+      setClientes(clientesData || []);
+      setProfissionais(profissionaisData || []);
+      setServicos(servicosData || []);
+      setPagamentos(pagamentosData || []);
+      setConfig(configData);
+
+      console.log('✅ Dados carregados do Firebase');
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err);
+      setError('Erro ao carregar dados');
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes');
+      return configs[0] || null;
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
+      return null;
+    }
+  };
 
   // Função para obter o serviço por ID
   const getServicoById = (id) => {
@@ -99,7 +134,6 @@ function ModernAtendimentos() {
   const getTodosServicos = (atendimento) => {
     const servicosLista = [];
     
-    // Se tiver itensServico (recomendado)
     if (atendimento.itensServico && atendimento.itensServico.length > 0) {
       atendimento.itensServico.forEach(item => {
         servicosLista.push({
@@ -110,7 +144,6 @@ function ModernAtendimentos() {
         });
       });
     } 
-    // Fallback para servicoId (serviço único)
     else if (atendimento.servicoId) {
       const servico = getServicoById(atendimento.servicoId);
       if (servico) {
@@ -133,18 +166,14 @@ function ModernAtendimentos() {
 
   // Calcular valor total do atendimento
   const calcularValorTotal = (atendimento) => {
-    // Se já tiver valorTotal calculado, usa ele
     if (atendimento.valorTotal) {
       return atendimento.valorTotal;
     }
     
     let total = 0;
-    
-    // Somar serviços
     const servicos = getTodosServicos(atendimento);
     total += servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
     
-    // Somar produtos
     if (atendimento.itensProduto && atendimento.itensProduto.length > 0) {
       total += atendimento.itensProduto.reduce((acc, item) => 
         acc + ((item.preco || 0) * (item.quantidade || 1)), 0);
@@ -189,7 +218,7 @@ function ModernAtendimentos() {
       servicosResumo.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filtros.status === 'todos' || atendimento.status === filtros.status;
-    const matchesProfissional = filtros.profissional === 'todos' || atendimento.profissionalId === parseInt(filtros.profissional);
+    const matchesProfissional = filtros.profissional === 'todos' || atendimento.profissionalId === filtros.profissional;
     
     let matchesPeriodo = true;
     if (filtros.periodo === 'hoje') {
@@ -210,8 +239,6 @@ function ModernAtendimentos() {
 
   const handleVerDetalhes = (atendimento) => {
     console.log('Abrindo detalhes do atendimento:', atendimento);
-    console.log('itensServico:', atendimento.itensServico);
-    console.log('Serviços processados:', getTodosServicos(atendimento));
     setSelectedAtendimento(atendimento);
     setOpenDetails(true);
   };
@@ -219,14 +246,14 @@ function ModernAtendimentos() {
   const handleCancelar = async (id) => {
     if (window.confirm('Tem certeza que deseja cancelar este atendimento?')) {
       try {
-        await fetch(`http://localhost:3001/atendimentos/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'cancelado' })
+        await firebaseService.update('atendimentos', id, { 
+          status: 'cancelado',
+          updatedAt: Timestamp.now()
         });
         toast.success('Atendimento cancelado com sucesso!');
-        carregar();
+        carregarTodosDados();
       } catch (error) {
+        console.error('Erro ao cancelar atendimento:', error);
         toast.error('Erro ao cancelar atendimento');
       }
     }
@@ -235,14 +262,14 @@ function ModernAtendimentos() {
   const handleReabrir = async (id) => {
     if (window.confirm('Deseja reabrir este atendimento?')) {
       try {
-        await fetch(`http://localhost:3001/atendimentos/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'em_andamento' })
+        await firebaseService.update('atendimentos', id, { 
+          status: 'em_andamento',
+          updatedAt: Timestamp.now()
         });
         toast.success('Atendimento reaberto!');
-        carregar();
+        carregarTodosDados();
       } catch (error) {
+        console.error('Erro ao reabrir atendimento:', error);
         toast.error('Erro ao reabrir atendimento');
       }
     }
@@ -264,7 +291,6 @@ function ModernAtendimentos() {
       contato: { telefone: '', email: '' }
     };
 
-    // Converter logo para base64 se necessário
     const logoUrl = logo || '';
 
     const estilo = `
@@ -542,7 +568,7 @@ function ModernAtendimentos() {
         <Button
           variant="outlined"
           startIcon={<RefreshIcon />}
-          onClick={() => carregar()}
+          onClick={carregarTodosDados}
         >
           Atualizar
         </Button>
@@ -685,7 +711,7 @@ function ModernAtendimentos() {
                     <Grid item xs={12} md={4} key={atendimento.id}>
                       <Card variant="outlined" sx={{ p: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                          <Avatar src={cliente?.foto} sx={{ bgcolor: '#ff9800', mr: 2, width: 48, height: 48 }}>
+                          <Avatar src={cliente?.avatar} sx={{ bgcolor: '#ff9800', mr: 2, width: 48, height: 48 }}>
                             {cliente?.nome?.charAt(0)}
                           </Avatar>
                           <Box>
@@ -805,7 +831,7 @@ function ModernAtendimentos() {
                       <TableRow key={atendimento.id} hover>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar src={cliente?.foto} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
+                            <Avatar src={cliente?.avatar} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
                               {cliente?.nome?.charAt(0)}
                             </Avatar>
                             <Box>
@@ -1171,7 +1197,7 @@ function ModernAtendimentos() {
                 >
                   <MenuItem value="todos">Todos</MenuItem>
                   {profissionais.map(prof => (
-                    <MenuItem key={prof.id} value={prof.id.toString()}>{prof.nome}</MenuItem>
+                    <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
