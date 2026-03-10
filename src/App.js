@@ -1,3 +1,4 @@
+// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -5,10 +6,15 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Contextos
+import { FeedbackProvider } from './contexts/FeedbackContext';
+
 // Components
 import ModernHeader from './components/ModernHeader';
 import ModernSidebar from './components/ModernSidebar';
 import PrivateRoute from './components/PrivateRoute';
+import GlobalLoading from './components/GlobalLoading';
+import GlobalSnackbar from './components/GlobalSnackbar';
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -209,69 +215,79 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-            borderRadius: '10px',
-          },
-          success: {
-            icon: '✅',
+      <FeedbackProvider>
+        {/* Loading Global */}
+        <GlobalLoading />
+        
+        {/* Toaster do react-hot-toast (mantido para compatibilidade) */}
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
             style: {
-              background: '#4caf50',
+              background: '#363636',
+              color: '#fff',
+              borderRadius: '10px',
             },
-          },
-          error: {
-            icon: '❌',
-            style: {
-              background: '#f44336',
+            success: {
+              icon: '✅',
+              style: {
+                background: '#4caf50',
+              },
             },
-          },
-          loading: {
-            icon: '⏳',
-            style: {
-              background: '#ff9800',
+            error: {
+              icon: '❌',
+              style: {
+                background: '#f44336',
+              },
             },
-          },
-        }}
-      />
-      <Router>
-        <Routes>
-          {/* Rotas sem sidebar */}
-          <Route path="/login" element={<ModernLogin />} />
-          <Route path="/teste" element={<TesteAPI />} />
-          
-          {/* Rotas com sidebar - todas as outras rotas */}
-          <Route path="/*" element={
-            <PrivateRoute>
-              <div style={{ display: 'flex', minHeight: '100vh' }}>
-                <ModernSidebar />
-                <div style={{ 
-                  flexGrow: 1, 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  width: 'calc(100% - 300px)',
-                  transition: 'width 0.3s ease',
-                }}>
-                  <ModernHeader />
-                  <main style={{ 
+            loading: {
+              icon: '⏳',
+              style: {
+                background: '#ff9800',
+              },
+            },
+          }}
+        />
+        
+        {/* Snackbar Global do MUI */}
+        <GlobalSnackbar />
+        
+        <Router>
+          <Routes>
+            {/* Rotas sem sidebar */}
+            <Route path="/login" element={<ModernLogin />} />
+            <Route path="/teste" element={<TesteAPI />} />
+            
+            {/* Rotas com sidebar - todas as outras rotas */}
+            <Route path="/*" element={
+              <PrivateRoute>
+                <div style={{ display: 'flex', minHeight: '100vh' }}>
+                  <ModernSidebar />
+                  <div style={{ 
                     flexGrow: 1, 
-                    padding: '24px',
-                    backgroundColor: '#faf5ff',
-                    minHeight: 'calc(100vh - 64px)',
-                    overflow: 'auto'
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    width: 'calc(100% - 300px)',
+                    transition: 'width 0.3s ease',
                   }}>
-                    <AnimatedRoutes />
-                  </main>
+                    <ModernHeader />
+                    <main style={{ 
+                      flexGrow: 1, 
+                      padding: '24px',
+                      backgroundColor: '#faf5ff',
+                      minHeight: 'calc(100vh - 64px)',
+                      overflow: 'auto'
+                    }}>
+                      <AnimatedRoutes />
+                    </main>
+                  </div>
                 </div>
-              </div>
-            </PrivateRoute>
-          } />
-        </Routes>
-      </Router>
+              </PrivateRoute>
+            } />
+          </Routes>
+        </Router>
+      </FeedbackProvider>
     </ThemeProvider>
   );
 }
