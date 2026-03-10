@@ -30,7 +30,6 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   LinearProgress,
   TablePagination,
   Stepper,
@@ -64,7 +63,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente', icon: <ScheduleIcon /> },
@@ -126,17 +125,17 @@ function Entradas() {
     try {
       setLoading(true);
       
-      const [entradasRes, produtosRes, fornecedoresRes, comprasRes] = await Promise.all([
-        api.get('/entradas').catch(() => ({ data: [] })),
-        api.get('/produtos').catch(() => ({ data: [] })),
-        api.get('/fornecedores').catch(() => ({ data: [] })),
-        api.get('/compras').catch(() => ({ data: [] })),
+      const [entradasData, produtosData, fornecedoresData, comprasData] = await Promise.all([
+        firebaseService.getAll('entradas').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('compras').catch(() => []),
       ]);
       
-      setEntradas(entradasRes.data || []);
-      setProdutos(produtosRes.data || []);
-      setFornecedores(fornecedoresRes.data || []);
-      setCompras(comprasRes.data || []);
+      setEntradas(entradasData || []);
+      setProdutos(produtosData || []);
+      setFornecedores(fornecedoresData || []);
+      setCompras(comprasData || []);
       
       toast.success('Dados carregados com sucesso!');
     } catch (error) {
@@ -196,6 +195,16 @@ function Entradas() {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEntradaEditando(null);
+    setNovoItem({
+      produtoId: '',
+      quantidade: 1,
+      quantidadeConferida: 0,
+      lote: '',
+      dataFabricacao: '',
+      dataValidade: '',
+      localizacao: '',
+      observacoes: '',
+    });
   };
 
   const handleOpenDetalhes = (entrada) => {
@@ -210,14 +219,14 @@ function Entradas() {
 
   const handleOpenConferencia = (entrada) => {
     setEntradaSelecionada(entrada);
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       itens: entrada.itens.map(item => ({
         ...item,
         quantidadeConferida: item.quantidadeConferida || 0,
-        divergencia: (item.quantidadeConferida || 0) - item.quantidade,
+        divergencia: (item.quantidadeConferida || 0) - (item.quantidade || 0),
       })),
-    });
+    }));
     setOpenConferenciaDialog(true);
   };
 
@@ -232,18 +241,18 @@ function Entradas() {
 
     // Se selecionar uma compra, carregar os itens
     if (name === 'compraId' && value) {
-      const compra = compras.find(c => c.id === parseInt(value));
+      const compra = compras.find(c => c.id === value);
       if (compra) {
         setFormData(prev => ({
           ...prev,
           fornecedorId: compra.fornecedorId,
-          itens: compra.itens.map(item => ({
+          itens: (compra.itens || []).map(item => ({
             ...item,
             quantidadeConferida: 0,
             lote: '',
             dataValidade: '',
           })),
-          valorTotal: compra.valorTotal || 0,
+          valorTotal: Number(compra.valorTotal) || 0,
         }));
       }
     }
@@ -257,7 +266,9 @@ function Entradas() {
       
       // Calcular divergência se for quantidade conferida
       if (name === 'quantidadeConferida') {
-        novosItens[index].divergencia = parseFloat(value) - novosItens[index].quantidade;
+        const quantidade = Number(value) || 0;
+        const prevista = Number(novosItens[index].quantidade) || 0;
+        novosItens[index].divergencia = quantidade - prevista;
       }
       
       return { ...prev, itens: novosItens };
@@ -270,22 +281,23 @@ function Entradas() {
       return;
     }
 
-    if (novoItem.quantidade <= 0) {
+    const quantidade = Number(novoItem.quantidade);
+    if (quantidade <= 0) {
       mostrarSnackbar('Quantidade deve ser maior que zero', 'error');
       return;
     }
 
-    const produto = produtos.find(p => p.id === parseInt(novoItem.produtoId));
+    const produto = produtos.find(p => p.id === novoItem.produtoId);
     
     const itemCompleto = {
       ...novoItem,
-      produtoId: parseInt(novoItem.produtoId),
+      produtoId: String(novoItem.produtoId),
       produtoNome: produto?.nome || 'Produto',
-      quantidade: parseFloat(novoItem.quantidade),
+      quantidade: Number(quantidade),
       quantidadeConferida: 0,
       divergencia: 0,
-      valorUnitario: produto?.precoCusto || 0,
-      total: parseFloat(novoItem.quantidade) * (produto?.precoCusto || 0),
+      valorUnitario: Number(produto?.precoCusto) || 0,
+      total: quantidade * (Number(produto?.precoCusto) || 0),
       lote: novoItem.lote || '',
       dataFabricacao: novoItem.dataFabricacao || '',
       dataValidade: novoItem.dataValidade || '',
@@ -294,7 +306,7 @@ function Entradas() {
 
     setFormData(prev => {
       const novosItens = [...prev.itens, itemCompleto];
-      const novoTotal = novosItens.reduce((acc, item) => acc + (item.total || 0), 0);
+      const novoTotal = novosItens.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
       return {
         ...prev,
         itens: novosItens,
@@ -317,7 +329,7 @@ function Entradas() {
   const handleRemoverItem = (index) => {
     setFormData(prev => {
       const novosItens = prev.itens.filter((_, i) => i !== index);
-      const novoTotal = novosItens.reduce((acc, item) => acc + (item.total || 0), 0);
+      const novoTotal = novosItens.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
       return {
         ...prev,
         itens: novosItens,
@@ -328,32 +340,50 @@ function Entradas() {
 
   const handleFinalizarConferencia = async () => {
     try {
+      if (!entradaSelecionada || !entradaSelecionada.id) {
+        mostrarSnackbar('Entrada inválida', 'error');
+        return;
+      }
+
       // Verificar se há divergências
-      const temDivergencia = formData.itens.some(item => item.divergencia !== 0);
+      const temDivergencia = formData.itens.some(item => (item.divergencia || 0) !== 0);
       
       const dadosAtualizados = {
         ...entradaSelecionada,
         itens: formData.itens,
         status: temDivergencia ? 'conferido' : 'finalizado',
         dataConferencia: new Date().toISOString(),
-        responsavelConferencia: JSON.parse(localStorage.getItem('usuario') || '{}').nome,
+        responsavelConferencia: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema',
         updatedAt: new Date().toISOString(),
       };
 
-      await api.patch(`/entradas/${entradaSelecionada.id}`, dadosAtualizados);
+      await firebaseService.update('entradas', entradaSelecionada.id, dadosAtualizados);
 
       // Atualizar estoque dos produtos
       for (const item of formData.itens) {
         if (item.quantidadeConferida > 0) {
           const produto = produtos.find(p => p.id === item.produtoId);
           if (produto) {
-            await api.patch(`/produtos/${item.produtoId}`, {
-              quantidadeEstoque: (produto.quantidadeEstoque || 0) + item.quantidadeConferida,
+            const novaQuantidade = (Number(produto.quantidadeEstoque) || 0) + Number(item.quantidadeConferida);
+            await firebaseService.update('produtos', item.produtoId, {
+              quantidadeEstoque: novaQuantidade,
               updatedAt: new Date().toISOString(),
             });
+            
+            // Atualizar estado local dos produtos
+            setProdutos(prev => prev.map(p => 
+              p.id === item.produtoId 
+                ? { ...p, quantidadeEstoque: novaQuantidade }
+                : p
+            ));
           }
         }
       }
+
+      // Atualizar estado local das entradas
+      setEntradas(prev => prev.map(e => 
+        e.id === entradaSelecionada.id ? dadosAtualizados : e
+      ));
 
       mostrarSnackbar(
         temDivergencia 
@@ -362,7 +392,6 @@ function Entradas() {
       );
       
       handleCloseConferencia();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao finalizar conferência:', error);
       mostrarSnackbar('Erro ao finalizar conferência', 'error');
@@ -376,23 +405,52 @@ function Entradas() {
         return;
       }
 
+      // Preparar dados para salvar
       const dadosParaSalvar = {
         ...formData,
+        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        compraId: formData.compraId ? String(formData.compraId) : null,
+        dataEntrada: String(formData.dataEntrada),
+        dataPrevista: formData.dataPrevista ? String(formData.dataPrevista) : null,
+        tipo: String(formData.tipo),
+        status: String(formData.status),
+        responsavel: String(formData.responsavel),
+        documento: formData.documento ? String(formData.documento) : null,
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        valorTotal: Number(formData.valorTotal) || 0,
+        itens: formData.itens.map(item => ({
+          ...item,
+          produtoId: String(item.produtoId),
+          quantidade: Number(item.quantidade),
+          quantidadeConferida: Number(item.quantidadeConferida || 0),
+          divergencia: Number(item.divergencia || 0),
+          valorUnitario: Number(item.valorUnitario || 0),
+          total: Number(item.total || 0),
+          lote: item.lote || null,
+          dataValidade: item.dataValidade || null,
+        })),
         updatedAt: new Date().toISOString(),
       };
 
       if (entradaEditando) {
-        await api.patch(`/entradas/${entradaEditando.id}`, dadosParaSalvar);
+        await firebaseService.update('entradas', entradaEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        setEntradas(prev => prev.map(e => 
+          e.id === entradaEditando.id ? { ...e, ...dadosParaSalvar, id: entradaEditando.id } : e
+        ));
+        
         mostrarSnackbar('Entrada atualizada com sucesso!');
       } else {
-        dadosParaSalvar.id = Date.now();
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        await api.post('/entradas', dadosParaSalvar);
+        
+        const novoId = await firebaseService.add('entradas', dadosParaSalvar);
+        setEntradas([...entradas, { ...dadosParaSalvar, id: novoId }]);
+        
         mostrarSnackbar('Entrada registrada com sucesso!');
       }
 
       handleCloseDialog();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao salvar entrada:', error);
       mostrarSnackbar('Erro ao salvar entrada', 'error');
@@ -447,7 +505,7 @@ function Entradas() {
     pendentes: entradas.filter(e => e.status === 'pendente').length,
     conferidas: entradas.filter(e => e.status === 'conferido').length,
     finalizadas: entradas.filter(e => e.status === 'finalizado').length,
-    valorTotal: entradas.reduce((acc, e) => acc + (e.valorTotal || 0), 0),
+    valorTotal: entradas.reduce((acc, e) => acc + (Number(e.valorTotal) || 0), 0),
   };
 
   if (loading) {
@@ -482,7 +540,7 @@ function Entradas() {
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -501,7 +559,7 @@ function Entradas() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -520,7 +578,7 @@ function Entradas() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -539,13 +597,32 @@ function Entradas() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
             <Card sx={{ bgcolor: '#e8f5e9' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Finalizadas
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                  {stats.finalizadas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={2.4}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Valor Total
@@ -596,10 +673,11 @@ function Entradas() {
                   onChange={(e) => setFiltroStatus(e.target.value)}
                 >
                   <MenuItem value="todos">Todos</MenuItem>
-                  <MenuItem value="pendente">Pendente</MenuItem>
-                  <MenuItem value="conferido">Conferido</MenuItem>
-                  <MenuItem value="finalizado">Finalizado</MenuItem>
-                  <MenuItem value="cancelado">Cancelado</MenuItem>
+                  {Object.keys(statusColors).map(status => (
+                    <MenuItem key={status} value={status}>
+                      {statusColors[status].label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -671,7 +749,7 @@ function Entradas() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {new Date(entrada.dataEntrada).toLocaleDateString('pt-BR')}
+                        {entrada.dataEntrada ? new Date(entrada.dataEntrada).toLocaleDateString('pt-BR') : '—'}
                       </TableCell>
                       <TableCell>{fornecedor?.nome || '—'}</TableCell>
                       <TableCell>
@@ -685,7 +763,7 @@ function Entradas() {
                         {entrada.itens?.length || 0} itens
                       </TableCell>
                       <TableCell align="right">
-                        R$ {entrada.valorTotal?.toFixed(2)}
+                        R$ {Number(entrada.valorTotal || 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -829,7 +907,7 @@ function Entradas() {
                             .filter(c => c.status === 'entregue' || c.status === 'aprovada')
                             .map(compra => (
                               <MenuItem key={compra.id} value={compra.id}>
-                                {compra.numeroPedido} - R$ {compra.valorTotal?.toFixed(2)}
+                                {compra.numeroPedido} - R$ {Number(compra.valorTotal || 0).toFixed(2)}
                               </MenuItem>
                             ))}
                         </Select>
@@ -846,6 +924,7 @@ function Entradas() {
                             label="Fornecedor"
                             onChange={handleInputChange}
                           >
+                            <MenuItem value="">Nenhum</MenuItem>
                             {fornecedores.map(f => (
                               <MenuItem key={f.id} value={f.id}>
                                 {f.nome}
@@ -926,7 +1005,7 @@ function Entradas() {
               <StepContent>
                 {formData.tipo === 'manual' && (
                   <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
                       Adicionar Item Manualmente
                     </Typography>
                     <Grid container spacing={2}>
@@ -940,7 +1019,7 @@ function Entradas() {
                           >
                             {produtos.map(p => (
                               <MenuItem key={p.id} value={p.id}>
-                                {p.nome} - R$ {p.precoCusto?.toFixed(2)}
+                                {p.nome} - R$ {Number(p.precoCusto || 0).toFixed(2)}
                               </MenuItem>
                             ))}
                           </Select>
@@ -986,6 +1065,7 @@ function Entradas() {
                           variant="contained"
                           onClick={handleAdicionarItemManual}
                           size="small"
+                          sx={{ bgcolor: '#9c27b0' }}
                         >
                           Adicionar Item
                         </Button>
@@ -997,7 +1077,7 @@ function Entradas() {
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
-                      <TableRow>
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                         <TableCell>Produto</TableCell>
                         <TableCell align="right">Qtd</TableCell>
                         <TableCell>Lote</TableCell>
@@ -1027,6 +1107,15 @@ function Entradas() {
                           </TableCell>
                         </TableRow>
                       ))}
+                      {formData.itens.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center" sx={{ py: 2 }}>
+                            <Typography variant="body2" color="textSecondary">
+                              Nenhum item adicionado
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1049,7 +1138,7 @@ function Entradas() {
               <StepLabel>Revisão e Finalização</StepLabel>
               <StepContent>
                 <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
+                  <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
                     Resumo da Entrada
                   </Typography>
                   <Grid container spacing={2}>
@@ -1064,7 +1153,7 @@ function Entradas() {
                         Data
                       </Typography>
                       <Typography variant="body2">
-                        {new Date(formData.dataEntrada).toLocaleDateString('pt-BR')}
+                        {formData.dataEntrada ? new Date(formData.dataEntrada).toLocaleDateString('pt-BR') : '—'}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
@@ -1078,7 +1167,7 @@ function Entradas() {
                         Valor Total
                       </Typography>
                       <Typography variant="h6" sx={{ color: '#4caf50' }}>
-                        R$ {formData.valorTotal.toFixed(2)}
+                        R$ {Number(formData.valorTotal || 0).toFixed(2)}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -1118,12 +1207,12 @@ function Entradas() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell>Produto</TableCell>
-                    <TableCell align="right">Qtd. Prevista</TableCell>
-                    <TableCell align="right">Qtd. Conferida</TableCell>
-                    <TableCell align="right">Divergência</TableCell>
-                    <TableCell>Lote</TableCell>
-                    <TableCell>Validade</TableCell>
+                    <TableCell><strong>Produto</strong></TableCell>
+                    <TableCell align="right"><strong>Qtd. Prevista</strong></TableCell>
+                    <TableCell align="right"><strong>Qtd. Conferida</strong></TableCell>
+                    <TableCell align="right"><strong>Divergência</strong></TableCell>
+                    <TableCell><strong>Lote</strong></TableCell>
+                    <TableCell><strong>Validade</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1215,7 +1304,7 @@ function Entradas() {
                     Data da Entrada
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {new Date(entradaSelecionada.dataEntrada).toLocaleDateString('pt-BR')}
+                    {entradaSelecionada.dataEntrada ? new Date(entradaSelecionada.dataEntrada).toLocaleDateString('pt-BR') : '—'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -1265,19 +1354,19 @@ function Entradas() {
                 </Grid>
 
                 <Grid item xs={12}>
-                  <Typography variant="h6" sx={{ mt: 2, mb: 2 }}>
+                  <Typography variant="h6" sx={{ mt: 2, mb: 2, color: '#9c27b0' }}>
                     Itens da Entrada
                   </Typography>
                   <TableContainer component={Paper} variant="outlined">
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                          <TableCell>Produto</TableCell>
-                          <TableCell align="right">Qtd.</TableCell>
-                          <TableCell align="right">Qtd. Conferida</TableCell>
-                          <TableCell align="right">Divergência</TableCell>
-                          <TableCell>Lote</TableCell>
-                          <TableCell>Validade</TableCell>
+                          <TableCell><strong>Produto</strong></TableCell>
+                          <TableCell align="right"><strong>Qtd.</strong></TableCell>
+                          <TableCell align="right"><strong>Qtd. Conferida</strong></TableCell>
+                          <TableCell align="right"><strong>Divergência</strong></TableCell>
+                          <TableCell><strong>Lote</strong></TableCell>
+                          <TableCell><strong>Validade</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1290,7 +1379,7 @@ function Entradas() {
                               <Chip
                                 label={item.divergencia || 0}
                                 size="small"
-                                color={item.divergencia === 0 ? 'success' : 'warning'}
+                                color={(item.divergencia || 0) === 0 ? 'success' : 'warning'}
                               />
                             </TableCell>
                             <TableCell>{item.lote || '—'}</TableCell>
