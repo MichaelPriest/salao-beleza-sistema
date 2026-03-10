@@ -1,4 +1,4 @@
-// src/pages/SiteSalão.js
+// src/pages/SiteSalao.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -7,7 +7,6 @@ import {
   Grid,
   Card,
   CardContent,
-  CardMedia,
   Button,
   IconButton,
   AppBar,
@@ -36,6 +35,7 @@ import {
   Drawer,
   useMediaQuery,
   useTheme,
+  CircularProgress,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -47,21 +47,14 @@ import {
   Facebook as FacebookIcon,
   WhatsApp as WhatsAppIcon,
   Schedule as ScheduleIcon,
-  Star as StarIcon,
   Spa as SpaIcon,
-  CalendarToday as CalendarIcon,
-  Person as PersonIcon,
   ContentCut as CutIcon,
   Brush as BrushIcon,
   Face as FaceIcon,
-  ArrowForward as ArrowForwardIcon,
-  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { siteService } from '../services/siteService';
 
 // Componente de Loading
 const LoadingSpinner = () => (
@@ -79,16 +72,14 @@ function SiteSalao() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  // Estados
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
-  const [depoimentos, setDepoimentos] = useState([]);
   
-  // Estados para agendamento
   const [openAgendamento, setOpenAgendamento] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState({
     clienteNome: '',
@@ -101,9 +92,14 @@ function SiteSalao() {
     observacoes: ''
   });
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
-
-  // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Depoimentos simulados
+  const depoimentos = [
+    { id: 1, nome: 'Maria Silva', comentario: 'Melhor salão da cidade! Atendimento excelente.', avaliacao: 5 },
+    { id: 2, nome: 'João Santos', comentario: 'Profissionais muito qualificados. Ambiente agradável.', avaliacao: 5 },
+    { id: 3, nome: 'Ana Oliveira', comentario: 'Sempre saio satisfeita. Recomendo!', avaliacao: 5 },
+  ];
 
   useEffect(() => {
     carregarDados();
@@ -112,26 +108,21 @@ function SiteSalao() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       const [configData, servicosData, profissionaisData] = await Promise.all([
-        firebaseService.getAll('configuracoes').then(data => data[0] || null),
-        firebaseService.getAll('servicos').then(data => data.filter(s => s.ativo !== false)),
-        firebaseService.getAll('profissionais').then(data => data.filter(p => p.status === 'ativo')),
+        siteService.buscarConfiguracoes(),
+        siteService.buscarServicos(),
+        siteService.buscarProfissionais(),
       ]);
       
       setConfig(configData);
-      setServicos(servicosData || []);
-      setProfissionais(profissionaisData || []);
+      setServicos(servicosData);
+      setProfissionais(profissionaisData);
       
-      // Depoimentos simulados (depois pode vir do Firebase)
-      setDepoimentos([
-        { id: 1, nome: 'Maria Silva', comentario: 'Melhor salão da cidade! Atendimento excelente.', avaliacao: 5, foto: null },
-        { id: 2, nome: 'João Santos', comentario: 'Profissionais muito qualificados. Ambiente agradável.', avaliacao: 5, foto: null },
-        { id: 3, nome: 'Ana Oliveira', comentario: 'Sempre saio satisfeita. Recomendo!', avaliacao: 5, foto: null },
-      ]);
-      
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err);
+      setError('Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
       toast.error('Erro ao carregar dados do salão');
     } finally {
       setLoading(false);
@@ -155,9 +146,7 @@ function SiteSalao() {
     }
   };
 
-  // Gerar horários disponíveis baseado no profissional e data
-  const gerarHorariosDisponiveis = (profissionalId, data) => {
-    // Simulação - em produção, verificar agendamentos existentes
+  const gerarHorariosDisponiveis = () => {
     const horarios = [
       '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
       '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
@@ -168,7 +157,6 @@ function SiteSalao() {
 
   const handleAgendamentoSubmit = async () => {
     try {
-      // Validar campos
       if (!agendamentoData.clienteNome || !agendamentoData.clienteEmail || !agendamentoData.clienteTelefone) {
         mostrarSnackbar('Preencha todos os dados do cliente', 'error');
         return;
@@ -178,13 +166,22 @@ function SiteSalao() {
         return;
       }
 
-      // Buscar dados completos
       const servico = servicos.find(s => s.id === agendamentoData.servicoId);
       const profissional = profissionais.find(p => p.id === agendamentoData.profissionalId);
 
-      // Criar agendamento
-      const agendamento = {
-        clienteId: null, // Cliente não cadastrado
+      // Verificar disponibilidade
+      const disponivel = await siteService.verificarDisponibilidade(
+        agendamentoData.profissionalId,
+        agendamentoData.data,
+        agendamentoData.horario
+      );
+
+      if (!disponivel) {
+        mostrarSnackbar('Horário não disponível. Escolha outro horário.', 'error');
+        return;
+      }
+
+      await siteService.criarAgendamento({
         clienteNome: agendamentoData.clienteNome,
         clienteEmail: agendamentoData.clienteEmail,
         clienteTelefone: agendamentoData.clienteTelefone,
@@ -195,13 +192,8 @@ function SiteSalao() {
         valor: servico?.preco,
         data: agendamentoData.data,
         horario: agendamentoData.horario,
-        status: 'pendente',
-        observacoes: agendamentoData.observacoes,
-        origem: 'site',
-        dataCriacao: new Date().toISOString()
-      };
-
-      await firebaseService.add('agendamentos', agendamento);
+        observacoes: agendamentoData.observacoes
+      });
       
       mostrarSnackbar('Agendamento realizado com sucesso! Entraremos em contato para confirmar.', 'success');
       setOpenAgendamento(false);
@@ -224,6 +216,16 @@ function SiteSalao() {
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', p: 3 }}>
+        <Alert severity="error" sx={{ maxWidth: 600 }}>
+          {error}
+        </Alert>
+      </Box>
+    );
   }
 
   const salaoNome = config?.salao?.nome || 'Beauty Pro';
@@ -260,18 +262,6 @@ function SiteSalao() {
                   sx={{
                     color: activeSection === item ? '#9c27b0' : '#666',
                     fontWeight: activeSection === item ? 600 : 400,
-                    position: 'relative',
-                    '&::after': activeSection === item ? {
-                      content: '""',
-                      position: 'absolute',
-                      bottom: 0,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: '30%',
-                      height: 3,
-                      bgcolor: '#9c27b0',
-                      borderRadius: 2,
-                    } : {},
                   }}
                 >
                   {item === 'home' ? 'Início' : 
@@ -315,10 +305,6 @@ function SiteSalao() {
                   primary={item === 'home' ? 'Início' : 
                           item === 'servicos' ? 'Serviços' : 
                           item === 'profissionais' ? 'Profissionais' : 'Contato'}
-                  sx={{ 
-                    color: activeSection === item ? '#9c27b0' : '#666',
-                    fontWeight: activeSection === item ? 600 : 400,
-                  }}
                 />
               </ListItem>
             ))}
@@ -343,7 +329,7 @@ function SiteSalao() {
         </Box>
       </Drawer>
 
-      {/* Espaçador para o AppBar fixo */}
+      {/* Espaçador */}
       <Toolbar id="home" />
 
       {/* Hero Section */}
@@ -403,143 +389,128 @@ function SiteSalao() {
       {/* Serviços Section */}
       <Box sx={{ bgcolor: 'white', py: 8 }} id="servicos">
         <Container maxWidth="lg">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-              Nossos <span style={{ color: '#9c27b0' }}>Serviços</span>
-            </Typography>
-            <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
-              Conheça todos os serviços que oferecemos para realçar sua beleza
-            </Typography>
-          </motion.div>
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
+            Nossos <span style={{ color: '#9c27b0' }}>Serviços</span>
+          </Typography>
 
-          <Grid container spacing={3}>
-            {servicos.map((servico, index) => (
-              <Grid item xs={12} sm={6} md={4} key={servico.id}>
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  whileHover={{ y: -10 }}
-                >
-                  <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
-                    <CardContent>
-                      <Avatar
-                        sx={{
-                          width: 60,
-                          height: 60,
-                          bgcolor: '#9c27b0',
-                          position: 'absolute',
-                          top: -30,
-                          left: 20,
-                        }}
-                      >
-                        {servico.categoria === 'Cabelo' ? <CutIcon /> :
-                         servico.categoria === 'Unhas' ? <BrushIcon /> :
-                         servico.categoria === 'Maquiagem' ? <FaceIcon /> :
-                         <SpaIcon />}
-                      </Avatar>
-                      
-                      <Box sx={{ mt: 4 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                          {servico.nome}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                          {servico.descricao || 'Serviço de qualidade com profissionais especializados.'}
-                        </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Chip
-                            label={`${servico.duracao} min`}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
-                            R$ {servico.preco?.toFixed(2)}
+          {servicos.length === 0 ? (
+            <Typography align="center" color="textSecondary">
+              Em breve novos serviços serão disponibilizados.
+            </Typography>
+          ) : (
+            <Grid container spacing={3}>
+              {servicos.map((servico, index) => (
+                <Grid item xs={12} sm={6} md={4} key={servico.id}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    viewport={{ once: true }}
+                    whileHover={{ y: -10 }}
+                  >
+                    <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
+                      <CardContent>
+                        <Avatar
+                          sx={{
+                            width: 60,
+                            height: 60,
+                            bgcolor: '#9c27b0',
+                            position: 'absolute',
+                            top: -30,
+                            left: 20,
+                          }}
+                        >
+                          {servico.categoria === 'Cabelo' ? <CutIcon /> :
+                           servico.categoria === 'Unhas' ? <BrushIcon /> :
+                           servico.categoria === 'Maquiagem' ? <FaceIcon /> :
+                           <SpaIcon />}
+                        </Avatar>
+                        
+                        <Box sx={{ mt: 4 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                            {servico.nome}
                           </Typography>
+                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                            {servico.descricao || 'Serviço de qualidade com profissionais especializados.'}
+                          </Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Chip
+                              label={`${servico.duracao} min`}
+                              size="small"
+                              variant="outlined"
+                            />
+                            <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
+                              R$ {servico.preco?.toFixed(2)}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Grid>
-            ))}
-          </Grid>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          )}
         </Container>
       </Box>
 
       {/* Profissionais Section */}
       <Box sx={{ py: 8 }} id="profissionais">
         <Container maxWidth="lg">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-              Nossa <span style={{ color: '#9c27b0' }}>Equipe</span>
-            </Typography>
-            <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
-              Profissionais qualificados e apaixonados pelo que fazem
-            </Typography>
-          </motion.div>
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
+            Nossa <span style={{ color: '#9c27b0' }}>Equipe</span>
+          </Typography>
 
-          <Grid container spacing={4}>
-            {profissionais.map((prof, index) => (
-              <Grid item xs={12} sm={6} md={4} key={prof.id}>
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  whileHover={{ scale: 1.05 }}
-                >
-                  <Card sx={{ textAlign: 'center', p: 2 }}>
-                    <Avatar
-                      src={prof.foto}
-                      sx={{
-                        width: 120,
-                        height: 120,
-                        mx: 'auto',
-                        mb: 2,
-                        border: '4px solid #9c27b0',
-                      }}
-                    >
-                      {prof.nome?.charAt(0)}
-                    </Avatar>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {prof.nome}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                      {prof.especialidade}
-                    </Typography>
-                    <Rating value={5} readOnly size="small" />
-                  </Card>
-                </motion.div>
-              </Grid>
-            ))}
-          </Grid>
+          {profissionais.length === 0 ? (
+            <Typography align="center" color="textSecondary">
+              Em breve nossa equipe será apresentada.
+            </Typography>
+          ) : (
+            <Grid container spacing={4}>
+              {profissionais.map((prof, index) => (
+                <Grid item xs={12} sm={6} md={4} key={prof.id}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    viewport={{ once: true }}
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    <Card sx={{ textAlign: 'center', p: 2 }}>
+                      <Avatar
+                        src={prof.foto}
+                        sx={{
+                          width: 120,
+                          height: 120,
+                          mx: 'auto',
+                          mb: 2,
+                          border: '4px solid #9c27b0',
+                        }}
+                      >
+                        {prof.nome?.charAt(0)}
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        {prof.nome}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        {prof.especialidade}
+                      </Typography>
+                      <Rating value={5} readOnly size="small" />
+                    </Card>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          )}
         </Container>
       </Box>
 
       {/* Depoimentos Section */}
       <Box sx={{ bgcolor: 'white', py: 8 }}>
         <Container maxWidth="lg">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            viewport={{ once: true }}
-          >
-            <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
-              O que nossos <span style={{ color: '#9c27b0' }}>clientes</span> dizem
-            </Typography>
-          </motion.div>
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
+            O que nossos <span style={{ color: '#9c27b0' }}>clientes</span> dizem
+          </Typography>
 
           <Grid container spacing={3}>
             {depoimentos.map((dep, index) => (
@@ -580,128 +551,114 @@ function SiteSalao() {
         <Container maxWidth="lg">
           <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
-                viewport={{ once: true }}
-              >
-                <Typography variant="h3" sx={{ fontWeight: 700, mb: 3 }}>
-                  Entre em <span style={{ color: '#9c27b0' }}>Contato</span>
-                </Typography>
+              <Typography variant="h3" sx={{ fontWeight: 700, mb: 3 }}>
+                Entre em <span style={{ color: '#9c27b0' }}>Contato</span>
+              </Typography>
+              
+              <List>
+                <ListItem>
+                  <ListItemIcon>
+                    <LocationIcon sx={{ color: '#9c27b0' }} />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Endereço"
+                    secondary={salaoEndereco ? 
+                      `${salaoEndereco.logradouro || ''}, ${salaoEndereco.numero || ''} - ${salaoEndereco.bairro || ''}, ${salaoEndereco.cidade || ''}/${salaoEndereco.estado || ''}` 
+                      : 'Rua da Beleza, 100 - Centro'}
+                  />
+                </ListItem>
                 
-                <List>
-                  <ListItem>
-                    <ListItemIcon>
-                      <LocationIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Endereço"
-                      secondary={salaoEndereco ? 
-                        `${salaoEndereco.logradouro || ''}, ${salaoEndereco.numero || ''} - ${salaoEndereco.bairro || ''}, ${salaoEndereco.cidade || ''}/${salaoEndereco.estado || ''}` 
-                        : 'Rua da Beleza, 100 - Centro'}
-                    />
-                  </ListItem>
-                  
-                  <ListItem>
-                    <ListItemIcon>
-                      <PhoneIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Telefone"
-                      secondary={contato?.telefone || '(11) 3333-4444'}
-                    />
-                  </ListItem>
-                  
-                  <ListItem>
-                    <ListItemIcon>
-                      <EmailIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Email"
-                      secondary={contato?.email || 'contato@beautypro.com'}
-                    />
-                  </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <PhoneIcon sx={{ color: '#9c27b0' }} />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Telefone"
+                    secondary={contato?.telefone || '(11) 3333-4444'}
+                  />
+                </ListItem>
+                
+                <ListItem>
+                  <ListItemIcon>
+                    <EmailIcon sx={{ color: '#9c27b0' }} />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Email"
+                    secondary={contato?.email || 'contato@beautypro.com'}
+                  />
+                </ListItem>
 
-                  <ListItem>
-                    <ListItemIcon>
-                      <ScheduleIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Horário de Funcionamento"
-                      secondary="Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00"
-                    />
-                  </ListItem>
-                </List>
+                <ListItem>
+                  <ListItemIcon>
+                    <ScheduleIcon sx={{ color: '#9c27b0' }} />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Horário de Funcionamento"
+                    secondary="Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00"
+                  />
+                </ListItem>
+              </List>
 
-                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                  <IconButton href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`} target="_blank" sx={{ color: '#25D366' }}>
-                    <WhatsAppIcon />
-                  </IconButton>
-                  <IconButton href={contato?.instagram ? `https://instagram.com/${contato.instagram}` : '#'} target="_blank" sx={{ color: '#E1306C' }}>
-                    <InstagramIcon />
-                  </IconButton>
-                  <IconButton href={contato?.facebook ? `https://facebook.com/${contato.facebook}` : '#'} target="_blank" sx={{ color: '#4267B2' }}>
-                    <FacebookIcon />
-                  </IconButton>
-                </Box>
-              </motion.div>
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <IconButton href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`} target="_blank" sx={{ color: '#25D366' }}>
+                  <WhatsAppIcon />
+                </IconButton>
+                <IconButton href={contato?.instagram ? `https://instagram.com/${contato.instagram}` : '#'} target="_blank" sx={{ color: '#E1306C' }}>
+                  <InstagramIcon />
+                </IconButton>
+                <IconButton href={contato?.facebook ? `https://facebook.com/${contato.facebook}` : '#'} target="_blank" sx={{ color: '#4267B2' }}>
+                  <FacebookIcon />
+                </IconButton>
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
-                viewport={{ once: true }}
-              >
-                <Paper sx={{ p: 3, bgcolor: '#f3e5f5' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                    Faça seu Agendamento
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                    Preencha o formulário abaixo e entraremos em contato para confirmar seu horário.
-                  </Typography>
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Seu Nome"
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        label="Telefone"
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        label="Melhor horário"
-                        size="small"
-                        placeholder="Ex: Manhã"
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        onClick={() => setOpenAgendamento(true)}
-                        sx={{
-                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                          color: 'white',
-                        }}
-                      >
-                        Solicitar Agendamento
-                      </Button>
-                    </Grid>
+              <Paper sx={{ p: 3, bgcolor: '#f3e5f5' }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                  Faça seu Agendamento
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                  Preencha o formulário abaixo e entraremos em contato para confirmar seu horário.
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Seu Nome"
+                      size="small"
+                    />
                   </Grid>
-                </Paper>
-              </motion.div>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Telefone"
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Melhor horário"
+                      size="small"
+                      placeholder="Ex: Manhã"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => setOpenAgendamento(true)}
+                      sx={{
+                        background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                        color: 'white',
+                      }}
+                    >
+                      Solicitar Agendamento
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
             </Grid>
           </Grid>
         </Container>
@@ -799,9 +756,7 @@ function SiteSalao() {
                   label="Profissional"
                   onChange={(e) => {
                     setAgendamentoData({ ...agendamentoData, profissionalId: e.target.value });
-                    if (agendamentoData.data) {
-                      gerarHorariosDisponiveis(e.target.value, agendamentoData.data);
-                    }
+                    gerarHorariosDisponiveis();
                   }}
                 >
                   {profissionais.map(p => (
@@ -818,9 +773,7 @@ function SiteSalao() {
                 value={agendamentoData.data}
                 onChange={(e) => {
                   setAgendamentoData({ ...agendamentoData, data: e.target.value });
-                  if (agendamentoData.profissionalId) {
-                    gerarHorariosDisponiveis(agendamentoData.profissionalId, e.target.value);
-                  }
+                  gerarHorariosDisponiveis();
                 }}
                 InputLabelProps={{ shrink: true }}
                 size="small"
@@ -867,7 +820,6 @@ function SiteSalao() {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
