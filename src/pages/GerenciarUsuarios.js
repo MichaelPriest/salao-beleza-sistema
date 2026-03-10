@@ -1,3 +1,4 @@
+// src/pages/GerenciarUsuarios.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -57,7 +58,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 // Constantes para cargos e permissões
 const CARGOS = {
@@ -146,11 +147,12 @@ function GerenciarUsuarios() {
   const carregarUsuarios = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/usuarios');
-      setUsuarios(response.data || []);
+      const usuariosData = await firebaseService.getAll('usuarios').catch(() => []);
+      setUsuarios(usuariosData || []);
+      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
-      mostrarSnackbar('Erro ao carregar usuários', 'error');
+      toast.error('Erro ao carregar usuários');
     } finally {
       setLoading(false);
     }
@@ -241,12 +243,12 @@ function GerenciarUsuarios() {
   const handleSalvar = async () => {
     try {
       // Validações
-      if (!formData.nome.trim()) {
+      if (!formData.nome?.trim()) {
         mostrarSnackbar('Nome é obrigatório', 'error');
         return;
       }
 
-      if (!formData.email.trim()) {
+      if (!formData.email?.trim()) {
         mostrarSnackbar('Email é obrigatório', 'error');
         return;
       }
@@ -277,39 +279,42 @@ function GerenciarUsuarios() {
       }
 
       const dadosParaSalvar = {
-        nome: formData.nome,
-        email: formData.email,
-        cargo: formData.cargo,
-        telefone: formData.telefone,
-        permissoes: formData.permissoes,
-        status: formData.status,
+        nome: String(formData.nome).trim(),
+        email: String(formData.email).toLowerCase().trim(),
+        cargo: String(formData.cargo),
+        telefone: formData.telefone ? String(formData.telefone).trim() : null,
+        permissoes: formData.permissoes || [],
+        status: String(formData.status),
         avatar: formData.avatar,
         updatedAt: new Date().toISOString(),
       };
 
       // Se for novo usuário, adicionar senha e data de cadastro
       if (!usuarioEditando) {
-        dadosParaSalvar.senha = formData.senha;
+        dadosParaSalvar.senha = String(formData.senha);
         dadosParaSalvar.dataCadastro = new Date().toISOString();
         dadosParaSalvar.ultimoAcesso = null;
       } else if (formData.senha) {
         // Se estiver editando e senha foi preenchida, atualizar
-        dadosParaSalvar.senha = formData.senha;
+        dadosParaSalvar.senha = String(formData.senha);
       }
 
       if (usuarioEditando) {
-        // Atualizar usuário existente
-        await api.patch(`/usuarios/${usuarioEditando.id}`, dadosParaSalvar);
+        await firebaseService.update('usuarios', usuarioEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        setUsuarios(prev => prev.map(u => 
+          u.id === usuarioEditando.id ? { ...u, ...dadosParaSalvar, id: usuarioEditando.id } : u
+        ));
+        
         mostrarSnackbar('Usuário atualizado com sucesso!');
       } else {
-        // Criar novo usuário
-        dadosParaSalvar.id = Date.now(); // Gerar ID único
-        await api.post('/usuarios', dadosParaSalvar);
+        const novoId = await firebaseService.add('usuarios', dadosParaSalvar);
+        setUsuarios([...usuarios, { ...dadosParaSalvar, id: novoId }]);
         mostrarSnackbar('Usuário criado com sucesso!');
       }
 
       handleCloseDialog();
-      carregarUsuarios();
     } catch (error) {
       console.error('Erro ao salvar usuário:', error);
       mostrarSnackbar('Erro ao salvar usuário', 'error');
@@ -318,14 +323,20 @@ function GerenciarUsuarios() {
 
   const handleSalvarPermissoes = async () => {
     try {
-      await api.patch(`/usuarios/${usuarioSelecionado.id}`, {
+      await firebaseService.update('usuarios', usuarioSelecionado.id, {
         permissoes: formData.permissoes,
         updatedAt: new Date().toISOString(),
       });
 
+      // Atualizar estado local
+      setUsuarios(prev => prev.map(u => 
+        u.id === usuarioSelecionado.id 
+          ? { ...u, permissoes: formData.permissoes }
+          : u
+      ));
+
       mostrarSnackbar('Permissões atualizadas com sucesso!');
       handleClosePermissoesDialog();
-      carregarUsuarios();
     } catch (error) {
       console.error('Erro ao salvar permissões:', error);
       mostrarSnackbar('Erro ao salvar permissões', 'error');
@@ -336,13 +347,17 @@ function GerenciarUsuarios() {
     try {
       const novoStatus = usuario.status === 'ativo' ? 'inativo' : 'ativo';
       
-      await api.patch(`/usuarios/${usuario.id}`, {
+      await firebaseService.update('usuarios', usuario.id, {
         status: novoStatus,
         updatedAt: new Date().toISOString(),
       });
 
+      // Atualizar estado local
+      setUsuarios(prev => prev.map(u => 
+        u.id === usuario.id ? { ...u, status: novoStatus } : u
+      ));
+
       mostrarSnackbar(`Usuário ${novoStatus === 'ativo' ? 'ativado' : 'desativado'} com sucesso!`);
-      carregarUsuarios();
     } catch (error) {
       console.error('Erro ao alterar status:', error);
       mostrarSnackbar('Erro ao alterar status do usuário', 'error');
@@ -351,10 +366,10 @@ function GerenciarUsuarios() {
 
   const handleDelete = async () => {
     try {
-      await api.delete(`/usuarios/${confirmDelete.id}`);
+      await firebaseService.delete('usuarios', confirmDelete.id);
+      setUsuarios(usuarios.filter(u => u.id !== confirmDelete.id));
       mostrarSnackbar('Usuário excluído com sucesso!');
       setConfirmDelete(null);
-      carregarUsuarios();
     } catch (error) {
       console.error('Erro ao excluir usuário:', error);
       mostrarSnackbar('Erro ao excluir usuário', 'error');
@@ -363,16 +378,12 @@ function GerenciarUsuarios() {
 
   // Filtrar usuários
   const usuariosFiltrados = usuarios.filter(usuario => {
-    // Filtro por texto
     const matchesTexto = filtro === '' || 
       usuario.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
       usuario.email?.toLowerCase().includes(filtro.toLowerCase()) ||
       usuario.telefone?.includes(filtro);
 
-    // Filtro por cargo
     const matchesCargo = filtroCargo === 'todos' || usuario.cargo === filtroCargo;
-
-    // Filtro por status
     const matchesStatus = filtroStatus === 'todos' || usuario.status === filtroStatus;
 
     return matchesTexto && matchesCargo && matchesStatus;
@@ -436,7 +447,7 @@ function GerenciarUsuarios() {
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -455,7 +466,7 @@ function GerenciarUsuarios() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -474,7 +485,7 @@ function GerenciarUsuarios() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -493,7 +504,7 @@ function GerenciarUsuarios() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -506,6 +517,25 @@ function GerenciarUsuarios() {
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
                   {stats.admins}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={2.4}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Profissionais
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                  {stats.profissionais}
                 </Typography>
               </CardContent>
             </Card>
@@ -550,10 +580,11 @@ function GerenciarUsuarios() {
                   onChange={(e) => setFiltroCargo(e.target.value)}
                 >
                   <MenuItem value="todos">Todos os Cargos</MenuItem>
-                  <MenuItem value="admin">Administrador</MenuItem>
-                  <MenuItem value="gerente">Gerente</MenuItem>
-                  <MenuItem value="atendente">Atendente</MenuItem>
-                  <MenuItem value="profissional">Profissional</MenuItem>
+                  {Object.keys(CARGOS).map(cargo => (
+                    <MenuItem key={cargo} value={cargo}>
+                      {CARGOS[cargo].nome}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -843,7 +874,7 @@ function GerenciarUsuarios() {
             </Grid>
 
             <Grid item xs={12}>
-              <Divider sx={{ my: 1 }}>Segurança</Divider>
+              <Divider sx={{ my: 1, color: '#9c27b0' }}>Segurança</Divider>
             </Grid>
 
             <Grid item xs={12} md={6}>
