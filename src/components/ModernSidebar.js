@@ -174,13 +174,16 @@ function ModernSidebar() {
   const carregarNotificacoes = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      if (user) {
-        // Buscar notificações do Firebase filtrando por usuarioId
+      if (user && user.uid) { // Usar user.uid em vez de user.id
+        console.log('Buscando notificações para usuário:', user.uid);
+        
         const data = await firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: user.id }
+          { field: 'usuarioId', operator: '==', value: user.uid } // Usar user.uid
         ], 'data');
         
         setUnreadCount(data.filter(n => !n.lida).length);
+      } else {
+        console.log('Usuário não tem uid:', user);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
