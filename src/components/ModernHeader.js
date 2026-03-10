@@ -140,10 +140,11 @@ function ModernHeader() {
   const carregarNotificacoes = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      if (user) {
-        // Buscar notificações do Firebase filtrando por usuarioId
+      if (user && user.uid) { // Usar user.uid em vez de user.id
+        console.log('Header - Buscando notificações para:', user.uid);
+        
         const data = await firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: user.id }
+          { field: 'usuarioId', operator: '==', value: user.uid } // Usar user.uid
         ], 'data');
         
         setNotifications(data);
