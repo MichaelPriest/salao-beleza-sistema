@@ -19,7 +19,7 @@ import {
   LinearProgress,
   InputAdornment,
   CircularProgress,
-  Grid, // Importação adicionada
+  Grid,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -27,7 +27,7 @@ import {
 } from '@mui/icons-material';
 import InputMask from 'react-input-mask';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase'; // 🔥 IMPORTANTE: usar Firebase
 
 // Máscaras para inputs
 export const masks = {
@@ -379,10 +379,16 @@ export const EnderecoForm = ({ endereco, onChange, onCepFound }) => {
   );
 };
 
-// Histórico de atendimentos do cliente
+// 🔥 HISTÓRICO DE ATENDIMENTOS DO CLIENTE - CORRIGIDO COM FIREBASE
 export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
-  const [historico, setHistorico] = useState([]);
+  const [atendimentos, setAtendimentos] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    valorTotal: 0,
+  });
 
   useEffect(() => {
     if (clienteId) {
@@ -393,26 +399,72 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   const carregarHistorico = async () => {
     setLoading(true);
     try {
-      // Buscar atendimentos do cliente
-      const response = await api.get(`/atendimentos?clienteId=${clienteId}`);
-      const atendimentos = response.data || [];
+      // Buscar todos os atendimentos
+      const todosAtendimentos = await firebaseService.getAll('atendimentos').catch(() => []);
       
-      // Formatar dados
-      const historicoFormatado = atendimentos.map(a => ({
-        id: a.id,
-        data: a.data,
-        servicos: a.itensServico?.map(i => i.nome) || ['Atendimento'],
-        profissional: a.profissionalId ? `Profissional ${a.profissionalId}` : 'Não informado',
-        valor: a.valorTotal || 0,
-        status: a.status || 'realizado',
-      }));
-      
-      setHistorico(historicoFormatado);
+      // Filtrar por cliente e status finalizado/cancelado
+      const atendimentosCliente = todosAtendimentos.filter(a => 
+        a.clienteId === clienteId && 
+        (a.status === 'finalizado' || a.status === 'cancelado')
+      );
+
+      // Buscar profissionais e serviços para enriquecer os dados
+      const [profissionaisData, servicosData] = await Promise.all([
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+      ]);
+
+      setAtendimentos(atendimentosCliente);
+      setProfissionais(profissionaisData);
+      setServicos(servicosData);
+
+      // Calcular estatísticas
+      const valorTotal = atendimentosCliente.reduce((acc, a) => {
+        if (a.status === 'finalizado') {
+          return acc + (a.valorTotal || 0);
+        }
+        return acc;
+      }, 0);
+
+      setStats({
+        total: atendimentosCliente.length,
+        valorTotal,
+      });
+
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
       toast.error('Erro ao carregar histórico');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getProfissionalNome = (profissionalId) => {
+    if (!profissionalId) return 'Profissional não identificado';
+    const profissional = profissionais.find(p => p.id === profissionalId);
+    return profissional?.nome || 'Profissional não encontrado';
+  };
+
+  const getServicosNomes = (atendimento) => {
+    if (atendimento.itensServico && atendimento.itensServico.length > 0) {
+      return atendimento.itensServico.map(item => item.nome).join(', ');
+    } else if (atendimento.servicoId) {
+      const servico = servicos.find(s => s.id === atendimento.servicoId);
+      return servico?.nome || 'Serviço não encontrado';
+    }
+    return 'Serviço não especificado';
+  };
+
+  const formatarData = (data) => {
+    if (!data) return '-';
+    return new Date(data).toLocaleDateString('pt-BR');
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'finalizado': return 'success';
+      case 'cancelado': return 'error';
+      default: return 'default';
     }
   };
 
@@ -425,12 +477,32 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
         
         {loading ? (
           <LinearProgress />
-        ) : historico.length === 0 ? (
+        ) : atendimentos.length === 0 ? (
           <Typography color="textSecondary" align="center" sx={{ py: 4 }}>
             Nenhum atendimento encontrado para este cliente
           </Typography>
         ) : (
           <>
+            {/* Cards de resumo */}
+            <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+              <Card variant="outlined" sx={{ flex: 1, p: 2 }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Total de Atendimentos
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  {stats.total}
+                </Typography>
+              </Card>
+              <Card variant="outlined" sx={{ flex: 1, p: 2 }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Valor Total Gasto
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                  R$ {stats.valorTotal.toFixed(2)}
+                </Typography>
+              </Card>
+            </Box>
+
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -443,31 +515,43 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {historico.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{new Date(item.data).toLocaleDateString('pt-BR')}</TableCell>
+                  {atendimentos.map((item) => (
+                    <TableRow key={item.id} hover>
                       <TableCell>
-                        {item.servicos.map((s, i) => (
-                          <Chip
-                            key={i}
-                            label={s}
-                            size="small"
-                            variant="outlined"
-                            sx={{ mr: 0.5, mb: 0.5 }}
-                          />
-                        ))}
+                        {formatarData(item.data)}
+                        <Typography variant="caption" display="block" color="textSecondary">
+                          {item.horaInicio || ''}
+                        </Typography>
                       </TableCell>
-                      <TableCell>{item.profissional}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {item.itensServico?.map((s, i) => (
+                            <Chip
+                              key={i}
+                              label={s.nome}
+                              size="small"
+                              variant="outlined"
+                            />
+                          )) || (
+                            <Chip
+                              label={getServicosNomes(item)}
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>{getProfissionalNome(item.profissionalId)}</TableCell>
                       <TableCell align="right">
                         <Typography fontWeight={600} color="#4caf50">
-                          R$ {item.valor.toFixed(2)}
+                          R$ {item.valorTotal?.toFixed(2) || '0,00'}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={item.status}
+                          label={item.status === 'finalizado' ? 'Finalizado' : 'Cancelado'}
                           size="small"
-                          color={item.status === 'realizado' ? 'success' : 'default'}
+                          color={getStatusColor(item.status)}
                         />
                       </TableCell>
                     </TableRow>
@@ -478,10 +562,10 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
             
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="textSecondary">
-                Total de atendimentos: {historico.length}
+                Total de atendimentos: {atendimentos.length}
               </Typography>
               <Typography variant="body2" fontWeight={600}>
-                Valor total: R$ {historico.reduce((acc, item) => acc + item.valor, 0).toFixed(2)}
+                Valor total: R$ {atendimentos.reduce((acc, item) => acc + (item.valorTotal || 0), 0).toFixed(2)}
               </Typography>
             </Box>
           </>
