@@ -1,3 +1,4 @@
+// src/pages/ModernConfiguracoes.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -21,6 +22,7 @@ import {
   Paper,
   IconButton,
   Chip,
+  Snackbar,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -34,7 +36,7 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { configuracoesService } from '../services/configuracoesService';
+import { firebaseService } from '../services/firebase';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -51,6 +53,7 @@ function ModernConfiguracoes() {
   const [config, setConfig] = useState(null);
   const [backup, setBackup] = useState(null);
   const [error, setError] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const diasSemana = [
     'segunda',
@@ -76,25 +79,92 @@ function ModernConfiguracoes() {
     carregarConfiguracoes();
   }, []);
 
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   const carregarConfiguracoes = async () => {
     try {
       setLoading(true);
       setError(null);
       console.log('🔄 Carregando configurações...');
       
-      const data = await configuracoesService.buscar();
-      console.log('✅ Configurações carregadas:', data);
+      // Buscar configurações do Firebase
+      const configuracoes = await firebaseService.getAll('configuracoes').catch(() => []);
       
-      // Validar se os dados vieram corretamente
-      if (!data || !data.salao) {
-        throw new Error('Dados de configuração inválidos');
+      // Se não existir configuração, criar uma padrão
+      if (!configuracoes || configuracoes.length === 0) {
+        const configPadrao = {
+          salao: {
+            nome: '',
+            nomeFantasia: '',
+            cnpj: '',
+            ie: '',
+            endereco: {
+              logradouro: '',
+              complemento: '',
+              bairro: '',
+              cidade: '',
+              estado: '',
+              cep: ''
+            },
+            contato: {
+              telefone: '',
+              celular: '',
+              email: '',
+              site: '',
+              instagram: '',
+              facebook: ''
+            }
+          },
+          horarioFuncionamento: {
+            segunda: { aberto: true, abertura: '09:00', fechamento: '19:00' },
+            terca: { aberto: true, abertura: '09:00', fechamento: '19:00' },
+            quarta: { aberto: true, abertura: '09:00', fechamento: '19:00' },
+            quinta: { aberto: true, abertura: '09:00', fechamento: '19:00' },
+            sexta: { aberto: true, abertura: '09:00', fechamento: '19:00' },
+            sabado: { aberto: true, abertura: '09:00', fechamento: '18:00' },
+            domingo: { aberto: false, abertura: '09:00', fechamento: '13:00' }
+          },
+          notificacoes: {
+            email: true,
+            whatsapp: true,
+            sms: false,
+            lembreteAgendamento: 24,
+            promocoes: true
+          },
+          tema: {
+            corPrimaria: '#9c27b0',
+            corSecundaria: '#ff4081',
+            modoEscuro: false
+          },
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Criar configuração padrão
+        const novoId = await firebaseService.add('configuracoes', configPadrao);
+        setConfig({ ...configPadrao, id: novoId });
+        console.log('✅ Configuração padrão criada:', { ...configPadrao, id: novoId });
+      } else {
+        // Usar a primeira configuração encontrada
+        setConfig(configuracoes[0]);
+        console.log('✅ Configurações carregadas:', configuracoes[0]);
       }
       
-      setConfig(data);
+      // Tentar carregar último backup se existir
+      const backups = await firebaseService.getAll('backups').catch(() => []);
+      if (backups && backups.length > 0) {
+        setBackup(backups.sort((a, b) => new Date(b.dataBackup) - new Date(a.dataBackup))[0]);
+      }
+      
     } catch (error) {
       console.error('❌ Erro ao carregar configurações:', error);
       setError(error.message || 'Erro ao carregar configurações');
-      toast.error('Erro ao carregar configurações');
+      mostrarSnackbar('Erro ao carregar configurações', 'error');
     } finally {
       setLoading(false);
     }
@@ -105,11 +175,18 @@ function ModernConfiguracoes() {
       setSaving(true);
       console.log('🔄 Salvando configurações:', config);
       
-      await configuracoesService.atualizar(config);
-      toast.success('Configurações salvas com sucesso!');
+      const configAtualizada = {
+        ...config,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await firebaseService.update('configuracoes', config.id, configAtualizada);
+      setConfig(configAtualizada);
+      
+      mostrarSnackbar('Configurações salvas com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao salvar:', error);
-      toast.error('Erro ao salvar configurações');
+      mostrarSnackbar('Erro ao salvar configurações', 'error');
     } finally {
       setSaving(false);
     }
@@ -117,21 +194,29 @@ function ModernConfiguracoes() {
 
   const handleBackup = async () => {
     try {
-      const data = await configuracoesService.backup();
-      setBackup(data);
+      // Criar objeto de backup
+      const backupData = {
+        dataBackup: new Date().toISOString(),
+        configuracoes: config,
+        versao: '1.0'
+      };
+      
+      // Salvar backup no Firebase
+      await firebaseService.add('backups', backupData);
+      setBackup(backupData);
       
       // Download do backup
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       
-      toast.success('Backup realizado com sucesso!');
+      mostrarSnackbar('Backup realizado com sucesso!');
     } catch (error) {
       console.error('❌ Erro no backup:', error);
-      toast.error('Erro ao realizar backup');
+      mostrarSnackbar('Erro ao realizar backup', 'error');
     }
   };
 
@@ -145,15 +230,33 @@ function ModernConfiguracoes() {
         const backupData = JSON.parse(e.target.result);
         console.log('🔄 Restaurando backup:', backupData);
         
-        await configuracoesService.restaurar(backupData);
+        // Verificar se o backup tem a estrutura esperada
+        if (!backupData.configuracoes) {
+          throw new Error('Arquivo de backup inválido');
+        }
+        
+        // Restaurar configurações
+        await firebaseService.update('configuracoes', config.id, backupData.configuracoes);
+        
+        // Registrar o restore como um backup
+        await firebaseService.add('backups', {
+          dataBackup: new Date().toISOString(),
+          configuracoes: backupData.configuracoes,
+          versao: '1.0',
+          tipo: 'restore'
+        });
+        
         await carregarConfiguracoes();
-        toast.success('Backup restaurado com sucesso!');
+        mostrarSnackbar('Backup restaurado com sucesso!');
       } catch (error) {
         console.error('❌ Erro ao restaurar:', error);
-        toast.error('Erro ao restaurar backup');
+        mostrarSnackbar('Erro ao restaurar backup', 'error');
       }
     };
     reader.readAsText(file);
+    
+    // Limpar o input
+    event.target.value = '';
   };
 
   const handleHorarioChange = (dia, campo, valor) => {
@@ -260,7 +363,7 @@ function ModernConfiguracoes() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Configurações
         </Typography>
         <Button
@@ -304,6 +407,7 @@ function ModernConfiguracoes() {
                   label="Nome do Salão"
                   value={config.salao?.nome || ''}
                   onChange={(e) => handleSalaoChange('nome', e.target.value)}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -312,6 +416,7 @@ function ModernConfiguracoes() {
                   label="Nome Fantasia"
                   value={config.salao?.nomeFantasia || ''}
                   onChange={(e) => handleSalaoChange('nomeFantasia', e.target.value)}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -320,6 +425,8 @@ function ModernConfiguracoes() {
                   label="CNPJ"
                   value={config.salao?.cnpj || ''}
                   onChange={(e) => handleSalaoChange('cnpj', e.target.value)}
+                  size="small"
+                  placeholder="00.000.000/0000-00"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -328,11 +435,12 @@ function ModernConfiguracoes() {
                   label="Inscrição Estadual"
                   value={config.salao?.ie || ''}
                   onChange={(e) => handleSalaoChange('ie', e.target.value)}
+                  size="small"
                 />
               </Grid>
 
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2, color: '#9c27b0' }}>
                   Endereço
                 </Typography>
               </Grid>
@@ -343,6 +451,7 @@ function ModernConfiguracoes() {
                   label="Logradouro"
                   value={config.salao?.endereco?.logradouro || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'logradouro')}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -351,6 +460,7 @@ function ModernConfiguracoes() {
                   label="Complemento"
                   value={config.salao?.endereco?.complemento || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'complemento')}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -359,6 +469,7 @@ function ModernConfiguracoes() {
                   label="Bairro"
                   value={config.salao?.endereco?.bairro || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'bairro')}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -367,6 +478,7 @@ function ModernConfiguracoes() {
                   label="Cidade"
                   value={config.salao?.endereco?.cidade || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'cidade')}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={2}>
@@ -375,6 +487,8 @@ function ModernConfiguracoes() {
                   label="UF"
                   value={config.salao?.endereco?.estado || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'estado')}
+                  size="small"
+                  inputProps={{ maxLength: 2 }}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
@@ -383,11 +497,13 @@ function ModernConfiguracoes() {
                   label="CEP"
                   value={config.salao?.endereco?.cep || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'cep')}
+                  size="small"
+                  placeholder="00000-000"
                 />
               </Grid>
 
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2, color: '#9c27b0' }}>
                   Contato
                 </Typography>
               </Grid>
@@ -398,6 +514,8 @@ function ModernConfiguracoes() {
                   label="Telefone"
                   value={config.salao?.contato?.telefone || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'telefone')}
+                  size="small"
+                  placeholder="(00) 0000-0000"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -406,6 +524,8 @@ function ModernConfiguracoes() {
                   label="Celular"
                   value={config.salao?.contato?.celular || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'celular')}
+                  size="small"
+                  placeholder="(00) 00000-0000"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -415,6 +535,7 @@ function ModernConfiguracoes() {
                   type="email"
                   value={config.salao?.contato?.email || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'email')}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -423,6 +544,8 @@ function ModernConfiguracoes() {
                   label="Site"
                   value={config.salao?.contato?.site || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'site')}
+                  size="small"
+                  placeholder="www.exemplo.com"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -431,6 +554,8 @@ function ModernConfiguracoes() {
                   label="Instagram"
                   value={config.salao?.contato?.instagram || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'instagram')}
+                  size="small"
+                  placeholder="@usuario"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -439,6 +564,8 @@ function ModernConfiguracoes() {
                   label="Facebook"
                   value={config.salao?.contato?.facebook || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'facebook')}
+                  size="small"
+                  placeholder="facebook.com/usuario"
                 />
               </Grid>
             </Grid>
@@ -472,6 +599,7 @@ function ModernConfiguracoes() {
                               value={config.horarioFuncionamento?.[dia]?.abertura || '09:00'}
                               onChange={(e) => handleHorarioChange(dia, 'abertura', e.target.value)}
                               InputLabelProps={{ shrink: true }}
+                              size="small"
                             />
                           </Grid>
                           <Grid item xs={12} md={3}>
@@ -482,6 +610,7 @@ function ModernConfiguracoes() {
                               value={config.horarioFuncionamento?.[dia]?.fechamento || '19:00'}
                               onChange={(e) => handleHorarioChange(dia, 'fechamento', e.target.value)}
                               InputLabelProps={{ shrink: true }}
+                              size="small"
                             />
                           </Grid>
                         </>
@@ -497,7 +626,7 @@ function ModernConfiguracoes() {
           <TabPanel value={tabValue} index={2}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                   Canais de Notificação
                 </Typography>
               </Grid>
@@ -540,7 +669,7 @@ function ModernConfiguracoes() {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel>Lembrete de Agendamento</InputLabel>
                   <Select
                     value={config.notificacoes?.lembreteAgendamento || 24}
@@ -582,6 +711,7 @@ function ModernConfiguracoes() {
                   value={config.tema?.corPrimaria || '#9c27b0'}
                   onChange={(e) => handleTemaChange('corPrimaria', e.target.value)}
                   InputLabelProps={{ shrink: true }}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -592,6 +722,7 @@ function ModernConfiguracoes() {
                   value={config.tema?.corSecundaria || '#ff4081'}
                   onChange={(e) => handleTemaChange('corSecundaria', e.target.value)}
                   InputLabelProps={{ shrink: true }}
+                  size="small"
                 />
               </Grid>
               <Grid item xs={12}>
@@ -653,7 +784,7 @@ function ModernConfiguracoes() {
               <Grid item xs={12} md={6}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                       Exportar Backup
                     </Typography>
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
@@ -677,7 +808,7 @@ function ModernConfiguracoes() {
               <Grid item xs={12} md={6}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                       Importar Backup
                     </Typography>
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
@@ -712,6 +843,18 @@ function ModernConfiguracoes() {
           </TabPanel>
         </CardContent>
       </Card>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
