@@ -1,3 +1,4 @@
+// src/pages/ModernLogin.js
 import React, { useState } from 'react';
 import {
   Box,
@@ -22,10 +23,9 @@ import {
   getAuth, 
   signInWithEmailAndPassword, 
   signInWithPopup, 
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword 
+  GoogleAuthProvider
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
 function ModernLogin() {
@@ -40,58 +40,35 @@ function ModernLogin() {
   const auth = getAuth();
   const googleProvider = new GoogleAuthProvider();
 
-  // Criar ou atualizar usuário no Firestore
-  const salvarUsuarioFirestore = async (user, dadosAdicionais = {}) => {
+  // Verificar se usuário existe no Firestore
+  const verificarUsuarioFirestore = async (user) => {
     try {
       const userRef = doc(db, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        // Usuário não existe, criar novo
-        const novoUsuario = {
-          uid: user.uid,
-          nome: dadosAdicionais.nome || user.displayName || 'Usuário',
-          email: user.email,
-          avatar: user.photoURL || null,
-          cargo: 'admin', // Admin por padrão para o primeiro usuário
-          permissoes: [
-            'admin',
-            'gerenciar_usuarios',
-            'gerenciar_clientes',
-            'gerenciar_agendamentos',
-            'gerenciar_servicos',
-            'gerenciar_profissionais',
-            'gerenciar_estoque',
-            'gerenciar_compras',
-            'financeiro',
-            'visualizar_relatorios',
-            'configurar_sistema',
-            'visualizar_notificacoes',
-            'visualizar_dashboard',
-            'gerenciar_atendimentos'
-          ],
-          telefone: dadosAdicionais.telefone || '',
-          dataCadastro: new Date().toISOString(),
-          ultimoAcesso: new Date().toISOString(),
-          status: 'ativo',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        await setDoc(userRef, novoUsuario);
-        return novoUsuario;
-      } else {
-        // Usuário existe, atualizar último acesso
-        const usuarioData = userSnap.data();
-        await setDoc(userRef, { 
-          ...usuarioData,
-          ultimoAcesso: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        return { id: user.uid, ...usuarioData };
+        console.log('❌ Usuário não encontrado no Firestore:', user.uid);
+        return null;
       }
+
+      const usuarioData = userSnap.data();
+      
+      // Verificar se usuário está ativo
+      if (usuarioData.status !== 'ativo') {
+        console.log('❌ Usuário inativo:', user.uid);
+        return { error: 'inativo' };
+      }
+
+      // Atualizar último acesso
+      await setDoc(userRef, { 
+        ...usuarioData,
+        ultimoAcesso: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      return { id: user.uid, ...usuarioData };
     } catch (error) {
-      console.error('Erro ao salvar usuário no Firestore:', error);
+      console.error('Erro ao verificar usuário no Firestore:', error);
       throw error;
     }
   };
@@ -111,8 +88,23 @@ function ModernLogin() {
       
       const user = userCredential.user;
       
-      // Salvar/atualizar no Firestore
-      const usuarioData = await salvarUsuarioFirestore(user);
+      // Verificar se usuário existe no Firestore
+      const usuarioData = await verificarUsuarioFirestore(user);
+      
+      if (!usuarioData) {
+        // Usuário não encontrado no Firestore - fazer logout
+        await auth.signOut();
+        setError('Acesso negado! Usuário não cadastrado no sistema.');
+        setLoading(false);
+        return;
+      }
+
+      if (usuarioData.error === 'inativo') {
+        await auth.signOut();
+        setError('Usuário inativo. Contate o administrador.');
+        setLoading(false);
+        return;
+      }
       
       // Salvar no localStorage
       localStorage.setItem('usuario', JSON.stringify(usuarioData));
@@ -145,8 +137,23 @@ function ModernLogin() {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Salvar/atualizar no Firestore
-      const usuarioData = await salvarUsuarioFirestore(user);
+      // Verificar se usuário existe no Firestore
+      const usuarioData = await verificarUsuarioFirestore(user);
+      
+      if (!usuarioData) {
+        // Usuário não encontrado no Firestore - fazer logout
+        await auth.signOut();
+        setError('Acesso negado! Usuário não cadastrado no sistema.');
+        setLoading(false);
+        return;
+      }
+
+      if (usuarioData.error === 'inativo') {
+        await auth.signOut();
+        setError('Usuário inativo. Contate o administrador.');
+        setLoading(false);
+        return;
+      }
       
       // Salvar no localStorage
       localStorage.setItem('usuario', JSON.stringify(usuarioData));
@@ -156,91 +163,6 @@ function ModernLogin() {
     } catch (error) {
       console.error('Erro no login com Google:', error);
       setError('Erro ao fazer login com Google');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Criar usuário específico (michael.rodrigoraimundo@gmail.com)
-  const criarUsuarioEspecifico = async () => {
-    try {
-      setLoading(true);
-      
-      // Criar no Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        'michael.rodrigoraimundo@gmail.com',
-        'C@de367336'
-      );
-      
-      const user = userCredential.user;
-      
-      // Dados adicionais do usuário
-      const usuarioData = {
-        uid: user.uid,
-        nome: 'Michael Rodrigo Raimundo',
-        email: user.email,
-        avatar: null,
-        cargo: 'admin',
-        permissoes: [
-          'admin',
-          'gerenciar_usuarios',
-          'gerenciar_clientes',
-          'gerenciar_agendamentos',
-          'gerenciar_servicos',
-          'gerenciar_profissionais',
-          'gerenciar_estoque',
-          'gerenciar_compras',
-          'financeiro',
-          'visualizar_relatorios',
-          'configurar_sistema',
-          'visualizar_notificacoes',
-          'visualizar_dashboard',
-          'gerenciar_atendimentos'
-        ],
-        telefone: '(11) 99999-0001',
-        dataCadastro: new Date().toISOString(),
-        ultimoAcesso: new Date().toISOString(),
-        status: 'ativo'
-      };
-      
-      // Salvar no Firestore
-      const userRef = doc(db, 'usuarios', user.uid);
-      await setDoc(userRef, usuarioData);
-      
-      // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(usuarioData));
-      
-      toast.success('Usuário criado com sucesso!');
-      navigate('/');
-    } catch (error) {
-      console.error('Erro ao criar usuário:', error);
-      
-      if (error.code === 'auth/email-already-in-use') {
-        // Se já existe, tenta fazer login
-        try {
-          const userCredential = await signInWithEmailAndPassword(
-            auth,
-            'michael.rodrigoraimundo@gmail.com',
-            'C@de367336'
-          );
-          
-          const user = userCredential.user;
-          const userRef = doc(db, 'usuarios', user.uid);
-          const userSnap = await getDoc(userRef);
-          
-          if (userSnap.exists()) {
-            localStorage.setItem('usuario', JSON.stringify(userSnap.data()));
-          }
-          
-          toast.success('Login realizado com sucesso!');
-          navigate('/');
-        } catch (loginError) {
-          setError('Erro ao fazer login. Verifique suas credenciais.');
-        }
-      } else {
-        setError('Erro ao criar usuário');
-      }
     } finally {
       setLoading(false);
     }
@@ -351,27 +273,17 @@ function ModernLogin() {
                   borderColor: '#ff4081',
                   backgroundColor: 'rgba(156,39,176,0.04)',
                 },
-                mb: 2,
               }}
             >
               Entrar com Google
             </Button>
 
-            {/* Botão para criar usuário específico (remover em produção) */}
-            <Button
-              fullWidth
-              size="small"
-              variant="text"
-              onClick={criarUsuarioEspecifico}
-              disabled={loading}
-              sx={{ mt: 1, color: '#9c27b0' }}
-            >
-              Criar usuário de teste
-            </Button>
-
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 3, textAlign: 'center' }}>
-              Use: ana@salao.com / 123456
-            </Typography>
+            {/* FOOTER - Sem informações de teste */}
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary">
+                © 2026 Beauty Pro - Todos os direitos reservados
+              </Typography>
+            </Box>
           </CardContent>
         </Paper>
       </motion.div>
