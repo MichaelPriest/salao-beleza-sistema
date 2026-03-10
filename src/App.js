@@ -53,6 +53,8 @@ import MinhasComissoes from './pages/MinhasComissoes';
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
 
+import SiteSalao from './pages/SiteSalao';
+
 // DIAGNÓSTICO - Verificar cada importação
 console.log('Verificando importações:');
 console.log('✅ ModernHeader:', typeof ModernHeader);
@@ -204,6 +206,8 @@ function AnimatedRoutes() {
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
+            
+          <Route path="/site" element={<SiteSalao />} />
 
           {/* Rota fallback - 404 */}
           <Route path="*" element={<div>Página não encontrada</div>} />
