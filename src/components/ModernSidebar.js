@@ -1,3 +1,4 @@
+// src/components/ModernSidebar.js
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -17,103 +18,204 @@ import {
   Collapse,
 } from '@mui/material';
 import {
+  // Dashboard
   Dashboard as DashboardIcon,
-  People as PeopleIcon,
-  ContentCut as CutIcon,
-  CalendarMonth as CalendarIcon,
-  Person as PersonIcon,
-  Spa as SpaIcon,
+  DashboardCustomize as DashboardCustomizeIcon,
+  
+  // Notificações
   Notifications as NotificationsIcon,
-  Assessment as AssessmentIcon,
-  Inventory as InventoryIcon,
-  Settings as SettingsIcon,
+  NotificationsActive as NotificationsActiveIcon,
+  
+  // Agendamentos
+  CalendarMonth as CalendarIcon,
+  EventAvailable as EventAvailableIcon,
+  EventBusy as EventBusyIcon,
+  DateRange as DateRangeIcon,
+  
+  // Atendimentos
   Receipt as ReceiptIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
+  Assignment as AssignmentIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
+  
+  // Clientes
+  People as PeopleIcon,
+  PersonAdd as PersonAddIcon,
+  PersonSearch as PersonSearchIcon,
   Group as GroupIcon,
-  AdminPanelSettings as AdminIcon,
-  Security as SecurityIcon,
-  ExpandLess as ExpandLessIcon,
-  ExpandMore as ExpandMoreIcon,
-  AccountBalance as AccountBalanceIcon,
-  ShoppingCart as ShoppingCartIcon,
-  LocalShipping as LocalShippingIcon,
+  
+  // Histórico
   History as HistoryIcon,
+  Restore as RestoreIcon,
   Timeline as TimelineIcon,
+  
+  // Profissionais
+  Person as PersonIcon,
+  Badge as BadgeIcon,
+  Groups as GroupsIcon,
+  
+  // Serviços
+  ContentCut as CutIcon,
+  Build as BuildIcon,
+  Handyman as HandymanIcon,
+  
+  // Financeiro
   AttachMoney as AttachMoneyIcon,
+  AccountBalance as AccountBalanceIcon,
+  AccountBalanceWallet as AccountBalanceWalletIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
+  Assessment as AssessmentIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  ReceiptLong as ReceiptLongIcon,
+  ReceiptOutlined as ReceiptOutlinedIcon,
+  
+  // Compras
+  ShoppingCart as ShoppingCartIcon,
+  AddShoppingCart as AddShoppingCartIcon,
+  RemoveShoppingCart as RemoveShoppingCartIcon,
+  
+  // Relatórios
+  Summarize as SummarizeIcon,
+  Description as DescriptionIcon,
+  FilePresent as FilePresentIcon,
+  
+  // Estoque
+  Inventory as InventoryIcon,
+  Inventory2 as Inventory2Icon,
   Warehouse as WarehouseIcon,
+  Storage as StorageIcon,
+  
+  // Entradas
+  Input as InputIcon,
+  MoveToInbox as MoveToInboxIcon,
+  Unarchive as UnarchiveIcon,
+  
+  // Fornecedores
+  LocalShipping as LocalShippingIcon,
+  DeliveryDining as DeliveryDiningIcon,
+  Factory as FactoryIcon,
+  
+  // Usuários
+  AdminPanelSettings as AdminIcon,
+  ManageAccounts as ManageAccountsIcon,
+  Security as SecurityIcon,
+  
+  // Configurações
+  Settings as SettingsIcon,
+  SettingsApplications as SettingsApplicationsIcon,
+  Tune as TuneIcon,
+  
+  // Ícones de navegação
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
+  
+  // Ícones adicionais
+  Spa as SpaIcon,
+  PriceCheck as PriceCheckIcon,
+  PointOfSale as PointOfSaleIcon,
+  CreditCard as CreditCardIcon,
+  Pix as PixIcon,
+  QrCodeScanner as QrCodeIcon,
+  Print as PrintIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  Backup as BackupIcon,
+  RestoreFromTrash as RestoreFromTrashIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon,
+  CheckCircle as CheckCircleIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 
-// Estrutura do menu agrupada por área
+// Estrutura do menu com ícones únicos
 const menuGroups = [
   {
     title: 'PRINCIPAL',
-    icon: <DashboardIcon />,
+    icon: <DashboardCustomizeIcon />,
     items: [
       { text: 'Dashboard', icon: <DashboardIcon />, path: '/', permission: 'visualizar_dashboard' },
-      { text: 'Notificações', icon: <NotificationsIcon />, path: '/notificacoes', permission: 'visualizar_notificacoes', badge: 'unread' },
+      { text: 'Notificações', icon: <NotificationsActiveIcon />, path: '/notificacoes', permission: 'visualizar_notificacoes', badge: 'unread' },
     ],
   },
   {
     title: 'AGENDAMENTOS',
-    icon: <CalendarIcon />,
+    icon: <EventAvailableIcon />,
     items: [
-      { text: 'Calendário', icon: <CalendarIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
-      { text: 'Atendimentos', icon: <ReceiptIcon />, path: '/atendimentos', permission: 'gerenciar_atendimentos' },
+      { text: 'Calendário', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
+      { text: 'Atendimentos', icon: <AssignmentTurnedInIcon />, path: '/atendimentos', permission: 'gerenciar_atendimentos' },
     ],
   },
   {
     title: 'CLIENTES',
-    icon: <PeopleIcon />,
+    icon: <PersonSearchIcon />,
     items: [
-      { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes', permission: 'gerenciar_clientes' },
-      { text: 'Histórico', icon: <HistoryIcon />, path: '/historico', permission: 'visualizar_relatorios' },
+      { text: 'Clientes', icon: <GroupIcon />, path: '/clientes', permission: 'gerenciar_clientes' },
+      { text: 'Histórico', icon: <RestoreIcon />, path: '/historico', permission: 'visualizar_relatorios' },
     ],
   },
   {
     title: 'PROFISSIONAIS',
-    icon: <PersonIcon />,
+    icon: <GroupsIcon />,
     items: [
-      { text: 'Profissionais', icon: <PersonIcon />, path: '/profissionais', permission: 'gerenciar_profissionais' },
-      { text: 'Serviços', icon: <CutIcon />, path: '/servicos', permission: 'gerenciar_servicos' },
+      { text: 'Profissionais', icon: <BadgeIcon />, path: '/profissionais', permission: 'gerenciar_profissionais' },
+      { text: 'Serviços', icon: <HandymanIcon />, path: '/servicos', permission: 'gerenciar_servicos' },
     ],
   },
   {
     title: 'FINANCEIRO',
-    icon: <AttachMoneyIcon />,
+    icon: <AccountBalanceWalletIcon />,
     items: [
-      { text: 'Dashboard Financeiro', icon: <AccountBalanceIcon />, path: '/financeiro', permission: 'financeiro' },
+      { text: 'Dashboard Financeiro', icon: <BarChartIcon />, path: '/financeiro', permission: 'financeiro' },
       { text: 'Contas a Receber', icon: <TrendingUpIcon />, path: '/financeiro/receber', permission: 'financeiro' },
       { text: 'Contas a Pagar', icon: <TrendingDownIcon />, path: '/financeiro/pagar', permission: 'financeiro' },
       { text: 'Fluxo de Caixa', icon: <TimelineIcon />, path: '/financeiro/fluxo', permission: 'financeiro' },
-      { text: 'Compras', icon: <ShoppingCartIcon />, path: '/compras', permission: 'gerenciar_compras' },
-      { text: 'Relatórios', icon: <AssessmentIcon />, path: '/relatorios', permission: 'visualizar_relatorios' },
+      { text: 'Compras', icon: <AddShoppingCartIcon />, path: '/compras', permission: 'gerenciar_compras' },
+      { text: 'Relatórios', icon: <SummarizeIcon />, path: '/relatorios', permission: 'visualizar_relatorios' },
     ],
   },
   {
     title: 'ESTOQUE',
-    icon: <InventoryIcon />,
+    icon: <Inventory2Icon />,
     items: [
-      { text: 'Produtos', icon: <InventoryIcon />, path: '/estoque', permission: 'gerenciar_estoque' },
-      { text: 'Entradas', icon: <WarehouseIcon />, path: '/entradas', permission: 'gerenciar_estoque' },
-      { text: 'Fornecedores', icon: <LocalShippingIcon />, path: '/fornecedores', permission: 'gerenciar_compras' },
+      { text: 'Produtos', icon: <StorageIcon />, path: '/estoque', permission: 'gerenciar_estoque' },
+      { text: 'Entradas', icon: <MoveToInboxIcon />, path: '/entradas', permission: 'gerenciar_estoque' },
+      { text: 'Fornecedores', icon: <FactoryIcon />, path: '/fornecedores', permission: 'gerenciar_compras' },
     ],
   },
   {
     title: 'ADMINISTRAÇÃO',
-    icon: <AdminIcon />,
+    icon: <ManageAccountsIcon />,
     items: [
-      { text: 'Usuários', icon: <GroupIcon />, path: '/usuarios', permission: 'gerenciar_usuarios' },
+      { text: 'Usuários', icon: <AdminIcon />, path: '/usuarios', permission: 'gerenciar_usuarios' },
       { text: 'Auditoria', icon: <SecurityIcon />, path: '/auditoria', permission: 'visualizar_relatorios' },
-      { text: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes', permission: 'configurar_sistema' },
+      { text: 'Configurações', icon: <TuneIcon />, path: '/configuracoes', permission: 'configurar_sistema' },
     ],
   },
 ];
+
+// Ícones extras que podem ser usados em badges ou situações específicas
+export const extraIcons = {
+  success: <CheckCircleIcon />,
+  warning: <WarningIcon />,
+  error: <ErrorIcon />,
+  info: <InfoIcon />,
+  print: <PrintIcon />,
+  download: <DownloadIcon />,
+  upload: <UploadIcon />,
+  backup: <BackupIcon />,
+  restore: <RestoreFromTrashIcon />,
+  pix: <PixIcon />,
+  creditCard: <CreditCardIcon />,
+  pointOfSale: <PointOfSaleIcon />,
+  priceCheck: <PriceCheckIcon />,
+  qrCode: <QrCodeIcon />,
+};
 
 function ModernSidebar() {
   const location = useLocation();
@@ -174,11 +276,11 @@ function ModernSidebar() {
   const carregarNotificacoes = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      if (user && user.uid) { // Usar user.uid em vez de user.id
+      if (user && user.uid) {
         console.log('Buscando notificações para usuário:', user.uid);
         
         const data = await firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: user.uid } // Usar user.uid
+          { field: 'usuarioId', operator: '==', value: user.uid }
         ], 'data');
         
         setUnreadCount(data.filter(n => !n.lida).length);
