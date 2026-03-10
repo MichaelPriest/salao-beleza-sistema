@@ -730,7 +730,9 @@ function ModernClientes() {
                     bairro: dados.bairro || prev.bairro,
                     cidade: dados.cidade || prev.cidade,
                     estado: dados.estado || prev.estado,
+                    complemento: dados.complemento || prev.complemento,
                   }));
+                  toast.success('Endereço preenchido automaticamente!');
                 }}
               />
             </TabPanel>
