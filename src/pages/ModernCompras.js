@@ -30,7 +30,6 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   LinearProgress,
   TablePagination,
   Stepper,
@@ -50,13 +49,12 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Payment as PaymentIcon,
-  PictureAsPdf as PdfIcon,
   Print as PrintIcon,
   RemoveShoppingCart as EmptyCartIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente' },
@@ -106,17 +104,21 @@ function ModernCompras() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [comprasRes, fornecedoresRes, produtosRes] = await Promise.all([
-        api.get('/compras'),
-        api.get('/fornecedores'),
-        api.get('/produtos'),
+      
+      const [comprasData, fornecedoresData, produtosData] = await Promise.all([
+        firebaseService.getAll('compras').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
       ]);
-      setCompras(comprasRes.data || []);
-      setFornecedores(fornecedoresRes.data || []);
-      setProdutos(produtosRes.data || []);
+      
+      setCompras(comprasData || []);
+      setFornecedores(fornecedoresData || []);
+      setProdutos(produtosData || []);
+      
+      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      mostrarSnackbar('Erro ao carregar dados', 'error');
+      toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -163,6 +165,12 @@ function ModernCompras() {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setCompraEditando(null);
+    setNovoItem({
+      produtoId: '',
+      quantidade: 1,
+      valorUnitario: 0,
+      total: 0,
+    });
   };
 
   const handleOpenDetalhes = (compra) => {
@@ -184,14 +192,14 @@ function ModernCompras() {
     const { name, value } = e.target;
     const updatedItem = { ...novoItem, [name]: value };
     
-    if (name === 'produtoId') {
-      const produto = produtos.find(p => p.id === parseInt(value));
+    if (name === 'produtoId' && value) {
+      const produto = produtos.find(p => p.id === value);
       if (produto) {
-        updatedItem.valorUnitario = produto.precoCusto || 0;
-        updatedItem.total = updatedItem.quantidade * updatedItem.valorUnitario;
+        updatedItem.valorUnitario = Number(produto.precoCusto) || 0;
+        updatedItem.total = Number(updatedItem.quantidade) * Number(updatedItem.valorUnitario);
       }
     } else if (name === 'quantidade' || name === 'valorUnitario') {
-      updatedItem.total = updatedItem.quantidade * updatedItem.valorUnitario;
+      updatedItem.total = Number(updatedItem.quantidade) * Number(updatedItem.valorUnitario);
     }
     
     setNovoItem(updatedItem);
@@ -208,20 +216,19 @@ function ModernCompras() {
       return;
     }
 
-    const produto = produtos.find(p => p.id === parseInt(novoItem.produtoId));
+    const produto = produtos.find(p => p.id === novoItem.produtoId);
     
     const itemCompleto = {
-      ...novoItem,
-      produtoId: parseInt(novoItem.produtoId),
+      produtoId: novoItem.produtoId,
       produtoNome: produto?.nome || 'Produto',
-      quantidade: parseFloat(novoItem.quantidade),
-      valorUnitario: parseFloat(novoItem.valorUnitario),
-      total: parseFloat(novoItem.quantidade * novoItem.valorUnitario),
+      quantidade: Number(novoItem.quantidade),
+      valorUnitario: Number(novoItem.valorUnitario),
+      total: Number(novoItem.quantidade) * Number(novoItem.valorUnitario),
     };
 
     setFormData(prev => {
       const novosItens = [...prev.itens, itemCompleto];
-      const novoTotal = novosItens.reduce((acc, item) => acc + item.total, 0);
+      const novoTotal = novosItens.reduce((acc, item) => acc + (item.total || 0), 0);
       return {
         ...prev,
         itens: novosItens,
@@ -240,7 +247,7 @@ function ModernCompras() {
   const handleRemoverItem = (index) => {
     setFormData(prev => {
       const novosItens = prev.itens.filter((_, i) => i !== index);
-      const novoTotal = novosItens.reduce((acc, item) => acc + item.total, 0);
+      const novoTotal = novosItens.reduce((acc, item) => acc + (item.total || 0), 0);
       return {
         ...prev,
         itens: novosItens,
@@ -263,24 +270,45 @@ function ModernCompras() {
 
       const dadosParaSalvar = {
         ...formData,
-        fornecedorId: parseInt(formData.fornecedorId),
-        dataCompra: formData.dataCompra,
+        fornecedorId: String(formData.fornecedorId),
+        dataCompra: String(formData.dataCompra),
+        valorTotal: Number(formData.valorTotal),
+        prazoEntrega: formData.prazoEntrega ? String(formData.prazoEntrega) : null,
+        formaPagamento: formData.formaPagamento ? String(formData.formaPagamento) : null,
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        itens: formData.itens.map(item => ({
+          ...item,
+          quantidade: Number(item.quantidade),
+          valorUnitario: Number(item.valorUnitario),
+          total: Number(item.total),
+        })),
         updatedAt: new Date().toISOString(),
       };
 
+      if (!dadosParaSalvar.numeroPedido) {
+        dadosParaSalvar.numeroPedido = `PED-${Date.now()}`;
+      }
+
       if (compraEditando) {
-        await api.patch(`/compras/${compraEditando.id}`, dadosParaSalvar);
+        await firebaseService.update('compras', compraEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        const comprasAtualizadas = compras.map(c => 
+          c.id === compraEditando.id ? { ...c, ...dadosParaSalvar, id: compraEditando.id } : c
+        );
+        setCompras(comprasAtualizadas);
+        
         mostrarSnackbar('Compra atualizada com sucesso!');
       } else {
-        dadosParaSalvar.id = Date.now();
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        dadosParaSalvar.numeroPedido = `PED-${Date.now()}`;
-        await api.post('/compras', dadosParaSalvar);
+        
+        const novoId = await firebaseService.add('compras', dadosParaSalvar);
+        setCompras([...compras, { ...dadosParaSalvar, id: novoId }]);
+        
         mostrarSnackbar('Compra criada com sucesso!');
       }
 
       handleCloseDialog();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao salvar compra:', error);
       mostrarSnackbar('Erro ao salvar compra', 'error');
@@ -289,12 +317,17 @@ function ModernCompras() {
 
   const handleAtualizarStatus = async (compra, novoStatus) => {
     try {
-      await api.patch(`/compras/${compra.id}`, {
+      await firebaseService.update('compras', compra.id, {
         status: novoStatus,
         updatedAt: new Date().toISOString(),
       });
+
+      // Atualizar estado local
+      setCompras(prev => prev.map(c => 
+        c.id === compra.id ? { ...c, status: novoStatus } : c
+      ));
+
       mostrarSnackbar(`Status atualizado para ${statusColors[novoStatus].label}`);
-      carregarDados();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       mostrarSnackbar('Erro ao atualizar status', 'error');
@@ -303,9 +336,10 @@ function ModernCompras() {
 
   // Filtrar compras
   const comprasFiltradas = compras.filter(compra => {
+    const fornecedor = fornecedores.find(f => f.id === compra.fornecedorId);
     const matchesTexto = filtro === '' || 
       compra.numeroPedido?.toLowerCase().includes(filtro.toLowerCase()) ||
-      fornecedores.find(f => f.id === compra.fornecedorId)?.nome?.toLowerCase().includes(filtro.toLowerCase());
+      fornecedor?.nome?.toLowerCase().includes(filtro.toLowerCase());
 
     const matchesStatus = filtroStatus === 'todos' || compra.status === filtroStatus;
 
@@ -333,8 +367,10 @@ function ModernCompras() {
     pendentes: compras.filter(c => c.status === 'pendente').length,
     aprovadas: compras.filter(c => c.status === 'aprovada').length,
     entregues: compras.filter(c => c.status === 'entregue').length,
-    valorTotal: compras.reduce((acc, c) => acc + (c.valorTotal || 0), 0),
-    valorPendente: compras.filter(c => c.status === 'pendente').reduce((acc, c) => acc + (c.valorTotal || 0), 0),
+    valorTotal: compras.reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0),
+    valorPendente: compras
+      .filter(c => c.status === 'pendente' || c.status === 'aprovada')
+      .reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0),
   };
 
   if (loading) {
@@ -369,7 +405,7 @@ function ModernCompras() {
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -388,7 +424,7 @@ function ModernCompras() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -407,18 +443,37 @@ function ModernCompras() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
+          >
+            <Card sx={{ bgcolor: '#e3f2fd' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Aprovadas
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                  {stats.aprovadas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={2.4}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
           >
             <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Valor Total
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
                   R$ {stats.valorTotal.toFixed(2)}
                 </Typography>
               </CardContent>
@@ -426,18 +481,18 @@ function ModernCompras() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2.4}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.5 }}
           >
             <Card sx={{ bgcolor: '#ffebee' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Valor Pendente
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: '#f44336' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
                   R$ {stats.valorPendente.toFixed(2)}
                 </Typography>
               </CardContent>
@@ -543,8 +598,8 @@ function ModernCompras() {
                         {new Date(compra.dataCompra).toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          R$ {compra.valorTotal?.toFixed(2)}
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                          R$ {Number(compra.valorTotal).toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -772,7 +827,7 @@ function ModernCompras() {
                       >
                         {produtos.map(p => (
                           <MenuItem key={p.id} value={p.id}>
-                            {p.nome} - R$ {p.precoCusto?.toFixed(2)}
+                            {p.nome} - R$ {Number(p.precoCusto).toFixed(2)}
                           </MenuItem>
                         ))}
                       </Select>
@@ -817,7 +872,7 @@ function ModernCompras() {
                       fullWidth
                       variant="contained"
                       onClick={handleAdicionarItem}
-                      sx={{ height: 40 }}
+                      sx={{ height: 40, bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
                     >
                       Adicionar
                     </Button>
@@ -839,9 +894,9 @@ function ModernCompras() {
                       {formData.itens.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell>{item.produtoNome}</TableCell>
-                          <TableCell align="right">{item.quantidade}</TableCell>
-                          <TableCell align="right">R$ {item.valorUnitario.toFixed(2)}</TableCell>
-                          <TableCell align="right">R$ {item.total.toFixed(2)}</TableCell>
+                          <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
+                          <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
+                          <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
                           <TableCell align="center">
                             <IconButton
                               size="small"
@@ -867,8 +922,8 @@ function ModernCompras() {
                 </TableContainer>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6">
-                    Valor Total: R$ {formData.valorTotal.toFixed(2)}
+                  <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                    Valor Total: R$ {Number(formData.valorTotal).toFixed(2)}
                   </Typography>
                   <Box>
                     <Button
@@ -894,13 +949,13 @@ function ModernCompras() {
               <StepLabel>Revisão e Confirmação</StepLabel>
               <StepContent>
                 <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                     Resumo da Compra
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="textSecondary">Fornecedor:</Typography>
-                      <Typography variant="body2">
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {fornecedores.find(f => f.id === formData.fornecedorId)?.nome}
                       </Typography>
                     </Grid>
@@ -916,8 +971,8 @@ function ModernCompras() {
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" color="textSecondary">Valor Total:</Typography>
-                      <Typography variant="h6" sx={{ color: '#4caf50' }}>
-                        R$ {formData.valorTotal.toFixed(2)}
+                      <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                        R$ {Number(formData.valorTotal).toFixed(2)}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -956,7 +1011,7 @@ function ModernCompras() {
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="subtitle2" color="textSecondary">Fornecedor</Typography>
-                    <Typography variant="body1">
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
                       {fornecedores.find(f => f.id === compraSelecionada.fornecedorId)?.nome}
                     </Typography>
                   </Grid>
@@ -974,6 +1029,7 @@ function ModernCompras() {
                       sx={{
                         bgcolor: `${statusColors[compraSelecionada.status]?.color}20`,
                         color: statusColors[compraSelecionada.status]?.color,
+                        fontWeight: 500,
                       }}
                     />
                   </Grid>
@@ -1000,7 +1056,7 @@ function ModernCompras() {
                 </Grid>
               </Paper>
 
-              <Typography variant="h6" sx={{ mb: 2 }}>Itens da Compra</Typography>
+              <Typography variant="h6" sx={{ mb: 2, color: '#9c27b0' }}>Itens da Compra</Typography>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
                   <TableHead>
@@ -1015,14 +1071,16 @@ function ModernCompras() {
                     {compraSelecionada.itens?.map((item, index) => (
                       <TableRow key={index}>
                         <TableCell>{item.produtoNome}</TableCell>
-                        <TableCell align="right">{item.quantidade}</TableCell>
-                        <TableCell align="right">R$ {item.valorUnitario.toFixed(2)}</TableCell>
-                        <TableCell align="right">R$ {item.total.toFixed(2)}</TableCell>
+                        <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
+                        <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
+                        <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                       <TableCell colSpan={3} align="right"><strong>VALOR TOTAL</strong></TableCell>
-                      <TableCell align="right"><strong>R$ {compraSelecionada.valorTotal?.toFixed(2)}</strong></TableCell>
+                      <TableCell align="right">
+                        <strong>R$ {Number(compraSelecionada.valorTotal).toFixed(2)}</strong>
+                      </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
