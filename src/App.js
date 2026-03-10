@@ -53,8 +53,14 @@ import MinhasComissoes from './pages/MinhasComissoes';
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
 
-// 🔥 CORREÇÃO: Importar com o nome correto do arquivo (sem acento)
-import SiteSalao from './pages/SiteSalao'; // O arquivo deve ser SiteSalao.js (sem acento)
+// Site Público
+import SiteSalao from './pages/SiteSalao';
+
+// Páginas de Erro
+import Page404 from './pages/404';
+import Page403 from './pages/403';
+import Page500 from './pages/500';
+import Manutencao from './pages/Manutencao';
 
 // DIAGNÓSTICO - Verificar cada importação
 console.log('Verificando importações:');
@@ -82,7 +88,11 @@ console.log('✅ GerenciarUsuarios:', typeof GerenciarUsuarios);
 console.log('✅ HistoricoAtendimentos:', typeof HistoricoAtendimentos);
 console.log('✅ Auditoria:', typeof Auditoria);
 console.log('✅ TesteAPI:', typeof TesteAPI);
-console.log('✅ SiteSalao:', typeof SiteSalao); // 🔥 Verificar se a importação funcionou
+console.log('✅ SiteSalao:', typeof SiteSalao);
+console.log('✅ Page404:', typeof Page404);
+console.log('✅ Page403:', typeof Page403);
+console.log('✅ Page500:', typeof Page500);
+console.log('✅ Manutencao:', typeof Manutencao);
 
 const theme = createTheme({
   palette: {
@@ -173,7 +183,7 @@ function AnimatedRoutes() {
           {/* Rotas Públicas */}
           <Route path="/login" element={<ModernLogin />} />
           <Route path="/teste" element={<TesteAPI />} />
-          <Route path="/site" element={<SiteSalao />} /> {/* 🔥 ROTA PÚBLICA DO SITE */}
+          <Route path="/site" element={<SiteSalao />} />
           
           {/* Rotas Privadas */}
           <Route path="/" element={<ModernDashboard />} />
@@ -210,8 +220,13 @@ function AnimatedRoutes() {
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
 
-          {/* Rota fallback - 404 */}
-          <Route path="*" element={<div>Página não encontrada</div>} />
+          {/* Páginas de Erro */}
+          <Route path="/403" element={<Page403 />} />
+          <Route path="/500" element={<Page500 />} />
+          <Route path="/manutencao" element={<Manutencao />} />
+          
+          {/* Rota 404 - DEVE SER A ÚLTIMA */}
+          <Route path="*" element={<Page404 />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -265,7 +280,7 @@ function App() {
             {/* Rotas sem sidebar - PÚBLICAS */}
             <Route path="/login" element={<ModernLogin />} />
             <Route path="/teste" element={<TesteAPI />} />
-            <Route path="/site" element={<SiteSalao />} /> {/* 🔥 GARANTIR QUE ESTÁ AQUI TAMBÉM */}
+            <Route path="/site" element={<SiteSalao />} />
             
             {/* Rotas com sidebar - todas as outras rotas (privadas) */}
             <Route path="/*" element={
