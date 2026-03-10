@@ -29,7 +29,6 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   LinearProgress,
   TablePagination,
   Avatar,
@@ -37,22 +36,19 @@ import {
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
   Payment as PaymentIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
   Warning as WarningIcon,
   AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
-  CalendarToday as CalendarIcon,
   Person as PersonIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente' },
@@ -65,6 +61,7 @@ function ContasReceber() {
   const [loading, setLoading] = useState(true);
   const [contas, setContas] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [caixa, setCaixa] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
@@ -95,12 +92,23 @@ function ContasReceber() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [contasRes, clientesRes] = await Promise.all([
-        api.get('/contas_receber').catch(() => ({ data: [] })),
-        api.get('/clientes').catch(() => ({ data: [] })),
+      
+      const [contasData, clientesData, caixaData] = await Promise.all([
+        firebaseService.getAll('contas_receber').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('caixa').catch(() => []),
       ]);
-      setContas(contasRes.data || []);
-      setClientes(clientesRes.data || []);
+      
+      setContas(contasData || []);
+      setClientes(clientesData || []);
+      
+      // Pega o caixa atual (último caixa aberto)
+      const caixaAtual = caixaData?.length > 0 
+        ? caixaData.filter(c => c && c.status === 'aberto')
+            .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0]
+        : null;
+      setCaixa(caixaAtual);
+      
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -171,34 +179,58 @@ function ContasReceber() {
 
   const handleSalvar = async () => {
     try {
-      if (!formData.descricao) {
+      if (!formData.descricao?.trim()) {
         mostrarSnackbar('Descrição é obrigatória', 'error');
         return;
       }
 
-      if (!formData.valor || formData.valor <= 0) {
+      const valorNumerico = parseFloat(formData.valor);
+      if (isNaN(valorNumerico) || valorNumerico <= 0) {
         mostrarSnackbar('Valor deve ser maior que zero', 'error');
         return;
       }
 
+      // Preparar dados para salvar
       const dadosParaSalvar = {
-        ...formData,
-        valor: parseFloat(formData.valor),
+        descricao: String(formData.descricao).trim(),
+        valor: Number(valorNumerico),
+        dataVencimento: String(formData.dataVencimento),
+        categoria: String(formData.categoria),
+        clienteId: formData.clienteId ? String(formData.clienteId) : null,
+        formaPagamento: String(formData.formaPagamento),
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        status: String(formData.status),
+        parcelas: Number(formData.parcelas) || 1,
         updatedAt: new Date().toISOString(),
       };
 
+      // Remover campos undefined
+      Object.keys(dadosParaSalvar).forEach(key => {
+        if (dadosParaSalvar[key] === undefined) {
+          delete dadosParaSalvar[key];
+        }
+      });
+
       if (contaEditando) {
-        await api.patch(`/contas_receber/${contaEditando.id}`, dadosParaSalvar);
+        await firebaseService.update('contas_receber', contaEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        const contasAtualizadas = contas.map(c => 
+          c.id === contaEditando.id ? { ...c, ...dadosParaSalvar, id: contaEditando.id } : c
+        );
+        setContas(contasAtualizadas);
+        
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
-        dadosParaSalvar.id = Date.now();
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        await api.post('/contas_receber', dadosParaSalvar);
+        
+        const novoId = await firebaseService.add('contas_receber', dadosParaSalvar);
+        setContas([...contas, { ...dadosParaSalvar, id: novoId }]);
+        
         mostrarSnackbar('Conta registrada com sucesso!');
       }
 
       handleCloseDialog();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
@@ -207,34 +239,59 @@ function ContasReceber() {
 
   const handleRegistrarRecebimento = async () => {
     try {
-      await api.patch(`/contas_receber/${contaSelecionada.id}`, {
+      if (!contaSelecionada || !contaSelecionada.id) {
+        mostrarSnackbar('Conta inválida', 'error');
+        return;
+      }
+
+      // Atualizar status da conta
+      const dadosConta = {
         status: 'recebido',
         dataRecebimento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
 
-      // Atualizar caixa
-      const caixaRes = await api.get('/caixa');
-      const caixa = caixaRes.data;
-      if (caixa && caixa.status === 'aberto') {
-        await api.patch(`/caixa/${caixa.id}`, {
-          saldoAtual: caixa.saldoAtual + contaSelecionada.valor,
-          movimentacoes: [
-            ...(caixa.movimentacoes || []),
-            {
-              id: Date.now(),
-              tipo: 'entrada',
-              valor: contaSelecionada.valor,
-              descricao: `Recebimento: ${contaSelecionada.descricao}`,
-              data: new Date().toISOString(),
-            },
-          ],
+      await firebaseService.update('contas_receber', contaSelecionada.id, dadosConta);
+
+      // Atualizar estado local das contas
+      const contasAtualizadas = contas.map(c => 
+        c.id === contaSelecionada.id ? { ...c, ...dadosConta } : c
+      );
+      setContas(contasAtualizadas);
+
+      // Atualizar caixa se estiver aberto
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const novoSaldo = (caixa.saldoAtual || 0) + Number(contaSelecionada.valor);
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: 'receita',
+          valor: Number(contaSelecionada.valor),
+          descricao: `Recebimento: ${contaSelecionada.descricao}`,
+          data: new Date().toISOString(),
+          contaId: contaSelecionada.id,
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        const dadosCaixa = {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        };
+        
+        await firebaseService.update('caixa', caixa.id, dadosCaixa);
+        
+        setCaixa({ 
+          ...caixa, 
+          saldoAtual: novoSaldo, 
+          movimentacoes: novasMovimentacoes 
         });
       }
 
       mostrarSnackbar('Recebimento registrado com sucesso!');
       handleCloseRecebimento();
-      carregarDados();
     } catch (error) {
       console.error('Erro ao registrar recebimento:', error);
       mostrarSnackbar('Erro ao registrar recebimento', 'error');
@@ -243,22 +300,36 @@ function ContasReceber() {
 
   // Verificar contas atrasadas
   useEffect(() => {
-    const verificarAtrasados = () => {
+    const verificarEAtualizarAtrasadas = async () => {
       const hoje = new Date();
-      contas.forEach(async (conta) => {
+      hoje.setHours(0, 0, 0, 0);
+      
+      for (const conta of contas) {
         if (conta.status === 'pendente') {
           const vencimento = new Date(conta.dataVencimento);
+          vencimento.setHours(0, 0, 0, 0);
+          
           if (vencimento < hoje) {
-            await api.patch(`/contas_receber/${conta.id}`, {
-              status: 'atrasado',
-            });
+            try {
+              await firebaseService.update('contas_receber', conta.id, {
+                status: 'atrasado',
+                updatedAt: new Date().toISOString(),
+              });
+              
+              // Atualizar estado local
+              setContas(prev => prev.map(c => 
+                c.id === conta.id ? { ...c, status: 'atrasado' } : c
+              ));
+            } catch (error) {
+              console.error('Erro ao atualizar conta atrasada:', error);
+            }
           }
         }
-      });
+      }
     };
 
     if (contas.length > 0) {
-      verificarAtrasados();
+      verificarEAtualizarAtrasadas();
     }
   }, [contas]);
 
@@ -307,7 +378,9 @@ function ContasReceber() {
     pendentes: contas.filter(c => c.status === 'pendente').length,
     atrasadas: contas.filter(c => c.status === 'atrasado').length,
     recebidas: contas.filter(c => c.status === 'recebido').length,
-    valorTotal: contas.filter(c => c.status !== 'recebido').reduce((acc, c) => acc + (c.valor || 0), 0),
+    valorTotal: contas
+      .filter(c => c.status !== 'recebido')
+      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
   };
 
   if (loading) {
@@ -334,7 +407,7 @@ function ContasReceber() {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
-          sx={{ bgcolor: '#9c27b0' }}
+          sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
         >
           Nova Conta
         </Button>
@@ -343,52 +416,76 @@ function ContasReceber() {
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total a Receber
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                R$ {stats.valorTotal.toFixed(2)}
-              </Typography>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Total a Receber
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                  R$ {stats.valorTotal.toFixed(2)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: '#fff3e0' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Pendentes
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                {stats.pendentes}
-              </Typography>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card sx={{ bgcolor: '#fff3e0' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Pendentes
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {stats.pendentes}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: '#ffebee' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Atrasadas
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                {stats.atrasadas}
-              </Typography>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card sx={{ bgcolor: '#ffebee' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Atrasadas
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                  {stats.atrasadas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: '#e8f5e9' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Recebidas
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                {stats.recebidas}
-              </Typography>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Card sx={{ bgcolor: '#e8f5e9' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Recebidas
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                  {stats.recebidas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
       </Grid>
 
@@ -409,6 +506,13 @@ function ContasReceber() {
                       <SearchIcon />
                     </InputAdornment>
                   ),
+                  endAdornment: filtro && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setFiltro('')}>
+                        <ClearIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
                 }}
               />
             </Grid>
@@ -421,9 +525,11 @@ function ContasReceber() {
                   label="Status"
                 >
                   <MenuItem value="todos">Todos</MenuItem>
-                  <MenuItem value="pendente">Pendentes</MenuItem>
-                  <MenuItem value="recebido">Recebidas</MenuItem>
-                  <MenuItem value="atrasado">Atrasadas</MenuItem>
+                  {Object.keys(statusColors).map(status => (
+                    <MenuItem key={status} value={status}>
+                      {statusColors[status].label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -462,81 +568,107 @@ function ContasReceber() {
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell>Descrição</TableCell>
-                <TableCell>Cliente</TableCell>
-                <TableCell>Vencimento</TableCell>
-                <TableCell align="right">Valor</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="center">Ações</TableCell>
+                <TableCell><strong>Descrição</strong></TableCell>
+                <TableCell><strong>Cliente</strong></TableCell>
+                <TableCell><strong>Vencimento</strong></TableCell>
+                <TableCell align="right"><strong>Valor</strong></TableCell>
+                <TableCell><strong>Status</strong></TableCell>
+                <TableCell align="center"><strong>Ações</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedContas.map((conta) => {
-                const cliente = clientes.find(c => c.id === conta.clienteId);
-                return (
-                  <TableRow key={conta.id}>
-                    <TableCell>{conta.descricao}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
-                          <PersonIcon sx={{ fontSize: 14 }} />
-                        </Avatar>
-                        {cliente?.nome || '—'}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(conta.dataVencimento).toLocaleDateString('pt-BR')}
-                      {new Date(conta.dataVencimento) < new Date() && conta.status === 'pendente' && (
+              <AnimatePresence>
+                {paginatedContas.map((conta, index) => {
+                  const cliente = clientes.find(c => c.id === conta.clienteId);
+                  const hoje = new Date();
+                  hoje.setHours(0, 0, 0, 0);
+                  const vencimento = new Date(conta.dataVencimento);
+                  vencimento.setHours(0, 0, 0, 0);
+                  const isVencida = vencimento < hoje && conta.status === 'pendente';
+                  
+                  return (
+                    <motion.tr
+                      key={conta.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <TableCell>{conta.descricao}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
+                            <PersonIcon sx={{ fontSize: 14 }} />
+                          </Avatar>
+                          {cliente?.nome || '—'}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(conta.dataVencimento).toLocaleDateString('pt-BR')}
+                        {isVencida && (
+                          <Chip
+                            size="small"
+                            label="Vencida"
+                            color="error"
+                            sx={{ ml: 1, height: 20 }}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography fontWeight={600} color="#4caf50">
+                          R$ {Number(conta.valor).toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
                         <Chip
+                          label={statusColors[conta.status]?.label}
                           size="small"
-                          label="Vencida"
-                          color="error"
-                          sx={{ ml: 1 }}
+                          sx={{
+                            bgcolor: `${statusColors[conta.status]?.color}20`,
+                            color: statusColors[conta.status]?.color,
+                            fontWeight: 500,
+                          }}
                         />
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography fontWeight={600} color="#4caf50">
-                        R$ {conta.valor?.toFixed(2)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={statusColors[conta.status]?.label}
-                        size="small"
-                        sx={{
-                          bgcolor: `${statusColors[conta.status]?.color}20`,
-                          color: statusColors[conta.status]?.color,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        {conta.status !== 'recebido' && (
-                          <Tooltip title="Registrar Recebimento">
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                          {conta.status !== 'recebido' && (
+                            <Tooltip title="Registrar Recebimento">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenRecebimento(conta)}
+                                sx={{ color: '#4caf50' }}
+                              >
+                                <PaymentIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Editar">
                             <IconButton
                               size="small"
-                              onClick={() => handleOpenRecebimento(conta)}
-                              sx={{ color: '#4caf50' }}
+                              onClick={() => handleOpenDialog(conta)}
+                              sx={{ color: '#2196f3' }}
                             >
-                              <PaymentIcon />
+                              <EditIcon />
                             </IconButton>
                           </Tooltip>
-                        )}
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(conta)}
-                            sx={{ color: '#2196f3' }}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                        </Box>
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })}
+              </AnimatePresence>
+
+              {paginatedContas.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                    <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                    <Typography variant="body1" color="textSecondary">
+                      Nenhuma conta encontrada
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -548,12 +680,14 @@ function ContasReceber() {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          labelRowsPerPage="Itens por página"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
         />
       </Card>
 
       {/* Dialog de Nova Conta */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {contaEditando ? 'Editar Conta' : 'Nova Conta a Receber'}
         </DialogTitle>
         <DialogContent>
@@ -580,6 +714,7 @@ function ContasReceber() {
                 size="small"
                 InputProps={{
                   startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                  inputProps: { min: 0, step: 0.01 }
                 }}
               />
             </Grid>
@@ -621,6 +756,7 @@ function ContasReceber() {
                   onChange={handleInputChange}
                   label="Cliente"
                 >
+                  <MenuItem value="">Nenhum</MenuItem>
                   {clientes.map(c => (
                     <MenuItem key={c.id} value={c.id}>{c.nome}</MenuItem>
                   ))}
@@ -660,7 +796,11 @@ function ContasReceber() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleSalvar} variant="contained" color="primary">
+          <Button 
+            onClick={handleSalvar} 
+            variant="contained"
+            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+          >
             Salvar
           </Button>
         </DialogActions>
@@ -668,23 +808,25 @@ function ContasReceber() {
 
       {/* Dialog de Recebimento */}
       <Dialog open={openRecebimentoDialog} onClose={handleCloseRecebimento} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirmar Recebimento</DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+          Confirmar Recebimento
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Alert severity="success">
+            <Alert severity="success" sx={{ mb: 2 }}>
               Deseja registrar o recebimento de:
             </Alert>
-            <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+            <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
               <Typography variant="subtitle2">{contaSelecionada?.descricao}</Typography>
-              <Typography variant="h5" color="primary" sx={{ mt: 1 }}>
-                R$ {contaSelecionada?.valor?.toFixed(2)}
+              <Typography variant="h5" color="primary" sx={{ mt: 1, fontWeight: 600 }}>
+                R$ {Number(contaSelecionada?.valor).toFixed(2)}
               </Typography>
-              <Typography variant="caption" color="textSecondary">
+              <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
                 Vencimento: {contaSelecionada && new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
               </Typography>
               {contaSelecionada && (
                 <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                  Cliente: {clientes.find(c => c.id === contaSelecionada.clienteId)?.nome}
+                  Cliente: {clientes.find(c => c.id === contaSelecionada.clienteId)?.nome || '—'}
                 </Typography>
               )}
             </Box>
@@ -703,7 +845,12 @@ function ContasReceber() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
