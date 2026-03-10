@@ -37,7 +37,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { notificacoesService } from '../services/notificacoesService';
+import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 
 function TabPanel({ children, value, index }) {
@@ -62,21 +62,24 @@ function ModernNotificacoes() {
   useEffect(() => {
     const user = usuariosService.getUsuarioAtual();
     setUsuario(user);
-    carregarNotificacoes();
+    if (user) {
+      carregarNotificacoes(user.id);
+    }
   }, []);
 
   useEffect(() => {
     filtrarNotificacoes();
   }, [notifications, tabValue, filterType]);
 
-  const carregarNotificacoes = async () => {
+  const carregarNotificacoes = async (usuarioId) => {
     try {
       setLoading(true);
-      const user = usuariosService.getUsuarioAtual();
-      if (user) {
-        const data = await notificacoesService.listar(user.id);
-        setNotifications(data);
-      }
+      // Buscar notificações do Firebase filtrando por usuarioId
+      const data = await firebaseService.query('notificacoes', [
+        { field: 'usuarioId', operator: '==', value: usuarioId }
+      ], 'data');
+      
+      setNotifications(data);
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
       toast.error('Erro ao carregar notificações');
@@ -103,50 +106,70 @@ function ModernNotificacoes() {
     }
 
     // Ordenar por data (mais recentes primeiro)
-    filtered.sort((a, b) => new Date(b.data) - new Date(a.data));
+    filtered.sort((a, b) => {
+      const dateA = a.data?.toDate ? a.data.toDate() : new Date(a.data);
+      const dateB = b.data?.toDate ? b.data.toDate() : new Date(b.data);
+      return dateB - dateA;
+    });
 
     setFilteredNotifications(filtered);
   };
 
   const handleMarkAsRead = async (id) => {
     try {
-      await notificacoesService.marcarComoLida(id);
-      await carregarNotificacoes();
+      await firebaseService.update('notificacoes', id, { 
+        lida: true,
+        updatedAt: new Date().toISOString()
+      });
+      await carregarNotificacoes(usuario.id);
       toast.success('Notificação marcada como lida');
     } catch (error) {
+      console.error('Erro ao marcar notificação:', error);
       toast.error('Erro ao marcar notificação');
     }
   };
 
   const handleMarkAllAsRead = async () => {
     try {
-      await notificacoesService.marcarTodasComoLidas(usuario.id);
-      await carregarNotificacoes();
+      const naoLidas = notifications.filter(n => !n.lida);
+      
+      const promises = naoLidas.map(n => 
+        firebaseService.update('notificacoes', n.id, { 
+          lida: true,
+          updatedAt: new Date().toISOString()
+        })
+      );
+      
+      await Promise.all(promises);
+      await carregarNotificacoes(usuario.id);
       toast.success('Todas as notificações marcadas como lidas');
     } catch (error) {
+      console.error('Erro ao marcar notificações:', error);
       toast.error('Erro ao marcar notificações');
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await notificacoesService.excluir(id);
-      await carregarNotificacoes();
+      await firebaseService.delete('notificacoes', id);
+      await carregarNotificacoes(usuario.id);
       toast.success('Notificação removida');
       handleCloseMenu();
     } catch (error) {
+      console.error('Erro ao remover notificação:', error);
       toast.error('Erro ao remover notificação');
     }
   };
 
   const handleDeleteAll = async () => {
     try {
-      const promises = notifications.map(n => notificacoesService.excluir(n.id));
+      const promises = notifications.map(n => firebaseService.delete('notificacoes', n.id));
       await Promise.all(promises);
-      await carregarNotificacoes();
+      await carregarNotificacoes(usuario.id);
       toast.success('Todas as notificações removidas');
       setOpenDialog(false);
     } catch (error) {
+      console.error('Erro ao remover notificações:', error);
       toast.error('Erro ao remover notificações');
     }
   };
@@ -192,6 +215,14 @@ function ModernNotificacoes() {
       case 'lembrete': return '#ff9800';
       default: return '#2196f3';
     }
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    if (date.toDate) {
+      return date.toDate().toLocaleString('pt-BR');
+    }
+    return new Date(date).toLocaleString('pt-BR');
   };
 
   const unreadCount = notifications.filter(n => !n.lida).length;
@@ -390,7 +421,7 @@ function ModernNotificacoes() {
                               </Typography>
                               
                               <Typography variant="caption" color="textSecondary">
-                                {new Date(notification.data).toLocaleString('pt-BR')}
+                                {formatDate(notification.data)}
                               </Typography>
                             </Grid>
                             
