@@ -55,6 +55,7 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   Badge as BadgeIcon,
+  AttachMoney as MoneyIcon, // NOVO ÍCONE
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -76,6 +77,7 @@ const CARGOS = {
       'gerenciar_estoque',
       'visualizar_relatorios',
       'configurar_sistema',
+      'visualizar_comissoes', // NOVA PERMISSÃO
     ]
   },
   gerente: {
@@ -88,6 +90,7 @@ const CARGOS = {
       'gerenciar_servicos',
       'gerenciar_profissionais',
       'visualizar_relatorios',
+      'visualizar_comissoes', // NOVA PERMISSÃO
     ]
   },
   atendente: {
@@ -106,6 +109,7 @@ const CARGOS = {
     permissoes: [
       'visualizar_agenda',
       'gerenciar_atendimentos',
+      'visualizar_comissoes', // NOVA PERMISSÃO (para o profissional ver suas próprias comissões)
     ]
   }
 };
@@ -113,6 +117,7 @@ const CARGOS = {
 function GerenciarUsuarios() {
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState([]);
+  const [profissionais, setProfissionais] = useState([]); // NOVO: lista de profissionais
   const [filtro, setFiltro] = useState('');
   const [filtroCargo, setFiltroCargo] = useState('todos');
   const [filtroStatus, setFiltroStatus] = useState('todos');
@@ -135,24 +140,30 @@ function GerenciarUsuarios() {
     confirmarSenha: '',
     cargo: 'atendente',
     telefone: '',
+    profissionalId: '', // NOVO: ID do profissional vinculado
     permissoes: [],
     status: 'ativo',
     avatar: null,
   });
 
   useEffect(() => {
-    carregarUsuarios();
+    carregarDados();
   }, []);
 
-  const carregarUsuarios = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true);
-      const usuariosData = await firebaseService.getAll('usuarios').catch(() => []);
+      const [usuariosData, profissionaisData] = await Promise.all([
+        firebaseService.getAll('usuarios').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => [])
+      ]);
+      
       setUsuarios(usuariosData || []);
+      setProfissionais(profissionaisData || []);
       toast.success('Dados carregados!');
     } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
-      toast.error('Erro ao carregar usuários');
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -176,6 +187,7 @@ function GerenciarUsuarios() {
         confirmarSenha: '',
         cargo: usuario.cargo || 'atendente',
         telefone: usuario.telefone || '',
+        profissionalId: usuario.profissionalId || '', // NOVO
         permissoes: usuario.permissoes || CARGOS[usuario.cargo]?.permissoes || [],
         status: usuario.status || 'ativo',
         avatar: usuario.avatar || null,
@@ -189,6 +201,7 @@ function GerenciarUsuarios() {
         confirmarSenha: '',
         cargo: 'atendente',
         telefone: '',
+        profissionalId: '', // NOVO
         permissoes: CARGOS.atendente.permissoes,
         status: 'ativo',
         avatar: null,
@@ -283,6 +296,7 @@ function GerenciarUsuarios() {
         email: String(formData.email).toLowerCase().trim(),
         cargo: String(formData.cargo),
         telefone: formData.telefone ? String(formData.telefone).trim() : null,
+        profissionalId: formData.profissionalId || null, // NOVO
         permissoes: formData.permissoes || [],
         status: String(formData.status),
         avatar: formData.avatar,
@@ -609,7 +623,7 @@ function GerenciarUsuarios() {
                 fullWidth
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={carregarUsuarios}
+                onClick={carregarDados}
               >
                 Atualizar
               </Button>
@@ -627,6 +641,7 @@ function GerenciarUsuarios() {
                 <TableCell><strong>Usuário</strong></TableCell>
                 <TableCell><strong>Contato</strong></TableCell>
                 <TableCell><strong>Cargo</strong></TableCell>
+                <TableCell><strong>Profissional</strong></TableCell> {/* NOVA COLUNA */}
                 <TableCell><strong>Status</strong></TableCell>
                 <TableCell><strong>Último Acesso</strong></TableCell>
                 <TableCell align="center"><strong>Ações</strong></TableCell>
@@ -634,125 +649,146 @@ function GerenciarUsuarios() {
             </TableHead>
             <TableBody>
               <AnimatePresence>
-                {paginatedUsuarios.map((usuario, index) => (
-                  <motion.tr
-                    key={usuario.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar
-                          src={usuario.avatar}
-                          sx={{
-                            bgcolor: CARGOS[usuario.cargo]?.cor || '#9c27b0',
-                            width: 40,
-                            height: 40,
-                          }}
-                        >
-                          {usuario.nome?.charAt(0).toUpperCase()}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {usuario.nome}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            ID: {usuario.id}
-                          </Typography>
+                {paginatedUsuarios.map((usuario, index) => {
+                  const profissionalVinculado = profissionais.find(p => p.id === usuario.profissionalId);
+                  
+                  return (
+                    <motion.tr
+                      key={usuario.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Avatar
+                            src={usuario.avatar}
+                            sx={{
+                              bgcolor: CARGOS[usuario.cargo]?.cor || '#9c27b0',
+                              width: 40,
+                              height: 40,
+                            }}
+                          >
+                            {usuario.nome?.charAt(0).toUpperCase()}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                              {usuario.nome}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              ID: {usuario.id?.substring(0, 8)}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{usuario.email}</Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {usuario.telefone || 'Telefone não informado'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={CARGOS[usuario.cargo]?.icone}
-                        label={CARGOS[usuario.cargo]?.nome || usuario.cargo}
-                        size="small"
-                        sx={{
-                          bgcolor: `${CARGOS[usuario.cargo]?.cor}20`,
-                          color: CARGOS[usuario.cargo]?.cor,
-                          fontWeight: 500,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={usuario.status === 'ativo' ? <CheckCircleIcon /> : <BlockIcon />}
-                        label={usuario.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                        size="small"
-                        color={usuario.status === 'ativo' ? 'success' : 'error'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {usuario.ultimoAcesso 
-                          ? new Date(usuario.ultimoAcesso).toLocaleDateString('pt-BR')
-                          : 'Nunca acessou'}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {usuario.ultimoAcesso 
-                          ? new Date(usuario.ultimoAcesso).toLocaleTimeString('pt-BR')
-                          : ''}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(usuario)}
-                            sx={{ color: '#9c27b0' }}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{usuario.email}</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {usuario.telefone || 'Telefone não informado'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={CARGOS[usuario.cargo]?.icone}
+                          label={CARGOS[usuario.cargo]?.nome || usuario.cargo}
+                          size="small"
+                          sx={{
+                            bgcolor: `${CARGOS[usuario.cargo]?.cor}20`,
+                            color: CARGOS[usuario.cargo]?.cor,
+                            fontWeight: 500,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {profissionalVinculado ? (
+                          <Tooltip title={profissionalVinculado.nome}>
+                            <Chip
+                              icon={<BadgeIcon />}
+                              label={profissionalVinculado.nome.split(' ')[0]}
+                              size="small"
+                              variant="outlined"
+                              sx={{ color: '#ff9800', borderColor: '#ff9800' }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="caption" color="textSecondary">
+                            Não vinculado
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={usuario.status === 'ativo' ? <CheckCircleIcon /> : <BlockIcon />}
+                          label={usuario.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                          size="small"
+                          color={usuario.status === 'ativo' ? 'success' : 'error'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {usuario.ultimoAcesso 
+                            ? new Date(usuario.ultimoAcesso).toLocaleDateString('pt-BR')
+                            : 'Nunca acessou'}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {usuario.ultimoAcesso 
+                            ? new Date(usuario.ultimoAcesso).toLocaleTimeString('pt-BR')
+                            : ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                          <Tooltip title="Editar">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenDialog(usuario)}
+                              sx={{ color: '#9c27b0' }}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
 
-                        <Tooltip title="Gerenciar Permissões">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenPermissoesDialog(usuario)}
-                            sx={{ color: '#ff4081' }}
-                          >
-                            <LockIcon />
-                          </IconButton>
-                        </Tooltip>
+                          <Tooltip title="Gerenciar Permissões">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenPermissoesDialog(usuario)}
+                              sx={{ color: '#ff4081' }}
+                            >
+                              <LockIcon />
+                            </IconButton>
+                          </Tooltip>
 
-                        <Tooltip title={usuario.status === 'ativo' ? 'Desativar' : 'Ativar'}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleToggleStatus(usuario)}
-                            sx={{ color: usuario.status === 'ativo' ? '#f44336' : '#4caf50' }}
-                          >
-                            {usuario.status === 'ativo' ? <BlockIcon /> : <LockOpenIcon />}
-                          </IconButton>
-                        </Tooltip>
+                          <Tooltip title={usuario.status === 'ativo' ? 'Desativar' : 'Ativar'}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleToggleStatus(usuario)}
+                              sx={{ color: usuario.status === 'ativo' ? '#f44336' : '#4caf50' }}
+                            >
+                              {usuario.status === 'ativo' ? <BlockIcon /> : <LockOpenIcon />}
+                            </IconButton>
+                          </Tooltip>
 
-                        <Tooltip title="Excluir">
-                          <IconButton
-                            size="small"
-                            onClick={() => setConfirmDelete(usuario)}
-                            sx={{ color: '#f44336' }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </motion.tr>
-                ))}
+                          <Tooltip title="Excluir">
+                            <IconButton
+                              size="small"
+                              onClick={() => setConfirmDelete(usuario)}
+                              sx={{ color: '#f44336' }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })}
               </AnimatePresence>
 
               {paginatedUsuarios.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                     <Typography variant="body1" color="textSecondary">
                       Nenhum usuário encontrado
                     </Typography>
@@ -852,6 +888,25 @@ function GerenciarUsuarios() {
                         {CARGOS[cargo].icone}
                         {CARGOS[cargo].nome}
                       </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Profissional Vinculado</InputLabel> {/* NOVO CAMPO */}
+                <Select
+                  name="profissionalId"
+                  value={formData.profissionalId}
+                  label="Profissional Vinculado"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="">Nenhum</MenuItem>
+                  {profissionais.map(prof => (
+                    <MenuItem key={prof.id} value={prof.id}>
+                      {prof.nome}
                     </MenuItem>
                   ))}
                 </Select>
@@ -972,6 +1027,7 @@ function GerenciarUsuarios() {
                 { valor: 'visualizar_clientes', label: 'Visualizar Clientes' },
                 { valor: 'visualizar_agenda', label: 'Visualizar Agenda' },
                 { valor: 'gerenciar_atendimentos', label: 'Gerenciar Atendimentos' },
+                { valor: 'visualizar_comissoes', label: 'Visualizar Comissões' }, // NOVA PERMISSÃO
               ].map((permissao) => (
                 <Grid item xs={12} sm={6} key={permissao.valor}>
                   <FormControlLabel
