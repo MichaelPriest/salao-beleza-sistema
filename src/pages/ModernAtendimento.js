@@ -450,37 +450,86 @@ const handleFinalizarAtendimento = async () => {
     const valorTotal = calcularValorTotal();
     const totalPago = calcularTotalPago();
     const saldoRestante = valorTotal - totalPago;
+    const MARGEM_ERRO = 0.01;
 
-    // 🔥 CORREÇÃO: Usar uma margem de erro para evitar problemas com arredondamento
-    const MARGEM_ERRO = 0.01; // 1 centavo de tolerância
-    
     if (Math.abs(saldoRestante) > MARGEM_ERRO) {
       toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
       return;
     }
 
-    // Finalizar atendimento
+    console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
+    console.log('📌 Atendimento ID:', id);
+    console.log('📌 Valor total:', valorTotal);
+    console.log('📌 Itens serviço:', itensServico);
+    console.log('📌 Itens produto:', itensProduto);
+
+    // 1. Atualizar o atendimento no Firebase
+    console.log('📌 Atualizando atendimento...');
     await firebaseService.update('atendimentos', id, {
       status: 'finalizado',
       horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       valorTotal,
-      itensServico, // Garantir que os arrays são salvos
+      itensServico,
       itensProduto,
       updatedAt: Timestamp.now()
     });
+    console.log('✅ Atendimento atualizado');
 
-    // Atualizar último acesso do cliente
-    const hoje = new Date().toISOString().split('T')[0];
+    // 2. Buscar dados para comissão
+    const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
+    const servico = await firebaseService.getById('servicos', atendimento.servicoId);
+    
+    console.log('📌 Profissional:', profissional);
+    console.log('📌 Serviço:', servico);
+
+    // 3. Calcular e registrar comissão
+    const percentual = profissional?.comissao || servico?.comissaoProfissional || 40;
+    const valorComissao = (valorTotal * percentual) / 100;
+
+    console.log('📊 Cálculo da comissão:');
+    console.log('   - Percentual:', percentual);
+    console.log('   - Valor total:', valorTotal);
+    console.log('   - Comissão:', valorComissao);
+
+    const comissaoData = {
+      atendimentoId: id,
+      profissionalId: atendimento.profissionalId,
+      profissionalNome: profissional?.nome || atendimento.profissionalNome,
+      servicoId: atendimento.servicoId,
+      servicoNome: servico?.nome || atendimento.servicoNome,
+      valorAtendimento: valorTotal,
+      percentual,
+      valor: valorComissao,
+      data: atendimento.data,
+      status: 'pendente',
+      dataRegistro: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    console.log('📌 Salvando comissão no Firebase...');
+    const comissaoId = await firebaseService.add('comissoes', comissaoData);
+    console.log('✅ Comissão registrada com ID:', comissaoId);
+
+    // 4. Atualizar cliente
+    console.log('📌 Atualizando cliente...');
     await firebaseService.update('clientes', cliente.id, {
-      ultimaVisita: hoje,
+      ultimaVisita: new Date().toISOString().split('T')[0],
       totalGasto: (cliente.totalGasto || 0) + valorTotal,
       updatedAt: Timestamp.now()
     });
 
     setActiveStep(3);
     toast.success('Atendimento finalizado com sucesso!');
+    
+    // 5. Verificar se a comissão foi criada
+    setTimeout(async () => {
+      const comissoes = await firebaseService.getAll('comissoes');
+      const minhaComissao = comissoes.find(c => c.atendimentoId === id);
+      console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
+    }, 2000);
+    
   } catch (error) {
-    console.error('Erro ao finalizar atendimento:', error);
+    console.error('❌ Erro ao finalizar atendimento:', error);
     toast.error('Erro ao finalizar atendimento');
   } finally {
     setSaving(false);
