@@ -57,7 +57,8 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { firebaseService } from '../services/firebase';
+import { Timestamp } from 'firebase/firestore';
 
 const steps = ['Confirmar Atendimento', 'Adicionar Itens', 'Registrar Pagamentos', 'Finalizar'];
 
@@ -151,31 +152,30 @@ function ModernAtendimento() {
       setLoading(true);
       
       // Buscar atendimento
-      const response = await api.get(`/atendimentos/${id}`);
-      const atendimentoData = response.data;
+      const atendimentoData = await firebaseService.getById('atendimentos', id);
       setAtendimento(atendimentoData);
       setObservacoes(atendimentoData.observacoes || '');
 
       // Buscar dados relacionados
-      const [clienteRes, profissionalRes] = await Promise.all([
-        api.get(`/clientes/${atendimentoData.clienteId}`),
-        api.get(`/profissionais/${atendimentoData.profissionalId}`)
+      const [clienteData, profissionalData] = await Promise.all([
+        firebaseService.getById('clientes', atendimentoData.clienteId),
+        firebaseService.getById('profissionais', atendimentoData.profissionalId)
       ]);
 
-      setCliente(clienteRes.data);
-      setProfissional(profissionalRes.data);
+      setCliente(clienteData);
+      setProfissional(profissionalData);
 
       // Carregar itens do atendimento - ARRAY de serviços
       if (atendimentoData.itensServico && atendimentoData.itensServico.length > 0) {
         setItensServico(atendimentoData.itensServico);
       } else if (atendimentoData.servicoId) {
-        // Se tiver apenas servicoId, converter para array
-        const servicoRes = await api.get(`/servicos/${atendimentoData.servicoId}`);
+        // Se tiver apenas servicoId, buscar o serviço
+        const servicoData = await firebaseService.getById('servicos', atendimentoData.servicoId);
         setItensServico([{
-          id: servicoRes.data.id,
-          nome: servicoRes.data.nome,
-          preco: servicoRes.data.preco,
-          duracao: servicoRes.data.duracao,
+          id: servicoData.id,
+          nome: servicoData.nome,
+          preco: servicoData.preco,
+          duracao: servicoData.duracao,
           principal: true
         }]);
       }
@@ -186,13 +186,15 @@ function ModernAtendimento() {
       }
 
       // Carregar pagamentos - ARRAY de pagamentos
-      const pagamentosRes = await api.get(`/pagamentos?atendimentoId=${id}`);
-      setPagamentos(pagamentosRes.data || []);
+      const pagamentosData = await firebaseService.query('pagamentos', [
+        { field: 'atendimentoId', operator: '==', value: id }
+      ]);
+      setPagamentos(pagamentosData || []);
 
       // Verificar status para definir o step atual
       if (atendimentoData.status === 'finalizado') {
         setActiveStep(3);
-      } else if (pagamentosRes.data.length > 0) {
+      } else if (pagamentosData.length > 0) {
         setActiveStep(2);
       }
 
@@ -206,12 +208,12 @@ function ModernAtendimento() {
 
   const carregarServicosEProdutos = async () => {
     try {
-      const [servicosRes, produtosRes] = await Promise.all([
-        api.get('/servicos'),
-        api.get('/produtos')
+      const [servicosData, produtosData] = await Promise.all([
+        firebaseService.getAll('servicos'),
+        firebaseService.getAll('produtos')
       ]);
-      setServicosDisponiveis(servicosRes.data || []);
-      setProdutosDisponiveis(produtosRes.data || []);
+      setServicosDisponiveis(servicosData || []);
+      setProdutosDisponiveis(produtosData || []);
     } catch (error) {
       console.error('Erro ao carregar serviços e produtos:', error);
     }
@@ -283,8 +285,9 @@ function ModernAtendimento() {
 
     // Atualizar estoque
     const novaQuantidade = produtoSelecionado.quantidadeEstoque - quantidadeProduto;
-    api.patch(`/produtos/${produtoSelecionado.id}`, {
-      quantidadeEstoque: novaQuantidade
+    firebaseService.update('produtos', produtoSelecionado.id, {
+      quantidadeEstoque: novaQuantidade,
+      updatedAt: Timestamp.now()
     });
 
     setProdutoSelecionado(null);
@@ -308,10 +311,10 @@ function ModernAtendimento() {
     
     // Devolver ao estoque
     if (itemRemovido) {
-      api.get(`/produtos/${itemRemovido.id}`).then(res => {
-        const produto = res.data;
-        api.patch(`/produtos/${itemRemovido.id}`, {
-          quantidadeEstoque: (produto.quantidadeEstoque || 0) + itemRemovido.quantidade
+      firebaseService.getById('produtos', itemRemovido.id).then(produto => {
+        firebaseService.update('produtos', itemRemovido.id, {
+          quantidadeEstoque: (produto.quantidadeEstoque || 0) + itemRemovido.quantidade,
+          updatedAt: Timestamp.now()
         });
       });
     }
@@ -333,11 +336,11 @@ function ModernAtendimento() {
         itensProduto: itensProduto, // Array
         valorTotal,
         status: 'em_andamento',
-        updatedAt: new Date().toISOString()
+        updatedAt: Timestamp.now()
       };
 
       // Atualizar atendimento
-      await api.patch(`/atendimentos/${id}`, dadosAtendimento);
+      await firebaseService.update('atendimentos', id, dadosAtendimento);
 
       setActiveStep(1);
       toast.success('Atendimento confirmado!');
@@ -366,29 +369,30 @@ function ModernAtendimento() {
         return;
       }
 
+      const agora = Timestamp.now();
+      
       const pagamentoData = {
-        id: pagamentoEditando?.id || Date.now(),
-        atendimentoId: parseInt(id),
+        atendimentoId: id,
         clienteId: cliente.id,
         valor: parseFloat(pagamentoForm.valor),
         formaPagamento: pagamentoForm.formaPagamento,
         parcelas: pagamentoForm.parcelas || 1,
         observacoes: pagamentoForm.observacoes,
         status: 'pago',
-        data: new Date().toISOString(),
-        createdAt: pagamentoEditando?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        data: agora,
+        createdAt: pagamentoEditando?.createdAt || agora,
+        updatedAt: agora
       };
 
       if (pagamentoEditando) {
         // Atualizar pagamento no array
-        await api.patch(`/pagamentos/${pagamentoEditando.id}`, pagamentoData);
-        setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoData : p));
+        await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
+        setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? { ...pagamentoData, id: pagamentoEditando.id } : p));
         toast.success('Pagamento atualizado!');
       } else {
         // Adicionar novo pagamento ao array
-        await api.post('/pagamentos', pagamentoData);
-        setPagamentos([...pagamentos, pagamentoData]);
+        const novoPagamento = await firebaseService.add('pagamentos', pagamentoData);
+        setPagamentos([...pagamentos, novoPagamento]);
         toast.success('Pagamento registrado!');
       }
 
@@ -403,7 +407,7 @@ function ModernAtendimento() {
   const handleRemoverPagamento = async (pagamentoId) => {
     if (window.confirm('Deseja remover este pagamento?')) {
       try {
-        await api.delete(`/pagamentos/${pagamentoId}`);
+        await firebaseService.delete('pagamentos', pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
         toast.success('Pagamento removido!');
       } catch (error) {
@@ -452,19 +456,21 @@ function ModernAtendimento() {
       }
 
       // Finalizar atendimento
-      await api.patch(`/atendimentos/${id}`, {
+      await firebaseService.update('atendimentos', id, {
         status: 'finalizado',
         horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         valorTotal,
         itensServico, // Garantir que os arrays são salvos
         itensProduto,
-        updatedAt: new Date().toISOString()
+        updatedAt: Timestamp.now()
       });
 
       // Atualizar último acesso do cliente
-      await api.patch(`/clientes/${cliente.id}`, {
-        ultimaVisita: new Date().toISOString().split('T')[0],
-        totalGasto: (cliente.totalGasto || 0) + valorTotal
+      const hoje = new Date().toISOString().split('T')[0];
+      await firebaseService.update('clientes', cliente.id, {
+        ultimaVisita: hoje,
+        totalGasto: (cliente.totalGasto || 0) + valorTotal,
+        updatedAt: Timestamp.now()
       });
 
       setActiveStep(3);
@@ -505,6 +511,22 @@ function ModernAtendimento() {
 
   const handleVoltar = () => {
     navigate(-1);
+  };
+
+  const formatarDataFirebase = (timestamp) => {
+    if (!timestamp) return '';
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleDateString('pt-BR');
+    }
+    return new Date(timestamp).toLocaleDateString('pt-BR');
+  };
+
+  const formatarHoraFirebase = (timestamp) => {
+    if (!timestamp) return '';
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleTimeString('pt-BR');
+    }
+    return new Date(timestamp).toLocaleTimeString('pt-BR');
   };
 
   if (loading) {
@@ -581,15 +603,15 @@ function ModernAtendimento() {
                   Cliente
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar src={cliente.foto} sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                    {cliente.nome?.charAt(0)}
+                  <Avatar src={cliente?.avatar} sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
+                    {cliente?.nome?.charAt(0)}
                   </Avatar>
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {cliente.nome}
+                      {cliente?.nome}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
-                      {cliente.telefone}
+                      {cliente?.telefone}
                     </Typography>
                   </Box>
                 </Box>
@@ -603,7 +625,7 @@ function ModernAtendimento() {
                     Profissional
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {profissional.nome}
+                    {profissional?.nome}
                   </Typography>
                 </Grid>
 
@@ -689,7 +711,7 @@ function ModernAtendimento() {
                       {p.parcelas > 1 ? ` (${p.parcelas}x)` : ''}
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      R$ {p.valor.toFixed(2)}
+                      R$ {p.valor?.toFixed(2)}
                     </Typography>
                   </Box>
                 ))}
@@ -1041,9 +1063,9 @@ function ModernAtendimento() {
                                      pagamento.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
                                      pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento}
                                   </TableCell>
-                                  <TableCell align="right">R$ {pagamento.valor.toFixed(2)}</TableCell>
+                                  <TableCell align="right">R$ {pagamento.valor?.toFixed(2)}</TableCell>
                                   <TableCell>{pagamento.parcelas > 1 ? `${pagamento.parcelas}x` : '-'}</TableCell>
-                                  <TableCell>{new Date(pagamento.data).toLocaleDateString('pt-BR')}</TableCell>
+                                  <TableCell>{formatarDataFirebase(pagamento.data)}</TableCell>
                                   <TableCell align="center">
                                     <IconButton size="small" onClick={() => handleOpenPagamentoDialog(pagamento)}>
                                       <EditIcon fontSize="small" />
@@ -1104,7 +1126,7 @@ function ModernAtendimento() {
                             Cliente:
                           </Typography>
                           <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {cliente.nome}
+                            {cliente?.nome}
                           </Typography>
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -1112,7 +1134,7 @@ function ModernAtendimento() {
                             Profissional:
                           </Typography>
                           <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {profissional.nome}
+                            {profissional?.nome}
                           </Typography>
                         </Grid>
                         
@@ -1184,7 +1206,7 @@ function ModernAtendimento() {
                                 {pagamento.parcelas > 1 ? ` (${pagamento.parcelas}x)` : ''}
                               </Typography>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                R$ {pagamento.valor.toFixed(2)}
+                                R$ {pagamento.valor?.toFixed(2)}
                               </Typography>
                             </Box>
                           ))}
