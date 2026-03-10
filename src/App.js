@@ -53,7 +53,8 @@ import MinhasComissoes from './pages/MinhasComissoes';
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
 
-import SiteSalao from './pages/SiteSalao';
+// 🔥 CORREÇÃO: Importar com o nome correto do arquivo (sem acento)
+import SiteSalao from './pages/SiteSalao'; // O arquivo deve ser SiteSalao.js (sem acento)
 
 // DIAGNÓSTICO - Verificar cada importação
 console.log('Verificando importações:');
@@ -81,6 +82,7 @@ console.log('✅ GerenciarUsuarios:', typeof GerenciarUsuarios);
 console.log('✅ HistoricoAtendimentos:', typeof HistoricoAtendimentos);
 console.log('✅ Auditoria:', typeof Auditoria);
 console.log('✅ TesteAPI:', typeof TesteAPI);
+console.log('✅ SiteSalao:', typeof SiteSalao); // 🔥 Verificar se a importação funcionou
 
 const theme = createTheme({
   palette: {
@@ -171,6 +173,7 @@ function AnimatedRoutes() {
           {/* Rotas Públicas */}
           <Route path="/login" element={<ModernLogin />} />
           <Route path="/teste" element={<TesteAPI />} />
+          <Route path="/site" element={<SiteSalao />} /> {/* 🔥 ROTA PÚBLICA DO SITE */}
           
           {/* Rotas Privadas */}
           <Route path="/" element={<ModernDashboard />} />
@@ -206,8 +209,6 @@ function AnimatedRoutes() {
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
-            
-          <Route path="/site" element={<SiteSalao />} />
 
           {/* Rota fallback - 404 */}
           <Route path="*" element={<div>Página não encontrada</div>} />
@@ -225,7 +226,7 @@ function App() {
         {/* Loading Global */}
         <GlobalLoading />
         
-        {/* Toaster do react-hot-toast (mantido para compatibilidade) */}
+        {/* Toaster do react-hot-toast */}
         <Toaster 
           position="top-right"
           toastOptions={{
@@ -261,11 +262,12 @@ function App() {
         
         <Router>
           <Routes>
-            {/* Rotas sem sidebar */}
+            {/* Rotas sem sidebar - PÚBLICAS */}
             <Route path="/login" element={<ModernLogin />} />
             <Route path="/teste" element={<TesteAPI />} />
+            <Route path="/site" element={<SiteSalao />} /> {/* 🔥 GARANTIR QUE ESTÁ AQUI TAMBÉM */}
             
-            {/* Rotas com sidebar - todas as outras rotas */}
+            {/* Rotas com sidebar - todas as outras rotas (privadas) */}
             <Route path="/*" element={
               <PrivateRoute>
                 <div style={{ display: 'flex', minHeight: '100vh' }}>
