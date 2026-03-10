@@ -156,6 +156,17 @@ function ModernFinanceiro() {
     carregarDados();
   }, []);
 
+  const normalizarValor = (valor) => {
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero : 0;
+  };
+
+  const normalizarData = (data) => {
+    if (!data) return null;
+    const dataObj = new Date(data);
+    return Number.isNaN(dataObj.getTime()) ? null : dataObj;
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
@@ -165,9 +176,14 @@ function ModernFinanceiro() {
         firebaseService.getAll('caixa').catch(() => []),
       ]);
       
-      setTransacoes(transacoesData || []);
-      setContasPagar((transacoesData || []).filter(t => t.tipo === 'despesa'));
-      setContasReceber((transacoesData || []).filter(t => t.tipo === 'receita'));
+      const transacoesNormalizadas = (transacoesData || []).map((transacao) => ({
+        ...transacao,
+        valor: normalizarValor(transacao?.valor),
+      }));
+
+      setTransacoes(transacoesNormalizadas);
+      setContasPagar(transacoesNormalizadas.filter(t => t.tipo === 'despesa'));
+      setContasReceber(transacoesNormalizadas.filter(t => t.tipo === 'receita'));
       
       // Pega o caixa atual (último caixa aberto)
       let caixaAtual = null;
@@ -447,14 +463,15 @@ const handleMarcarComoPago = async (transacao) => {
     // Atualizar saldo do caixa se estiver aberto
     if (caixa && caixa.status === 'aberto' && caixa.id) {
       // Calcular novo saldo
-      const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
+      const valorTransacao = normalizarValor(transacao.valor);
+      const valorOperacao = transacao.tipo === 'receita' ? valorTransacao : -valorTransacao;
       const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
       
       // Criar nova movimentação
       const novaMovimentacao = {
         id: Date.now().toString(),
         tipo: transacao.tipo,
-        valor: Number(transacao.valor), // Garantir que é número
+        valor: valorTransacao,
         descricao: String(transacao.descricao || ''),
         data: new Date().toISOString(),
         transacaoId: String(transacao.id),
@@ -497,31 +514,33 @@ const handleMarcarComoPago = async (transacao) => {
   // Cálculo das estatísticas
   const calcularEstatisticas = () => {
     const transacoesPeriodo = transacoes.filter(t => {
-      const data = new Date(t.data);
+      const data = normalizarData(t.data);
+      if (!data) return false;
       return data >= new Date(dataInicio) && data <= new Date(dataFim);
     });
 
     const receitas = transacoesPeriodo
       .filter(t => t.tipo === 'receita' && t.status === 'pago')
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
+      .reduce((acc, t) => acc + normalizarValor(t.valor), 0);
 
     const despesas = transacoesPeriodo
       .filter(t => t.tipo === 'despesa' && t.status === 'pago')
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
+      .reduce((acc, t) => acc + normalizarValor(t.valor), 0);
 
     const saldo = receitas - despesas;
 
     const aReceber = transacoesPeriodo
       .filter(t => t.tipo === 'receita' && t.status === 'pendente')
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
+      .reduce((acc, t) => acc + normalizarValor(t.valor), 0);
 
     const aPagar = transacoesPeriodo
       .filter(t => t.tipo === 'despesa' && t.status === 'pendente')
-      .reduce((acc, t) => acc + (t.valor || 0), 0);
+      .reduce((acc, t) => acc + normalizarValor(t.valor), 0);
 
     const atrasados = transacoesPeriodo.filter(t => {
       if (t.status !== 'pendente') return false;
-      const vencimento = new Date(t.dataVencimento);
+      const vencimento = normalizarData(t.dataVencimento);
+      if (!vencimento) return false;
       const hoje = new Date();
       return vencimento < hoje;
     }).length;
@@ -550,12 +569,13 @@ const handleMarcarComoPago = async (transacao) => {
     transacoes
       .filter(t => t.status === 'pago')
       .forEach(t => {
-        const data = t.data.split('T')[0];
+        const data = (t.data || '').split('T')[0];
+        const valorTransacao = normalizarValor(t.valor);
         if (dias[data]) {
           if (t.tipo === 'receita') {
-            dias[data].receitas += t.valor || 0;
+            dias[data].receitas += valorTransacao;
           } else {
-            dias[data].despesas += t.valor || 0;
+            dias[data].despesas += valorTransacao;
           }
           dias[data].saldo = dias[data].receitas - dias[data].despesas;
         }
@@ -578,7 +598,7 @@ const handleMarcarComoPago = async (transacao) => {
         if (!categorias[cat]) {
           categorias[cat] = 0;
         }
-        categorias[cat] += t.valor || 0;
+        categorias[cat] += normalizarValor(t.valor);
       });
 
     return Object.keys(categorias).map(cat => ({
@@ -844,7 +864,7 @@ const handleMarcarComoPago = async (transacao) => {
                       <XAxis dataKey="dia" />
                       <YAxis />
                       <RechartsTooltip 
-                        formatter={(value) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value) => `R$ ${normalizarValor(value).toFixed(2)}`}
                       />
                       <Legend />
                       <Area type="monotone" dataKey="receitas" stackId="1" stroke="#4caf50" fill="#4caf50" fillOpacity={0.6} />
@@ -887,7 +907,7 @@ const handleMarcarComoPago = async (transacao) => {
                         ))}
                       </Pie>
                       <RechartsTooltip 
-                        formatter={(value) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value) => `R$ ${normalizarValor(value).toFixed(2)}`}
                       />
                     </PieChart>
                   </ResponsiveContainer>
