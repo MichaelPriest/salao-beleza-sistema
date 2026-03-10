@@ -136,6 +136,7 @@ export const firebaseService = {
       console.error(`Erro na query de ${collectionName}:`, error);
       throw error;
     }
-  },
+  }
+}; // <-- AGORA O OBJETO ESTÁ CORRETAMENTE FECHADO
 
 export default firebaseService;
