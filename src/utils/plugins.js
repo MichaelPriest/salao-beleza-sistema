@@ -325,30 +325,50 @@ export const buscarCep = async (cep) => {
 export const CepInput = ({ value, onChange, onCepFound, ...props }) => {
   const [loading, setLoading] = useState(false);
 
-  const handleCepBlur = async () => {
+  const handleChange = (e) => {
+    const rawValue = e.target.value;
+    // Aplica a máscara de CEP
+    const maskedValue = masks.cep(rawValue);
+    // Cria um evento sintético
+    onChange({ target: { value: maskedValue, name: props.name } });
+  };
+
+  const handleBlur = async () => {
     const cepLimpo = value?.replace(/\D/g, '') || '';
-    if (cepLimpo.length === 8) {
+    if (cepLimpo.length === 8 && onCepFound) {
       setLoading(true);
-      const resultado = await buscarCep(value);
-      setLoading(false);
-      
-      if (onCepFound && resultado.success) {
-        onCepFound(resultado);
-        toast.success('CEP encontrado!');
-      } else if (resultado.erro) {
-        toast.error(resultado.erro);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+        const data = await response.json();
+        
+        if (!data.erro) {
+          onCepFound({
+            logradouro: data.logradouro || '',
+            bairro: data.bairro || '',
+            cidade: data.localidade || '',
+            estado: data.uf || '',
+            cep: data.cep || '',
+            complemento: data.complemento || ''
+          });
+        } else {
+          toast.error('CEP não encontrado');
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+        toast.error('Erro ao buscar CEP');
+      } finally {
+        setLoading(false);
       }
     }
   };
 
   return (
     <Box sx={{ position: 'relative' }}>
-      <MaskedInput
-        mask="cep"
-        value={value}
-        onChange={onChange}
-        onBlur={handleCepBlur}
+      <TextField
         {...props}
+        value={value || ''}
+        onChange={handleChange}
+        onBlur={handleBlur}
         InputProps={{
           endAdornment: loading && (
             <InputAdornment position="end">
