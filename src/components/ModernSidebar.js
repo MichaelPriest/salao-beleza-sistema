@@ -46,7 +46,7 @@ import {
   Warehouse as WarehouseIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { notificacoesService } from '../services/notificacoesService';
+import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 
 // Estrutura do menu agrupada por área
@@ -175,7 +175,11 @@ function ModernSidebar() {
     try {
       const user = usuariosService.getUsuarioAtual();
       if (user) {
-        const data = await notificacoesService.listar(user.id);
+        // Buscar notificações do Firebase filtrando por usuarioId
+        const data = await firebaseService.query('notificacoes', [
+          { field: 'usuarioId', operator: '==', value: user.id }
+        ], 'data');
+        
         setUnreadCount(data.filter(n => !n.lida).length);
       }
     } catch (error) {
