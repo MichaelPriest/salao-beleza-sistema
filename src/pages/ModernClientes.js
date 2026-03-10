@@ -655,12 +655,14 @@ function ModernClientes() {
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
+                  <MaskedInput
+                    mask="rg"
                     label="RG"
+                    name="rg"
                     value={formData.rg}
                     onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
                     size="small"
+                    placeholder="00.000.000-0"
                   />
                 </Grid>
 
