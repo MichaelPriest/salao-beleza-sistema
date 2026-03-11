@@ -21,6 +21,20 @@ import {
   Alert,
   LinearProgress,
   Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Paper,
+  ToggleButton,
+  ToggleButtonGroup,
+  InputAdornment,
+  Tooltip,
+  Fab,
+  Zoom,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +42,13 @@ import {
   Delete as DeleteIcon,
   AccessTime as AccessTimeIcon,
   AttachMoney as AttachMoneyIcon,
+  GridView as GridViewIcon,
+  ViewList as ViewListIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  FileDownload as ExportIcon,
+  FilterList as FilterIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -36,10 +57,22 @@ import { firebaseService } from '../services/firebase';
 const categories = ['Cabelo', 'Unhas', 'Barba', 'Maquiagem', 'Estética', 'Depilação', 'Massagem'];
 
 function ModernServicos() {
+  // Estados existentes
   const [loading, setLoading] = useState(true);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
   
+  // NOVOS ESTADOS
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' ou 'list'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('todos');
+  const [filterStatus, setFilterStatus] = useState('todos'); // 'todos', 'ativo', 'inativo'
+  
+  // Paginação
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
+  
+  // Diálogos existentes
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
@@ -79,6 +112,45 @@ function ModernServicos() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // FUNÇÕES DE FILTRAGEM
+  const getServicosFiltrados = () => {
+    return servicos.filter(servico => {
+      // Filtro por busca
+      const matchesSearch = searchTerm === '' || 
+        servico.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        servico.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        servico.categoria?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Filtro por categoria
+      const matchesCategory = filterCategory === 'todos' || servico.categoria === filterCategory;
+      
+      // Filtro por status
+      const matchesStatus = 
+        filterStatus === 'todos' ? true :
+        filterStatus === 'ativo' ? servico.ativo === true :
+        filterStatus === 'inativo' ? servico.ativo === false : true;
+      
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  };
+
+  const servicosFiltrados = getServicosFiltrados();
+
+  // Paginação
+  const paginatedServicos = servicosFiltrados.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -188,6 +260,39 @@ function ModernServicos() {
     }
   };
 
+  // EXPORTAR DADOS
+  const exportarDados = () => {
+    try {
+      const dadosExport = {
+        dataBackup: new Date().toISOString(),
+        versao: '2.0',
+        totalServicos: servicosFiltrados.length,
+        dados: {
+          servicos: servicosFiltrados
+        }
+      };
+      
+      const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `servicos_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      
+      mostrarSnackbar('Dados exportados com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      mostrarSnackbar('Erro ao exportar dados', 'error');
+    }
+  };
+
+  const limparFiltros = () => {
+    setSearchTerm('');
+    setFilterCategory('todos');
+    setFilterStatus('todos');
+    setPage(0);
+  };
+
   const formatarPreco = (preco) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -204,13 +309,11 @@ function ModernServicos() {
 
   // Função para verificar se um profissional realiza este serviço
   const profissionalRealizaServico = (profissional, servico) => {
-    // Verificar pela especialidade
     if (profissional.especialidade && 
         profissional.especialidade.toLowerCase().includes(servico.categoria.toLowerCase())) {
       return true;
     }
     
-    // Verificar pelo nome
     if (servico.nome.toLowerCase().includes('cabelo') && 
         profissional.especialidade?.toLowerCase().includes('cabelo')) {
       return true;
@@ -234,171 +337,411 @@ function ModernServicos() {
 
   return (
     <Box>
+      {/* HEADER */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-          Serviços
-        </Typography>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Serviços
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Total: {servicosFiltrados.length} serviços
+          </Typography>
+        </Box>
         
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{
-              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              color: 'white',
-              boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
-            }}
-          >
-            Novo Serviço
-          </Button>
-        </motion.div>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Tooltip title="Exportar dados">
+            <Button
+              variant="outlined"
+              startIcon={<ExportIcon />}
+              onClick={exportarDados}
+              sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+            >
+              Exportar
+            </Button>
+          </Tooltip>
+          
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                color: 'white',
+                boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+              }}
+            >
+              Novo Serviço
+            </Button>
+          </motion.div>
+        </Box>
       </Box>
 
-      {servicos.length === 0 ? (
+      {/* BARRA DE FILTROS */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar serviços..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchTerm('')}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                )
+              }}
+            />
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Categoria</InputLabel>
+              <Select
+                value={filterCategory}
+                label="Categoria"
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                <MenuItem value="todos">Todas as categorias</MenuItem>
+                {categories.map(cat => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={filterStatus}
+                label="Status"
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="ativo">Ativos</MenuItem>
+                <MenuItem value="inativo">Inativos</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(e, newView) => newView && setViewMode(newView)}
+                size="small"
+              >
+                <ToggleButton value="grid">
+                  <GridViewIcon />
+                </ToggleButton>
+                <ToggleButton value="list">
+                  <ViewListIcon />
+                </ToggleButton>
+              </ToggleButtonGroup>
+              
+              {(searchTerm || filterCategory !== 'todos' || filterStatus !== 'todos') && (
+                <Button
+                  size="small"
+                  startIcon={<FilterIcon />}
+                  onClick={limparFiltros}
+                >
+                  Limpar filtros
+                </Button>
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* CONTEÚDO PRINCIPAL */}
+      {servicosFiltrados.length === 0 ? (
         <Card sx={{ p: 4, textAlign: 'center' }}>
+          <CategoryIcon sx={{ fontSize: 60, color: '#9c27b0', opacity: 0.5, mb: 2 }} />
           <Typography variant="h6" color="textSecondary" gutterBottom>
-            Nenhum serviço cadastrado
+            Nenhum serviço encontrado
           </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Clique no botão "Novo Serviço" para começar
+            {searchTerm || filterCategory !== 'todos' || filterStatus !== 'todos' 
+              ? 'Tente ajustar os filtros' 
+              : 'Clique no botão "Novo Serviço" para começar'}
           </Typography>
         </Card>
       ) : (
-        <Grid container spacing={3}>
-          <AnimatePresence>
-            {servicos.map((service, index) => {
-              // Encontrar profissionais que realizam este serviço
-              const profissionaisDoServico = profissionais.filter(prof => 
-                profissionalRealizaServico(prof, service)
-              );
+        <>
+          {/* VISUALIZAÇÃO EM GRADE */}
+          {viewMode === 'grid' && (
+            <Grid container spacing={3}>
+              <AnimatePresence>
+                {paginatedServicos.map((service, index) => {
+                  const profissionaisDoServico = profissionais.filter(prof => 
+                    profissionalRealizaServico(prof, service)
+                  );
 
-              return (
-                <Grid item xs={12} sm={6} md={4} key={service.id}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ delay: index * 0.1 }}
-                    whileHover={{ y: -5 }}
-                    layout
-                  >
-                    <Card sx={{ 
-                      height: '100%', 
-                      position: 'relative',
-                      opacity: service.ativo ? 1 : 0.7,
-                      bgcolor: service.ativo ? 'white' : '#f5f5f5'
-                    }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                          <Chip 
-                            label={service.categoria}
-                            size="small"
-                            sx={{
-                              backgroundColor: '#f3e5f5',
-                              color: '#9c27b0',
-                              fontWeight: 600,
-                            }}
-                          />
-                          <Box>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleEdit(service)}
-                              sx={{ color: '#9c27b0' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleDelete(service.id)}
-                              sx={{ color: '#f44336' }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </Box>
-
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                          {service.nome}
-                        </Typography>
-
-                        {service.descricao && (
-                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                            {service.descricao}
-                          </Typography>
-                        )}
-
-                        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <AccessTimeIcon fontSize="small" color="action" />
-                            <Typography variant="body2" color="textSecondary">
-                              {formatarDuracao(service.duracao)}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <AttachMoneyIcon fontSize="small" color="action" />
-                            <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
-                              {formatarPreco(service.preco)}
-                            </Typography>
-                          </Box>
-                        </Box>
-
-                        {service.comissaoProfissional && (
-                          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-                            Comissão: {service.comissaoProfissional}%
-                          </Typography>
-                        )}
-
-                        {profissionaisDoServico.length > 0 ? (
-                          <>
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              Profissionais:
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                              {profissionaisDoServico.slice(0, 4).map(prof => (
-                                <Chip
-                                  key={prof.id}
-                                  label={prof.nome.split(' ')[0]}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.7rem' }}
-                                />
-                              ))}
-                              {profissionaisDoServico.length > 4 && (
-                                <Chip
-                                  label={`+${profissionaisDoServico.length - 4}`}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.7rem' }}
-                                />
-                              )}
+                  return (
+                    <Grid item xs={12} sm={6} md={4} lg={3} key={service.id}>
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ delay: index * 0.1 }}
+                        whileHover={{ y: -5 }}
+                        layout
+                      >
+                        <Card sx={{ 
+                          height: '100%', 
+                          position: 'relative',
+                          opacity: service.ativo ? 1 : 0.7,
+                          bgcolor: service.ativo ? 'white' : '#f5f5f5',
+                          transition: 'all 0.3s',
+                          '&:hover': {
+                            boxShadow: '0 8px 25px rgba(156,39,176,0.15)'
+                          }
+                        }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                              <Chip 
+                                label={service.categoria}
+                                size="small"
+                                sx={{
+                                  backgroundColor: '#f3e5f5',
+                                  color: '#9c27b0',
+                                  fontWeight: 600,
+                                }}
+                              />
+                              <Box>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleEdit(service)}
+                                  sx={{ color: '#9c27b0' }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleDelete(service.id)}
+                                  sx={{ color: '#f44336' }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
                             </Box>
-                          </>
-                        ) : (
-                          <Typography variant="caption" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-                            Nenhum profissional vinculado
-                          </Typography>
-                        )}
 
-                        {!service.ativo && (
-                          <Chip
-                            label="Inativo"
-                            size="small"
-                            color="error"
-                            sx={{ position: 'absolute', top: 10, right: 10 }}
-                          />
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Grid>
-              );
-            })}
-          </AnimatePresence>
-        </Grid>
+                            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, fontSize: '1.1rem' }}>
+                              {service.nome}
+                            </Typography>
+
+                            {service.descricao && (
+                              <Typography variant="body2" color="textSecondary" sx={{ mb: 2, fontSize: '0.875rem' }}>
+                                {service.descricao.length > 60 
+                                  ? `${service.descricao.substring(0, 60)}...` 
+                                  : service.descricao}
+                              </Typography>
+                            )}
+
+                            <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <AccessTimeIcon fontSize="small" color="action" />
+                                <Typography variant="body2" color="textSecondary">
+                                  {formatarDuracao(service.duracao)}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <AttachMoneyIcon fontSize="small" color="action" />
+                                <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
+                                  {formatarPreco(service.preco)}
+                                </Typography>
+                              </Box>
+                            </Box>
+
+                            {service.comissaoProfissional && (
+                              <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
+                                Comissão: {service.comissaoProfissional}%
+                              </Typography>
+                            )}
+
+                            {profissionaisDoServico.length > 0 ? (
+                              <>
+                                <Typography variant="body2" color="textSecondary" gutterBottom sx={{ fontSize: '0.75rem' }}>
+                                  Profissionais:
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                  {profissionaisDoServico.slice(0, 3).map(prof => (
+                                    <Chip
+                                      key={prof.id}
+                                      label={prof.nome.split(' ')[0]}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem' }}
+                                    />
+                                  ))}
+                                  {profissionaisDoServico.length > 3 && (
+                                    <Chip
+                                      label={`+${profissionaisDoServico.length - 3}`}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem' }}
+                                    />
+                                  )}
+                                </Box>
+                              </>
+                            ) : (
+                              <Typography variant="caption" color="textSecondary" sx={{ fontStyle: 'italic' }}>
+                                Nenhum profissional vinculado
+                              </Typography>
+                            )}
+
+                            {!service.ativo && (
+                              <Chip
+                                label="Inativo"
+                                size="small"
+                                color="error"
+                                sx={{ position: 'absolute', top: 10, right: 10 }}
+                              />
+                            )}
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    </Grid>
+                  );
+                })}
+              </AnimatePresence>
+            </Grid>
+          )}
+
+          {/* VISUALIZAÇÃO EM LISTA */}
+          {viewMode === 'list' && (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead sx={{ bgcolor: '#faf5ff' }}>
+                  <TableRow>
+                    <TableCell><strong>Nome</strong></TableCell>
+                    <TableCell><strong>Categoria</strong></TableCell>
+                    <TableCell><strong>Duração</strong></TableCell>
+                    <TableCell><strong>Preço</strong></TableCell>
+                    <TableCell><strong>Comissão</strong></TableCell>
+                    <TableCell><strong>Status</strong></TableCell>
+                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedServicos.map((service) => (
+                    <TableRow 
+                      key={service.id}
+                      sx={{ 
+                        '&:hover': { bgcolor: '#faf5ff' },
+                        opacity: service.ativo ? 1 : 0.7
+                      }}
+                    >
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {service.nome}
+                          </Typography>
+                          {service.descricao && (
+                            <Typography variant="caption" color="textSecondary">
+                              {service.descricao.length > 50 
+                                ? `${service.descricao.substring(0, 50)}...` 
+                                : service.descricao}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={service.categoria}
+                          size="small"
+                          sx={{
+                            backgroundColor: '#f3e5f5',
+                            color: '#9c27b0',
+                            fontSize: '0.75rem'
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{formatarDuracao(service.duracao)}</TableCell>
+                      <TableCell>
+                        <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                          {formatarPreco(service.preco)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{service.comissaoProfissional || 50}%</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={service.ativo ? 'Ativo' : 'Inativo'}
+                          size="small"
+                          color={service.ativo ? 'success' : 'error'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleEdit(service)}
+                          sx={{ color: '#9c27b0', mr: 1 }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleDelete(service.id)}
+                          sx={{ color: '#f44336' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {/* PAGINAÇÃO */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+            <TablePagination
+              component="div"
+              count={servicosFiltrados.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[6, 12, 24, 48]}
+              labelRowsPerPage="Itens por página:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            />
+          </Box>
+        </>
       )}
 
-      {/* Dialog de Serviço */}
+      {/* FLOATING ACTION BUTTON */}
+      <Zoom in={true} unmountOnExit>
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={handleAdd}
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      </Zoom>
+
+      {/* Dialog de Serviço (igual ao original) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedService ? 'Editar Serviço' : 'Novo Serviço'}
