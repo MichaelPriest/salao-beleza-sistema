@@ -1,201 +1,192 @@
-// src/components/ImprimirCliente.js
-import React from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  Paper,
+import React, { forwardRef } from 'react';
+import { 
+  Box, 
+  Typography, 
+  Grid, 
   Divider,
-  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper
 } from '@mui/material';
 
-export const ImprimirCliente = React.forwardRef(({ cliente }, ref) => {
-  const formatarData = (data) => {
-    if (!data) return '-';
-    return new Date(data).toLocaleDateString('pt-BR');
-  };
-
-  const formatarTelefone = (tel) => {
-    if (!tel) return '-';
-    return tel;
-  };
+export const ImprimirCliente = forwardRef(({ cliente }, ref) => {
+  if (!cliente) return null;
 
   return (
-    <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minHeight: '100vh' }}>
+    <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', color: 'black' }}>
       {/* Cabeçalho */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 4,
-        pb: 2,
-        borderBottom: '2px solid #9c27b0'
-      }}>
-        <Box>
-          <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700 }}>
-            Beauty Pro
-          </Typography>
-          <Typography variant="subtitle1" color="textSecondary">
-            Ficha do Cliente
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: 'right' }}>
-          <Typography variant="body2">
-            Data: {new Date().toLocaleDateString('pt-BR')}
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Hora: {new Date().toLocaleTimeString('pt-BR')}
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Foto e Nome */}
-      <Box sx={{ textAlign: 'center', mb: 4 }}>
-        {cliente.foto ? (
-          <Box
-            component="img"
-            src={cliente.foto}
-            alt={cliente.nome}
-            sx={{
-              width: 120,
-              height: 120,
-              borderRadius: '50%',
-              objectFit: 'cover',
-              mb: 2,
-              border: '3px solid #9c27b0'
-            }}
-          />
-        ) : (
-          <Box
-            sx={{
-              width: 120,
-              height: 120,
-              borderRadius: '50%',
-              bgcolor: '#9c27b0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mb: 2,
-              mx: 'auto',
-              color: 'white',
-              fontSize: '3rem',
-              fontWeight: 600
-            }}
-          >
-            {cliente.nome?.charAt(0)}
-          </Box>
-        )}
-        <Typography variant="h4" gutterBottom>
-          {cliente.nome}
-        </Typography>
-        <Chip
-          label={cliente.status || 'Regular'}
-          sx={{
-            bgcolor: cliente.status === 'VIP' ? '#f3e5f5' : 
-                     cliente.status === 'Novo' ? '#e8f5e9' : '#e3f2fd',
-            color: cliente.status === 'VIP' ? '#9c27b0' :
-                   cliente.status === 'Novo' ? '#2e7d32' : '#1976d2',
-            fontWeight: 600,
-            fontSize: '1rem',
-            px: 2
-          }}
-        />
-      </Box>
+      <Typography variant="h4" align="center" gutterBottom sx={{ color: '#9c27b0', fontWeight: 'bold' }}>
+        Ficha do Cliente
+      </Typography>
+      
+      <Typography variant="subtitle1" align="center" gutterBottom>
+        Data da impressão: {new Date().toLocaleDateString('pt-BR')}
+      </Typography>
+      
+      <Divider sx={{ my: 3 }} />
 
       {/* Informações Pessoais */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: '#faf5ff' }}>
-        <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, fontWeight: 600 }}>
-          Informações Pessoais
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">Email</Typography>
-            <Typography variant="body1">{cliente.email || '-'}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">Telefone</Typography>
-            <Typography variant="body1">{formatarTelefone(cliente.telefone)}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">Telefone 2</Typography>
-            <Typography variant="body1">{formatarTelefone(cliente.telefone2) || '-'}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">CPF</Typography>
-            <Typography variant="body1">{cliente.cpf || '-'}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">RG</Typography>
-            <Typography variant="body1">{cliente.rg || '-'}</Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" color="textSecondary">Data Nascimento</Typography>
-            <Typography variant="body1">{formatarData(cliente.dataNascimento)}</Typography>
-          </Grid>
+      <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+        Informações Pessoais
+      </Typography>
+      
+      <Grid container spacing={2}>
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Nome:</Typography>
+          <Typography variant="body1">{cliente.nome || '-'}</Typography>
         </Grid>
-      </Paper>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Status:</Typography>
+          <Typography variant="body1">{cliente.status || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">CPF:</Typography>
+          <Typography variant="body1">{cliente.cpf || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">RG:</Typography>
+          <Typography variant="body1">{cliente.rg || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Data de Nascimento:</Typography>
+          <Typography variant="body1">
+            {cliente.dataNascimento 
+              ? new Date(cliente.dataNascimento).toLocaleDateString('pt-BR')
+              : '-'}
+          </Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Data de Cadastro:</Typography>
+          <Typography variant="body1">
+            {cliente.dataCadastro 
+              ? new Date(cliente.dataCadastro).toLocaleDateString('pt-BR')
+              : '-'}
+          </Typography>
+        </Grid>
+      </Grid>
+
+      <Divider sx={{ my: 3 }} />
+
+      {/* Contato */}
+      <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+        Contato
+      </Typography>
+      
+      <Grid container spacing={2}>
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Email:</Typography>
+          <Typography variant="body1">{cliente.email || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Telefone Principal:</Typography>
+          <Typography variant="body1">{cliente.telefone || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Telefone Secundário:</Typography>
+          <Typography variant="body1">{cliente.telefone2 || '-'}</Typography>
+        </Grid>
+      </Grid>
+
+      <Divider sx={{ my: 3 }} />
 
       {/* Endereço */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: '#faf5ff' }}>
-        <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, fontWeight: 600 }}>
-          Endereço
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Typography variant="body1">
-              {cliente.logradouro || ''} {cliente.numero || ''}
-              {cliente.complemento && ` - ${cliente.complemento}`}
-            </Typography>
-            <Typography variant="body1">
-              {cliente.bairro || ''} - {cliente.cidade || ''}/{cliente.estado || ''}
-            </Typography>
-            <Typography variant="body1">CEP: {cliente.cep || ''}</Typography>
-          </Grid>
-        </Grid>
-      </Paper>
+      <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+        Endereço
+      </Typography>
+      
+      <Typography variant="body1">
+        {cliente.logradouro || ''} {cliente.numero || ''}
+        {cliente.complemento && ` - ${cliente.complemento}`}
+        <br />
+        {cliente.bairro || ''} - {cliente.cidade || ''}/{cliente.estado || ''}
+        <br />
+        CEP: {cliente.cep || ''}
+      </Typography>
 
-      {/* Estatísticas */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: '#faf5ff' }}>
-        <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, fontWeight: 600 }}>
-          Estatísticas
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={4}>
-            <Typography variant="subtitle2" color="textSecondary">Data Cadastro</Typography>
-            <Typography variant="body1">{formatarData(cliente.dataCadastro)}</Typography>
-          </Grid>
-          <Grid item xs={4}>
-            <Typography variant="subtitle2" color="textSecondary">Última Visita</Typography>
-            <Typography variant="body1">{formatarData(cliente.ultimaVisita) || '-'}</Typography>
-          </Grid>
-          <Grid item xs={4}>
-            <Typography variant="subtitle2" color="textSecondary">Total Gasto</Typography>
-            <Typography variant="body1" sx={{ color: '#4caf50', fontWeight: 600 }}>
-              R$ {cliente.totalGasto?.toFixed(2) || '0,00'}
-            </Typography>
-          </Grid>
-        </Grid>
-      </Paper>
+      <Divider sx={{ my: 3 }} />
 
-      {/* Observações */}
+      {/* Preferências */}
+      <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+        Preferências
+      </Typography>
+      
+      <Grid container spacing={2}>
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Profissional Preferido:</Typography>
+          <Typography variant="body1">{cliente.preferencias?.profissionalPreferido || '-'}</Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Receber Notificações:</Typography>
+          <Typography variant="body1">{cliente.preferencias?.notificacoes ? 'Sim' : 'Não'}</Typography>
+        </Grid>
+        
+        <Grid item xs={12}>
+          <Typography variant="subtitle2">Serviços Preferidos:</Typography>
+          <Typography variant="body1">
+            {cliente.preferencias?.servicosPreferidos?.length > 0 
+              ? cliente.preferencias.servicosPreferidos.join(', ')
+              : '-'}
+          </Typography>
+        </Grid>
+      </Grid>
+
       {cliente.observacoes && (
-        <Paper sx={{ p: 3, bgcolor: '#faf5ff' }}>
-          <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, fontWeight: 600 }}>
+        <>
+          <Divider sx={{ my: 3 }} />
+          
+          <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
             Observações
           </Typography>
+          
           <Typography variant="body1">{cliente.observacoes}</Typography>
-        </Paper>
+        </>
       )}
 
+      <Divider sx={{ my: 3 }} />
+
+      {/* Histórico Resumido */}
+      <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+        Resumo Financeiro
+      </Typography>
+      
+      <Grid container spacing={2}>
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Total Gasto:</Typography>
+          <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+            R$ {cliente.totalGasto?.toFixed(2) || '0,00'}
+          </Typography>
+        </Grid>
+        
+        <Grid item xs={6}>
+          <Typography variant="subtitle2">Última Visita:</Typography>
+          <Typography variant="body1">
+            {cliente.ultimaVisita 
+              ? new Date(cliente.ultimaVisita).toLocaleDateString('pt-BR')
+              : '-'}
+          </Typography>
+        </Grid>
+      </Grid>
+
       {/* Rodapé */}
-      <Box sx={{ mt: 4, pt: 2, borderTop: '1px dashed #ccc' }}>
-        <Typography variant="caption" color="textSecondary" display="block" align="center">
+      <Box sx={{ mt: 4, textAlign: 'center' }}>
+        <Typography variant="caption" color="textSecondary">
           Documento gerado em {new Date().toLocaleString('pt-BR')}
-        </Typography>
-        <Typography variant="caption" color="textSecondary" display="block" align="center">
-          Beauty Pro Salon - Sistema de Gerenciamento v2.0
         </Typography>
       </Box>
     </Box>
   );
 });
+
+ImprimirCliente.displayName = 'ImprimirCliente';
