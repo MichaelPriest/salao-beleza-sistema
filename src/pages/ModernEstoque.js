@@ -1,5 +1,5 @@
 // src/pages/ModernEstoque.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // 🔥 CORREÇÃO: adicionar useRef
 import {
   Box,
   Card,
