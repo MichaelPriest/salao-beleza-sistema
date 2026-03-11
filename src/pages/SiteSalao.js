@@ -56,6 +56,17 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
 
+// 🔥 Mapa de nomes dos dias
+const nomesDias = {
+  segunda: 'Segunda-feira',
+  terca: 'Terça-feira',
+  quarta: 'Quarta-feira',
+  quinta: 'Quinta-feira',
+  sexta: 'Sexta-feira',
+  sabado: 'Sábado',
+  domingo: 'Domingo'
+};
+
 // Componente de Loading
 const LoadingSpinner = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -229,9 +240,20 @@ function SiteSalao() {
   }
 
   const salaoNome = config?.salao?.nome || 'Beauty Pro';
-  const salaoLogo = config?.salao?.logo; // 🔥 Logo das configurações
+  const salaoLogo = config?.salao?.logo;
   const salaoEndereco = config?.salao?.endereco;
   const contato = config?.salao?.contato;
+
+  // 🔥 Função para formatar horário de funcionamento
+  const formatarHorarioFuncionamento = () => {
+    if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
+    
+    const diasAbertos = Object.entries(config.horarioFuncionamento)
+      .filter(([_, h]) => h.aberto)
+      .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`);
+    
+    return diasAbertos.join(' | ');
+  };
 
   return (
     <Box sx={{ bgcolor: '#faf5ff', minHeight: '100vh' }}>
@@ -245,7 +267,6 @@ function SiteSalao() {
         }}
       >
         <Toolbar>
-          {/* 🔥 Logo do salão (das configurações) */}
           {salaoLogo ? (
             <Avatar
               src={salaoLogo}
@@ -318,7 +339,6 @@ function SiteSalao() {
             </IconButton>
           </Box>
           
-          {/* 🔥 Logo no menu mobile */}
           {salaoLogo && (
             <Box sx={{ textAlign: 'center', mb: 2 }}>
               <Avatar
@@ -635,12 +655,7 @@ function SiteSalao() {
                   </ListItemIcon>
                   <ListItemText 
                     primary="Horário de Funcionamento"
-                    secondary={config?.horarioFuncionamento ? 
-                      Object.entries(config.horarioFuncionamento)
-                        .filter(([_, h]) => h.aberto)
-                        .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`)
-                        .join(' | ')
-                      : 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00'}
+                    secondary={formatarHorarioFuncionamento()} // 🔥 Usando a função formatada
                   />
                 </ListItem>
               </List>
@@ -728,7 +743,6 @@ function SiteSalao() {
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {/* 🔥 Logo no footer */}
                 {salaoLogo ? (
                   <Avatar
                     src={salaoLogo}
