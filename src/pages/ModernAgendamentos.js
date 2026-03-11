@@ -1,3 +1,4 @@
+// src/pages/ModernAgendamentos.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -50,6 +51,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
+import { notificacoesService } from '../services/notificacoesService';
 import { Timestamp } from 'firebase/firestore';
 
 // Funções auxiliares de data
@@ -115,6 +117,7 @@ function ModernAgendamentos() {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
+  const [usuario, setUsuario] = useState(null);
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -124,6 +127,14 @@ function ModernAgendamentos() {
   const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
 
   const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos;
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('usuario');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setUsuario(user);
+    }
+  }, []);
 
   // Combinar agendamentos e atendimentos
   const todosEventos = [
@@ -359,15 +370,33 @@ function ModernAgendamentos() {
         data: formData.data,
         horario: formData.horario,
         observacoes: formData.observacoes || '',
-        status: formData.status || 'pendente'
+        status: formData.status || 'pendente',
+        origem: 'sistema'
       };
+
+      let agendamentoCriado;
 
       if (selectedAppointment) {
         await atualizar(selectedAppointment.id, dadosParaSalvar);
+        agendamentoCriado = { ...dadosParaSalvar, id: selectedAppointment.id };
         toast.success('Agendamento atualizado!');
       } else {
-        await adicionar(dadosParaSalvar);
+        agendamentoCriado = await adicionar(dadosParaSalvar);
         toast.success('Agendamento criado!');
+      }
+
+      // 🔥 NOTIFICAR PROFISSIONAL SOBRE NOVO AGENDAMENTO
+      if (usuario && formData.profissionalId) {
+        try {
+          const usuarios = await firebaseService.getAll('usuarios');
+          const profissionalUser = usuarios.find(u => u.profissionalId === formData.profissionalId);
+          
+          if (profissionalUser) {
+            await notificacoesService.notificarAgendamento(agendamentoCriado, profissionalUser.id);
+          }
+        } catch (notifError) {
+          console.error('Erro ao enviar notificação:', notifError);
+        }
       }
       
       setOpenDialog(false);
@@ -544,7 +573,7 @@ function ModernAgendamentos() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Agenda
         </Typography>
         
@@ -1294,7 +1323,7 @@ function ModernAgendamentos() {
 
       {/* Dialog de Agendamento */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
         </DialogTitle>
         <form onSubmit={handleSave}>
@@ -1342,7 +1371,7 @@ function ModernAgendamentos() {
                   >
                     {(servicos || []).map(service => (
                       <MenuItem key={service.id} value={service.id}>
-                        {service.nome} - R$ {service.preco}
+                        {service.nome} - R$ {service.preco?.toFixed(2)}
                       </MenuItem>
                     ))}
                   </Select>
@@ -1358,11 +1387,12 @@ function ModernAgendamentos() {
                   onChange={(e) => setFormData({ ...formData, data: e.target.value })}
                   InputLabelProps={{ shrink: true }}
                   required
+                  size="small"
                 />
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
+                <FormControl fullWidth required size="small">
                   <InputLabel>Horário</InputLabel>
                   <Select
                     value={formData.horario}
@@ -1387,7 +1417,7 @@ function ModernAgendamentos() {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
                   <Select
                     value={formData.status}
@@ -1397,7 +1427,7 @@ function ModernAgendamentos() {
                     <MenuItem value="pendente">Pendente</MenuItem>
                     <MenuItem value="confirmado">Confirmado</MenuItem>
                     <MenuItem value="cancelado">Cancelado</MenuItem>
-                    <MenuItem value="em_andamennto">Em andamento</MenuItem>   
+                    <MenuItem value="em_andamento">Em andamento</MenuItem>   
                     <MenuItem value="finalizado">Finalizado</MenuItem>  
                   </Select>
                 </FormControl>
@@ -1412,6 +1442,7 @@ function ModernAgendamentos() {
                   value={formData.observacoes}
                   onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
                   placeholder="Alguma observação especial?"
+                  size="small"
                 />
               </Grid>
             </Grid>
@@ -1433,7 +1464,7 @@ function ModernAgendamentos() {
 
       {/* Dialog de Confirmação de Exclusão */}
       <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
-        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+        <DialogTitle sx={{ bgcolor: '#f44336', color: 'white' }}>
           Cancelar Agendamento
         </DialogTitle>
         <DialogContent>
