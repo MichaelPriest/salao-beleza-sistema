@@ -46,6 +46,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 
+// 🔥 Lista completa de unidades de medida
+const UNIDADES_MEDIDA = [
+  { value: 'un', label: 'Unidade', simbolo: 'un' },
+  { value: 'pç', label: 'Peça', simbolo: 'pç' },
+  { value: 'cx', label: 'Caixa', simbolo: 'cx' },
+  { value: 'pct', label: 'Pacote', simbolo: 'pct' },
+  { value: 'kit', label: 'Kit', simbolo: 'kit' },
+  { value: 'par', label: 'Par', simbolo: 'par' },
+  { value: 'dz', label: 'Dúzia', simbolo: 'dz' },
+  { value: 'kg', label: 'Quilograma', simbolo: 'kg' },
+  { value: 'g', label: 'Grama', simbolo: 'g' },
+  { value: 'mg', label: 'Miligrama', simbolo: 'mg' },
+  { value: 'L', label: 'Litro', simbolo: 'L' },
+  { value: 'ml', label: 'Mililitro', simbolo: 'ml' },
+  { value: 'm', label: 'Metro', simbolo: 'm' },
+  { value: 'cm', label: 'Centímetro', simbolo: 'cm' },
+  { value: 'mm', label: 'Milímetro', simbolo: 'mm' },
+  { value: 'm²', label: 'Metro Quadrado', simbolo: 'm²' },
+  { value: 'fr', label: 'Frasco', simbolo: 'fr' },
+  { value: 'tb', label: 'Tablete', simbolo: 'tb' },
+];
+
 function ModernEstoque() {
   const [loading, setLoading] = useState(true);
   const [produtos, setProdutos] = useState([]);
@@ -284,6 +306,12 @@ function ModernEstoque() {
     return { label: 'Normal', color: 'success' };
   };
 
+  // 🔥 Função para obter o símbolo da unidade
+  const getUnidadeSimbolo = (unidade) => {
+    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
+    return unidadeEncontrada?.simbolo || unidade;
+  };
+
   if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
@@ -517,7 +545,7 @@ function ModernEstoque() {
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                              {Number(produto.quantidadeEstoque || 0)} {produto.unidade || 'un'}
+                              {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidade)}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -667,18 +695,17 @@ function ModernEstoque() {
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Unidade</InputLabel>
+                  <InputLabel>Unidade de Medida</InputLabel>
                   <Select
                     value={formData.unidade}
-                    label="Unidade"
+                    label="Unidade de Medida"
                     onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
                   >
-                    <MenuItem value="un">Unidade</MenuItem>
-                    <MenuItem value="cx">Caixa</MenuItem>
-                    <MenuItem value="lt">Litro</MenuItem>
-                    <MenuItem value="ml">Ml</MenuItem>
-                    <MenuItem value="kg">Kg</MenuItem>
-                    <MenuItem value="g">Grama</MenuItem>
+                    {UNIDADES_MEDIDA.map(unidade => (
+                      <MenuItem key={unidade.value} value={unidade.value}>
+                        {unidade.label} ({unidade.simbolo})
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
