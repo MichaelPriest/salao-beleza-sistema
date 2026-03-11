@@ -60,7 +60,7 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   GridOn as GridIcon,
-  ViewModule as ModuleIcon,
+  ViewModule as ViewModuleIcon, // 🔥 CORREÇÃO: Nome correto do ícone
   LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -191,19 +191,19 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
         <Typography variant="caption" color="textSecondary">
           Prateleiras disponíveis no {SETORES.find(s => s.id === setor)?.nome}
         </Typography>
-        <ToggleButtonGroup
-          size="small"
-          value={modoVisualizacao}
-          exclusive
-          onChange={(e, novoModo) => novoModo && setModoVisualizacao(novoModo)}
-        >
-          <ToggleButton value="grade">
-            <GridIcon fontSize="small" />
-          </ToggleButton>
-          <ToggleButton value="lista">
-            <ViewModule fontSize="small" />
-          </ToggleButton>
-        </ToggleButtonGroup>
+          <ToggleButtonGroup
+            size="small"
+            value={modoVisualizacao}
+            exclusive
+            onChange={(e, novoModo) => novoModo && setModoVisualizacao(novoModo)}
+          >
+            <ToggleButton value="grade">
+              <GridIcon fontSize="small" />
+            </ToggleButton>
+            <ToggleButton value="lista">
+              <ViewModuleIcon fontSize="small" /> {/* 🔥 CORREÇÃO: Usando ViewModuleIcon */}
+            </ToggleButton>
+          </ToggleButtonGroup>
       </Box>
 
       {modoVisualizacao === 'grade' ? (
