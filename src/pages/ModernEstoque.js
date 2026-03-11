@@ -31,6 +31,12 @@ import {
   Snackbar,
   LinearProgress,
   Avatar,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  Tooltip,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -41,6 +47,8 @@ import {
   Inventory as InventoryIcon,
   AttachMoney as MoneyIcon,
   Clear as ClearIcon,
+  Category as CategoryIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -71,16 +79,28 @@ const UNIDADES_MEDIDA = [
 function ModernEstoque() {
   const [loading, setLoading] = useState(true);
   const [produtos, setProdutos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [filteredProdutos, setFilteredProdutos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Dialogs
   const [openDialog, setOpenDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
+  
+  // Selected items
   const [selectedProduto, setSelectedProduto] = useState(null);
   const [produtoToDelete, setProdutoToDelete] = useState(null);
+  const [categoriaEditando, setCategoriaEditando] = useState(null);
+  
+  // Pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [categorias, setCategorias] = useState([]);
+  
+  // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Stats
   const [stats, setStats] = useState({
     totalProdutos: 0,
     valorEstoque: 0,
@@ -88,6 +108,7 @@ function ModernEstoque() {
     produtosSemEstoque: 0,
   });
 
+  // 🔥 Formulário de produto
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
@@ -95,13 +116,23 @@ function ModernEstoque() {
     precoCusto: '',
     precoVenda: '',
     quantidadeEstoque: '',
-    unidade: 'un',
+    unidadeEstoque: 'un',      // Unidade para controle de estoque
+    unidadeVenda: 'un',         // Unidade para venda
+    fatorConversao: 1,          // Fator de conversão (ex: 1 caixa = 12 unidades)
     fornecedor: '',
     estoqueMinimo: '',
+    localizacao: '',            // Localização no estoque
+    codigoBarras: '',           // Código de barras
+  });
+
+  // 🔥 Formulário de categoria
+  const [categoriaForm, setCategoriaForm] = useState({
+    nome: '',
+    descricao: '',
   });
 
   useEffect(() => {
-    carregarProdutos();
+    carregarDados();
   }, []);
 
   useEffect(() => {
@@ -109,19 +140,22 @@ function ModernEstoque() {
     calcularStats();
   }, [produtos, searchTerm]);
 
-  const carregarProdutos = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true);
-      const produtosData = await firebaseService.getAll('produtos').catch(() => []);
-      setProdutos(produtosData || []);
       
-      // Extrair categorias únicas
-      const cats = [...new Set((produtosData || []).map(p => p.categoria).filter(Boolean))];
-      setCategorias(cats);
+      // Buscar produtos e categorias
+      const [produtosData, categoriasData] = await Promise.all([
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('categorias_produtos').catch(() => []),
+      ]);
+      
+      setProdutos(produtosData || []);
+      setCategorias(categoriasData || []);
       
       toast.success('Dados carregados!');
     } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
+      console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar estoque');
     } finally {
       setLoading(false);
@@ -143,7 +177,8 @@ function ModernEstoque() {
       filtered = filtered.filter(p =>
         p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.fornecedor?.toLowerCase().includes(searchTerm.toLowerCase())
+        p.fornecedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.codigoBarras?.includes(searchTerm)
       );
     }
 
@@ -164,6 +199,90 @@ function ModernEstoque() {
     });
   };
 
+  // 🔥 Função para obter o símbolo da unidade
+  const getUnidadeSimbolo = (unidade) => {
+    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
+    return unidadeEncontrada?.simbolo || unidade;
+  };
+
+  // 🔥 Funções para categorias
+  const handleOpenCategoriaDialog = (categoria = null) => {
+    if (categoria) {
+      setCategoriaEditando(categoria);
+      setCategoriaForm({
+        nome: categoria.nome || '',
+        descricao: categoria.descricao || '',
+      });
+    } else {
+      setCategoriaEditando(null);
+      setCategoriaForm({
+        nome: '',
+        descricao: '',
+      });
+    }
+    setOpenCategoriaDialog(true);
+  };
+
+  const handleCloseCategoriaDialog = () => {
+    setOpenCategoriaDialog(false);
+    setCategoriaEditando(null);
+  };
+
+  const handleSalvarCategoria = async () => {
+    try {
+      if (!categoriaForm.nome) {
+        mostrarSnackbar('Nome da categoria é obrigatório', 'error');
+        return;
+      }
+
+      const categoriaData = {
+        nome: String(categoriaForm.nome).trim(),
+        descricao: categoriaForm.descricao ? String(categoriaForm.descricao).trim() : null,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (categoriaEditando) {
+        await firebaseService.update('categorias_produtos', categoriaEditando.id, categoriaData);
+        setCategorias(categorias.map(c => 
+          c.id === categoriaEditando.id ? { ...c, ...categoriaData, id: categoriaEditando.id } : c
+        ));
+        mostrarSnackbar('Categoria atualizada com sucesso!');
+      } else {
+        categoriaData.dataCriacao = new Date().toISOString();
+        const novoId = await firebaseService.add('categorias_produtos', categoriaData);
+        setCategorias([...categorias, { ...categoriaData, id: novoId }]);
+        mostrarSnackbar('Categoria criada com sucesso!');
+      }
+
+      handleCloseCategoriaDialog();
+    } catch (error) {
+      console.error('Erro ao salvar categoria:', error);
+      mostrarSnackbar('Erro ao salvar categoria', 'error');
+    }
+  };
+
+  const handleExcluirCategoria = async (id) => {
+    // Verificar se existem produtos usando esta categoria
+    const produtosNaCategoria = produtos.filter(p => p.categoria === id);
+    
+    if (produtosNaCategoria.length > 0) {
+      mostrarSnackbar(`Não é possível excluir: ${produtosNaCategoria.length} produtos usam esta categoria`, 'error');
+      return;
+    }
+
+    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
+      try {
+        await firebaseService.delete('categorias_produtos', id);
+        setCategorias(categorias.filter(c => c.id !== id));
+        mostrarSnackbar('Categoria excluída com sucesso!');
+      } catch (error) {
+        console.error('Erro ao excluir categoria:', error);
+        mostrarSnackbar('Erro ao excluir categoria', 'error');
+      }
+    }
+  };
+
+  // 🔥 Funções para produtos
   const handleAdd = () => {
     setSelectedProduto(null);
     setFormData({
@@ -173,9 +292,13 @@ function ModernEstoque() {
       precoCusto: '',
       precoVenda: '',
       quantidadeEstoque: '',
-      unidade: 'un',
+      unidadeEstoque: 'un',
+      unidadeVenda: 'un',
+      fatorConversao: 1,
       fornecedor: '',
       estoqueMinimo: '',
+      localizacao: '',
+      codigoBarras: '',
     });
     setOpenDialog(true);
   };
@@ -189,9 +312,13 @@ function ModernEstoque() {
       precoCusto: produto.precoCusto || '',
       precoVenda: produto.precoVenda || '',
       quantidadeEstoque: produto.quantidadeEstoque || '',
-      unidade: produto.unidade || 'un',
+      unidadeEstoque: produto.unidadeEstoque || 'un',
+      unidadeVenda: produto.unidadeVenda || 'un',
+      fatorConversao: produto.fatorConversao || 1,
       fornecedor: produto.fornecedor || '',
       estoqueMinimo: produto.estoqueMinimo || '',
+      localizacao: produto.localizacao || '',
+      codigoBarras: produto.codigoBarras || '',
     });
     setOpenDialog(true);
   };
@@ -227,6 +354,7 @@ function ModernEstoque() {
     const precoVendaNum = parseFloat(formData.precoVenda);
     const quantidadeNum = parseInt(formData.quantidadeEstoque);
     const estoqueMinimoNum = parseInt(formData.estoqueMinimo) || 5;
+    const fatorConversaoNum = parseFloat(formData.fatorConversao) || 1;
 
     if (isNaN(precoCustoNum) || precoCustoNum < 0) {
       mostrarSnackbar('Preço de custo inválido', 'error');
@@ -243,6 +371,11 @@ function ModernEstoque() {
       return;
     }
 
+    if (fatorConversaoNum <= 0) {
+      mostrarSnackbar('Fator de conversão deve ser maior que zero', 'error');
+      return;
+    }
+
     const produtoData = {
       nome: String(formData.nome).trim(),
       descricao: formData.descricao ? String(formData.descricao).trim() : null,
@@ -250,9 +383,13 @@ function ModernEstoque() {
       precoCusto: Number(precoCustoNum),
       precoVenda: Number(precoVendaNum),
       quantidadeEstoque: Number(quantidadeNum),
-      unidade: String(formData.unidade),
+      unidadeEstoque: String(formData.unidadeEstoque),
+      unidadeVenda: String(formData.unidadeVenda),
+      fatorConversao: Number(fatorConversaoNum),
       fornecedor: formData.fornecedor ? String(formData.fornecedor).trim() : null,
       estoqueMinimo: Number(estoqueMinimoNum),
+      localizacao: formData.localizacao ? String(formData.localizacao).trim() : null,
+      codigoBarras: formData.codigoBarras ? String(formData.codigoBarras).trim() : null,
       updatedAt: new Date().toISOString(),
     };
 
@@ -272,11 +409,6 @@ function ModernEstoque() {
         
         const novoId = await firebaseService.add('produtos', produtoData);
         setProdutos([...produtos, { ...produtoData, id: novoId }]);
-        
-        // Atualizar categorias se necessário
-        if (produtoData.categoria && !categorias.includes(produtoData.categoria)) {
-          setCategorias([...categorias, produtoData.categoria]);
-        }
         
         mostrarSnackbar('Produto adicionado com sucesso!');
       }
@@ -306,12 +438,6 @@ function ModernEstoque() {
     return { label: 'Normal', color: 'success' };
   };
 
-  // 🔥 Função para obter o símbolo da unidade
-  const getUnidadeSimbolo = (unidade) => {
-    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
-    return unidadeEncontrada?.simbolo || unidade;
-  };
-
   if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
@@ -322,24 +448,36 @@ function ModernEstoque() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Estoque
         </Typography>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{
-              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              color: 'white',
-              boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
-            }}
-          >
-            Novo Produto
-          </Button>
-        </motion.div>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<CategoryIcon />}
+              onClick={() => handleOpenCategoriaDialog()}
+              sx={{ borderColor: '#ff4081', color: '#ff4081' }}
+            >
+              Gerenciar Categorias
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                color: 'white',
+                boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+              }}
+            >
+              Novo Produto
+            </Button>
+          </motion.div>
+        </Box>
       </Box>
 
       {/* Cards de Estatísticas */}
@@ -447,7 +585,7 @@ function ModernEstoque() {
           <TextField
             fullWidth
             variant="outlined"
-            placeholder="Buscar produtos por nome, descrição ou fornecedor..."
+            placeholder="Buscar produtos por nome, descrição, fornecedor ou código de barras..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -485,7 +623,7 @@ function ModernEstoque() {
                   <TableCell align="right"><strong>Preço Custo</strong></TableCell>
                   <TableCell align="right"><strong>Preço Venda</strong></TableCell>
                   <TableCell align="right"><strong>Lucro</strong></TableCell>
-                  <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                  <TableCell align="right"><strong>Estoque</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell align="center"><strong>Ações</strong></TableCell>
                 </TableRow>
@@ -496,6 +634,7 @@ function ModernEstoque() {
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((produto, index) => {
                       const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
+                      const categoria = categorias.find(c => c.id === produto.categoria);
                       const lucro = produto.precoCusto > 0 
                         ? ((Number(produto.precoVenda) - Number(produto.precoCusto)) / Number(produto.precoCusto) * 100).toFixed(1)
                         : '0';
@@ -514,16 +653,21 @@ function ModernEstoque() {
                                 {produto.nome}
                               </Typography>
                               {produto.descricao && (
-                                <Typography variant="caption" color="textSecondary">
+                                <Typography variant="caption" color="textSecondary" display="block">
                                   {produto.descricao}
+                                </Typography>
+                              )}
+                              {produto.codigoBarras && (
+                                <Typography variant="caption" color="textSecondary">
+                                  Código: {produto.codigoBarras}
                                 </Typography>
                               )}
                             </Box>
                           </TableCell>
                           <TableCell>
-                            {produto.categoria && (
+                            {categoria && (
                               <Chip
-                                label={produto.categoria}
+                                label={categoria.nome}
                                 size="small"
                                 sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }}
                               />
@@ -545,7 +689,11 @@ function ModernEstoque() {
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                              {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidade)}
+                              {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidadeEstoque)}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              Venda: {getUnidadeSimbolo(produto.unidadeVenda)}
+                              {produto.fatorConversao > 1 && ` (1 ${getUnidadeSimbolo(produto.unidadeEstoque)} = ${produto.fatorConversao} ${getUnidadeSimbolo(produto.unidadeVenda)})`}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -556,20 +704,24 @@ function ModernEstoque() {
                             />
                           </TableCell>
                           <TableCell align="center">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleEdit(produto)}
-                              sx={{ color: '#ff4081' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleDelete(produto.id)}
-                              sx={{ color: '#f44336' }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            <Tooltip title="Editar">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleEdit(produto)}
+                                sx={{ color: '#ff4081' }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Excluir">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleDelete(produto.id)}
+                                sx={{ color: '#f44336' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           </TableCell>
                         </motion.tr>
                       );
@@ -634,12 +786,14 @@ function ModernEstoque() {
                       <em>Nenhuma</em>
                     </MenuItem>
                     {categorias.map(cat => (
-                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.nome}
+                      </MenuItem>
                     ))}
-                    <MenuItem value="nova">+ Nova Categoria</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -651,6 +805,27 @@ function ModernEstoque() {
                   size="small"
                 />
               </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Código de Barras"
+                  value={formData.codigoBarras}
+                  onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Localização"
+                  value={formData.localizacao}
+                  onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
+                  size="small"
+                  placeholder="Ex: Prateleira A, Setor 1"
+                />
+              </Grid>
+
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -681,6 +856,7 @@ function ModernEstoque() {
                   size="small"
                 />
               </Grid>
+
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
@@ -695,11 +871,11 @@ function ModernEstoque() {
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Unidade de Medida</InputLabel>
+                  <InputLabel>Unidade de Estoque</InputLabel>
                   <Select
-                    value={formData.unidade}
-                    label="Unidade de Medida"
-                    onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
+                    value={formData.unidadeEstoque}
+                    label="Unidade de Estoque"
+                    onChange={(e) => setFormData({ ...formData, unidadeEstoque: e.target.value })}
                   >
                     {UNIDADES_MEDIDA.map(unidade => (
                       <MenuItem key={unidade.value} value={unidade.value}>
@@ -716,12 +892,41 @@ function ModernEstoque() {
                   type="number"
                   value={formData.estoqueMinimo}
                   onChange={(e) => setFormData({ ...formData, estoqueMinimo: e.target.value })}
-                  helperText="Alerta quando estoque abaixo deste valor"
+                  helperText="Alerta quando abaixo deste valor"
                   size="small"
                   inputProps={{ min: 0, step: 1 }}
                 />
               </Grid>
-              <Grid item xs={12}>
+
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Unidade de Venda</InputLabel>
+                  <Select
+                    value={formData.unidadeVenda}
+                    label="Unidade de Venda"
+                    onChange={(e) => setFormData({ ...formData, unidadeVenda: e.target.value })}
+                  >
+                    {UNIDADES_MEDIDA.map(unidade => (
+                      <MenuItem key={unidade.value} value={unidade.value}>
+                        {unidade.label} ({unidade.simbolo})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Fator de Conversão"
+                  type="number"
+                  value={formData.fatorConversao}
+                  onChange={(e) => setFormData({ ...formData, fatorConversao: e.target.value })}
+                  helperText="1 unidade estoque = X unidades venda"
+                  size="small"
+                  inputProps={{ min: 0.01, step: 0.01 }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   label="Fornecedor"
@@ -745,6 +950,92 @@ function ModernEstoque() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Dialog de Categorias */}
+      <Dialog open={openCategoriaDialog} onClose={handleCloseCategoriaDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff4081', color: 'white' }}>
+          {categoriaEditando ? 'Editar Categoria' : 'Nova Categoria'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Nome da Categoria"
+                value={categoriaForm.nome}
+                onChange={(e) => setCategoriaForm({ ...categoriaForm, nome: e.target.value })}
+                required
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                multiline
+                rows={2}
+                value={categoriaForm.descricao}
+                onChange={(e) => setCategoriaForm({ ...categoriaForm, descricao: e.target.value })}
+                size="small"
+                placeholder="Descrição da categoria"
+              />
+            </Grid>
+
+            {/* Lista de categorias existentes */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>
+                Categorias Existentes
+              </Typography>
+              <Paper variant="outlined" sx={{ maxHeight: 200, overflow: 'auto' }}>
+                <List dense>
+                  {categorias.map((cat) => (
+                    <React.Fragment key={cat.id}>
+                      <ListItem>
+                        <ListItemText
+                          primary={cat.nome}
+                          secondary={cat.descricao || 'Sem descrição'}
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => {
+                              handleOpenCategoriaDialog(cat);
+                            }}
+                            sx={{ mr: 1, color: '#ff4081' }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => handleExcluirCategoria(cat.id)}
+                            sx={{ color: '#f44336' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                      <Divider />
+                    </React.Fragment>
+                  ))}
+                </List>
+              </Paper>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseCategoriaDialog}>Cancelar</Button>
+          <Button
+            onClick={handleSalvarCategoria}
+            variant="contained"
+            startIcon={<SaveIcon />}
+            sx={{ bgcolor: '#ff4081' }}
+          >
+            {categoriaEditando ? 'Atualizar' : 'Salvar'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Dialog de Confirmação de Exclusão */}
