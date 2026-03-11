@@ -229,12 +229,13 @@ function SiteSalao() {
   }
 
   const salaoNome = config?.salao?.nome || 'Beauty Pro';
+  const salaoLogo = config?.salao?.logo; // 🔥 Logo das configurações
   const salaoEndereco = config?.salao?.endereco;
   const contato = config?.salao?.contato;
 
   return (
     <Box sx={{ bgcolor: '#faf5ff', minHeight: '100vh' }}>
-      {/* Header */}
+      {/* Header com Logo */}
       <AppBar 
         position="fixed" 
         sx={{ 
@@ -244,7 +245,25 @@ function SiteSalao() {
         }}
       >
         <Toolbar>
-          <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
+          {/* 🔥 Logo do salão (das configurações) */}
+          {salaoLogo ? (
+            <Avatar
+              src={salaoLogo}
+              alt={salaoNome}
+              sx={{
+                width: 50,
+                height: 50,
+                mr: 2,
+                border: '2px solid #9c27b0',
+                bgcolor: 'white',
+                objectFit: 'contain',
+              }}
+              variant="rounded"
+            />
+          ) : (
+            <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
+          )}
+          
           <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, color: '#9c27b0' }}>
             {salaoNome}
           </Typography>
@@ -298,6 +317,28 @@ function SiteSalao() {
               <CloseIcon />
             </IconButton>
           </Box>
+          
+          {/* 🔥 Logo no menu mobile */}
+          {salaoLogo && (
+            <Box sx={{ textAlign: 'center', mb: 2 }}>
+              <Avatar
+                src={salaoLogo}
+                alt={salaoNome}
+                sx={{
+                  width: 80,
+                  height: 80,
+                  mx: 'auto',
+                  mb: 1,
+                  border: '2px solid #9c27b0',
+                }}
+                variant="rounded"
+              />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {salaoNome}
+              </Typography>
+            </Box>
+          )}
+          
           <List>
             {['home', 'servicos', 'profissionais', 'contato'].map((item) => (
               <ListItem key={item} button onClick={() => scrollToSection(item)}>
@@ -594,19 +635,36 @@ function SiteSalao() {
                   </ListItemIcon>
                   <ListItemText 
                     primary="Horário de Funcionamento"
-                    secondary="Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00"
+                    secondary={config?.horarioFuncionamento ? 
+                      Object.entries(config.horarioFuncionamento)
+                        .filter(([_, h]) => h.aberto)
+                        .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`)
+                        .join(' | ')
+                      : 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00'}
                   />
                 </ListItem>
               </List>
 
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                <IconButton href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`} target="_blank" sx={{ color: '#25D366' }}>
+                <IconButton 
+                  href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`} 
+                  target="_blank" 
+                  sx={{ color: '#25D366' }}
+                >
                   <WhatsAppIcon />
                 </IconButton>
-                <IconButton href={contato?.instagram ? `https://instagram.com/${contato.instagram}` : '#'} target="_blank" sx={{ color: '#E1306C' }}>
+                <IconButton 
+                  href={contato?.instagram ? `https://instagram.com/${contato.instagram.replace('@', '')}` : '#'} 
+                  target="_blank" 
+                  sx={{ color: '#E1306C' }}
+                >
                   <InstagramIcon />
                 </IconButton>
-                <IconButton href={contato?.facebook ? `https://facebook.com/${contato.facebook}` : '#'} target="_blank" sx={{ color: '#4267B2' }}>
+                <IconButton 
+                  href={contato?.facebook ? `https://facebook.com/${contato.facebook}` : '#'} 
+                  target="_blank" 
+                  sx={{ color: '#4267B2' }}
+                >
                   <FacebookIcon />
                 </IconButton>
               </Box>
@@ -670,7 +728,23 @@ function SiteSalao() {
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <SpaIcon sx={{ mr: 1 }} />
+                {/* 🔥 Logo no footer */}
+                {salaoLogo ? (
+                  <Avatar
+                    src={salaoLogo}
+                    alt={salaoNome}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      mr: 1,
+                      border: '1px solid white',
+                      bgcolor: 'white',
+                    }}
+                    variant="rounded"
+                  />
+                ) : (
+                  <SpaIcon sx={{ mr: 1 }} />
+                )}
                 <Typography variant="h6">{salaoNome}</Typography>
               </Box>
             </Grid>
