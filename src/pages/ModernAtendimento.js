@@ -1,4 +1,4 @@
-// src/pages/ModernAtendimento.js
+// src/pages/ModernEstoque.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -7,65 +7,55 @@ import {
   Typography,
   Grid,
   Button,
-  Stepper,
-  Step,
-  StepLabel,
-  Paper,
-  Divider,
+  TextField,
+  InputAdornment,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  TextField,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormLabel,
-  Chip,
-  Avatar,
-  Alert,
-  CircularProgress,
-  IconButton,
-  Tooltip,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Autocomplete,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  InputAdornment,
-  Checkbox,
+  TablePagination,
+  Alert,
+  Snackbar,
+  LinearProgress,
+  Avatar,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  Tooltip,
 } from '@mui/material';
 import {
-  CheckCircle as CheckIcon,
-  Payment as PaymentIcon,
-  Receipt as ReceiptIcon,
-  Print as PrintIcon,
-  WhatsApp as WhatsAppIcon,
-  Email as EmailIcon,
-  ArrowBack as ArrowBackIcon,
-  Timer as TimerIcon,
-  Schedule as ScheduleIcon,
+  Search as SearchIcon,
   Add as AddIcon,
-  Delete as DeleteIcon,
   Edit as EditIcon,
-  AttachMoney as MoneyIcon,
+  Delete as DeleteIcon,
+  Warning as WarningIcon,
   Inventory as InventoryIcon,
-  RemoveShoppingCart as NoCostIcon,
-  CompareArrows as ConversionIcon,
+  AttachMoney as MoneyIcon,
+  Clear as ClearIcon,
+  Category as CategoryIcon,
+  Save as SaveIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { Timestamp } from 'firebase/firestore';
 
-// 🔥 Lista de unidades de medida
+// 🔥 Lista completa de unidades de medida
 const UNIDADES_MEDIDA = [
   { value: 'un', label: 'Unidade', simbolo: 'un' },
   { value: 'pç', label: 'Peça', simbolo: 'pç' },
@@ -87,169 +77,129 @@ const UNIDADES_MEDIDA = [
   { value: 'tb', label: 'Tablete', simbolo: 'tb' },
 ];
 
-const steps = ['Confirmar Atendimento', 'Adicionar Itens', 'Registrar Pagamentos', 'Finalizar'];
-
-function ModernAtendimento() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [activeStep, setActiveStep] = useState(0);
+function ModernEstoque() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [atendimento, setAtendimento] = useState(null);
-  const [cliente, setCliente] = useState(null);
-  const [profissional, setProfissional] = useState(null);
-  const [observacoes, setObservacoes] = useState('');
+  const [produtos, setProdutos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
+  const [filteredProdutos, setFilteredProdutos] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   
-  // Itens do atendimento - ARRAYS
-  const [itensServico, setItensServico] = useState([]);
-  const [itensProduto, setItensProduto] = useState([]);
+  // Dialogs
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
   
-  // Controles para adicionar itens
-  const [servicoSelecionado, setServicoSelecionado] = useState(null);
-  const [produtoSelecionado, setProdutoSelecionado] = useState(null);
-  const [quantidadeProduto, setQuantidadeProduto] = useState(1);
+  // Selected items
+  const [selectedProduto, setSelectedProduto] = useState(null);
+  const [produtoToDelete, setProdutoToDelete] = useState(null);
+  const [categoriaEditando, setCategoriaEditando] = useState(null);
   
-  // 🔥 NOVO: controle para item sem cobrança
-  const [itemSemCobranca, setItemSemCobranca] = useState(false);
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   
-  // Pagamentos - ARRAY
-  const [pagamentos, setPagamentos] = useState([]);
-  const [openPagamentoDialog, setOpenPagamentoDialog] = useState(false);
-  const [pagamentoEditando, setPagamentoEditando] = useState(null);
-  const [pagamentoForm, setPagamentoForm] = useState({
-    formaPagamento: 'dinheiro',
-    valor: '',
-    parcelas: 1,
-    observacoes: ''
+  // Snackbar
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Stats
+  const [stats, setStats] = useState({
+    totalProdutos: 0,
+    valorEstoque: 0,
+    produtosBaixo: 0,
+    produtosSemEstoque: 0,
   });
 
-  const [tempoDecorrido, setTempoDecorrido] = useState('');
+  // 🔥 Formulário de produto
+  const [formData, setFormData] = useState({
+    nome: '',
+    descricao: '',
+    categoria: '',
+    precoCusto: '',
+    precoVenda: '',
+    quantidadeEstoque: '',
+    unidadeEstoque: 'un',
+    unidadeVenda: 'un',
+    fatorConversao: 1,
+    fornecedorId: '',
+    estoqueMinimo: '',
+    localizacao: '',
+    codigoBarras: '',
+  });
 
-  // Listas de serviços e produtos disponíveis
-  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
-  const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
+  // 🔥 Formulário de categoria
+  const [categoriaForm, setCategoriaForm] = useState({
+    nome: '',
+    descricao: '',
+  });
 
   useEffect(() => {
     carregarDados();
-    carregarServicosEProdutos();
-  }, [id]);
+  }, []);
 
   useEffect(() => {
-    // Calcular tempo decorrido se o atendimento estiver em andamento
-    if (atendimento && atendimento.horaInicio && !atendimento.horaFim) {
-      const calcularTempo = () => {
-        const inicio = new Date(`${atendimento.data}T${atendimento.horaInicio}`);
-        const agora = new Date();
-        const diff = Math.floor((agora - inicio) / 60000); // minutos
-        const horas = Math.floor(diff / 60);
-        const minutos = diff % 60;
-        setTempoDecorrido(`${horas}h ${minutos}min`);
-      };
-
-      calcularTempo();
-      const interval = setInterval(calcularTempo, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [atendimento]);
-
-  // Calcular valor total dos serviços
-  const calcularTotalServicos = () => {
-    return itensServico.reduce((acc, item) => acc + (item.preco || 0), 0);
-  };
-
-  // Calcular valor total dos produtos (considerando itens sem cobrança)
-  const calcularTotalProdutos = () => {
-    return itensProduto.reduce((acc, item) => {
-      if (item.semCobranca) return acc; // Não cobra se for sem cobrança
-      return acc + ((item.preco || 0) * (item.quantidadeVenda || 1));
-    }, 0);
-  };
-
-  // Calcular valor total do atendimento
-  const calcularValorTotal = () => {
-    return calcularTotalServicos() + calcularTotalProdutos();
-  };
-
-  // Calcular total pago
-  const calcularTotalPago = () => {
-    return pagamentos.reduce((acc, p) => acc + (p.valor || 0), 0);
-  };
-
-  // Calcular saldo restante
-  const calcularSaldoRestante = () => {
-    return calcularValorTotal() - calcularTotalPago();
-  };
+    filtrarProdutos();
+    calcularStats();
+  }, [produtos, searchTerm]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
       
-      // Buscar atendimento
-      const atendimentoData = await firebaseService.getById('atendimentos', id);
-      setAtendimento(atendimentoData);
-      setObservacoes(atendimentoData.observacoes || '');
-
-      // Buscar dados relacionados
-      const [clienteData, profissionalData] = await Promise.all([
-        firebaseService.getById('clientes', atendimentoData.clienteId),
-        firebaseService.getById('profissionais', atendimentoData.profissionalId)
+      // Buscar produtos, categorias e fornecedores
+      const [produtosData, categoriasData, fornecedoresData] = await Promise.all([
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('categorias_produtos').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
       ]);
-
-      setCliente(clienteData);
-      setProfissional(profissionalData);
-
-      // Carregar itens do atendimento - ARRAY de serviços
-      if (atendimentoData.itensServico && atendimentoData.itensServico.length > 0) {
-        setItensServico(atendimentoData.itensServico);
-      } else if (atendimentoData.servicoId) {
-        // Se tiver apenas servicoId, buscar o serviço
-        const servicoData = await firebaseService.getById('servicos', atendimentoData.servicoId);
-        setItensServico([{
-          id: servicoData.id,
-          nome: servicoData.nome,
-          preco: servicoData.preco,
-          duracao: servicoData.duracao,
-          principal: true
-        }]);
-      }
-
-      // Carregar itens de produto - ARRAY de produtos
-      if (atendimentoData.itensProduto) {
-        setItensProduto(atendimentoData.itensProduto);
-      }
-
-      // Carregar pagamentos - ARRAY de pagamentos
-      const pagamentosData = await firebaseService.query('pagamentos', [
-        { field: 'atendimentoId', operator: '==', value: id }
-      ]);
-      setPagamentos(pagamentosData || []);
-
-      // Verificar status para definir o step atual
-      if (atendimentoData.status === 'finalizado') {
-        setActiveStep(3);
-      } else if (pagamentosData.length > 0) {
-        setActiveStep(2);
-      }
-
+      
+      setProdutos(produtosData || []);
+      setCategorias(categoriasData || []);
+      setFornecedores(fornecedoresData || []);
+      
+      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados do atendimento');
+      toast.error('Erro ao carregar estoque');
     } finally {
       setLoading(false);
     }
   };
 
-  const carregarServicosEProdutos = async () => {
-    try {
-      const [servicosData, produtosData] = await Promise.all([
-        firebaseService.getAll('servicos'),
-        firebaseService.getAll('produtos')
-      ]);
-      setServicosDisponiveis(servicosData || []);
-      setProdutosDisponiveis(produtosData || []);
-    } catch (error) {
-      console.error('Erro ao carregar serviços e produtos:', error);
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const filtrarProdutos = () => {
+    let filtered = [...produtos];
+
+    if (searchTerm) {
+      filtered = filtered.filter(p =>
+        p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.codigoBarras?.includes(searchTerm)
+      );
     }
+
+    setFilteredProdutos(filtered);
+  };
+
+  const calcularStats = () => {
+    const total = produtos.length;
+    const valor = produtos.reduce((acc, p) => acc + (Number(p.precoVenda) * Number(p.quantidadeEstoque || 0)), 0);
+    const baixo = produtos.filter(p => Number(p.quantidadeEstoque) <= Number(p.estoqueMinimo || 5)).length;
+    const semEstoque = produtos.filter(p => Number(p.quantidadeEstoque) === 0).length;
+
+    setStats({
+      totalProdutos: total,
+      valorEstoque: valor,
+      produtosBaixo: baixo,
+      produtosSemEstoque: semEstoque,
+    });
   };
 
   // 🔥 Função para obter o símbolo da unidade
@@ -258,1352 +208,909 @@ function ModernAtendimento() {
     return unidadeEncontrada?.simbolo || unidade;
   };
 
-  // 🔥 Função para calcular quantidade em estoque baseado na unidade de venda
-  const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
-    if (!produto) return 0;
-    
-    const estoqueEmUnidadeVenda = produto.quantidadeEstoque * (produto.fatorConversao || 1);
-    return Math.floor(estoqueEmUnidadeVenda);
-  };
-
-  // 🔥 Função para converter quantidade de venda para estoque
-  const converterParaEstoque = (produto, quantidadeVenda) => {
-    if (!produto) return 0;
-    return quantidadeVenda / (produto.fatorConversao || 1);
-  };
-
-  // Adicionar serviço ao ARRAY itensServico
-  const handleAdicionarServico = () => {
-    if (!servicoSelecionado) {
-      toast.error('Selecione um serviço');
-      return;
-    }
-
-    // Verificar se o serviço já foi adicionado
-    if (itensServico.some(item => item.id === servicoSelecionado.id)) {
-      toast.error('Serviço já adicionado');
-      return;
-    }
-
-    // Adicionar ao array
-    setItensServico([...itensServico, {
-      id: servicoSelecionado.id,
-      nome: servicoSelecionado.nome,
-      preco: servicoSelecionado.preco,
-      duracao: servicoSelecionado.duracao,
-      principal: itensServico.length === 0 // Primeiro serviço é principal
-    }]);
-
-    setServicoSelecionado(null);
-    toast.success('Serviço adicionado!');
-  };
-
-  // 🔥 Adicionar produto ao ARRAY itensProduto (com unidades de medida)
-  const handleAdicionarProduto = () => {
-    if (!produtoSelecionado) {
-      toast.error('Selecione um produto');
-      return;
-    }
-
-    if (quantidadeProduto <= 0) {
-      toast.error('Quantidade inválida');
-      return;
-    }
-
-    // Calcular quantidade disponível na unidade de venda
-    const quantidadeDisponivel = calcularQuantidadeDisponivel(produtoSelecionado, quantidadeProduto);
-    
-    if (quantidadeProduto > quantidadeDisponivel) {
-      toast.error(
-        `Quantidade indisponível. Disponível: ${quantidadeDisponivel} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
-      );
-      return;
-    }
-
-    // Calcular quanto será baixado do estoque
-    const quantidadeEstoque = converterParaEstoque(produtoSelecionado, quantidadeProduto);
-
-    // Verificar se o produto já foi adicionado
-    const produtoExistente = itensProduto.find(item => item.id === produtoSelecionado.id);
-    
-    if (produtoExistente) {
-      // Atualizar quantidade no array
-      setItensProduto(itensProduto.map(item => 
-        item.id === produtoSelecionado.id 
-          ? { 
-              ...item, 
-              quantidadeVenda: item.quantidadeVenda + quantidadeProduto,
-              quantidadeEstoque: item.quantidadeEstoque + quantidadeEstoque,
-              semCobranca: item.semCobranca // Manter status de cobrança
-            }
-          : item
-      ));
+  // 🔥 Funções para categorias
+  const handleOpenCategoriaDialog = (categoria = null) => {
+    if (categoria) {
+      setCategoriaEditando(categoria);
+      setCategoriaForm({
+        nome: categoria.nome || '',
+        descricao: categoria.descricao || '',
+      });
     } else {
-      // Adicionar novo item ao array
-      setItensProduto([...itensProduto, {
-        id: produtoSelecionado.id,
-        nome: produtoSelecionado.nome,
-        preco: produtoSelecionado.precoVenda,
-        unidadeEstoque: produtoSelecionado.unidadeEstoque,
-        unidadeVenda: produtoSelecionado.unidadeVenda,
-        fatorConversao: produtoSelecionado.fatorConversao || 1,
-        quantidadeVenda: quantidadeProduto,
-        quantidadeEstoque: quantidadeEstoque,
-        semCobranca: itemSemCobranca,
-        apenasBaixa: itemSemCobranca
-      }]);
-    }
-
-    // Atualizar estoque (sempre dá baixa, independente de cobrança)
-    const novaQuantidadeEstoque = produtoSelecionado.quantidadeEstoque - quantidadeEstoque;
-    firebaseService.update('produtos', produtoSelecionado.id, {
-      quantidadeEstoque: novaQuantidadeEstoque,
-      updatedAt: Timestamp.now()
-    });
-
-    // Registrar movimentação de estoque
-    registrarMovimentacaoEstoque(
-      produtoSelecionado, 
-      quantidadeEstoque, 
-      produtoSelecionado.unidadeEstoque,
-      itemSemCobranca ? 'uso_sem_cobranca' : 'venda'
-    );
-
-    setProdutoSelecionado(null);
-    setQuantidadeProduto(1);
-    setItemSemCobranca(false);
-    toast.success(
-      itemSemCobranca 
-        ? `Produto adicionado (sem cobrança)! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}` 
-        : `Produto adicionado! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
-    );
-  };
-
-  // 🔥 Registrar movimentação de estoque
-  const registrarMovimentacaoEstoque = async (produto, quantidade, unidade, tipo) => {
-    try {
-      const movimentacao = {
-        produtoId: produto.id,
-        produtoNome: produto.nome,
-        quantidade: quantidade,
-        unidade: unidade,
-        tipo: tipo,
-        data: new Date().toISOString(),
-        atendimentoId: id,
-        usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema'
-      };
-      await firebaseService.add('movimentacoes_estoque', movimentacao);
-    } catch (error) {
-      console.error('Erro ao registrar movimentação:', error);
-    }
-  };
-
-  // Remover serviço do ARRAY itensServico
-  const handleRemoverServico = (index) => {
-    const novosItens = itensServico.filter((_, i) => i !== index);
-    // Se removeu o principal, definir o primeiro como principal
-    if (itensServico[index].principal && novosItens.length > 0) {
-      novosItens[0].principal = true;
-    }
-    setItensServico(novosItens);
-  };
-
-  // 🔥 Remover produto do ARRAY itensProduto (com devolução ao estoque)
-  const handleRemoverProduto = (index) => {
-    const itemRemovido = itensProduto[index];
-    
-    // Devolver ao estoque
-    if (itemRemovido) {
-      firebaseService.getById('produtos', itemRemovido.id).then(produto => {
-        const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidadeEstoque;
-        firebaseService.update('produtos', itemRemovido.id, {
-          quantidadeEstoque: novaQuantidade,
-          updatedAt: Timestamp.now()
-        });
-        
-        // Registrar devolução
-        registrarMovimentacaoEstoque(
-          produto, 
-          itemRemovido.quantidadeEstoque, 
-          itemRemovido.unidadeEstoque,
-          'devolucao'
-        );
+      setCategoriaEditando(null);
+      setCategoriaForm({
+        nome: '',
+        descricao: '',
       });
     }
-
-    const novosItens = itensProduto.filter((_, i) => i !== index);
-    setItensProduto(novosItens);
+    setOpenCategoriaDialog(true);
   };
 
-  const handleConfirmarAtendimento = async () => {
-    try {
-      setSaving(true);
-      
-      const valorTotal = calcularValorTotal();
-      
-      // Preparar dados para salvar - garantindo que são arrays
-      const dadosAtendimento = {
-        observacoes,
-        itensServico: itensServico, // Array
-        itensProduto: itensProduto, // Array
-        valorTotal,
-        status: 'em_andamento',
-        updatedAt: Timestamp.now()
-      };
-
-      // Atualizar atendimento
-      await firebaseService.update('atendimentos', id, dadosAtendimento);
-
-      setActiveStep(1);
-      toast.success('Atendimento confirmado!');
-    } catch (error) {
-      console.error('Erro ao confirmar atendimento:', error);
-      toast.error('Erro ao confirmar atendimento');
-    } finally {
-      setSaving(false);
-    }
+  const handleCloseCategoriaDialog = () => {
+    setOpenCategoriaDialog(false);
+    setCategoriaEditando(null);
+    setCategoriaForm({ nome: '', descricao: '' });
   };
 
-  // Adicionar pagamento ao ARRAY pagamentos
-  const handleSalvarPagamento = async () => {
+  const handleSalvarCategoria = async () => {
     try {
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
-      const saldoRestante = valorTotal - totalPago;
-
-      if (!pagamentoForm.valor || pagamentoForm.valor <= 0) {
-        toast.error('Valor inválido');
+      if (!categoriaForm.nome.trim()) {
+        mostrarSnackbar('Nome da categoria é obrigatório', 'error');
         return;
       }
 
-      if (pagamentoForm.valor > saldoRestante && !pagamentoEditando) {
-        toast.error(`Valor máximo permitido: R$ ${saldoRestante.toFixed(2)}`);
-        return;
-      }
-
-      const agora = Timestamp.now();
-      
-      const pagamentoData = {
-        atendimentoId: id,
-        clienteId: cliente.id,
-        valor: parseFloat(pagamentoForm.valor),
-        formaPagamento: pagamentoForm.formaPagamento,
-        parcelas: pagamentoForm.parcelas || 1,
-        observacoes: pagamentoForm.observacoes,
-        status: 'pago',
-        data: agora,
-        createdAt: pagamentoEditando?.createdAt || agora,
-        updatedAt: agora
+      const categoriaData = {
+        nome: String(categoriaForm.nome).trim(),
+        descricao: categoriaForm.descricao ? String(categoriaForm.descricao).trim() : '',
+        updatedAt: new Date().toISOString(),
       };
 
-      if (pagamentoEditando) {
-        // Atualizar pagamento no array
-        await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
-        setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? { ...pagamentoData, id: pagamentoEditando.id } : p));
-        toast.success('Pagamento atualizado!');
+      if (categoriaEditando) {
+        // 🔥 CORREÇÃO: Atualizar categoria existente
+        await firebaseService.update('categorias_produtos', categoriaEditando.id, categoriaData);
+        
+        // Atualizar estado local
+        setCategorias(categorias.map(c => 
+          c.id === categoriaEditando.id ? { ...c, ...categoriaData, id: categoriaEditando.id } : c
+        ));
+        
+        mostrarSnackbar('Categoria atualizada com sucesso!');
       } else {
-        // Adicionar novo pagamento ao array
-        const novoPagamento = await firebaseService.add('pagamentos', pagamentoData);
-        setPagamentos([...pagamentos, novoPagamento]);
-        toast.success('Pagamento registrado!');
+        categoriaData.dataCriacao = new Date().toISOString();
+        const novoId = await firebaseService.add('categorias_produtos', categoriaData);
+        setCategorias([...categorias, { ...categoriaData, id: novoId }]);
+        mostrarSnackbar('Categoria criada com sucesso!');
       }
 
-      handleClosePagamentoDialog();
+      handleCloseCategoriaDialog();
     } catch (error) {
-      console.error('Erro ao salvar pagamento:', error);
-      toast.error('Erro ao salvar pagamento');
+      console.error('Erro ao salvar categoria:', error);
+      mostrarSnackbar('Erro ao salvar categoria', 'error');
     }
   };
 
-  // Remover pagamento do ARRAY pagamentos
-  const handleRemoverPagamento = async (pagamentoId) => {
-    if (window.confirm('Deseja remover este pagamento?')) {
+  const handleExcluirCategoria = async (id) => {
+    // Verificar se existem produtos usando esta categoria
+    const produtosNaCategoria = produtos.filter(p => p.categoria === id);
+    
+    if (produtosNaCategoria.length > 0) {
+      mostrarSnackbar(`Não é possível excluir: ${produtosNaCategoria.length} produtos usam esta categoria`, 'error');
+      return;
+    }
+
+    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
       try {
-        await firebaseService.delete('pagamentos', pagamentoId);
-        setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
-        toast.success('Pagamento removido!');
+        await firebaseService.delete('categorias_produtos', id);
+        setCategorias(categorias.filter(c => c.id !== id));
+        mostrarSnackbar('Categoria excluída com sucesso!');
       } catch (error) {
-        console.error('Erro ao remover pagamento:', error);
-        toast.error('Erro ao remover pagamento');
+        console.error('Erro ao excluir categoria:', error);
+        mostrarSnackbar('Erro ao excluir categoria', 'error');
       }
     }
   };
 
-  const handleOpenPagamentoDialog = (pagamento = null) => {
-    if (pagamento) {
-      setPagamentoEditando(pagamento);
-      setPagamentoForm({
-        formaPagamento: pagamento.formaPagamento || 'dinheiro',
-        valor: pagamento.valor,
-        parcelas: pagamento.parcelas || 1,
-        observacoes: pagamento.observacoes || ''
-      });
-    } else {
-      setPagamentoEditando(null);
-      setPagamentoForm({
-        formaPagamento: 'dinheiro',
-        valor: '',
-        parcelas: 1,
-        observacoes: ''
-      });
-    }
-    setOpenPagamentoDialog(true);
+  // 🔥 Funções para produtos
+  const handleAdd = () => {
+    setSelectedProduto(null);
+    setFormData({
+      nome: '',
+      descricao: '',
+      categoria: '',
+      precoCusto: '',
+      precoVenda: '',
+      quantidadeEstoque: '',
+      unidadeEstoque: 'un',
+      unidadeVenda: 'un',
+      fatorConversao: 1,
+      fornecedorId: '',
+      estoqueMinimo: '',
+      localizacao: '',
+      codigoBarras: '',
+    });
+    setOpenDialog(true);
   };
 
-  const handleClosePagamentoDialog = () => {
-    setOpenPagamentoDialog(false);
-    setPagamentoEditando(null);
+  const handleEdit = (produto) => {
+    setSelectedProduto(produto);
+    setFormData({
+      nome: produto.nome || '',
+      descricao: produto.descricao || '',
+      categoria: produto.categoria || '',
+      precoCusto: produto.precoCusto || '',
+      precoVenda: produto.precoVenda || '',
+      quantidadeEstoque: produto.quantidadeEstoque || '',
+      unidadeEstoque: produto.unidadeEstoque || 'un',
+      unidadeVenda: produto.unidadeVenda || 'un',
+      fatorConversao: produto.fatorConversao || 1,
+      fornecedorId: produto.fornecedorId || '',
+      estoqueMinimo: produto.estoqueMinimo || '',
+      localizacao: produto.localizacao || '',
+      codigoBarras: produto.codigoBarras || '',
+    });
+    setOpenDialog(true);
   };
 
-  const handleFinalizarAtendimento = async () => {
+  const handleDelete = (id) => {
+    setProdutoToDelete(id);
+    setOpenDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
     try {
-      setSaving(true);
-      
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
-      const saldoRestante = valorTotal - totalPago;
-      const MARGEM_ERRO = 0.01;
-
-      if (Math.abs(saldoRestante) > MARGEM_ERRO) {
-        toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
-        return;
-      }
-
-      console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
-      console.log('📌 Atendimento ID:', id);
-      console.log('📌 Valor total:', valorTotal);
-      console.log('📌 Itens serviço:', itensServico);
-      console.log('📌 Itens produto:', itensProduto);
-
-      // 1. Atualizar o atendimento no Firebase
-      console.log('📌 Atualizando atendimento...');
-      await firebaseService.update('atendimentos', id, {
-        status: 'finalizado',
-        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        valorTotal,
-        itensServico,
-        itensProduto,
-        updatedAt: Timestamp.now()
-      });
-      console.log('✅ Atendimento atualizado');
-
-      // 2. Buscar dados para comissão
-      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
-      const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
-      
-      console.log('📌 Profissional:', profissional);
-      console.log('📌 Serviço principal:', servicoPrincipal);
-
-      // 3. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
-      const percentual = profissional?.comissao || 40;
-      const valorComissao = (calcularTotalServicos() * percentual) / 100;
-
-      console.log('📊 Cálculo da comissão:');
-      console.log('   - Percentual:', percentual);
-      console.log('   - Valor serviços:', calcularTotalServicos());
-      console.log('   - Comissão:', valorComissao);
-
-      const comissaoData = {
-        atendimentoId: id,
-        profissionalId: atendimento.profissionalId,
-        profissionalNome: profissional?.nome || atendimento.profissionalNome,
-        servicoId: servicoPrincipal?.id || atendimento.servicoId,
-        servicoNome: servicoPrincipal?.nome || atendimento.servicoNome || 'Serviço',
-        valorAtendimento: calcularTotalServicos(),
-        percentual,
-        valor: valorComissao,
-        data: atendimento.data,
-        status: 'pendente',
-        dataRegistro: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      console.log('📌 Salvando comissão no Firebase...');
-      const comissaoId = await firebaseService.add('comissoes', comissaoData);
-      console.log('✅ Comissão registrada com ID:', comissaoId);
-
-      // 4. Atualizar cliente
-      console.log('📌 Atualizando cliente...');
-      await firebaseService.update('clientes', cliente.id, {
-        ultimaVisita: new Date().toISOString().split('T')[0],
-        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(), // Só serviços entram no total gasto
-        updatedAt: Timestamp.now()
-      });
-
-      setActiveStep(3);
-      toast.success('Atendimento finalizado com sucesso!');
-      
-      // 5. Verificar se a comissão foi criada
-      setTimeout(async () => {
-        const comissoes = await firebaseService.getAll('comissoes');
-        const minhaComissao = comissoes.find(c => c.atendimentoId === id);
-        console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
-      }, 2000);
-      
+      await firebaseService.delete('produtos', produtoToDelete);
+      setProdutos(produtos.filter(p => p.id !== produtoToDelete));
+      mostrarSnackbar('Produto excluído com sucesso!');
     } catch (error) {
-      console.error('❌ Erro ao finalizar atendimento:', error);
-      toast.error('Erro ao finalizar atendimento');
-    } finally {
-      setSaving(false);
+      console.error('Erro ao excluir produto:', error);
+      mostrarSnackbar('Erro ao excluir produto', 'error');
     }
+    setOpenDeleteDialog(false);
+    setProdutoToDelete(null);
   };
 
-  const handleEnviarComprovante = async (metodo) => {
+  const handleSave = async (event) => {
+    event.preventDefault();
+
+    // Validações
+    if (!formData.nome) {
+      mostrarSnackbar('Nome do produto é obrigatório', 'error');
+      return;
+    }
+
+    const precoCustoNum = parseFloat(formData.precoCusto);
+    const precoVendaNum = parseFloat(formData.precoVenda);
+    const quantidadeNum = parseInt(formData.quantidadeEstoque);
+    const estoqueMinimoNum = parseInt(formData.estoqueMinimo) || 5;
+    const fatorConversaoNum = parseFloat(formData.fatorConversao) || 1;
+
+    if (isNaN(precoCustoNum) || precoCustoNum < 0) {
+      mostrarSnackbar('Preço de custo inválido', 'error');
+      return;
+    }
+
+    if (isNaN(precoVendaNum) || precoVendaNum < 0) {
+      mostrarSnackbar('Preço de venda inválido', 'error');
+      return;
+    }
+
+    if (isNaN(quantidadeNum) || quantidadeNum < 0) {
+      mostrarSnackbar('Quantidade inválida', 'error');
+      return;
+    }
+
+    if (fatorConversaoNum <= 0) {
+      mostrarSnackbar('Fator de conversão deve ser maior que zero', 'error');
+      return;
+    }
+
+    const produtoData = {
+      nome: String(formData.nome).trim(),
+      descricao: formData.descricao ? String(formData.descricao).trim() : '',
+      categoria: formData.categoria || '',
+      precoCusto: Number(precoCustoNum),
+      precoVenda: Number(precoVendaNum),
+      quantidadeEstoque: Number(quantidadeNum),
+      unidadeEstoque: String(formData.unidadeEstoque),
+      unidadeVenda: String(formData.unidadeVenda),
+      fatorConversao: Number(fatorConversaoNum),
+      fornecedorId: formData.fornecedorId || '',
+      estoqueMinimo: Number(estoqueMinimoNum),
+      localizacao: formData.localizacao ? String(formData.localizacao).trim() : '',
+      codigoBarras: formData.codigoBarras ? String(formData.codigoBarras).trim() : '',
+      updatedAt: new Date().toISOString(),
+    };
+
     try {
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
-      
-      if (metodo === 'whatsapp') {
-        const numero = cliente?.telefone?.replace(/\D/g, '') || '';
+      if (selectedProduto) {
+        // 🔥 CORREÇÃO: Usar update em vez de add
+        await firebaseService.update('produtos', selectedProduto.id, produtoData);
         
-        // Filtrar produtos sem cobrança para não aparecer no comprovante de pagamento
-        const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
+        // Atualizar estado local
+        const produtosAtualizados = produtos.map(p => 
+          p.id === selectedProduto.id ? { ...p, ...produtoData, id: selectedProduto.id } : p
+        );
+        setProdutos(produtosAtualizados);
         
-        const mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
-          `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
-          (produtosCobrados.length > 0 ? 
-            `🛍️ *Produtos:*\n${produtosCobrados.map(p => 
-              `• ${p.nome} (${p.quantidadeVenda} ${getUnidadeSimbolo(p.unidadeVenda)}): R$ ${((p.preco || 0) * (p.quantidadeVenda || 1)).toFixed(2)}`
-            ).join('\n')}\n\n` 
-            : '') +
-          `💰 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
-          `💳 *Pago: R$ ${totalPago.toFixed(2)}*\n\n` +
-          `Obrigado pela preferência!`;
+        mostrarSnackbar('Produto atualizado com sucesso!');
+      } else {
+        produtoData.dataCriacao = new Date().toISOString();
         
-        window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
-        toast.success('WhatsApp aberto para envio!');
-      } else if (metodo === 'email') {
-        toast.success('Comprovante enviado por email!');
-      } else if (metodo === 'print') {
-        window.print();
+        const novoId = await firebaseService.add('produtos', produtoData);
+        setProdutos([...produtos, { ...produtoData, id: novoId }]);
+        
+        mostrarSnackbar('Produto adicionado com sucesso!');
       }
+      
+      setOpenDialog(false);
     } catch (error) {
-      toast.error('Erro ao enviar comprovante');
+      console.error('Erro ao salvar produto:', error);
+      mostrarSnackbar('Erro ao salvar produto', 'error');
     }
   };
 
-  const handleVoltar = () => {
-    navigate(-1);
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
   };
 
-  const formatarDataFirebase = (timestamp) => {
-    if (!timestamp) return '';
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleDateString('pt-BR');
-    }
-    return new Date(timestamp).toLocaleDateString('pt-BR');
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
-  const formatarHoraFirebase = (timestamp) => {
-    if (!timestamp) return '';
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleTimeString('pt-BR');
-    }
-    return new Date(timestamp).toLocaleTimeString('pt-BR');
+  const getEstoqueStatus = (quantidade, minimo) => {
+    const qtd = Number(quantidade || 0);
+    const min = Number(minimo || 5);
+    
+    if (qtd === 0) return { label: 'Sem Estoque', color: 'error' };
+    if (qtd <= min) return { label: 'Estoque Baixo', color: 'warning' };
+    return { label: 'Normal', color: 'success' };
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
+      <Box sx={{ width: '100%' }}>
+        <LinearProgress />
       </Box>
     );
   }
-
-  if (!atendimento || !cliente || !profissional) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error" action={
-          <Button color="inherit" size="small" onClick={handleVoltar}>
-            Voltar
-          </Button>
-        }>
-          Atendimento não encontrado
-        </Alert>
-      </Box>
-    );
-  }
-
-  const valorTotal = calcularValorTotal();
-  const totalPago = calcularTotalPago();
-  const saldoRestante = calcularSaldoRestante();
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
-        <IconButton onClick={handleVoltar} sx={{ mr: 2 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {atendimento.status === 'finalizado' ? 'Detalhes do Atendimento' : 'Finalizar Atendimento'}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+          Estoque
         </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<CategoryIcon />}
+              onClick={() => handleOpenCategoriaDialog()}
+              sx={{ borderColor: '#ff4081', color: '#ff4081' }}
+            >
+              Gerenciar Categorias
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                color: 'white',
+                boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+              }}
+            >
+              Novo Produto
+            </Button>
+          </motion.div>
+        </Box>
       </Box>
 
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
-
-      <Grid container spacing={3}>
-        {/* Informações do Atendimento */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                Resumo do Atendimento
-              </Typography>
-
-              {/* Timer para atendimento em andamento */}
-              {atendimento.status === 'em_andamento' && tempoDecorrido && (
-                <Box sx={{ mb: 3, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <TimerIcon sx={{ color: '#ff9800' }} />
-                    <Typography variant="body2" color="textSecondary">
-                      Tempo em atendimento:
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#ff9800', fontWeight: 600 }}>
-                      {tempoDecorrido}
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Cliente
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar src={cliente?.avatar} sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                    {cliente?.nome?.charAt(0)}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {cliente?.nome}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {cliente?.telefone}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Profissional
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {profissional?.nome}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Data/Hora
-                  </Typography>
-                  <Typography variant="body1">
-                    {new Date(atendimento.data).toLocaleDateString('pt-BR')}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {atendimento.horaInicio}
-                    {atendimento.horaFim && ` - ${atendimento.horaFim}`}
-                  </Typography>
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ my: 2 }} />
-
-              {/* Lista de Serviços - ARRAY */}
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Serviços
-              </Typography>
-              {itensServico.length > 0 ? (
-                itensServico.map((item, index) => (
-                  <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">
-                      {item.nome} {item.principal && '(Principal)'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      R$ {(item.preco || 0).toFixed(2)}
-                    </Typography>
-                  </Box>
-                ))
-              ) : (
-                <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-                  Nenhum serviço registrado
-                </Typography>
-              )}
-
-              {/* Lista de Produtos - ARRAY */}
-              {itensProduto.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ mt: 2 }}>
-                    Produtos
-                  </Typography>
-                  {itensProduto.map((item, index) => (
-                    <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2">
-                        {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
-                        {item.semCobranca && (
-                          <Chip
-                            label="Sem cobrança"
-                            size="small"
-                            sx={{ ml: 1, bgcolor: '#ff9800', color: 'white', height: 20 }}
-                          />
-                        )}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}`}
-                      </Typography>
-                    </Box>
-                  ))}
-                </>
-              )}
-
-              <Divider sx={{ my: 2 }} />
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Total
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  R$ {valorTotal.toFixed(2)}
-                </Typography>
-              </Box>
-
-              {/* Resumo de Pagamentos - ARRAY */}
-              <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Pagamentos
-                </Typography>
-                {pagamentos.map((p, index) => (
-                  <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2">
-                      {p.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                       p.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                       p.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                       p.formaPagamento === 'pix' ? 'PIX' : p.formaPagamento}
-                      {p.parcelas > 1 ? ` (${p.parcelas}x)` : ''}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      R$ {p.valor?.toFixed(2)}
-                    </Typography>
-                  </Box>
-                ))}
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Pago:</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                    R$ {totalPago.toFixed(2)}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Restante:</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: saldoRestante > 0 ? '#f44336' : '#4caf50' }}>
-                    R$ {saldoRestante.toFixed(2)}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {(atendimento.observacoes || observacoes) && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Box>
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                      Observações
-                    </Typography>
-                    <Typography variant="body2">
-                      {atendimento.observacoes || observacoes}
-                    </Typography>
-                  </Box>
-                </>
-              )}
-
-              {/* Status atual */}
-              <Box sx={{ mt: 3 }}>
-                <Chip
-                  icon={atendimento.status === 'finalizado' ? <CheckIcon /> : <ScheduleIcon />}
-                  label={atendimento.status === 'finalizado' ? 'Finalizado' : 'Em Andamento'}
-                  color={atendimento.status === 'finalizado' ? 'success' : 'warning'}
-                  sx={{ width: '100%', py: 2 }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Conteúdo do Step */}
-        <Grid item xs={12} md={8}>
+      {/* Cards de Estatísticas */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
           <motion.div
-            key={activeStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
           >
             <Card>
               <CardContent>
-                {activeStep === 0 && (
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                      Confirmar Atendimento
-                    </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Avatar sx={{ bgcolor: '#9c27b0', mr: 2 }}>
+                    <InventoryIcon />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Total de Produtos
+                  </Typography>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700, textAlign: 'right' }}>
+                  {stats.totalProdutos}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
 
-                    <Alert severity="info" sx={{ mb: 3 }}>
-                      {atendimento.status === 'em_andamento' 
-                        ? 'Atendimento já está em andamento. Você pode adicionar observações antes de prosseguir.'
-                        : 'Verifique os dados e adicione observações sobre o atendimento.'}
-                    </Alert>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Avatar sx={{ bgcolor: '#4caf50', mr: 2 }}>
+                    <MoneyIcon />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Valor em Estoque
+                  </Typography>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700, textAlign: 'right', color: '#4caf50' }}>
+                  R$ {stats.valorEstoque.toFixed(2)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
 
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Observações do atendimento"
-                          multiline
-                          rows={4}
-                          value={observacoes}
-                          onChange={(e) => setObservacoes(e.target.value)}
-                          placeholder="Registre aqui qualquer observação sobre o atendimento (produtos utilizados, preferências do cliente, etc.)"
-                        />
-                      </Grid>
-                    </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Avatar sx={{ bgcolor: '#ff9800', mr: 2 }}>
+                    <WarningIcon />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Estoque Baixo
+                  </Typography>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700, textAlign: 'right', color: '#ff9800' }}>
+                  {stats.produtosBaixo}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
 
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                      <Button
-                        variant="contained"
-                        onClick={handleConfirmarAtendimento}
-                        startIcon={<CheckIcon />}
-                        disabled={saving}
-                        sx={{
-                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                        }}
-                      >
-                        {saving ? 'Salvando...' : 'Confirmar Atendimento'}
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
-
-                {activeStep === 1 && (
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                      Adicionar Itens
-                    </Typography>
-
-                    <Alert severity="info" sx={{ mb: 3 }}>
-                      Adicione serviços adicionais ou produtos utilizados durante o atendimento.
-                    </Alert>
-
-                    {/* Adicionar Serviço */}
-                    <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                        Adicionar Serviço
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} md={8}>
-                          <FormControl fullWidth>
-                            <Autocomplete
-                              options={servicosDisponiveis}
-                              getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
-                              value={servicoSelecionado}
-                              onChange={(e, newValue) => setServicoSelecionado(newValue)}
-                              renderInput={(params) => (
-                                <TextField {...params} label="Selecione um serviço" size="small" />
-                              )}
-                            />
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                          <Button
-                            fullWidth
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleAdicionarServico}
-                            sx={{ height: '40px' }}
-                          >
-                            Adicionar
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    </Paper>
-
-                    {/* Adicionar Produto */}
-                    <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                        Adicionar Produto
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} md={4}>
-                          <FormControl fullWidth>
-                            <Autocomplete
-                              options={produtosDisponiveis}
-                              getOptionLabel={(option) => 
-                                `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} ` +
-                                `(Estoque: ${option.quantidadeEstoque} ${getUnidadeSimbolo(option.unidadeEstoque)} ` +
-                                `= ${option.quantidadeEstoque * (option.fatorConversao || 1)} ${getUnidadeSimbolo(option.unidadeVenda)})`
-                              }
-                              value={produtoSelecionado}
-                              onChange={(e, newValue) => setProdutoSelecionado(newValue)}
-                              renderInput={(params) => (
-                                <TextField {...params} label="Selecione um produto" size="small" />
-                              )}
-                            />
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={2}>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label="Quantidade"
-                            value={quantidadeProduto}
-                            onChange={(e) => setQuantidadeProduto(parseFloat(e.target.value) || 1)}
-                            InputProps={{ inputProps: { min: 0.01, step: 0.01 } }}
-                            size="small"
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={itemSemCobranca}
-                                onChange={(e) => setItemSemCobranca(e.target.checked)}
-                                icon={<InventoryIcon />}
-                                checkedIcon={<NoCostIcon />}
-                              />
-                            }
-                            label="Sem cobrança (apenas baixa)"
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                          <Button
-                            fullWidth
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleAdicionarProduto}
-                            sx={{ height: '40px' }}
-                          >
-                            Adicionar
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    </Paper>
-
-                    {/* Lista de Serviços Adicionados - ARRAY */}
-                    {itensServico.length > 0 && (
-                      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                          Serviços Adicionados
-                        </Typography>
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Serviço</TableCell>
-                                <TableCell align="right">Valor</TableCell>
-                                <TableCell align="center">Ações</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {itensServico.map((item, index) => (
-                                <TableRow key={index}>
-                                  <TableCell>
-                                    {item.nome}
-                                    {item.principal && (
-                                      <Chip 
-                                        label="Principal" 
-                                        size="small" 
-                                        sx={{ ml: 1, bgcolor: '#9c27b0', color: 'white', height: 20 }} 
-                                      />
-                                    )}
-                                  </TableCell>
-                                  <TableCell align="right">R$ {(item.preco || 0).toFixed(2)}</TableCell>
-                                  <TableCell align="center">
-                                    <IconButton size="small" onClick={() => handleRemoverServico(index)}>
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Paper>
-                    )}
-
-                    {/* Lista de Produtos Adicionados - ARRAY */}
-                    {itensProduto.length > 0 && (
-                      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                          Produtos Adicionados
-                        </Typography>
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Produto</TableCell>
-                                <TableCell align="right">Quantidade</TableCell>
-                                <TableCell align="right">Unidade</TableCell>
-                                <TableCell align="right">Preço Unit.</TableCell>
-                                <TableCell align="right">Total</TableCell>
-                                <TableCell align="center">Status</TableCell>
-                                <TableCell align="center">Ações</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {itensProduto.map((item, index) => (
-                                <TableRow key={index}>
-                                  <TableCell>{item.nome}</TableCell>
-                                  <TableCell align="right">{item.quantidadeVenda}</TableCell>
-                                  <TableCell align="right">{getUnidadeSimbolo(item.unidadeVenda)}</TableCell>
-                                  <TableCell align="right">
-                                    {item.semCobranca ? 'Grátis' : `R$ ${(item.preco || 0).toFixed(2)}`}
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}`}
-                                  </TableCell>
-                                  <TableCell align="center">
-                                    {item.semCobranca ? (
-                                      <Chip
-                                        label="Sem cobrança"
-                                        size="small"
-                                        sx={{ bgcolor: '#ff9800', color: 'white', height: 20 }}
-                                      />
-                                    ) : (
-                                      <Chip
-                                        label="Cobrado"
-                                        size="small"
-                                        sx={{ bgcolor: '#4caf50', color: 'white', height: 20 }}
-                                      />
-                                    )}
-                                  </TableCell>
-                                  <TableCell align="center">
-                                    <IconButton size="small" onClick={() => handleRemoverProduto(index)}>
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Paper>
-                    )}
-
-                    {/* Total */}
-                    <Paper variant="outlined" sx={{ p: 3, bgcolor: '#f3e5f5' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box>
-                          <Typography variant="h6">Total a pagar:</Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            *Itens marcados como "sem cobrança" não entram no total
-                          </Typography>
-                        </Box>
-                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                          R$ {valorTotal.toFixed(2)}
-                        </Typography>
-                      </Box>
-                    </Paper>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                      <Button onClick={() => setActiveStep(0)}>
-                        Voltar
-                      </Button>
-                      <Button
-                        variant="contained"
-                        onClick={() => setActiveStep(2)}
-                        startIcon={<PaymentIcon />}
-                        disabled={itensServico.length === 0}
-                        sx={{
-                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                        }}
-                      >
-                        Ir para Pagamentos
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
-
-                {activeStep === 2 && (
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                      Registrar Pagamentos
-                    </Typography>
-
-                    <Alert severity="info" sx={{ mb: 3 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Valor total: R$ {valorTotal.toFixed(2)}</span>
-                        <span>Pago: R$ {totalPago.toFixed(2)}</span>
-                        <span style={{ color: saldoRestante > 0 ? '#f44336' : '#4caf50', fontWeight: 'bold' }}>
-                          Restante: R$ {saldoRestante.toFixed(2)}
-                        </span>
-                      </Box>
-                    </Alert>
-
-                    {/* Lista de Pagamentos - ARRAY */}
-                    <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          Pagamentos Registrados
-                        </Typography>
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={() => handleOpenPagamentoDialog()}
-                          disabled={saldoRestante <= 0}
-                          size="small"
-                        >
-                          Adicionar Pagamento
-                        </Button>
-                      </Box>
-
-                      {pagamentos.length === 0 ? (
-                        <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
-                          Nenhum pagamento registrado
-                        </Typography>
-                      ) : (
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Forma</TableCell>
-                                <TableCell align="right">Valor</TableCell>
-                                <TableCell>Parcelas</TableCell>
-                                <TableCell>Data</TableCell>
-                                <TableCell align="center">Ações</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {pagamentos.map((pagamento, index) => (
-                                <TableRow key={index}>
-                                  <TableCell>
-                                    {pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                                     pagamento.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                                     pagamento.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                                     pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento}
-                                  </TableCell>
-                                  <TableCell align="right">R$ {pagamento.valor?.toFixed(2)}</TableCell>
-                                  <TableCell>{pagamento.parcelas > 1 ? `${pagamento.parcelas}x` : '-'}</TableCell>
-                                  <TableCell>{formatarDataFirebase(pagamento.data)}</TableCell>
-                                  <TableCell align="center">
-                                    <IconButton size="small" onClick={() => handleOpenPagamentoDialog(pagamento)}>
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => handleRemoverPagamento(pagamento.id)}>
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      )}
-                    </Paper>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                      <Button onClick={() => setActiveStep(1)} disabled={saving}>
-                        Voltar
-                      </Button>
-                      <Button
-                        variant="contained"
-                        onClick={handleFinalizarAtendimento}
-                        startIcon={<CheckIcon />}
-                        disabled={saving || Math.abs(calcularSaldoRestante()) > 0.01}
-                        sx={{
-                          background: Math.abs(calcularSaldoRestante()) <= 0.01 
-                            ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' 
-                            : 'grey',
-                          '&:hover': {
-                            background: Math.abs(calcularSaldoRestante()) <= 0.01 
-                              ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)' 
-                              : 'grey',
-                          },
-                        }}
-                      >
-                        {saving ? 'Finalizando...' : 'Finalizar Atendimento'}
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
-
-                {activeStep === 3 && (
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 3, color: '#4caf50' }}>
-                      <CheckIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                      Atendimento Finalizado com Sucesso!
-                    </Typography>
-
-                    <Alert severity="success" sx={{ mb: 3 }}>
-                      Pagamentos registrados e atendimento concluído.
-                    </Alert>
-
-                    <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                        Comprovante de Pagamento
-                      </Typography>
-
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2" color="textSecondary">
-                            Cliente:
-                          </Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {cliente?.nome}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="body2" color="textSecondary">
-                            Profissional:
-                          </Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {profissional?.nome}
-                          </Typography>
-                        </Grid>
-                        
-                        <Grid item xs={6}>
-                          <Typography variant="body2" color="textSecondary">
-                            Data:
-                          </Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {new Date().toLocaleDateString('pt-BR')}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={6}>
-                          <Typography variant="body2" color="textSecondary">
-                            Hora:
-                          </Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {new Date().toLocaleTimeString('pt-BR')}
-                          </Typography>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <Divider sx={{ my: 1 }} />
-                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                            Serviços Realizados:
-                          </Typography>
-                          {itensServico.map((item, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                              <Typography variant="body2">{item.nome}</Typography>
-                              <Typography variant="body2">R$ {(item.preco || 0).toFixed(2)}</Typography>
-                            </Box>
-                          ))}
-                        </Grid>
-
-                        {itensProduto.filter(p => !p.semCobranca).length > 0 && (
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                              Produtos (cobrados):
-                            </Typography>
-                            {itensProduto.filter(p => !p.semCobranca).map((item, idx) => (
-                              <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                <Typography variant="body2">
-                                  {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
-                                </Typography>
-                                <Typography variant="body2">R$ {((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}</Typography>
-                              </Box>
-                            ))}
-                          </Grid>
-                        )}
-
-                        {itensProduto.filter(p => p.semCobranca).length > 0 && (
-                          <Grid item xs={12}>
-                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                              Produtos (cortesia):
-                            </Typography>
-                            {itensProduto.filter(p => p.semCobranca).map((item, idx) => (
-                              <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                <Typography variant="body2">
-                                  {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: '#ff9800' }}>Grátis</Typography>
-                              </Box>
-                            ))}
-                          </Grid>
-                        )}
-
-                        <Grid item xs={12}>
-                          <Divider sx={{ my: 1 }} />
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="h6">Total:</Typography>
-                            <Typography variant="h6" sx={{ color: '#9c27b0' }}>
-                              R$ {valorTotal.toFixed(2)}
-                            </Typography>
-                          </Box>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                            Pagamentos:
-                          </Typography>
-                          {pagamentos.map((pagamento, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                              <Typography variant="body2">
-                                {pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                                 pagamento.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                                 pagamento.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                                 pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento}
-                                {pagamento.parcelas > 1 ? ` (${pagamento.parcelas}x)` : ''}
-                              </Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                R$ {pagamento.valor?.toFixed(2)}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </Grid>
-                      </Grid>
-                    </Paper>
-
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                      Enviar comprovante para o cliente
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                      <Tooltip title="Abrir WhatsApp">
-                        <Button
-                          variant="outlined"
-                          startIcon={<WhatsAppIcon />}
-                          onClick={() => handleEnviarComprovante('whatsapp')}
-                          sx={{ color: '#25D366', borderColor: '#25D366' }}
-                        >
-                          WhatsApp
-                        </Button>
-                      </Tooltip>
-                      <Tooltip title="Enviar por email">
-                        <Button
-                          variant="outlined"
-                          startIcon={<EmailIcon />}
-                          onClick={() => handleEnviarComprovante('email')}
-                        >
-                          Email
-                        </Button>
-                      </Tooltip>
-                      <Tooltip title="Imprimir comprovante">
-                        <Button
-                          variant="outlined"
-                          startIcon={<PrintIcon />}
-                          onClick={() => handleEnviarComprovante('print')}
-                        >
-                          Imprimir
-                        </Button>
-                      </Tooltip>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                      <Button
-                        variant="outlined"
-                        onClick={() => navigate('/atendimentos')}
-                      >
-                        Ver todos atendimentos
-                      </Button>
-                      <Button
-                        variant="contained"
-                        onClick={() => navigate('/agendamentos')}
-                        startIcon={<ReceiptIcon />}
-                        sx={{
-                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                        }}
-                      >
-                        Concluir e Voltar
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Avatar sx={{ bgcolor: '#f44336', mr: 2 }}>
+                    <WarningIcon />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Sem Estoque
+                  </Typography>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 700, textAlign: 'right', color: '#f44336' }}>
+                  {stats.produtosSemEstoque}
+                </Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
       </Grid>
 
-      {/* Dialog de Pagamento */}
-      <Dialog open={openPagamentoDialog} onClose={handleClosePagamentoDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: pagamentoEditando ? '#ff4081' : '#9c27b0', color: 'white' }}>
-          {pagamentoEditando ? 'Editar Pagamento' : 'Novo Pagamento'}
+      {/* Barra de Pesquisa */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Buscar produtos por nome, descrição ou código de barras..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchTerm('')}>
+                    <ClearIcon />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 3,
+              },
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Tabela de Produtos */}
+      <Card>
+        <CardContent>
+          <TableContainer component={Paper} elevation={0}>
+            <Table sx={{ minWidth: 650 }}>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: '#faf5ff' }}>
+                  <TableCell><strong>Produto</strong></TableCell>
+                  <TableCell><strong>Categoria</strong></TableCell>
+                  <TableCell><strong>Fornecedor</strong></TableCell>
+                  <TableCell align="right"><strong>Preço Custo</strong></TableCell>
+                  <TableCell align="right"><strong>Preço Venda</strong></TableCell>
+                  <TableCell align="right"><strong>Lucro</strong></TableCell>
+                  <TableCell align="right"><strong>Estoque</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell align="center"><strong>Ações</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <AnimatePresence>
+                  {filteredProdutos
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((produto, index) => {
+                      const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
+                      const categoria = categorias.find(c => c.id === produto.categoria);
+                      const fornecedor = fornecedores.find(f => f.id === produto.fornecedorId);
+                      const lucro = produto.precoCusto > 0 
+                        ? ((Number(produto.precoVenda) - Number(produto.precoCusto)) / Number(produto.precoCusto) * 100).toFixed(1)
+                        : '0';
+                      
+                      return (
+                        <motion.tr
+                          key={produto.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <TableCell>
+                            <Box>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {produto.nome}
+                              </Typography>
+                              {produto.descricao && (
+                                <Typography variant="caption" color="textSecondary" display="block">
+                                  {produto.descricao}
+                                </Typography>
+                              )}
+                              {produto.codigoBarras && (
+                                <Typography variant="caption" color="textSecondary">
+                                  Código: {produto.codigoBarras}
+                                </Typography>
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            {categoria && (
+                              <Chip
+                                label={categoria.nome}
+                                size="small"
+                                sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {fornecedor ? (
+                              <Box>
+                                <Typography variant="body2">{fornecedor.nome}</Typography>
+                                <Typography variant="caption" color="textSecondary">
+                                  {fornecedor.telefone}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="textSecondary">
+                                Não informado
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            R$ {Number(produto.precoCusto || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            R$ {Number(produto.precoVenda || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              label={`${lucro}%`}
+                              size="small"
+                              color={parseFloat(lucro) > 50 ? 'success' : 'default'}
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                              {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidadeEstoque)}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              Venda: {getUnidadeSimbolo(produto.unidadeVenda)}
+                              {produto.fatorConversao > 1 && ` (1 ${getUnidadeSimbolo(produto.unidadeEstoque)} = ${produto.fatorConversao} ${getUnidadeSimbolo(produto.unidadeVenda)})`}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={status.label}
+                              size="small"
+                              color={status.color}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Editar">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleEdit(produto)}
+                                sx={{ color: '#ff4081' }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Excluir">
+                              <IconButton 
+                                size="small" 
+                                onClick={() => handleDelete(produto.id)}
+                                sx={{ color: '#f44336' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </motion.tr>
+                      );
+                    })}
+                </AnimatePresence>
+                
+                {filteredProdutos.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
+                      <InventoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                      <Typography variant="body1" color="textSecondary">
+                        Nenhum produto encontrado
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={filteredProdutos.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Itens por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Dialog de Produto */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          {selectedProduto ? 'Editar Produto' : 'Novo Produto'}
         </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <FormControl component="fieldset">
-                <FormLabel component="legend">Forma de Pagamento</FormLabel>
-                <RadioGroup
-                  row
-                  value={pagamentoForm.formaPagamento}
-                  onChange={(e) => setPagamentoForm({ ...pagamentoForm, formaPagamento: e.target.value })}
-                >
-                  <FormControlLabel value="dinheiro" control={<Radio />} label="Dinheiro" />
-                  <FormControlLabel value="cartao_credito" control={<Radio />} label="Cartão de Crédito" />
-                  <FormControlLabel value="cartao_debito" control={<Radio />} label="Cartão de Débito" />
-                  <FormControlLabel value="pix" control={<Radio />} label="PIX" />
-                </RadioGroup>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Valor"
-                value={pagamentoForm.valor}
-                onChange={(e) => setPagamentoForm({ ...pagamentoForm, valor: e.target.value })}
-                size="small"
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                  inputProps: { min: 0.01, step: 0.01, max: saldoRestante }
-                }}
-                helperText={`Máximo: R$ ${saldoRestante.toFixed(2)}`}
-              />
-            </Grid>
-
-            {pagamentoForm.formaPagamento === 'cartao_credito' && (
+        <form onSubmit={handleSave}>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Nome do Produto"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  required
+                  size="small"
+                />
+              </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Parcelas</InputLabel>
+                  <InputLabel>Categoria</InputLabel>
                   <Select
-                    value={pagamentoForm.parcelas}
-                    label="Parcelas"
-                    onChange={(e) => setPagamentoForm({ ...pagamentoForm, parcelas: e.target.value })}
+                    value={formData.categoria}
+                    label="Categoria"
+                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                   >
-                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
-                      <MenuItem key={num} value={num}>{num}x</MenuItem>
+                    <MenuItem value="">
+                      <em>Nenhuma</em>
+                    </MenuItem>
+                    {categorias.map(cat => (
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.nome}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-            )}
 
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Descrição"
+                  multiline
+                  rows={2}
+                  value={formData.descricao}
+                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Código de Barras"
+                  value={formData.codigoBarras}
+                  onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Localização"
+                  value={formData.localizacao}
+                  onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
+                  size="small"
+                  placeholder="Ex: Prateleira A, Setor 1"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Preço de Custo"
+                  type="number"
+                  value={formData.precoCusto}
+                  onChange={(e) => setFormData({ ...formData, precoCusto: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                    inputProps: { min: 0, step: 0.01 }
+                  }}
+                  required
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Preço de Venda"
+                  type="number"
+                  value={formData.precoVenda}
+                  onChange={(e) => setFormData({ ...formData, precoVenda: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                    inputProps: { min: 0, step: 0.01 }
+                  }}
+                  required
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Quantidade em Estoque"
+                  type="number"
+                  value={formData.quantidadeEstoque}
+                  onChange={(e) => setFormData({ ...formData, quantidadeEstoque: e.target.value })}
+                  required
+                  size="small"
+                  inputProps={{ min: 0, step: 1 }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Unidade de Estoque</InputLabel>
+                  <Select
+                    value={formData.unidadeEstoque}
+                    label="Unidade de Estoque"
+                    onChange={(e) => setFormData({ ...formData, unidadeEstoque: e.target.value })}
+                  >
+                    {UNIDADES_MEDIDA.map(unidade => (
+                      <MenuItem key={unidade.value} value={unidade.value}>
+                        {unidade.label} ({unidade.simbolo})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Estoque Mínimo"
+                  type="number"
+                  value={formData.estoqueMinimo}
+                  onChange={(e) => setFormData({ ...formData, estoqueMinimo: e.target.value })}
+                  helperText="Alerta quando abaixo deste valor"
+                  size="small"
+                  inputProps={{ min: 0, step: 1 }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Unidade de Venda</InputLabel>
+                  <Select
+                    value={formData.unidadeVenda}
+                    label="Unidade de Venda"
+                    onChange={(e) => setFormData({ ...formData, unidadeVenda: e.target.value })}
+                  >
+                    {UNIDADES_MEDIDA.map(unidade => (
+                      <MenuItem key={unidade.value} value={unidade.value}>
+                        {unidade.label} ({unidade.simbolo})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Fator de Conversão"
+                  type="number"
+                  value={formData.fatorConversao}
+                  onChange={(e) => setFormData({ ...formData, fatorConversao: e.target.value })}
+                  helperText="1 unidade estoque = X unidades venda"
+                  size="small"
+                  inputProps={{ min: 0.01, step: 0.01 }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Fornecedor</InputLabel>
+                  <Select
+                    value={formData.fornecedorId}
+                    label="Fornecedor"
+                    onChange={(e) => setFormData({ ...formData, fornecedorId: e.target.value })}
+                  >
+                    <MenuItem value="">
+                      <em>Nenhum</em>
+                    </MenuItem>
+                    {fornecedores.map(forn => (
+                      <MenuItem key={forn.id} value={forn.id}>
+                        {forn.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+              }}
+            >
+              Salvar
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Dialog de Categorias */}
+      <Dialog open={openCategoriaDialog} onClose={handleCloseCategoriaDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff4081', color: 'white' }}>
+          {categoriaEditando ? 'Editar Categoria' : 'Nova Categoria'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Observações"
+                label="Nome da Categoria"
+                value={categoriaForm.nome}
+                onChange={(e) => setCategoriaForm({ ...categoriaForm, nome: e.target.value })}
+                required
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Descrição"
                 multiline
                 rows={2}
-                value={pagamentoForm.observacoes}
-                onChange={(e) => setPagamentoForm({ ...pagamentoForm, observacoes: e.target.value })}
+                value={categoriaForm.descricao}
+                onChange={(e) => setCategoriaForm({ ...categoriaForm, descricao: e.target.value })}
                 size="small"
-                placeholder="Observações sobre o pagamento..."
+                placeholder="Descrição da categoria"
               />
+            </Grid>
+
+            {/* Lista de categorias existentes */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>
+                Categorias Existentes
+              </Typography>
+              <Paper variant="outlined" sx={{ maxHeight: 200, overflow: 'auto' }}>
+                <List dense>
+                  {categorias.map((cat) => (
+                    <React.Fragment key={cat.id}>
+                      <ListItem>
+                        <ListItemText
+                          primary={cat.nome}
+                          secondary={cat.descricao || 'Sem descrição'}
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => {
+                              handleOpenCategoriaDialog(cat);
+                            }}
+                            sx={{ mr: 1, color: '#ff4081' }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => handleExcluirCategoria(cat.id)}
+                            sx={{ color: '#f44336' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                      <Divider />
+                    </React.Fragment>
+                  ))}
+                </List>
+              </Paper>
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePagamentoDialog}>Cancelar</Button>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseCategoriaDialog}>Cancelar</Button>
           <Button
-            onClick={handleSalvarPagamento}
+            onClick={handleSalvarCategoria}
             variant="contained"
-            sx={{ bgcolor: '#9c27b0' }}
+            startIcon={<SaveIcon />}
+            sx={{ bgcolor: '#ff4081' }}
           >
-            {pagamentoEditando ? 'Atualizar' : 'Registrar'}
+            {categoriaEditando ? 'Atualizar' : 'Salvar'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Confirmar Exclusão
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Tem certeza que deseja excluir este produto?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Esta ação não poderá ser desfeita.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenDeleteDialog(false)}>Cancelar</Button>
+          <Button 
+            variant="contained" 
+            color="error"
+            onClick={confirmDelete}
+          >
+            Excluir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
 
-export default ModernAtendimento;
+export default ModernEstoque;
