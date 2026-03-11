@@ -37,8 +37,6 @@ import {
   useTheme,
   CircularProgress,
   Link,
-  CardMedia,
-  CardActions,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -54,14 +52,11 @@ import {
   ContentCut as CutIcon,
   Brush as BrushIcon,
   Face as FaceIcon,
-  Favorite as FavoriteIcon,
-  Comment as CommentIcon,
-  Share as ShareIcon,
-  ThumbUp as ThumbUpIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
+import { InstagramEmbed, FacebookEmbed } from 'react-social-media-embed';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -85,78 +80,6 @@ const LoadingSpinner = () => (
     </motion.div>
   </Box>
 );
-
-// Componente de Post do Instagram
-const InstagramPost = ({ post, instagramUser }) => {
-  return (
-    <Card variant="outlined" sx={{ mb: 2 }}>
-      <CardMedia
-        component="img"
-        height="200"
-        image={post.imagem}
-        alt={post.legenda}
-      />
-      <CardContent>
-        <Typography variant="body2" gutterBottom>
-          {post.legenda}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
-            <Typography variant="caption">{post.curtidas}</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CommentIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
-            <Typography variant="caption">{post.comentarios}</Typography>
-          </Box>
-        </Box>
-      </CardContent>
-      <CardActions>
-        <Button 
-          size="small" 
-          href={post.url} 
-          target="_blank"
-          sx={{ color: '#E1306C' }}
-        >
-          Ver no Instagram
-        </Button>
-      </CardActions>
-    </Card>
-  );
-};
-
-// Componente de Post do Facebook
-const FacebookPost = ({ post }) => {
-  return (
-    <Card variant="outlined" sx={{ mb: 2 }}>
-      <CardContent>
-        <Typography variant="body1" gutterBottom>
-          {post.mensagem}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
-            <Typography variant="caption">{post.curtidas}</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ShareIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
-            <Typography variant="caption">{post.compartilhamentos}</Typography>
-          </Box>
-        </Box>
-      </CardContent>
-      <CardActions>
-        <Button 
-          size="small" 
-          href={post.url} 
-          target="_blank"
-          sx={{ color: '#4267B2' }}
-        >
-          Ver no Facebook
-        </Button>
-      </CardActions>
-    </Card>
-  );
-};
 
 function SiteSalao() {
   const theme = useTheme();
@@ -191,9 +114,10 @@ function SiteSalao() {
     whatsapp: false
   });
 
-  // Posts simulados das redes
-  const [postsInstagram, setPostsInstagram] = useState([]);
-  const [postsFacebook, setPostsFacebook] = useState([]);
+  // URLs das redes sociais
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [instagramUser, setInstagramUser] = useState('');
 
   // Depoimentos simulados
   const depoimentos = [
@@ -232,13 +156,21 @@ function SiteSalao() {
         whatsapp: !!contato.whatsapp
       });
 
-      // Carregar posts simulados se as redes estiverem ativas
+      // Configurar URLs das redes
       if (instagramAtivo) {
-        carregarPostsInstagram();
+        const user = contato.instagram.replace('@', '').trim();
+        setInstagramUser(user);
+        // URL do perfil do Instagram
+        setInstagramUrl(`https://www.instagram.com/${user}/`);
       }
       
       if (facebookAtivo) {
-        carregarPostsFacebook();
+        let fbUrl = contato.facebook;
+        // Se for nome de usuário, converter para URL completa
+        if (!fbUrl.startsWith('http')) {
+          fbUrl = `https://facebook.com/${fbUrl}`;
+        }
+        setFacebookUrl(fbUrl);
       }
       
     } catch (err) {
@@ -248,65 +180,6 @@ function SiteSalao() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const carregarPostsInstagram = () => {
-    // Posts simulados do Instagram
-    const posts = [
-      {
-        id: 1,
-        url: 'https://www.instagram.com/p/Cxample1/',
-        imagem: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=400',
-        legenda: 'Novo corte disponível! ✂️ #cabelo #beleza',
-        curtidas: 45,
-        comentarios: 12
-      },
-      {
-        id: 2,
-        url: 'https://www.instagram.com/p/Cxample2/',
-        imagem: 'https://images.unsplash.com/photo-1522337360782-3b13b78a3a6b?w=400',
-        legenda: 'Hidratação profunda 💆‍♀️ #tratamento #cabelos',
-        curtidas: 67,
-        comentarios: 8
-      },
-      {
-        id: 3,
-        url: 'https://www.instagram.com/p/Cxample3/',
-        imagem: 'https://images.unsplash.com/photo-1487412947148-5cce1659a9f5?w=400',
-        legenda: 'Maquiagem para festas ✨ #maquiagem #makeup',
-        curtidas: 89,
-        comentarios: 15
-      }
-    ];
-    setPostsInstagram(posts);
-  };
-
-  const carregarPostsFacebook = () => {
-    // Posts simulados do Facebook
-    const posts = [
-      {
-        id: 1,
-        url: 'https://www.facebook.com/permalink.php?story_fbid=example1',
-        mensagem: '✨ Promoção especial essa semana! Corte + Escova por apenas R$ 89,90. Agende já!',
-        curtidas: 32,
-        compartilhamentos: 8
-      },
-      {
-        id: 2,
-        url: 'https://www.facebook.com/permalink.php?story_fbid=example2',
-        mensagem: '👋 Novo profissional na equipe! Seja bem-vindo João, especialista em coloração.',
-        curtidas: 28,
-        compartilhamentos: 5
-      },
-      {
-        id: 3,
-        url: 'https://www.facebook.com/permalink.php?story_fbid=example3',
-        mensagem: '🎉 Resultado incrível da nossa cliente! Mais um trabalho finalizado com sucesso.',
-        curtidas: 45,
-        compartilhamentos: 12
-      }
-    ];
-    setPostsFacebook(posts);
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -747,7 +620,7 @@ function SiteSalao() {
 
             <Grid container spacing={4}>
               {/* Instagram Feed - Só aparece se Instagram estiver configurado */}
-              {redesAtivas.instagram && (
+              {redesAtivas.instagram && instagramUser && (
                 <Grid item xs={12} md={redesAtivas.facebook ? 6 : 12}>
                   <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -755,31 +628,34 @@ function SiteSalao() {
                       <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         Instagram
                       </Typography>
-                      {contato.instagram && (
-                        <Button
-                          href={`https://instagram.com/${contato.instagram.replace('@', '')}`}
-                          target="_blank"
-                          size="small"
-                          sx={{ ml: 'auto' }}
-                        >
-                          Ver perfil
-                        </Button>
-                      )}
+                      <Button
+                        href={`https://instagram.com/${instagramUser}`}
+                        target="_blank"
+                        size="small"
+                        sx={{ ml: 'auto' }}
+                      >
+                        Ver perfil
+                      </Button>
                     </Box>
 
-                    <Grid container spacing={2}>
-                      {postsInstagram.map((post) => (
-                        <Grid item xs={12} key={post.id}>
-                          <InstagramPost post={post} instagramUser={contato.instagram} />
-                        </Grid>
-                      ))}
-                    </Grid>
+                    <Box sx={{ 
+                      width: '100%', 
+                      display: 'flex', 
+                      justifyContent: 'center',
+                      '& > div': { width: '100% !important' }
+                    }}>
+                      <InstagramEmbed
+                        url={`https://www.instagram.com/${instagramUser}/`}
+                        width="100%"
+                        captioned={true}
+                      />
+                    </Box>
                   </Paper>
                 </Grid>
               )}
 
               {/* Facebook Feed - Só aparece se Facebook estiver configurado */}
-              {redesAtivas.facebook && (
+              {redesAtivas.facebook && facebookUrl && (
                 <Grid item xs={12} md={redesAtivas.instagram ? 6 : 12}>
                   <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -787,25 +663,27 @@ function SiteSalao() {
                       <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         Facebook
                       </Typography>
-                      {contato.facebook && (
-                        <Button
-                          href={`https://facebook.com/${contato.facebook}`}
-                          target="_blank"
-                          size="small"
-                          sx={{ ml: 'auto' }}
-                        >
-                          Ver página
-                        </Button>
-                      )}
+                      <Button
+                        href={facebookUrl}
+                        target="_blank"
+                        size="small"
+                        sx={{ ml: 'auto' }}
+                      >
+                        Ver página
+                      </Button>
                     </Box>
 
-                    <Grid container spacing={2}>
-                      {postsFacebook.map((post) => (
-                        <Grid item xs={12} key={post.id}>
-                          <FacebookPost post={post} />
-                        </Grid>
-                      ))}
-                    </Grid>
+                    <Box sx={{ 
+                      width: '100%', 
+                      display: 'flex', 
+                      justifyContent: 'center',
+                      '& > div': { width: '100% !important' }
+                    }}>
+                      <FacebookEmbed
+                        url={facebookUrl}
+                        width="100%"
+                      />
+                    </Box>
                   </Paper>
                 </Grid>
               )}
@@ -883,9 +761,9 @@ function SiteSalao() {
                   </IconButton>
                 )}
                 
-                {redesAtivas.instagram && contato.instagram && (
+                {redesAtivas.instagram && instagramUser && (
                   <IconButton 
-                    href={`https://instagram.com/${contato.instagram.replace('@', '')}`} 
+                    href={`https://instagram.com/${instagramUser}`} 
                     target="_blank" 
                     sx={{ color: '#E1306C' }}
                   >
@@ -893,9 +771,9 @@ function SiteSalao() {
                   </IconButton>
                 )}
                 
-                {redesAtivas.facebook && contato.facebook && (
+                {redesAtivas.facebook && facebookUrl && (
                   <IconButton 
-                    href={`https://facebook.com/${contato.facebook}`} 
+                    href={facebookUrl} 
                     target="_blank" 
                     sx={{ color: '#4267B2' }}
                   >
