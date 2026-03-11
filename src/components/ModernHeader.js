@@ -1,3 +1,4 @@
+// src/components/ModernHeader.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   AppBar,
@@ -16,6 +17,9 @@ import {
   ListItemIcon,
   Divider,
   Button,
+  Drawer,
+  Popover,
+  Chip,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -28,6 +32,13 @@ import {
   Info as InfoIcon,
   Delete as DeleteIcon,
   DoneAll as DoneAllIcon,
+  Close as CloseIcon,
+  Inventory as InventoryIcon,
+  Receipt as ReceiptIcon,
+  People as PeopleIcon,
+  Spa as SpaIcon,
+  ContentCut as CutIcon,
+  AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -71,7 +82,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
     transition: theme.transitions.create('width'),
     width: '100%',
     [theme.breakpoints.up('md')]: {
-      width: '20ch',
+      width: '30ch',
     },
   },
 }));
@@ -80,10 +91,24 @@ function ModernHeader() {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationsAnchor, setNotificationsAnchor] = useState(null);
+  const [searchAnchor, setSearchAnchor] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
+  
+  // 🔥 ESTADOS PARA BUSCA
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState({
+    clientes: [],
+    profissionais: [],
+    servicos: [],
+    produtos: [],
+    agendamentos: [],
+    atendimentos: [],
+  });
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef(null);
   
   const usuarioRef = useRef(usuario);
 
@@ -140,11 +165,11 @@ function ModernHeader() {
   const carregarNotificacoes = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      if (user && user.uid) { // Usar user.uid em vez de user.id
+      if (user && user.uid) {
         console.log('Header - Buscando notificações para:', user.uid);
         
         const data = await firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: user.uid } // Usar user.uid
+          { field: 'usuarioId', operator: '==', value: user.uid }
         ], 'data');
         
         setNotifications(data);
@@ -153,6 +178,401 @@ function ModernHeader() {
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     }
+  };
+
+  // 🔥 FUNÇÃO DE BUSCA GLOBAL
+  const realizarBusca = async (termo) => {
+    if (!termo || termo.length < 2) {
+      setSearchResults({
+        clientes: [],
+        profissionais: [],
+        servicos: [],
+        produtos: [],
+        agendamentos: [],
+        atendimentos: [],
+      });
+      return;
+    }
+
+    setSearchLoading(true);
+    const termoLower = termo.toLowerCase();
+
+    try {
+      // Buscar em paralelo todas as coleções
+      const [
+        clientesData,
+        profissionaisData,
+        servicosData,
+        produtosData,
+        agendamentosData,
+        atendimentosData,
+      ] = await Promise.all([
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('agendamentos').catch(() => []),
+        firebaseService.getAll('atendimentos').catch(() => []),
+      ]);
+
+      // Filtrar resultados
+      const resultados = {
+        clientes: (clientesData || []).filter(c => 
+          c.nome?.toLowerCase().includes(termoLower) ||
+          c.email?.toLowerCase().includes(termoLower) ||
+          c.telefone?.includes(termo)
+        ).slice(0, 5),
+
+        profissionais: (profissionaisData || []).filter(p => 
+          p.nome?.toLowerCase().includes(termoLower) ||
+          p.especialidade?.toLowerCase().includes(termoLower) ||
+          p.email?.toLowerCase().includes(termoLower)
+        ).slice(0, 5),
+
+        servicos: (servicosData || []).filter(s => 
+          s.nome?.toLowerCase().includes(termoLower) ||
+          s.descricao?.toLowerCase().includes(termoLower)
+        ).slice(0, 5),
+
+        produtos: (produtosData || []).filter(p => 
+          p.nome?.toLowerCase().includes(termoLower) ||
+          p.descricao?.toLowerCase().includes(termoLower) ||
+          p.codigoBarras?.includes(termo)
+        ).slice(0, 5),
+
+        agendamentos: (agendamentosData || []).filter(a => 
+          a.clienteNome?.toLowerCase().includes(termoLower) ||
+          a.profissionalNome?.toLowerCase().includes(termoLower) ||
+          a.servicoNome?.toLowerCase().includes(termoLower)
+        ).slice(0, 5),
+
+        atendimentos: (atendimentosData || []).filter(a => 
+          a.clienteNome?.toLowerCase().includes(termoLower) ||
+          a.profissionalNome?.toLowerCase().includes(termoLower) ||
+          a.servicoNome?.toLowerCase().includes(termoLower)
+        ).slice(0, 5),
+      };
+
+      setSearchResults(resultados);
+    } catch (error) {
+      console.error('Erro na busca:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // 🔥 HANDLER DE MUDANÇA NA BUSCA
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+
+    // Debounce para evitar muitas requisições
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    searchTimeout.current = setTimeout(() => {
+      realizarBusca(value);
+    }, 500);
+  };
+
+  // 🔥 HANDLER DE FOCO NA BUSCA
+  const handleSearchFocus = (e) => {
+    setSearchAnchor(e.currentTarget);
+  };
+
+  const handleSearchClose = () => {
+    setSearchAnchor(null);
+  };
+
+  // 🔥 FUNÇÃO PARA NAVEGAR PARA O RESULTADO
+  const handleResultClick = (tipo, id) => {
+    const rotas = {
+      cliente: `/clientes`,
+      profissional: `/profissionais`,
+      servico: `/servicos`,
+      produto: `/estoque`,
+      agendamento: `/agendamentos`,
+      atendimento: `/atendimentos`,
+    };
+
+    // Para tipos que precisam abrir o item específico
+    if (tipo === 'cliente') {
+      navigate(`/clientes`);
+      // Idealmente abriria o detalhe, mas precisa de um estado global
+      toast.success(`Cliente encontrado! Verifique na lista.`);
+    } else {
+      navigate(rotas[tipo]);
+    }
+    
+    setSearchTerm('');
+    setSearchResults({
+      clientes: [],
+      profissionais: [],
+      servicos: [],
+      produtos: [],
+      agendamentos: [],
+      atendimentos: [],
+    });
+    handleSearchClose();
+  };
+
+  // 🔥 RENDERIZAR RESULTADOS DA BUSCA
+  const renderSearchResults = () => {
+    const totalResults = Object.values(searchResults).reduce((acc, arr) => acc + arr.length, 0);
+
+    if (searchTerm.length < 2) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+          <Typography variant="body2" color="textSecondary">
+            Digite pelo menos 2 caracteres para buscar
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (searchLoading) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          >
+            <SearchIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+          </motion.div>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Buscando...
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (totalResults === 0) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+          <Typography variant="body2" color="textSecondary">
+            Nenhum resultado encontrado para "{searchTerm}"
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <List sx={{ p: 0 }}>
+        {/* Clientes */}
+        {searchResults.clientes.length > 0 && (
+          <>
+            <ListItem sx={{ bgcolor: '#f3e5f5' }}>
+              <ListItemIcon>
+                <PeopleIcon sx={{ color: '#9c27b0' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Clientes ({searchResults.clientes.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.clientes.map(cliente => (
+              <ListItem 
+                key={cliente.id} 
+                button 
+                onClick={() => handleResultClick('cliente', cliente.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={cliente.nome}
+                  secondary={cliente.telefone || cliente.email}
+                />
+                <Chip label="Cliente" size="small" sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }} />
+              </ListItem>
+            ))}
+          </>
+        )}
+
+        {/* Profissionais */}
+        {searchResults.profissionais.length > 0 && (
+          <>
+            <Divider />
+            <ListItem sx={{ bgcolor: '#fff3e0' }}>
+              <ListItemIcon>
+                <PersonIcon sx={{ color: '#ff9800' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Profissionais ({searchResults.profissionais.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.profissionais.map(prof => (
+              <ListItem 
+                key={prof.id} 
+                button 
+                onClick={() => handleResultClick('profissional', prof.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={prof.nome}
+                  secondary={prof.especialidade}
+                />
+                <Chip label="Profissional" size="small" sx={{ bgcolor: '#fff3e0', color: '#ff9800' }} />
+              </ListItem>
+            ))}
+          </>
+        )}
+
+        {/* Serviços */}
+        {searchResults.servicos.length > 0 && (
+          <>
+            <Divider />
+            <ListItem sx={{ bgcolor: '#f3e5f5' }}>
+              <ListItemIcon>
+                <CutIcon sx={{ color: '#9c27b0' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Serviços ({searchResults.servicos.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.servicos.map(servico => (
+              <ListItem 
+                key={servico.id} 
+                button 
+                onClick={() => handleResultClick('servico', servico.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={servico.nome}
+                  secondary={`R$ ${servico.preco?.toFixed(2)}`}
+                />
+                <Chip label="Serviço" size="small" sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }} />
+              </ListItem>
+            ))}
+          </>
+        )}
+
+        {/* Produtos */}
+        {searchResults.produtos.length > 0 && (
+          <>
+            <Divider />
+            <ListItem sx={{ bgcolor: '#ffebee' }}>
+              <ListItemIcon>
+                <InventoryIcon sx={{ color: '#f44336' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Produtos ({searchResults.produtos.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.produtos.map(produto => (
+              <ListItem 
+                key={produto.id} 
+                button 
+                onClick={() => handleResultClick('produto', produto.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={produto.nome}
+                  secondary={`Estoque: ${produto.quantidadeEstoque} | R$ ${produto.precoVenda?.toFixed(2)}`}
+                />
+                <Chip label="Produto" size="small" sx={{ bgcolor: '#ffebee', color: '#f44336' }} />
+              </ListItem>
+            ))}
+          </>
+        )}
+
+        {/* Agendamentos */}
+        {searchResults.agendamentos.length > 0 && (
+          <>
+            <Divider />
+            <ListItem sx={{ bgcolor: '#e3f2fd' }}>
+              <ListItemIcon>
+                <EventIcon sx={{ color: '#2196f3' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Agendamentos ({searchResults.agendamentos.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.agendamentos.map(agendamento => (
+              <ListItem 
+                key={agendamento.id} 
+                button 
+                onClick={() => handleResultClick('agendamento', agendamento.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={agendamento.clienteNome}
+                  secondary={`${agendamento.data} às ${agendamento.horario} - ${agendamento.servicoNome}`}
+                />
+                <Chip 
+                  label={agendamento.status} 
+                  size="small" 
+                  color={
+                    agendamento.status === 'confirmado' ? 'success' :
+                    agendamento.status === 'pendente' ? 'warning' : 'default'
+                  }
+                />
+              </ListItem>
+            ))}
+          </>
+        )}
+
+        {/* Atendimentos */}
+        {searchResults.atendimentos.length > 0 && (
+          <>
+            <Divider />
+            <ListItem sx={{ bgcolor: '#e8f5e9' }}>
+              <ListItemIcon>
+                <ReceiptIcon sx={{ color: '#4caf50' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary={
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Atendimentos ({searchResults.atendimentos.length})
+                  </Typography>
+                }
+              />
+            </ListItem>
+            {searchResults.atendimentos.map(atendimento => (
+              <ListItem 
+                key={atendimento.id} 
+                button 
+                onClick={() => handleResultClick('atendimento', atendimento.id)}
+                sx={{ pl: 4 }}
+              >
+                <ListItemText
+                  primary={atendimento.clienteNome}
+                  secondary={`R$ ${atendimento.valorTotal?.toFixed(2)} - ${atendimento.status}`}
+                />
+                <Chip 
+                  label={atendimento.status} 
+                  size="small" 
+                  color={
+                    atendimento.status === 'finalizado' ? 'success' :
+                    atendimento.status === 'em_andamento' ? 'warning' : 'default'
+                  }
+                />
+              </ListItem>
+            ))}
+          </>
+        )}
+      </List>
+    );
   };
 
   const handleMenu = (event) => {
@@ -306,15 +726,56 @@ function ModernHeader() {
           Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋
         </Typography>
 
+        {/* 🔥 CAMPO DE BUSCA */}
         <Search>
           <SearchIconWrapper>
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
-            placeholder="Buscar clientes, serviços..."
+            placeholder="Buscar clientes, serviços, produtos..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            onFocus={handleSearchFocus}
             inputProps={{ 'aria-label': 'search' }}
           />
         </Search>
+
+        {/* 🔥 POPOVER DE RESULTADOS DA BUSCA */}
+        <Popover
+          open={Boolean(searchAnchor) && searchTerm.length > 0}
+          anchorEl={searchAnchor}
+          onClose={handleSearchClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+          PaperProps={{
+            sx: {
+              mt: 1,
+              width: 500,
+              maxHeight: 500,
+              borderRadius: 2,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            },
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Resultados da busca
+            </Typography>
+            <IconButton size="small" onClick={handleSearchClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <Divider />
+          <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
+            {renderSearchResults()}
+          </Box>
+        </Popover>
 
         <Box sx={{ flexGrow: 1 }} />
 
