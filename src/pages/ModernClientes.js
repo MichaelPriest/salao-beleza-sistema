@@ -84,6 +84,7 @@ function ModernClientes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [clientes, setClientes] = useState([]);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -111,26 +112,37 @@ function ModernClientes() {
   });
 
   // 🔥 FUNÇÃO DE IMPRESSÃO CORRIGIDA
-  const handlePrintCliente = useReactToPrint({
+  const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: selectedCliente 
-      ? `cliente_${selectedCliente.nome?.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}`
+      ? `cliente_${String(selectedCliente.nome || 'sem_nome').replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}`
       : `cliente_${new Date().toISOString().split('T')[0]}`,
     onBeforeGetContent: () => {
-      if (!selectedCliente) {
-        toast.error('Nenhum cliente selecionado para impressão');
-        return;
-      }
+      setIsPrinting(true);
       toast.loading('Preparando impressão...', { id: 'print' });
     },
     onAfterPrint: () => {
-      toast.success('Impressão enviada!', { id: 'print' });
+      setIsPrinting(false);
+      toast.success('Impressão concluída!', { id: 'print' });
     },
     onPrintError: (error) => {
+      setIsPrinting(false);
       console.error('Erro na impressão:', error);
-      toast.error('Erro ao imprimir', { id: 'print' });
+      toast.error('Erro ao imprimir. Tente novamente.', { id: 'print' });
     }
   });
+
+  const handlePrintCliente = () => {
+    if (!selectedCliente) {
+      toast.error('Nenhum cliente selecionado para impressão');
+      return;
+    }
+    
+    // Pequeno delay para garantir que o componente esteja renderizado
+    setTimeout(() => {
+      handlePrint();
+    }, 100);
+  };
 
   // Carregar clientes do Firebase
   useEffect(() => {
@@ -502,6 +514,7 @@ function ModernClientes() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: index * 0.05 }}
+                      style={{ display: 'table-row' }}
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -520,7 +533,7 @@ function ModernClientes() {
                               {cliente.nome}
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
-                              ID: {cliente.id?.substring(0, 8)}
+                              ID: {cliente.id ? String(cliente.id).substring(0, 8) : 'N/A'}
                             </Typography>
                           </Box>
                         </Box>
@@ -977,15 +990,16 @@ function ModernClientes() {
               variant="outlined"
               startIcon={<PrintIcon />}
               onClick={handlePrintCliente}
+              disabled={isPrinting}
               sx={{ mr: 1 }}
             >
-              Imprimir Ficha
+              {isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}
             </Button>
           )}
         </DialogActions>
       </Dialog>
 
-      {/* Componente oculto para impressão - SÓ APARECE QUANDO selectedCliente EXISTE */}
+      {/* Componente oculto para impressão */}
       {selectedCliente && (
         <Box sx={{ display: 'none' }}>
           <ImprimirCliente
