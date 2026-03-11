@@ -40,6 +40,9 @@ import {
   Tabs,
   Tab,
   Badge,
+  ToggleButton,
+  ToggleButtonGroup,
+  FormHelperText,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -56,6 +59,9 @@ import {
   Map as MapIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
+  GridOn as GridIcon,
+  ViewModule as ModuleIcon,
+  LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -111,6 +117,163 @@ const SETORES = [
   { id: 'G', nome: 'Setor G - Perfumaria', cor: '#00bcd4' },
   { id: 'H', nome: 'Setor H - Promoções', cor: '#795548' },
 ];
+
+// Configuração das prateleiras por setor
+const PRATELEIRAS_POR_SETOR = {
+  'A': Array.from({ length: 20 }, (_, i) => ({
+    id: `A-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira A-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'B': Array.from({ length: 20 }, (_, i) => ({
+    id: `B-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira B-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'C': Array.from({ length: 15 }, (_, i) => ({
+    id: `C-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira C-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'D': Array.from({ length: 15 }, (_, i) => ({
+    id: `D-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira D-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'E': Array.from({ length: 25 }, (_, i) => ({
+    id: `E-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira E-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'F': Array.from({ length: 10 }, (_, i) => ({
+    id: `F-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira F-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'G': Array.from({ length: 20 }, (_, i) => ({
+    id: `G-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira G-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+  'H': Array.from({ length: 30 }, (_, i) => ({
+    id: `H-${String(i + 1).padStart(2, '0')}`,
+    label: `Prateleira H-${String(i + 1).padStart(2, '0')}`,
+    posicao: `${Math.floor(i / 5) + 1}-${(i % 5) + 1}`,
+  })),
+};
+
+// Componente de seleção de prateleira
+const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
+  const [modoVisualizacao, setModoVisualizacao] = useState('grade'); // 'grade' ou 'lista'
+  
+  if (!setor) {
+    return (
+      <FormControl fullWidth size="small" error={error}>
+        <InputLabel>Prateleira</InputLabel>
+        <Select
+          value={value || ''}
+          label="Prateleira"
+          onChange={(e) => onChange(e.target.value)}
+          disabled
+        >
+          <MenuItem value="">Selecione um setor primeiro</MenuItem>
+        </Select>
+        {helperText && <FormHelperText>{helperText}</FormHelperText>}
+      </FormControl>
+    );
+  }
+
+  const prateleirasDisponiveis = PRATELEIRAS_POR_SETOR[setor] || [];
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Typography variant="caption" color="textSecondary">
+          Prateleiras disponíveis no {SETORES.find(s => s.id === setor)?.nome}
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          value={modoVisualizacao}
+          exclusive
+          onChange={(e, novoModo) => novoModo && setModoVisualizacao(novoModo)}
+        >
+          <ToggleButton value="grade">
+            <GridIcon fontSize="small" />
+          </ToggleButton>
+          <ToggleButton value="lista">
+            <ViewModule fontSize="small" />
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      {modoVisualizacao === 'grade' ? (
+        <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
+          <Grid container spacing={1}>
+            {prateleirasDisponiveis.map((prateleira) => {
+              const isSelected = value === prateleira.id;
+              const setorInfo = SETORES.find(s => s.id === setor);
+              
+              return (
+                <Grid item xs={6} sm={4} md={3} key={prateleira.id}>
+                  <Paper
+                    variant="outlined"
+                    onClick={() => onChange(prateleira.id)}
+                    sx={{
+                      p: 1.5,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      bgcolor: isSelected ? `${setorInfo?.cor}20` : 'transparent',
+                      borderColor: isSelected ? setorInfo?.cor : '#e0e0e0',
+                      borderWidth: isSelected ? 2 : 1,
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: setorInfo?.cor,
+                        bgcolor: `${setorInfo?.cor}10`,
+                      },
+                    }}
+                  >
+                    <LocationIcon sx={{ fontSize: 20, color: isSelected ? setorInfo?.cor : '#999', mb: 0.5 }} />
+                    <Typography variant="body2" sx={{ fontWeight: isSelected ? 600 : 400 }}>
+                      {prateleira.id}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Pos: {prateleira.posicao}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Paper>
+      ) : (
+        <FormControl fullWidth size="small" error={error}>
+          <InputLabel>Prateleira</InputLabel>
+          <Select
+            value={value || ''}
+            label="Prateleira"
+            onChange={(e) => onChange(e.target.value)}
+            MenuProps={{ style: { maxHeight: 400 } }}
+          >
+            <MenuItem value="">
+              <em>Selecione uma prateleira</em>
+            </MenuItem>
+            {prateleirasDisponiveis.map((prateleira) => (
+              <MenuItem key={prateleira.id} value={prateleira.id}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <LocationIcon sx={{ fontSize: 16, color: SETORES.find(s => s.id === setor)?.cor }} />
+                  <Typography variant="body2">
+                    {prateleira.label} (Posição: {prateleira.posicao})
+                  </Typography>
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+          {helperText && <FormHelperText>{helperText}</FormHelperText>}
+        </FormControl>
+      )}
+    </Box>
+  );
+};
 
 // Componente de relatório para impressão
 const RelatorioEstoque = React.forwardRef((props, ref) => {
@@ -205,7 +368,16 @@ const RelatorioEstoque = React.forwardRef((props, ref) => {
                     {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidadeEstoque)}
                   </TableCell>
                   <TableCell>
-                    {setor ? `${setor.nome} ${produto.prateleira ? `- ${produto.prateleira}` : ''}` : '-'}
+                    {setor ? (
+                      <Box>
+                        <Typography variant="body2">{setor.nome}</Typography>
+                        {produto.prateleira && (
+                          <Typography variant="caption" color="textSecondary">
+                            Prateleira: {produto.prateleira}
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : '-'}
                   </TableCell>
                   <TableCell>
                     <Box
@@ -423,7 +595,10 @@ function ModernEstoque() {
       const novasCelulas = mapaConfig.celulas.map(celula => {
         const produtosNaCelula = produtos.filter(p => 
           p.setor === celula.setor && 
-          p.prateleira === `${celula.linha}-${celula.coluna}`
+          p.prateleira && 
+          PRATELEIRAS_POR_SETOR[p.setor]?.find(pr => 
+            pr.id === p.prateleira && pr.posicao === `${celula.linha + 1}-${celula.coluna + 1}`
+          )
         );
         return {
           ...celula,
@@ -451,7 +626,8 @@ function ModernEstoque() {
         p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.codigoBarras?.includes(searchTerm) ||
-        p.setor?.toLowerCase().includes(searchTerm.toLowerCase())
+        p.setor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.prateleira?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -749,11 +925,12 @@ function ModernEstoque() {
   // FUNÇÕES PARA RELATÓRIOS
   const handleExportCSV = () => {
     try {
-      const headers = ['Nome', 'Categoria', 'Fornecedor', 'Preço Custo', 'Preço Venda', 'Estoque', 'Setor', 'Status'];
+      const headers = ['Nome', 'Categoria', 'Fornecedor', 'Preço Custo', 'Preço Venda', 'Estoque', 'Setor', 'Prateleira', 'Status'];
       const data = produtos.map(p => {
         const categoria = categorias.find(c => c.id === p.categoria);
         const fornecedor = fornecedores.find(f => f.id === p.fornecedorId);
         const status = getEstoqueStatus(p.quantidadeEstoque, p.estoqueMinimo);
+        const setor = SETORES.find(s => s.id === p.setor);
         
         return [
           p.nome,
@@ -762,7 +939,8 @@ function ModernEstoque() {
           p.precoCusto?.toFixed(2),
           p.precoVenda?.toFixed(2),
           `${p.quantidadeEstoque} ${getUnidadeSimbolo(p.unidadeEstoque)}`,
-          p.setor || '-',
+          setor?.nome || '-',
+          p.prateleira || '-',
           status.label,
         ];
       });
@@ -822,6 +1000,13 @@ function ModernEstoque() {
                       <>
                         <Typography variant="body2"><strong>Produtos:</strong> {celula.produtos.length}</Typography>
                         <Typography variant="body2"><strong>Quantidade:</strong> {celula.quantidade}</Typography>
+                        <Box sx={{ mt: 1 }}>
+                          {celula.produtos.map(p => (
+                            <Typography key={p.id} variant="caption" display="block">
+                              • {p.nome} ({p.quantidadeEstoque} {getUnidadeSimbolo(p.unidadeEstoque)})
+                            </Typography>
+                          ))}
+                        </Box>
                       </>
                     )}
                   </Box>
@@ -1054,7 +1239,7 @@ function ModernEstoque() {
           <TextField
             fullWidth
             variant="outlined"
-            placeholder="Buscar produtos por nome, descrição, código de barras ou setor..."
+            placeholder="Buscar produtos por nome, descrição, código de barras, setor ou prateleira..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -1180,12 +1365,22 @@ function ModernEstoque() {
                           </TableCell>
                           <TableCell>
                             {setor ? (
-                              <Tooltip title={`Setor: ${setor.nome}`}>
-                                <Chip
-                                  label={`${setor.id}${produto.prateleira ? ` - ${produto.prateleira}` : ''}`}
-                                  size="small"
-                                  sx={{ bgcolor: `${setor.cor}20`, color: setor.cor }}
-                                />
+                              <Tooltip title={`Setor: ${setor.nome} - Prateleira: ${produto.prateleira || 'Não definida'}`}>
+                                <Box>
+                                  <Chip
+                                    label={`${setor.id}`}
+                                    size="small"
+                                    sx={{ bgcolor: `${setor.cor}20`, color: setor.cor, mr: 0.5 }}
+                                  />
+                                  {produto.prateleira && (
+                                    <Chip
+                                      label={produto.prateleira}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ borderColor: setor.cor, color: setor.cor }}
+                                    />
+                                  )}
+                                </Box>
                               </Tooltip>
                             ) : (
                               <Typography variant="caption" color="textSecondary">
@@ -1319,7 +1514,13 @@ function ModernEstoque() {
                   <Select
                     value={formData.setor}
                     label="Setor"
-                    onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ 
+                        ...formData, 
+                        setor: e.target.value,
+                        prateleira: '' // Limpa a prateleira quando muda o setor
+                      });
+                    }}
                   >
                     <MenuItem value="">
                       <em>Nenhum</em>
@@ -1333,25 +1534,25 @@ function ModernEstoque() {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Prateleira / Posição"
+              <Grid item xs={12}>
+                <SeletorPrateleira
+                  setor={formData.setor}
                   value={formData.prateleira}
-                  onChange={(e) => setFormData({ ...formData, prateleira: e.target.value })}
-                  size="small"
-                  placeholder="Ex: A-01 ou 1-1"
+                  onChange={(prateleira) => setFormData({ ...formData, prateleira })}
+                  error={formData.setor && !formData.prateleira}
+                  helperText={formData.setor && !formData.prateleira ? "Selecione uma prateleira" : ""}
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Localização Detalhada"
+                  label="Localização Detalhada (Opcional)"
                   value={formData.localizacao}
                   onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
                   size="small"
-                  placeholder="Ex: Prateleira A, Setor 1"
+                  placeholder="Informações adicionais sobre a localização"
+                  helperText="Complemento da localização, se necessário"
                 />
               </Grid>
 
