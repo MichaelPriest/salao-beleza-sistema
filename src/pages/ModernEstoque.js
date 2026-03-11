@@ -49,6 +49,7 @@ import {
   Clear as ClearIcon,
   Category as CategoryIcon,
   Save as SaveIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -80,6 +81,7 @@ function ModernEstoque() {
   const [loading, setLoading] = useState(true);
   const [produtos, setProdutos] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
   const [filteredProdutos, setFilteredProdutos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -116,13 +118,13 @@ function ModernEstoque() {
     precoCusto: '',
     precoVenda: '',
     quantidadeEstoque: '',
-    unidadeEstoque: 'un',      // Unidade para controle de estoque
-    unidadeVenda: 'un',         // Unidade para venda
-    fatorConversao: 1,          // Fator de conversão (ex: 1 caixa = 12 unidades)
-    fornecedor: '',
+    unidadeEstoque: 'un',
+    unidadeVenda: 'un',
+    fatorConversao: 1,
+    fornecedorId: '',
     estoqueMinimo: '',
-    localizacao: '',            // Localização no estoque
-    codigoBarras: '',           // Código de barras
+    localizacao: '',
+    codigoBarras: '',
   });
 
   // 🔥 Formulário de categoria
@@ -144,14 +146,16 @@ function ModernEstoque() {
     try {
       setLoading(true);
       
-      // Buscar produtos e categorias
-      const [produtosData, categoriasData] = await Promise.all([
+      // Buscar produtos, categorias e fornecedores
+      const [produtosData, categoriasData, fornecedoresData] = await Promise.all([
         firebaseService.getAll('produtos').catch(() => []),
         firebaseService.getAll('categorias_produtos').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
       ]);
       
       setProdutos(produtosData || []);
       setCategorias(categoriasData || []);
+      setFornecedores(fornecedoresData || []);
       
       toast.success('Dados carregados!');
     } catch (error) {
@@ -177,7 +181,6 @@ function ModernEstoque() {
       filtered = filtered.filter(p =>
         p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.fornecedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.codigoBarras?.includes(searchTerm)
       );
     }
@@ -226,26 +229,31 @@ function ModernEstoque() {
   const handleCloseCategoriaDialog = () => {
     setOpenCategoriaDialog(false);
     setCategoriaEditando(null);
+    setCategoriaForm({ nome: '', descricao: '' });
   };
 
   const handleSalvarCategoria = async () => {
     try {
-      if (!categoriaForm.nome) {
+      if (!categoriaForm.nome.trim()) {
         mostrarSnackbar('Nome da categoria é obrigatório', 'error');
         return;
       }
 
       const categoriaData = {
         nome: String(categoriaForm.nome).trim(),
-        descricao: categoriaForm.descricao ? String(categoriaForm.descricao).trim() : null,
+        descricao: categoriaForm.descricao ? String(categoriaForm.descricao).trim() : '',
         updatedAt: new Date().toISOString(),
       };
 
       if (categoriaEditando) {
+        // 🔥 CORREÇÃO: Atualizar categoria existente
         await firebaseService.update('categorias_produtos', categoriaEditando.id, categoriaData);
+        
+        // Atualizar estado local
         setCategorias(categorias.map(c => 
           c.id === categoriaEditando.id ? { ...c, ...categoriaData, id: categoriaEditando.id } : c
         ));
+        
         mostrarSnackbar('Categoria atualizada com sucesso!');
       } else {
         categoriaData.dataCriacao = new Date().toISOString();
@@ -295,7 +303,7 @@ function ModernEstoque() {
       unidadeEstoque: 'un',
       unidadeVenda: 'un',
       fatorConversao: 1,
-      fornecedor: '',
+      fornecedorId: '',
       estoqueMinimo: '',
       localizacao: '',
       codigoBarras: '',
@@ -315,7 +323,7 @@ function ModernEstoque() {
       unidadeEstoque: produto.unidadeEstoque || 'un',
       unidadeVenda: produto.unidadeVenda || 'un',
       fatorConversao: produto.fatorConversao || 1,
-      fornecedor: produto.fornecedor || '',
+      fornecedorId: produto.fornecedorId || '',
       estoqueMinimo: produto.estoqueMinimo || '',
       localizacao: produto.localizacao || '',
       codigoBarras: produto.codigoBarras || '',
@@ -378,23 +386,24 @@ function ModernEstoque() {
 
     const produtoData = {
       nome: String(formData.nome).trim(),
-      descricao: formData.descricao ? String(formData.descricao).trim() : null,
-      categoria: formData.categoria ? String(formData.categoria) : null,
+      descricao: formData.descricao ? String(formData.descricao).trim() : '',
+      categoria: formData.categoria || '',
       precoCusto: Number(precoCustoNum),
       precoVenda: Number(precoVendaNum),
       quantidadeEstoque: Number(quantidadeNum),
       unidadeEstoque: String(formData.unidadeEstoque),
       unidadeVenda: String(formData.unidadeVenda),
       fatorConversao: Number(fatorConversaoNum),
-      fornecedor: formData.fornecedor ? String(formData.fornecedor).trim() : null,
+      fornecedorId: formData.fornecedorId || '',
       estoqueMinimo: Number(estoqueMinimoNum),
-      localizacao: formData.localizacao ? String(formData.localizacao).trim() : null,
-      codigoBarras: formData.codigoBarras ? String(formData.codigoBarras).trim() : null,
+      localizacao: formData.localizacao ? String(formData.localizacao).trim() : '',
+      codigoBarras: formData.codigoBarras ? String(formData.codigoBarras).trim() : '',
       updatedAt: new Date().toISOString(),
     };
 
     try {
       if (selectedProduto) {
+        // 🔥 CORREÇÃO: Usar update em vez de add
         await firebaseService.update('produtos', selectedProduto.id, produtoData);
         
         // Atualizar estado local
@@ -585,7 +594,7 @@ function ModernEstoque() {
           <TextField
             fullWidth
             variant="outlined"
-            placeholder="Buscar produtos por nome, descrição, fornecedor ou código de barras..."
+            placeholder="Buscar produtos por nome, descrição ou código de barras..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -620,6 +629,7 @@ function ModernEstoque() {
                 <TableRow sx={{ backgroundColor: '#faf5ff' }}>
                   <TableCell><strong>Produto</strong></TableCell>
                   <TableCell><strong>Categoria</strong></TableCell>
+                  <TableCell><strong>Fornecedor</strong></TableCell>
                   <TableCell align="right"><strong>Preço Custo</strong></TableCell>
                   <TableCell align="right"><strong>Preço Venda</strong></TableCell>
                   <TableCell align="right"><strong>Lucro</strong></TableCell>
@@ -635,6 +645,7 @@ function ModernEstoque() {
                     .map((produto, index) => {
                       const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
                       const categoria = categorias.find(c => c.id === produto.categoria);
+                      const fornecedor = fornecedores.find(f => f.id === produto.fornecedorId);
                       const lucro = produto.precoCusto > 0 
                         ? ((Number(produto.precoVenda) - Number(produto.precoCusto)) / Number(produto.precoCusto) * 100).toFixed(1)
                         : '0';
@@ -671,6 +682,20 @@ function ModernEstoque() {
                                 size="small"
                                 sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }}
                               />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {fornecedor ? (
+                              <Box>
+                                <Typography variant="body2">{fornecedor.nome}</Typography>
+                                <Typography variant="caption" color="textSecondary">
+                                  {fornecedor.telefone}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="textSecondary">
+                                Não informado
+                              </Typography>
                             )}
                           </TableCell>
                           <TableCell align="right">
@@ -730,7 +755,7 @@ function ModernEstoque() {
                 
                 {filteredProdutos.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
                       <InventoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                       <Typography variant="body1" color="textSecondary">
                         Nenhum produto encontrado
@@ -927,13 +952,23 @@ function ModernEstoque() {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
-                  label="Fornecedor"
-                  value={formData.fornecedor}
-                  onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
-                  size="small"
-                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Fornecedor</InputLabel>
+                  <Select
+                    value={formData.fornecedorId}
+                    label="Fornecedor"
+                    onChange={(e) => setFormData({ ...formData, fornecedorId: e.target.value })}
+                  >
+                    <MenuItem value="">
+                      <em>Nenhum</em>
+                    </MenuItem>
+                    {fornecedores.map(forn => (
+                      <MenuItem key={forn.id} value={forn.id}>
+                        {forn.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
             </Grid>
           </DialogContent>
