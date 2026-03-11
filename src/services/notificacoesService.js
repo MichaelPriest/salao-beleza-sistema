@@ -1,3 +1,4 @@
+// src/services/notificacoesService.js
 import { firebaseService } from './firebase';
 
 export const notificacoesService = {
@@ -6,14 +7,12 @@ export const notificacoesService = {
     try {
       console.log('🔍 Buscando notificações para usuário:', usuarioId);
       
-      // Buscar notificações do Firebase filtrando por usuarioId
       const notificacoes = await firebaseService.query('notificacoes', [
         { field: 'usuarioId', operator: '==', value: usuarioId }
       ], 'data');
       
       console.log('✅ Notificações encontradas:', notificacoes);
       
-      // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoes.sort((a, b) => 
         new Date(b.data) - new Date(a.data)
       );
@@ -33,21 +32,21 @@ export const notificacoesService = {
         updatedAt: new Date().toISOString()
       });
       console.log('✅ Notificação marcada como lida:', id);
+      return true;
     } catch (error) {
       console.error('❌ Erro ao marcar notificação:', error);
+      return false;
     }
   },
 
   // Marcar todas como lidas
   marcarTodasComoLidas: async (usuarioId) => {
     try {
-      // Buscar todas as notificações não lidas do usuário
       const notificacoesNaoLidas = await firebaseService.query('notificacoes', [
         { field: 'usuarioId', operator: '==', value: usuarioId },
         { field: 'lida', operator: '==', value: false }
       ]);
       
-      // Marcar cada uma como lida
       const promises = notificacoesNaoLidas.map(notif => 
         firebaseService.update('notificacoes', notif.id, { 
           lida: true,
@@ -57,8 +56,10 @@ export const notificacoesService = {
       
       await Promise.all(promises);
       console.log(`✅ ${notificacoesNaoLidas.length} notificações marcadas como lidas`);
+      return true;
     } catch (error) {
       console.error('❌ Erro ao marcar todas como lidas:', error);
+      return false;
     }
   },
 
@@ -67,28 +68,10 @@ export const notificacoesService = {
     try {
       await firebaseService.delete('notificacoes', id);
       console.log('✅ Notificação excluída:', id);
+      return true;
     } catch (error) {
       console.error('❌ Erro ao excluir notificação:', error);
-    }
-  },
-
-  // Criar notificação
-  criar: async (dados) => {
-    try {
-      const novaNotificacao = {
-        ...dados,
-        lida: false,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      const result = await firebaseService.add('notificacoes', novaNotificacao);
-      console.log('✅ Notificação criada:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ Erro ao criar notificação:', error);
-      throw error;
+      return false;
     }
   },
 
@@ -105,8 +88,10 @@ export const notificacoesService = {
       
       await Promise.all(promises);
       console.log(`✅ ${notificacoes.length} notificações excluídas`);
+      return true;
     } catch (error) {
       console.error('❌ Erro ao excluir todas:', error);
+      return false;
     }
   },
 
@@ -122,6 +107,26 @@ export const notificacoesService = {
     } catch (error) {
       console.error('❌ Erro ao contar notificações:', error);
       return 0;
+    }
+  },
+
+  // Criar notificação base
+  criar: async (dados) => {
+    try {
+      const novaNotificacao = {
+        ...dados,
+        lida: false,
+        data: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const result = await firebaseService.add('notificacoes', novaNotificacao);
+      console.log('✅ Notificação criada:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erro ao criar notificação:', error);
+      throw error;
     }
   },
 
@@ -178,6 +183,18 @@ export const notificacoesService = {
       mensagem: `Pagamento de R$ ${pagamento.valor.toFixed(2)} recebido`,
       link: `/pagamentos/${pagamento.id}`,
       icone: 'payment'
+    });
+  },
+
+  notificarAgendamentoSite: async (agendamento, usuarioId) => {
+    return notificacoesService.criar({
+      usuarioId,
+      tipo: 'agendamento',
+      titulo: 'Novo Agendamento pelo Site',
+      mensagem: `Cliente ${agendamento.clienteNome} agendou ${agendamento.servicoNome} para ${new Date(agendamento.data).toLocaleDateString('pt-BR')} às ${agendamento.horario}`,
+      link: `/agendamentos/${agendamento.id}`,
+      icone: 'event',
+      origem: 'site'
     });
   }
 };
