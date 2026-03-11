@@ -1,3 +1,4 @@
+// src/pages/ModernNotificacoes.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -20,6 +21,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Avatar,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -34,11 +36,11 @@ import {
   CheckCircle as CheckIcon,
   AccessTime as TimeIcon,
   Inventory as InventoryIcon,
+  Payment as PaymentIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
-import { usuariosService } from '../services/usuariosService';
+import { notificacoesService } from '../services/notificacoesService';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -60,10 +62,13 @@ function ModernNotificacoes() {
   const [usuario, setUsuario] = useState(null);
 
   useEffect(() => {
-    const user = usuariosService.getUsuarioAtual();
-    setUsuario(user);
-    if (user) {
-      carregarNotificacoes(user.id);
+    const userStr = localStorage.getItem('usuario');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setUsuario(user);
+      if (user?.id) {
+        carregarNotificacoes(user.id);
+      }
     }
   }, []);
 
@@ -74,11 +79,7 @@ function ModernNotificacoes() {
   const carregarNotificacoes = async (usuarioId) => {
     try {
       setLoading(true);
-      // Usar o ID do usuário passado como parâmetro
-      const data = await firebaseService.query('notificacoes', [
-        { field: 'usuarioId', operator: '==', value: usuarioId }
-      ], 'data');
-      
+      const data = await notificacoesService.listar(usuarioId);
       setNotifications(data);
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
@@ -87,15 +88,6 @@ function ModernNotificacoes() {
       setLoading(false);
     }
   };
-  
-  // No useEffect
-  useEffect(() => {
-    const user = usuariosService.getUsuarioAtual();
-    setUsuario(user);
-    if (user && user.uid) { // Usar user.uid
-      carregarNotificacoes(user.uid);
-    }
-  }, []);
 
   const filtrarNotificacoes = () => {
     let filtered = [...notifications];
@@ -116,8 +108,8 @@ function ModernNotificacoes() {
 
     // Ordenar por data (mais recentes primeiro)
     filtered.sort((a, b) => {
-      const dateA = a.data?.toDate ? a.data.toDate() : new Date(a.data);
-      const dateB = b.data?.toDate ? b.data.toDate() : new Date(b.data);
+      const dateA = a.data ? new Date(a.data) : new Date(0);
+      const dateB = b.data ? new Date(b.data) : new Date(0);
       return dateB - dateA;
     });
 
@@ -125,62 +117,45 @@ function ModernNotificacoes() {
   };
 
   const handleMarkAsRead = async (id) => {
-    try {
-      await firebaseService.update('notificacoes', id, { 
-        lida: true,
-        updatedAt: new Date().toISOString()
-      });
+    const success = await notificacoesService.marcarComoLida(id);
+    if (success) {
       await carregarNotificacoes(usuario.id);
       toast.success('Notificação marcada como lida');
-    } catch (error) {
-      console.error('Erro ao marcar notificação:', error);
+    } else {
       toast.error('Erro ao marcar notificação');
     }
   };
 
   const handleMarkAllAsRead = async () => {
-    try {
-      const naoLidas = notifications.filter(n => !n.lida);
-      
-      const promises = naoLidas.map(n => 
-        firebaseService.update('notificacoes', n.id, { 
-          lida: true,
-          updatedAt: new Date().toISOString()
-        })
-      );
-      
-      await Promise.all(promises);
+    const success = await notificacoesService.marcarTodasComoLidas(usuario.id);
+    if (success) {
       await carregarNotificacoes(usuario.id);
       toast.success('Todas as notificações marcadas como lidas');
-    } catch (error) {
-      console.error('Erro ao marcar notificações:', error);
+    } else {
       toast.error('Erro ao marcar notificações');
     }
   };
 
   const handleDelete = async (id) => {
-    try {
-      await firebaseService.delete('notificacoes', id);
+    const success = await notificacoesService.excluir(id);
+    if (success) {
       await carregarNotificacoes(usuario.id);
       toast.success('Notificação removida');
-      handleCloseMenu();
-    } catch (error) {
-      console.error('Erro ao remover notificação:', error);
+    } else {
       toast.error('Erro ao remover notificação');
     }
+    handleCloseMenu();
   };
 
   const handleDeleteAll = async () => {
-    try {
-      const promises = notifications.map(n => firebaseService.delete('notificacoes', n.id));
-      await Promise.all(promises);
+    const success = await notificacoesService.excluirTodas(usuario.id);
+    if (success) {
       await carregarNotificacoes(usuario.id);
       toast.success('Todas as notificações removidas');
-      setOpenDialog(false);
-    } catch (error) {
-      console.error('Erro ao remover notificações:', error);
+    } else {
       toast.error('Erro ao remover notificações');
     }
+    setOpenDialog(false);
   };
 
   const handleMenuOpen = (event, notification) => {
@@ -201,6 +176,10 @@ function ModernNotificacoes() {
         return <PersonIcon sx={{ color: '#ff4081', fontSize: 40 }} />;
       case 'estoque':
         return <InventoryIcon sx={{ color: '#f44336', fontSize: 40 }} />;
+      case 'pagamento':
+        return <PaymentIcon sx={{ color: '#4caf50', fontSize: 40 }} />;
+      case 'lembrete':
+        return <AccessTimeIcon sx={{ color: '#ff9800', fontSize: 40 }} />;
       default:
         return <InfoIcon sx={{ color: '#2196f3', fontSize: 40 }} />;
     }
@@ -211,6 +190,7 @@ function ModernNotificacoes() {
       case 'agendamento': return 'Agendamento';
       case 'cliente': return 'Cliente';
       case 'estoque': return 'Estoque';
+      case 'pagamento': return 'Pagamento';
       case 'lembrete': return 'Lembrete';
       default: return 'Sistema';
     }
@@ -221,6 +201,7 @@ function ModernNotificacoes() {
       case 'agendamento': return '#9c27b0';
       case 'cliente': return '#ff4081';
       case 'estoque': return '#f44336';
+      case 'pagamento': return '#4caf50';
       case 'lembrete': return '#ff9800';
       default: return '#2196f3';
     }
@@ -228,10 +209,8 @@ function ModernNotificacoes() {
 
   const formatDate = (date) => {
     if (!date) return '';
-    if (date.toDate) {
-      return date.toDate().toLocaleString('pt-BR');
-    }
-    return new Date(date).toLocaleString('pt-BR');
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleString('pt-BR');
   };
 
   const unreadCount = notifications.filter(n => !n.lida).length;
@@ -246,8 +225,8 @@ function ModernNotificacoes() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Notificações
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -273,56 +252,80 @@ function ModernNotificacoes() {
 
       <Grid container spacing={3}>
         {/* Cards de Estatísticas */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Total
-              </Typography>
-              <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                {notifications.length}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Total
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  {notifications.length}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Não lidas
-              </Typography>
-              <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                {unreadCount}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card sx={{ bgcolor: '#fff3e0' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Não lidas
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {unreadCount}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Agendamentos
-              </Typography>
-              <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                {notifications.filter(n => n.tipo === 'agendamento').length}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card sx={{ bgcolor: '#f3e5f5' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Agendamentos
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  {notifications.filter(n => n.tipo === 'agendamento').length}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Alertas
-              </Typography>
-              <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
-                {notifications.filter(n => n.tipo === 'estoque').length}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Card sx={{ bgcolor: '#ffebee' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Alertas
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
+                  {notifications.filter(n => n.tipo === 'estoque' || n.tipo === 'alerta').length}
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
         {/* Filtros e Listagem */}
@@ -337,7 +340,7 @@ function ModernNotificacoes() {
                 </Tabs>
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
                 <FilterIcon color="action" />
                 <Typography variant="body2">Filtrar por tipo:</Typography>
                 <Chip
@@ -364,6 +367,18 @@ function ModernNotificacoes() {
                   variant={filterType === 'estoque' ? 'filled' : 'outlined'}
                   sx={{ color: '#f44336', borderColor: '#f44336' }}
                 />
+                <Chip
+                  label="Pagamento"
+                  onClick={() => setFilterType('pagamento')}
+                  variant={filterType === 'pagamento' ? 'filled' : 'outlined'}
+                  sx={{ color: '#4caf50', borderColor: '#4caf50' }}
+                />
+                <Chip
+                  label="Lembrete"
+                  onClick={() => setFilterType('lembrete')}
+                  variant={filterType === 'lembrete' ? 'filled' : 'outlined'}
+                  sx={{ color: '#ff9800', borderColor: '#ff9800' }}
+                />
               </Box>
 
               {filteredNotifications.length === 0 ? (
@@ -389,18 +404,21 @@ function ModernNotificacoes() {
                           mb: 2,
                           bgcolor: notification.lida ? 'transparent' : '#f3e5f5',
                           position: 'relative',
+                          borderLeft: !notification.lida ? '4px solid #9c27b0' : 'none',
                           '&:hover': {
-                            boxShadow: 2,
+                            boxShadow: 3,
                           },
                         }}
                       >
                         <CardContent>
                           <Grid container spacing={2} alignItems="flex-start">
-                            <Grid item xs={12} sm={1}>
-                              {getNotificationIcon(notification.tipo)}
+                            <Grid item xs={12} sm={1} sx={{ display: 'flex', justifyContent: 'center' }}>
+                              <Avatar sx={{ bgcolor: `${getNotificationTypeColor(notification.tipo)}20`, width: 56, height: 56 }}>
+                                {getNotificationIcon(notification.tipo)}
+                              </Avatar>
                             </Grid>
                             
-                            <Grid item xs={12} sm={8}>
+                            <Grid item xs={12} sm={9}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                                 <Chip
                                   label={getNotificationTypeLabel(notification.tipo)}
@@ -419,6 +437,14 @@ function ModernNotificacoes() {
                                     color="secondary"
                                   />
                                 )}
+                                {notification.origem === 'site' && (
+                                  <Chip
+                                    label="Site"
+                                    size="small"
+                                    color="info"
+                                    variant="outlined"
+                                  />
+                                )}
                               </Box>
                               
                               <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
@@ -434,13 +460,13 @@ function ModernNotificacoes() {
                               </Typography>
                             </Grid>
                             
-                            <Grid item xs={12} sm={3}>
+                            <Grid item xs={12} sm={2}>
                               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                                 {!notification.lida && (
                                   <IconButton
                                     size="small"
                                     onClick={() => handleMarkAsRead(notification.id)}
-                                    color="success"
+                                    sx={{ color: '#4caf50' }}
                                     title="Marcar como lida"
                                   >
                                     <CheckIcon />
@@ -489,7 +515,7 @@ function ModernNotificacoes() {
 
       {/* Dialog de Confirmação */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           Limpar todas as notificações
         </DialogTitle>
         <DialogContent>
