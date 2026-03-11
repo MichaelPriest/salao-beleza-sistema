@@ -138,7 +138,7 @@ function Page500() {
                   sx={{ mr: 1, mb: 1 }} 
                 />
                 <Chip 
-                  label="Timestamp: " + new Date().toLocaleString('pt-BR') 
+                  label={`Timestamp: ${new Date().toLocaleString('pt-BR')}`} 
                   size="small" 
                   variant="outlined" 
                   sx={{ mb: 1 }} 
