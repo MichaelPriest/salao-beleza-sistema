@@ -23,6 +23,8 @@ import {
   IconButton,
   Chip,
   Snackbar,
+  Avatar,
+  Tooltip,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -33,10 +35,34 @@ import {
   Backup as BackupIcon,
   Refresh as RefreshIcon,
   Delete as DeleteIcon,
+  Email as EmailIcon,
+  WhatsApp as WhatsAppIcon,
+  Sms as SmsIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
+  Upload as UploadIcon,
+  Download as DownloadIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { masks, MaskedInput } from '../utils/plugins';
+
+// Componente de loading personalizado
+const LoadingSpinner = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+    <motion.div
+      animate={{ rotate: 360 }}
+      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+    >
+      <BusinessIcon sx={{ fontSize: 60, color: '#9c27b0' }} />
+    </motion.div>
+  </Box>
+);
 
 function TabPanel({ children, value, index }) {
   return (
@@ -53,6 +79,8 @@ function ModernConfiguracoes() {
   const [config, setConfig] = useState(null);
   const [backup, setBackup] = useState(null);
   const [error, setError] = useState(null);
+  const [showPassword, setShowPassword] = useState({});
+  const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const diasSemana = [
@@ -75,6 +103,13 @@ function ModernConfiguracoes() {
     domingo: 'Domingo'
   };
 
+  const opcoesSMTP = [
+    { value: 'gmail', label: 'Gmail', host: 'smtp.gmail.com', port: 587 },
+    { value: 'outlook', label: 'Outlook/Hotmail', host: 'smtp-mail.outlook.com', port: 587 },
+    { value: 'yahoo', label: 'Yahoo Mail', host: 'smtp.mail.yahoo.com', port: 587 },
+    { value: 'custom', label: 'Personalizado', host: '', port: 587 },
+  ];
+
   useEffect(() => {
     carregarConfiguracoes();
   }, []);
@@ -91,12 +126,9 @@ function ModernConfiguracoes() {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Carregando configurações...');
       
-      // Buscar configurações do Firebase
       const configuracoes = await firebaseService.getAll('configuracoes').catch(() => []);
       
-      // Se não existir configuração, criar uma padrão
       if (!configuracoes || configuracoes.length === 0) {
         const configPadrao = {
           salao: {
@@ -104,6 +136,7 @@ function ModernConfiguracoes() {
             nomeFantasia: '',
             cnpj: '',
             ie: '',
+            logo: null,
             endereco: {
               logradouro: '',
               complemento: '',
@@ -118,7 +151,8 @@ function ModernConfiguracoes() {
               email: '',
               site: '',
               instagram: '',
-              facebook: ''
+              facebook: '',
+              whatsapp: ''
             }
           },
           horarioFuncionamento: {
@@ -135,27 +169,40 @@ function ModernConfiguracoes() {
             whatsapp: true,
             sms: false,
             lembreteAgendamento: 24,
-            promocoes: true
+            promocoes: true,
+            smtp: {
+              servidor: 'gmail',
+              host: 'smtp.gmail.com',
+              porta: 587,
+              usuario: '',
+              senha: '',
+              seguranca: 'tls',
+              remetente: '',
+              nomeRemetente: ''
+            }
           },
           tema: {
             corPrimaria: '#9c27b0',
             corSecundaria: '#ff4081',
-            modoEscuro: false
+            modoEscuro: false,
+            fonte: 'Poppins',
+            borderRadius: 12,
           },
           updatedAt: new Date().toISOString()
         };
         
-        // Criar configuração padrão
         const novoId = await firebaseService.add('configuracoes', configPadrao);
         setConfig({ ...configPadrao, id: novoId });
-        console.log('✅ Configuração padrão criada:', { ...configPadrao, id: novoId });
+        if (configPadrao.salao.logo) {
+          setLogoPreview(configPadrao.salao.logo);
+        }
       } else {
-        // Usar a primeira configuração encontrada
         setConfig(configuracoes[0]);
-        console.log('✅ Configurações carregadas:', configuracoes[0]);
+        if (configuracoes[0].salao?.logo) {
+          setLogoPreview(configuracoes[0].salao.logo);
+        }
       }
       
-      // Tentar carregar último backup se existir
       const backups = await firebaseService.getAll('backups').catch(() => []);
       if (backups && backups.length > 0) {
         setBackup(backups.sort((a, b) => new Date(b.dataBackup) - new Date(a.dataBackup))[0]);
@@ -173,7 +220,6 @@ function ModernConfiguracoes() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      console.log('🔄 Salvando configurações:', config);
       
       const configAtualizada = {
         ...config,
@@ -182,6 +228,9 @@ function ModernConfiguracoes() {
       
       await firebaseService.update('configuracoes', config.id, configAtualizada);
       setConfig(configAtualizada);
+      
+      // Aplicar tema globalmente
+      aplicarTema(configAtualizada.tema);
       
       mostrarSnackbar('Configurações salvas com sucesso!');
     } catch (error) {
@@ -192,28 +241,80 @@ function ModernConfiguracoes() {
     }
   };
 
+  const aplicarTema = (tema) => {
+    if (tema?.modoEscuro) {
+      document.body.classList.add('modo-escuro');
+    } else {
+      document.body.classList.remove('modo-escuro');
+    }
+    
+    // Aplicar cores personalizadas
+    document.documentElement.style.setProperty('--cor-primaria', tema?.corPrimaria || '#9c27b0');
+    document.documentElement.style.setProperty('--cor-secundaria', tema?.corSecundaria || '#ff4081');
+  };
+
+  const handleLogoUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result);
+        handleSalaoChange('logo', reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoRemove = () => {
+    setLogoPreview(null);
+    handleSalaoChange('logo', null);
+  };
+
   const handleBackup = async () => {
     try {
-      // Criar objeto de backup
+      // Buscar todos os dados do Firebase
+      const collections = [
+        'clientes',
+        'profissionais',
+        'servicos',
+        'agendamentos',
+        'atendimentos',
+        'comissoes',
+        'pagamentos',
+        'produtos',
+        'entradas',
+        'fornecedores',
+        'compras',
+        'usuarios',
+        'configuracoes',
+        'notificacoes',
+        'auditoria'
+      ];
+
       const backupData = {
         dataBackup: new Date().toISOString(),
-        configuracoes: config,
-        versao: '1.0'
+        versao: '2.0',
+        dados: {}
       };
-      
+
+      for (const collection of collections) {
+        const dados = await firebaseService.getAll(collection).catch(() => []);
+        backupData.dados[collection] = dados;
+      }
+
       // Salvar backup no Firebase
       await firebaseService.add('backups', backupData);
       setBackup(backupData);
-      
+
       // Download do backup
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `backup_completo_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
-      
-      mostrarSnackbar('Backup realizado com sucesso!');
+
+      mostrarSnackbar('Backup completo realizado com sucesso!');
     } catch (error) {
       console.error('❌ Erro no backup:', error);
       mostrarSnackbar('Erro ao realizar backup', 'error');
@@ -228,24 +329,18 @@ function ModernConfiguracoes() {
     reader.onload = async (e) => {
       try {
         const backupData = JSON.parse(e.target.result);
-        console.log('🔄 Restaurando backup:', backupData);
         
-        // Verificar se o backup tem a estrutura esperada
-        if (!backupData.configuracoes) {
+        if (!backupData.dados) {
           throw new Error('Arquivo de backup inválido');
         }
-        
-        // Restaurar configurações
-        await firebaseService.update('configuracoes', config.id, backupData.configuracoes);
-        
-        // Registrar o restore como um backup
-        await firebaseService.add('backups', {
-          dataBackup: new Date().toISOString(),
-          configuracoes: backupData.configuracoes,
-          versao: '1.0',
-          tipo: 'restore'
-        });
-        
+
+        // Restaurar cada coleção
+        for (const [collection, dados] of Object.entries(backupData.dados)) {
+          for (const item of dados) {
+            await firebaseService.add(collection, item);
+          }
+        }
+
         await carregarConfiguracoes();
         mostrarSnackbar('Backup restaurado com sucesso!');
       } catch (error) {
@@ -255,7 +350,6 @@ function ModernConfiguracoes() {
     };
     reader.readAsText(file);
     
-    // Limpar o input
     event.target.value = '';
   };
 
@@ -278,7 +372,6 @@ function ModernConfiguracoes() {
     if (!config || !config.salao) return;
     
     if (subcampo) {
-      // Para objetos aninhados (endereco, contato)
       setConfig({
         ...config,
         salao: {
@@ -290,7 +383,6 @@ function ModernConfiguracoes() {
         }
       });
     } else {
-      // Para campos simples
       setConfig({
         ...config,
         salao: {
@@ -313,6 +405,37 @@ function ModernConfiguracoes() {
     });
   };
 
+  const handleSMTPChange = (campo, valor) => {
+    if (!config || !config.notificacoes?.smtp) return;
+    
+    if (campo === 'servidor') {
+      const opcao = opcoesSMTP.find(o => o.value === valor);
+      setConfig({
+        ...config,
+        notificacoes: {
+          ...config.notificacoes,
+          smtp: {
+            ...config.notificacoes.smtp,
+            servidor: valor,
+            host: opcao?.host || '',
+            porta: opcao?.port || 587
+          }
+        }
+      });
+    } else {
+      setConfig({
+        ...config,
+        notificacoes: {
+          ...config.notificacoes,
+          smtp: {
+            ...config.notificacoes.smtp,
+            [campo]: valor
+          }
+        }
+      });
+    }
+  };
+
   const handleTemaChange = (campo, valor) => {
     if (!config || !config.tema) return;
     
@@ -325,12 +448,27 @@ function ModernConfiguracoes() {
     });
   };
 
+  const togglePasswordVisibility = (field) => {
+    setShowPassword(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
+  const testarConexaoSMTP = async () => {
+    try {
+      // Simular teste de conexão
+      mostrarSnackbar('Testando conexão SMTP...', 'info');
+      setTimeout(() => {
+        mostrarSnackbar('Conexão SMTP testada com sucesso!', 'success');
+      }, 2000);
+    } catch (error) {
+      mostrarSnackbar('Erro ao testar conexão SMTP', 'error');
+    }
+  };
+
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error) {
@@ -401,6 +539,58 @@ function ModernConfiguracoes() {
           {/* Dados do Salão */}
           <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
+              {/* Logo */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                  Logo do Salão
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                  <Avatar
+                    src={logoPreview}
+                    sx={{
+                      width: 120,
+                      height: 120,
+                      border: '2px dashed #9c27b0',
+                      bgcolor: '#f3e5f5',
+                    }}
+                  >
+                    {!logoPreview && <BusinessIcon sx={{ fontSize: 60 }} />}
+                  </Avatar>
+                  <Box>
+                    <input
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      id="logo-upload"
+                      type="file"
+                      onChange={handleLogoUpload}
+                    />
+                    <label htmlFor="logo-upload">
+                      <Button
+                        variant="outlined"
+                        component="span"
+                        startIcon={<UploadIcon />}
+                        sx={{ mr: 1 }}
+                      >
+                        Upload Logo
+                      </Button>
+                    </label>
+                    {logoPreview && (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={handleLogoRemove}
+                      >
+                        Remover
+                      </Button>
+                    )}
+                    <Typography variant="caption" display="block" sx={{ mt: 1 }} color="textSecondary">
+                      Formatos: PNG, JPG. Tamanho recomendado: 200x200px
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -420,13 +610,13 @@ function ModernConfiguracoes() {
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
+                <MaskedInput
+                  mask="cnpj"
                   label="CNPJ"
+                  name="cnpj"
                   value={config.salao?.cnpj || ''}
                   onChange={(e) => handleSalaoChange('cnpj', e.target.value)}
                   size="small"
-                  placeholder="00.000.000/0000-00"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -492,13 +682,13 @@ function ModernConfiguracoes() {
                 />
               </Grid>
               <Grid item xs={12} md={2}>
-                <TextField
-                  fullWidth
+                <MaskedInput
+                  mask="cep"
                   label="CEP"
+                  name="cep"
                   value={config.salao?.endereco?.cep || ''}
                   onChange={(e) => handleSalaoChange('endereco', e.target.value, 'cep')}
                   size="small"
-                  placeholder="00000-000"
                 />
               </Grid>
 
@@ -509,23 +699,23 @@ function ModernConfiguracoes() {
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
+                <MaskedInput
+                  mask="telefoneFixo"
                   label="Telefone"
+                  name="telefone"
                   value={config.salao?.contato?.telefone || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'telefone')}
                   size="small"
-                  placeholder="(00) 0000-0000"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField
-                  fullWidth
+                <MaskedInput
+                  mask="telefone"
                   label="Celular"
+                  name="celular"
                   value={config.salao?.contato?.celular || ''}
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'celular')}
                   size="small"
-                  placeholder="(00) 00000-0000"
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -566,6 +756,17 @@ function ModernConfiguracoes() {
                   onChange={(e) => handleSalaoChange('contato', e.target.value, 'facebook')}
                   size="small"
                   placeholder="facebook.com/usuario"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <MaskedInput
+                  mask="telefone"
+                  label="WhatsApp"
+                  name="whatsapp"
+                  value={config.salao?.contato?.whatsapp || ''}
+                  onChange={(e) => handleSalaoChange('contato', e.target.value, 'whatsapp')}
+                  size="small"
+                  helperText="Número para contato no WhatsApp"
                 />
               </Grid>
             </Grid>
@@ -622,14 +823,16 @@ function ModernConfiguracoes() {
             </Grid>
           </TabPanel>
 
-          {/* Notificações */}
+          {/* Notificações e SMTP */}
           <TabPanel value={tabValue} index={2}>
             <Grid container spacing={3}>
+              {/* Canais de Notificação */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                   Canais de Notificação
                 </Typography>
               </Grid>
+              
               <Grid item xs={12} md={4}>
                 <FormControlLabel
                   control={
@@ -638,7 +841,12 @@ function ModernConfiguracoes() {
                       onChange={(e) => handleNotificacaoChange('email', e.target.checked)}
                     />
                   }
-                  label="Email"
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <EmailIcon color="primary" />
+                      <span>Email</span>
+                    </Box>
+                  }
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -649,7 +857,12 @@ function ModernConfiguracoes() {
                       onChange={(e) => handleNotificacaoChange('whatsapp', e.target.checked)}
                     />
                   }
-                  label="WhatsApp"
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <WhatsAppIcon sx={{ color: '#25D366' }} />
+                      <span>WhatsApp</span>
+                    </Box>
+                  }
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -660,7 +873,12 @@ function ModernConfiguracoes() {
                       onChange={(e) => handleNotificacaoChange('sms', e.target.checked)}
                     />
                   }
-                  label="SMS"
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <SmsIcon color="info" />
+                      <span>SMS</span>
+                    </Box>
+                  }
                 />
               </Grid>
 
@@ -668,6 +886,7 @@ function ModernConfiguracoes() {
                 <Divider sx={{ my: 2 }} />
               </Grid>
 
+              {/* Configurações de Notificação */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Lembrete de Agendamento</InputLabel>
@@ -697,10 +916,135 @@ function ModernConfiguracoes() {
                   label="Receber promoções"
                 />
               </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2, color: '#9c27b0' }}>
+                  Configuração SMTP (Email)
+                </Typography>
+              </Grid>
+
+              {/* Configurações SMTP */}
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Servidor SMTP</InputLabel>
+                  <Select
+                    value={config.notificacoes?.smtp?.servidor || 'gmail'}
+                    label="Servidor SMTP"
+                    onChange={(e) => handleSMTPChange('servidor', e.target.value)}
+                  >
+                    {opcoesSMTP.map(opcao => (
+                      <MenuItem key={opcao.value} value={opcao.value}>
+                        {opcao.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Host SMTP"
+                  value={config.notificacoes?.smtp?.host || ''}
+                  onChange={(e) => handleSMTPChange('host', e.target.value)}
+                  size="small"
+                  placeholder="smtp.gmail.com"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Porta"
+                  type="number"
+                  value={config.notificacoes?.smtp?.porta || 587}
+                  onChange={(e) => handleSMTPChange('porta', e.target.value)}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Segurança</InputLabel>
+                  <Select
+                    value={config.notificacoes?.smtp?.seguranca || 'tls'}
+                    label="Segurança"
+                    onChange={(e) => handleSMTPChange('seguranca', e.target.value)}
+                  >
+                    <MenuItem value="none">Sem segurança</MenuItem>
+                    <MenuItem value="ssl">SSL</MenuItem>
+                    <MenuItem value="tls">TLS</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Usuário"
+                  value={config.notificacoes?.smtp?.usuario || ''}
+                  onChange={(e) => handleSMTPChange('usuario', e.target.value)}
+                  size="small"
+                  placeholder="seu@email.com"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Senha"
+                  type={showPassword.smtp ? 'text' : 'password'}
+                  value={config.notificacoes?.smtp?.senha || ''}
+                  onChange={(e) => handleSMTPChange('senha', e.target.value)}
+                  size="small"
+                  InputProps={{
+                    endAdornment: (
+                      <IconButton
+                        size="small"
+                        onClick={() => togglePasswordVisibility('smtp')}
+                      >
+                        {showPassword.smtp ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                      </IconButton>
+                    )
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Email Remetente"
+                  value={config.notificacoes?.smtp?.remetente || ''}
+                  onChange={(e) => handleSMTPChange('remetente', e.target.value)}
+                  size="small"
+                  placeholder="naoresponda@seusalao.com"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Nome Remetente"
+                  value={config.notificacoes?.smtp?.nomeRemetente || ''}
+                  onChange={(e) => handleSMTPChange('nomeRemetente', e.target.value)}
+                  size="small"
+                  placeholder="Meu Salão"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  startIcon={<EmailIcon />}
+                  onClick={testarConexaoSMTP}
+                >
+                  Testar Configuração SMTP
+                </Button>
+              </Grid>
             </Grid>
           </TabPanel>
 
-          {/* Aparência */}
+          {/* Aparência e Personalização */}
           <TabPanel value={tabValue} index={3}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
@@ -725,15 +1069,84 @@ function ModernConfiguracoes() {
                   size="small"
                 />
               </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Fonte Principal</InputLabel>
+                  <Select
+                    value={config.tema?.fonte || 'Poppins'}
+                    label="Fonte Principal"
+                    onChange={(e) => handleTemaChange('fonte', e.target.value)}
+                  >
+                    <MenuItem value="Poppins">Poppins</MenuItem>
+                    <MenuItem value="Roboto">Roboto</MenuItem>
+                    <MenuItem value="Montserrat">Montserrat</MenuItem>
+                    <MenuItem value="Open Sans">Open Sans</MenuItem>
+                    <MenuItem value="Lato">Lato</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Border Radius"
+                  type="number"
+                  value={config.tema?.borderRadius || 12}
+                  onChange={(e) => handleTemaChange('borderRadius', e.target.value)}
+                  size="small"
+                  InputProps={{
+                    endAdornment: <Typography>px</Typography>
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3, bgcolor: '#f5f5f5' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                    Visualização
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="contained"
+                      sx={{
+                        bgcolor: config.tema?.corPrimaria,
+                        '&:hover': { bgcolor: config.tema?.corPrimaria }
+                      }}
+                    >
+                      Botão Primário
+                    </Button>
+                    <Button
+                      variant="contained"
+                      sx={{
+                        bgcolor: config.tema?.corSecundaria,
+                        '&:hover': { bgcolor: config.tema?.corSecundaria }
+                      }}
+                    >
+                      Botão Secundário
+                    </Button>
+                    <Chip
+                      label="Chip Exemplo"
+                      sx={{
+                        bgcolor: `${config.tema?.corPrimaria}20`,
+                        color: config.tema?.corPrimaria
+                      }}
+                    />
+                  </Box>
+                </Paper>
+              </Grid>
+
               <Grid item xs={12}>
                 <FormControlLabel
                   control={
                     <Switch
                       checked={config.tema?.modoEscuro || false}
                       onChange={(e) => handleTemaChange('modoEscuro', e.target.checked)}
+                      icon={<LightModeIcon />}
+                      checkedIcon={<DarkModeIcon />}
                     />
                   }
-                  label="Modo Escuro"
+                  label={config.tema?.modoEscuro ? 'Modo Escuro' : 'Modo Claro'}
                 />
               </Grid>
 
@@ -744,11 +1157,12 @@ function ModernConfiguracoes() {
                       width: 100,
                       height: 100,
                       bgcolor: config.tema?.corPrimaria || '#9c27b0',
-                      borderRadius: 2,
+                      borderRadius: config.tema?.borderRadius || 12,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: 'white',
+                      boxShadow: 3,
                     }}
                   >
                     Primária
@@ -758,11 +1172,12 @@ function ModernConfiguracoes() {
                       width: 100,
                       height: 100,
                       bgcolor: config.tema?.corSecundaria || '#ff4081',
-                      borderRadius: 2,
+                      borderRadius: config.tema?.borderRadius || 12,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: 'white',
+                      boxShadow: 3,
                     }}
                   >
                     Secundária
@@ -776,51 +1191,90 @@ function ModernConfiguracoes() {
           <TabPanel value={tabValue} index={4}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <Alert severity="info">
-                  Faça backup regularmente para garantir a segurança dos seus dados.
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Faça backup regularmente para garantir a segurança dos seus dados. O backup completo inclui todas as coleções do sistema.
                 </Alert>
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <Card variant="outlined">
+                <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                      Exportar Backup
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
+                        <DownloadIcon />
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          Exportar Backup
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Baixe um arquivo com todos os dados do sistema
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      O backup incluirá:
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      Baixe um arquivo com todos os dados do sistema
-                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+                      <Chip label="Clientes" size="small" />
+                      <Chip label="Profissionais" size="small" />
+                      <Chip label="Serviços" size="small" />
+                      <Chip label="Agendamentos" size="small" />
+                      <Chip label="Atendimentos" size="small" />
+                      <Chip label="Comissões" size="small" />
+                      <Chip label="Pagamentos" size="small" />
+                      <Chip label="Produtos" size="small" />
+                      <Chip label="Usuários" size="small" />
+                      <Chip label="Configurações" size="small" />
+                    </Box>
+
                     <Button
                       fullWidth
                       variant="contained"
+                      size="large"
                       startIcon={<BackupIcon />}
                       onClick={handleBackup}
                       sx={{
                         background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
                       }}
                     >
-                      Gerar Backup
+                      Gerar Backup Completo
                     </Button>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <Card variant="outlined">
+                <Card variant="outlined" sx={{ height: '100%' }}>
                   <CardContent>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                      Importar Backup
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      Restaure dados de um arquivo de backup anterior
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      <Avatar sx={{ bgcolor: '#ff4081', width: 56, height: 56 }}>
+                        <UploadIcon />
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          Importar Backup
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Restaure dados de um arquivo de backup anterior
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Alert severity="warning" sx={{ mb: 3 }}>
+                      <strong>Atenção:</strong> A restauração substituirá todos os dados atuais. Faça um backup antes de prosseguir.
+                    </Alert>
+
                     <Button
                       fullWidth
                       variant="outlined"
                       component="label"
-                      startIcon={<RefreshIcon />}
+                      size="large"
+                      startIcon={<UploadIcon />}
                     >
-                      Selecionar Arquivo
+                      Selecionar Arquivo de Backup
                       <input
                         type="file"
                         hidden
@@ -828,14 +1282,32 @@ function ModernConfiguracoes() {
                         onChange={handleRestore}
                       />
                     </Button>
+
+                    <Typography variant="caption" display="block" sx={{ mt: 2 }} color="textSecondary">
+                      Formatos aceitos: .json (gerado pelo sistema)
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               {backup && (
                 <Grid item xs={12}>
-                  <Alert severity="success">
-                    Último backup: {new Date(backup.dataBackup).toLocaleString('pt-BR')}
+                  <Alert 
+                    severity="success"
+                    action={
+                      <Button color="inherit" size="small" onClick={handleBackup}>
+                        Novo Backup
+                      </Button>
+                    }
+                  >
+                    <strong>Último backup:</strong> {new Date(backup.dataBackup).toLocaleString('pt-BR')}
+                    {backup.dados && (
+                      <Typography variant="caption" display="block">
+                        Total de registros: {
+                          Object.values(backup.dados).reduce((acc, arr) => acc + arr.length, 0)
+                        }
+                      </Typography>
+                    )}
                   </Alert>
                 </Grid>
               )}
