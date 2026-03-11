@@ -61,7 +61,7 @@ import Page404 from './pages/404';
 import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
-
+import ImportarServicos from './pages/ImportarServicos';
 const theme = createTheme({
   palette: {
     primary: {
@@ -192,7 +192,7 @@ function AnimatedRoutes() {
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
-          
+          <Route path="/importar-servicos" element={<ImportarServicos />} />
           {/* Rota 404 - DEVE SER A ÚLTIMA */}
           <Route path="*" element={<Page404 />} />
         </Routes>
