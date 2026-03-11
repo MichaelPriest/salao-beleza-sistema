@@ -62,38 +62,6 @@ import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 
-// DIAGNÓSTICO - Verificar cada importação
-console.log('Verificando importações:');
-console.log('✅ ModernHeader:', typeof ModernHeader);
-console.log('✅ ModernSidebar:', typeof ModernSidebar);
-console.log('✅ PrivateRoute:', typeof PrivateRoute);
-console.log('✅ ModernDashboard:', typeof ModernDashboard);
-console.log('✅ ModernLogin:', typeof ModernLogin);
-console.log('✅ ModernClientes:', typeof ModernClientes);
-console.log('✅ ModernServicos:', typeof ModernServicos);
-console.log('✅ ModernProfissionais:', typeof ModernProfissionais);
-console.log('✅ ModernAgendamentos:', typeof ModernAgendamentos);
-console.log('✅ ModernAtendimentos:', typeof ModernAtendimentos);
-console.log('✅ ModernAtendimento:', typeof ModernAtendimento);
-console.log('✅ ModernFinanceiro:', typeof ModernFinanceiro);
-console.log('✅ ModernCompras:', typeof ModernCompras);
-console.log('✅ ModernRelatorios:', typeof ModernRelatorios);
-console.log('✅ ContasPagar:', typeof ContasPagar);
-console.log('✅ ContasReceber:', typeof ContasReceber);
-console.log('✅ FluxoCaixa:', typeof FluxoCaixa);
-console.log('✅ ModernEstoque:', typeof ModernEstoque);
-console.log('✅ Fornecedores:', typeof Fornecedores);
-console.log('✅ Entradas:', typeof Entradas);
-console.log('✅ GerenciarUsuarios:', typeof GerenciarUsuarios);
-console.log('✅ HistoricoAtendimentos:', typeof HistoricoAtendimentos);
-console.log('✅ Auditoria:', typeof Auditoria);
-console.log('✅ TesteAPI:', typeof TesteAPI);
-console.log('✅ SiteSalao:', typeof SiteSalao);
-console.log('✅ Page404:', typeof Page404);
-console.log('✅ Page403:', typeof Page403);
-console.log('✅ Page500:', typeof Page500);
-console.log('✅ Manutencao:', typeof Manutencao);
-
 const theme = createTheme({
   palette: {
     primary: {
@@ -185,6 +153,11 @@ function AnimatedRoutes() {
           <Route path="/teste" element={<TesteAPI />} />
           <Route path="/site" element={<SiteSalao />} />
           
+          {/* 🔥 PÁGINAS DE ERRO PÚBLICAS (FORA DO PRIVATE ROUTE) */}
+          <Route path="/403" element={<Page403 />} />
+          <Route path="/500" element={<Page500 />} />
+          <Route path="/manutencao" element={<Manutencao />} />
+          
           {/* Rotas Privadas */}
           <Route path="/" element={<ModernDashboard />} />
           
@@ -219,11 +192,6 @@ function AnimatedRoutes() {
           <Route path="/notificacoes" element={<ModernNotificacoes />} />
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
-
-          {/* Páginas de Erro */}
-          <Route path="/403" element={<Page403 />} />
-          <Route path="/500" element={<Page500 />} />
-          <Route path="/manutencao" element={<Manutencao />} />
           
           {/* Rota 404 - DEVE SER A ÚLTIMA */}
           <Route path="*" element={<Page404 />} />
@@ -281,6 +249,9 @@ function App() {
             <Route path="/login" element={<ModernLogin />} />
             <Route path="/teste" element={<TesteAPI />} />
             <Route path="/site" element={<SiteSalao />} />
+            <Route path="/403" element={<Page403 />} />
+            <Route path="/500" element={<Page500 />} />
+            <Route path="/manutencao" element={<Manutencao />} />
             
             {/* Rotas com sidebar - todas as outras rotas (privadas) */}
             <Route path="/*" element={
