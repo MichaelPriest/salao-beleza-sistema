@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   LinearProgress,
+  Chip, // 🔥 IMPORTANTE: Adicionar Chip
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -154,7 +155,7 @@ function Manutencao() {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mb: 2 }}>
                 <ScheduleIcon sx={{ color: '#9c27b0' }} />
                 <Typography variant="h6">
-                  Tempo estimado: {timeLeft}
+                  {`Tempo estimado: ${timeLeft}`}
                 </Typography>
               </Box>
               
@@ -172,7 +173,7 @@ function Manutencao() {
               />
               
               <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                Progresso: {Math.round(progress)}%
+                {`Progresso: ${Math.round(progress)}%`}
               </Typography>
             </Box>
           </motion.div>
@@ -221,10 +222,10 @@ function Manutencao() {
             transition={{ delay: 0.7 }}
           >
             <Box sx={{ mt: 4, p: 2, bgcolor: '#f3e5f5', borderRadius: 2 }}>
-              <Typography variant="body2" color="textSecondary">
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
                 <strong>O que está sendo feito:</strong>
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center', mt: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
                 <Chip label="Atualização de segurança" size="small" />
                 <Chip label="Melhorias de performance" size="small" />
                 <Chip label="Novas funcionalidades" size="small" />
