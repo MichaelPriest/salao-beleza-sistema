@@ -112,12 +112,11 @@ function SiteSalao() {
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // Dados simulados das redes sociais
-  const [redesSociais, setRedesSociais] = useState({
-    instagram: null,
-    facebook: null,
-    postsInstagram: [],
-    postsFacebook: []
+  // Dados das redes sociais (vindo das configurações)
+  const [redesAtivas, setRedesAtivas] = useState({
+    instagram: false,
+    facebook: false,
+    whatsapp: false
   });
 
   // Depoimentos simulados
@@ -129,7 +128,6 @@ function SiteSalao() {
 
   useEffect(() => {
     carregarDados();
-    carregarPostsRedesSociais();
   }, []);
 
   const carregarDados = async () => {
@@ -147,6 +145,14 @@ function SiteSalao() {
       setServicos(servicosData);
       setProfissionais(profissionaisData);
       
+      // Verificar quais redes sociais estão configuradas
+      const contato = configData?.salao?.contato || {};
+      setRedesAtivas({
+        instagram: !!contato.instagram,
+        facebook: !!contato.facebook,
+        whatsapp: !!contato.whatsapp
+      });
+      
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setError('Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
@@ -154,61 +160,6 @@ function SiteSalao() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const carregarPostsRedesSociais = () => {
-    // Simular posts do Instagram
-    const postsInstagram = [
-      {
-        id: 1,
-        url: 'https://www.instagram.com/p/Cxample1/',
-        imagem: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=400',
-        legenda: 'Novo corte disponível! ✂️',
-        curtidas: 45,
-        comentarios: 12
-      },
-      {
-        id: 2,
-        url: 'https://www.instagram.com/p/Cxample2/',
-        imagem: 'https://images.unsplash.com/photo-1522337360782-3b13b78a3a6b?w=400',
-        legenda: 'Hidratação profunda 💆‍♀️',
-        curtidas: 67,
-        comentarios: 8
-      },
-      {
-        id: 3,
-        url: 'https://www.instagram.com/p/Cxample3/',
-        imagem: 'https://images.unsplash.com/photo-1487412947148-5cce1659a9f5?w=400',
-        legenda: 'Maquiagem para festas ✨',
-        curtidas: 89,
-        comentarios: 15
-      }
-    ];
-
-    // Simular posts do Facebook
-    const postsFacebook = [
-      {
-        id: 1,
-        url: 'https://www.facebook.com/permalink.php?story_fbid=example1',
-        mensagem: 'Promoção especial essa semana! 🎉',
-        curtidas: 32,
-        compartilhamentos: 8
-      },
-      {
-        id: 2,
-        url: 'https://www.facebook.com/permalink.php?story_fbid=example2',
-        mensagem: 'Novo profissional na equipe! 👋',
-        curtidas: 28,
-        compartilhamentos: 5
-      }
-    ];
-
-    setRedesSociais({
-      instagram: config?.salao?.contato?.instagram || null,
-      facebook: config?.salao?.contato?.facebook || null,
-      postsInstagram,
-      postsFacebook
-    });
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -313,7 +264,7 @@ function SiteSalao() {
   const salaoNome = config?.salao?.nome || 'Beauty Pro';
   const salaoLogo = config?.salao?.logo;
   const salaoEndereco = config?.salao?.endereco;
-  const contato = config?.salao?.contato;
+  const contato = config?.salao?.contato || {};
 
   // Função para formatar horário de funcionamento
   const formatarHorarioFuncionamento = () => {
@@ -328,7 +279,7 @@ function SiteSalao() {
 
   return (
     <Box sx={{ bgcolor: '#faf5ff', minHeight: '100vh' }}>
-      {/* Header com Logo */}
+      {/* Header com Logo - Ajustado */}
       <AppBar 
         position="fixed" 
         sx={{ 
@@ -339,18 +290,17 @@ function SiteSalao() {
       >
         <Toolbar>
           {salaoLogo ? (
-            <Avatar
+            <Box
+              component="img"
               src={salaoLogo}
               alt={salaoNome}
               sx={{
-                width: 50,
                 height: 50,
+                width: 'auto',
+                maxWidth: 150,
                 mr: 2,
-                border: '2px solid #9c27b0',
-                bgcolor: 'white',
                 objectFit: 'contain',
               }}
-              variant="rounded"
             />
           ) : (
             <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
@@ -369,7 +319,7 @@ function SiteSalao() {
             </IconButton>
           ) : (
             <Box sx={{ display: 'flex', gap: 3, flexGrow: 1, justifyContent: 'flex-end' }}>
-              {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
+              {['home', 'servicos', 'profissionais', 'contato'].map((item) => (
                 <Button
                   key={item}
                   onClick={() => scrollToSection(item)}
@@ -380,8 +330,7 @@ function SiteSalao() {
                 >
                   {item === 'home' ? 'Início' : 
                    item === 'servicos' ? 'Serviços' : 
-                   item === 'profissionais' ? 'Profissionais' : 
-                   item === 'redes' ? 'Redes Sociais' : 'Contato'}
+                   item === 'profissionais' ? 'Profissionais' : 'Contato'}
                 </Button>
               ))}
               <Button
@@ -416,35 +365,27 @@ function SiteSalao() {
           
           {salaoLogo && (
             <Box sx={{ textAlign: 'center', mb: 2 }}>
-              <Avatar
+              <Box
+                component="img"
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  width: 80,
-                  height: 80,
+                  height: 60,
+                  width: 'auto',
                   mx: 'auto',
                   mb: 1,
-                  border: '2px solid #9c27b0',
                 }}
-                variant="rounded"
               />
-              {/* Só mostra o nome se não tiver logo */}
-              {!salaoLogo && (
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {salaoNome}
-                </Typography>
-              )}
             </Box>
           )}
           
           <List>
-            {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
+            {['home', 'servicos', 'profissionais', 'contato'].map((item) => (
               <ListItem key={item} button onClick={() => scrollToSection(item)}>
                 <ListItemText 
                   primary={item === 'home' ? 'Início' : 
                           item === 'servicos' ? 'Serviços' : 
-                          item === 'profissionais' ? 'Profissionais' : 
-                          item === 'redes' ? 'Redes Sociais' : 'Contato'}
+                          item === 'profissionais' ? 'Profissionais' : 'Contato'}
                 />
               </ListItem>
             ))}
@@ -645,138 +586,6 @@ function SiteSalao() {
         </Container>
       </Box>
 
-      {/* Redes Sociais Section */}
-      <Box sx={{ bgcolor: 'white', py: 8 }} id="redes">
-        <Container maxWidth="lg">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-            Siga-nos nas <span style={{ color: '#9c27b0' }}>Redes Sociais</span>
-          </Typography>
-          <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
-            Acompanhe nosso trabalho e novidades
-          </Typography>
-
-          <Grid container spacing={4}>
-            {/* Instagram Feed */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <InstagramIcon sx={{ fontSize: 40, color: '#E1306C', mr: 2 }} />
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                    Instagram
-                  </Typography>
-                  {redesSociais.instagram && (
-                    <Button
-                      href={`https://instagram.com/${redesSociais.instagram.replace('@', '')}`}
-                      target="_blank"
-                      size="small"
-                      sx={{ ml: 'auto' }}
-                    >
-                      Ver perfil
-                    </Button>
-                  )}
-                </Box>
-
-                <Grid container spacing={2}>
-                  {redesSociais.postsInstagram.map((post) => (
-                    <Grid item xs={12} key={post.id}>
-                      <Card variant="outlined">
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={post.imagem}
-                          alt={post.legenda}
-                        />
-                        <CardContent>
-                          <Typography variant="body2" gutterBottom>
-                            {post.legenda}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
-                              <Typography variant="caption">{post.curtidas}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <CommentIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
-                              <Typography variant="caption">{post.comentarios}</Typography>
-                            </Box>
-                          </Box>
-                        </CardContent>
-                        <CardActions>
-                          <Button 
-                            size="small" 
-                            href={post.url} 
-                            target="_blank"
-                            sx={{ color: '#E1306C' }}
-                          >
-                            Ver no Instagram
-                          </Button>
-                        </CardActions>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Paper>
-            </Grid>
-
-            {/* Facebook Feed */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <FacebookIcon sx={{ fontSize: 40, color: '#4267B2', mr: 2 }} />
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                    Facebook
-                  </Typography>
-                  {redesSociais.facebook && (
-                    <Button
-                      href={`https://facebook.com/${redesSociais.facebook}`}
-                      target="_blank"
-                      size="small"
-                      sx={{ ml: 'auto' }}
-                    >
-                      Ver página
-                    </Button>
-                  )}
-                </Box>
-
-                <Grid container spacing={2}>
-                  {redesSociais.postsFacebook.map((post) => (
-                    <Grid item xs={12} key={post.id}>
-                      <Card variant="outlined" sx={{ mb: 2 }}>
-                        <CardContent>
-                          <Typography variant="body1" gutterBottom>
-                            {post.mensagem}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
-                              <Typography variant="caption">{post.curtidas}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <ShareIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
-                              <Typography variant="caption">{post.compartilhamentos}</Typography>
-                            </Box>
-                          </Box>
-                        </CardContent>
-                        <CardActions>
-                          <Button 
-                            size="small" 
-                            href={post.url} 
-                            target="_blank"
-                            sx={{ color: '#4267B2' }}
-                          >
-                            Ver no Facebook
-                          </Button>
-                        </CardActions>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Container>
-      </Box>
-
       {/* Contato Section */}
       <Box sx={{ py: 8 }} id="contato">
         <Container maxWidth="lg">
@@ -787,37 +596,41 @@ function SiteSalao() {
               </Typography>
               
               <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <LocationIcon sx={{ color: '#9c27b0' }} />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Endereço"
-                    secondary={salaoEndereco ? 
-                      `${salaoEndereco.logradouro || ''}, ${salaoEndereco.numero || ''} - ${salaoEndereco.bairro || ''}, ${salaoEndereco.cidade || ''}/${salaoEndereco.estado || ''}` 
-                      : 'Rua da Beleza, 100 - Centro'}
-                  />
-                </ListItem>
+                {salaoEndereco && (salaoEndereco.logradouro || salaoEndereco.cidade) && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <LocationIcon sx={{ color: '#9c27b0' }} />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Endereço"
+                      secondary={`${salaoEndereco.logradouro || ''}, ${salaoEndereco.numero || ''} - ${salaoEndereco.bairro || ''}, ${salaoEndereco.cidade || ''}/${salaoEndereco.estado || ''}`}
+                    />
+                  </ListItem>
+                )}
                 
-                <ListItem>
-                  <ListItemIcon>
-                    <PhoneIcon sx={{ color: '#9c27b0' }} />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Telefone"
-                    secondary={contato?.telefone || '(11) 3333-4444'}
-                  />
-                </ListItem>
+                {contato.telefone && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <PhoneIcon sx={{ color: '#9c27b0' }} />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Telefone"
+                      secondary={contato.telefone}
+                    />
+                  </ListItem>
+                )}
                 
-                <ListItem>
-                  <ListItemIcon>
-                    <EmailIcon sx={{ color: '#9c27b0' }} />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Email"
-                    secondary={contato?.email || 'contato@beautypro.com'}
-                  />
-                </ListItem>
+                {contato.email && (
+                  <ListItem>
+                    <ListItemIcon>
+                      <EmailIcon sx={{ color: '#9c27b0' }} />
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary="Email"
+                      secondary={contato.email}
+                    />
+                  </ListItem>
+                )}
 
                 <ListItem>
                   <ListItemIcon>
@@ -830,29 +643,45 @@ function SiteSalao() {
                 </ListItem>
               </List>
 
+              {/* Redes Sociais - Mostra apenas as configuradas */}
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                <IconButton 
-                  href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`} 
-                  target="_blank" 
-                  sx={{ color: '#25D366' }}
-                >
-                  <WhatsAppIcon />
-                </IconButton>
-                <IconButton 
-                  href={contato?.instagram ? `https://instagram.com/${contato.instagram.replace('@', '')}` : '#'} 
-                  target="_blank" 
-                  sx={{ color: '#E1306C' }}
-                >
-                  <InstagramIcon />
-                </IconButton>
-                <IconButton 
-                  href={contato?.facebook ? `https://facebook.com/${contato.facebook}` : '#'} 
-                  target="_blank" 
-                  sx={{ color: '#4267B2' }}
-                >
-                  <FacebookIcon />
-                </IconButton>
+                {redesAtivas.whatsapp && contato.whatsapp && (
+                  <IconButton 
+                    href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    sx={{ color: '#25D366' }}
+                  >
+                    <WhatsAppIcon />
+                  </IconButton>
+                )}
+                
+                {redesAtivas.instagram && contato.instagram && (
+                  <IconButton 
+                    href={`https://instagram.com/${contato.instagram.replace('@', '')}`} 
+                    target="_blank" 
+                    sx={{ color: '#E1306C' }}
+                  >
+                    <InstagramIcon />
+                  </IconButton>
+                )}
+                
+                {redesAtivas.facebook && contato.facebook && (
+                  <IconButton 
+                    href={`https://facebook.com/${contato.facebook}`} 
+                    target="_blank" 
+                    sx={{ color: '#4267B2' }}
+                  >
+                    <FacebookIcon />
+                  </IconButton>
+                )}
               </Box>
+
+              {/* Mensagem se não houver redes configuradas */}
+              {!redesAtivas.whatsapp && !redesAtivas.instagram && !redesAtivas.facebook && (
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2, fontStyle: 'italic' }}>
+                  Siga-nos em breve nas redes sociais!
+                </Typography>
+              )}
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -914,17 +743,18 @@ function SiteSalao() {
             <Grid item>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 {salaoLogo ? (
-                  <Avatar
+                  <Box
+                    component="img"
                     src={salaoLogo}
                     alt={salaoNome}
                     sx={{
-                      width: 40,
-                      height: 40,
+                      height: 30,
+                      width: 'auto',
                       mr: 1,
-                      border: '1px solid white',
                       bgcolor: 'white',
+                      borderRadius: 1,
+                      p: 0.5,
                     }}
-                    variant="rounded"
                   />
                 ) : (
                   <SpaIcon sx={{ mr: 1 }} />
@@ -944,15 +774,17 @@ function SiteSalao() {
         </Container>
       </Box>
 
-      {/* Botão flutuante do WhatsApp */}
-      <Fab
-        color="success"
-        sx={{ position: 'fixed', bottom: 20, right: 20 }}
-        href={`https://wa.me/${contato?.whatsapp || '5511999999999'}`}
-        target="_blank"
-      >
-        <WhatsAppIcon />
-      </Fab>
+      {/* Botão flutuante do WhatsApp - Só aparece se configurado */}
+      {redesAtivas.whatsapp && contato.whatsapp && (
+        <Fab
+          color="success"
+          sx={{ position: 'fixed', bottom: 20, right: 20 }}
+          href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`}
+          target="_blank"
+        >
+          <WhatsAppIcon />
+        </Fab>
+      )}
 
       {/* Dialog de Agendamento */}
       <Dialog open={openAgendamento} onClose={() => setOpenAgendamento(false)} maxWidth="md" fullWidth>
