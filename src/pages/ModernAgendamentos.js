@@ -38,6 +38,13 @@ import {
   FormLabel,
   Collapse,
   Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TableFooter,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -61,6 +68,10 @@ import {
   PersonSearch as PersonSearchIcon,
   Fingerprint as FingerprintIcon,
   Cake as CakeIcon,
+  AddCircle as AddCircleIcon,
+  RemoveCircle as RemoveCircleIcon,
+  AttachMoney as AttachMoneyIcon,
+  Work as WorkIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -139,13 +150,20 @@ function ModernAgendamentos() {
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   const [usuario, setUsuario] = useState(null);
 
-  // NOVOS ESTADOS PARA PESQUISA DE CLIENTES
+  // Estados para pesquisa de clientes
   const [searchClientTerm, setSearchClientTerm] = useState('');
-  const [searchClientType, setSearchClientType] = useState('nome'); // 'nome', 'cpf', 'dataNascimento'
+  const [searchClientType, setSearchClientType] = useState('nome');
   const [searchClientResults, setSearchClientResults] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [cpfInput, setCpfInput] = useState('');
   const [dataNascimentoInput, setDataNascimentoInput] = useState(null);
+
+  // Estados para múltiplos serviços
+  const [servicosSelecionados, setServicosSelecionados] = useState([]);
+  const [servicoAtual, setServicoAtual] = useState('');
+  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
+  const [profissionaisDisponiveis, setProfissionaisDisponiveis] = useState([]);
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState('');
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -191,33 +209,162 @@ function ModernAgendamentos() {
     data: selectedDate,
     horario: '',
     observacoes: '',
-    status: 'pendente'
+    status: 'pendente',
+    servicos: [], // Array para múltiplos serviços
+    valorTotal: 0
   });
+
+  // ============================================
+  // FUNÇÕES PARA FILTRAR SERVIÇOS POR PROFISSIONAL
+  // ============================================
+
+  // Atualizar serviços disponíveis quando profissional é selecionado
+  useEffect(() => {
+    if (formData.profissionalId && servicos) {
+      // Buscar o profissional selecionado
+      const profissional = profissionais?.find(p => p.id === formData.profissionalId);
+      
+      if (profissional && profissional.servicosIds) {
+        // Filtrar serviços pelos IDs associados ao profissional
+        const servicosDoProfissional = servicos.filter(s => 
+          profissional.servicosIds.includes(s.id) && s.ativo !== false
+        );
+        setServicosDisponiveis(servicosDoProfissional);
+      } else {
+        // Se profissional não tem serviços específicos, mostrar todos ativos
+        setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
+      }
+    } else {
+      setServicosDisponiveis([]);
+    }
+  }, [formData.profissionalId, servicos, profissionais]);
+
+  // Atualizar profissionais disponíveis quando serviço é selecionado
+  useEffect(() => {
+    if (servicoAtual && profissionais) {
+      // Buscar o serviço selecionado
+      const servico = servicos?.find(s => s.id === servicoAtual);
+      
+      if (servico && servico.profissionaisIds) {
+        // Filtrar profissionais pelos IDs associados ao serviço
+        const profissionaisDoServico = profissionais.filter(p => 
+          servico.profissionaisIds.includes(p.id) && p.ativo !== false
+        );
+        setProfissionaisDisponiveis(profissionaisDoServico);
+      }
+    } else {
+      setProfissionaisDisponiveis([]);
+    }
+  }, [servicoAtual, profissionais, servicos]);
+
+  // ============================================
+  // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
+  // ============================================
+
+  // Adicionar serviço à lista
+  const adicionarServico = () => {
+    if (!servicoAtual) {
+      toast.error('Selecione um serviço');
+      return;
+    }
+
+    const servico = servicos?.find(s => s.id === servicoAtual);
+    if (!servico) return;
+
+    // Verificar se serviço já foi adicionado
+    if (servicosSelecionados.some(s => s.id === servico.id)) {
+      toast.error('Este serviço já foi adicionado');
+      return;
+    }
+
+    const novoServico = {
+      id: servico.id,
+      nome: servico.nome,
+      preco: servico.preco || 0,
+      duracao: servico.duracao || 60,
+      comissao: servico.comissaoProfissional || 50,
+      profissionalId: profissionalSelecionado || formData.profissionalId
+    };
+
+    setServicosSelecionados([...servicosSelecionados, novoServico]);
+    setServicoAtual('');
+    
+    // Calcular novo valor total
+    const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
+  };
+
+  // Remover serviço da lista
+  const removerServico = (id) => {
+    const novosServicos = servicosSelecionados.filter(s => s.id !== id);
+    setServicosSelecionados(novosServicos);
+    
+    // Calcular novo valor total
+    const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
+  };
+
+  // Limpar lista de serviços
+  const limparServicos = () => {
+    setServicosSelecionados([]);
+    setFormData({ ...formData, valorTotal: 0, servicos: [] });
+  };
+
+  // Reset quando abrir modal
+  useEffect(() => {
+    if (openDialog) {
+      if (selectedAppointment) {
+        setFormData({
+          clienteId: selectedAppointment.clienteId || '',
+          profissionalId: selectedAppointment.profissionalId || '',
+          servicoId: selectedAppointment.servicoId || '',
+          data: selectedAppointment.data || selectedDate,
+          horario: selectedAppointment.horario || '',
+          observacoes: selectedAppointment.observacoes || '',
+          status: selectedAppointment.status || 'pendente',
+          servicos: selectedAppointment.servicos || [],
+          valorTotal: selectedAppointment.valorTotal || 0
+        });
+        setServicosSelecionados(selectedAppointment.servicos || []);
+      } else {
+        setFormData({
+          clienteId: '',
+          profissionalId: '',
+          servicoId: '',
+          data: selectedDate,
+          horario: '',
+          observacoes: '',
+          status: 'pendente',
+          servicos: [],
+          valorTotal: 0
+        });
+        setServicosSelecionados([]);
+        setServicoAtual('');
+        setProfissionalSelecionado('');
+      }
+    }
+  }, [openDialog, selectedAppointment, selectedDate]);
 
   // ============================================
   // FUNÇÕES DE PESQUISA DE CLIENTES
   // ============================================
 
-  // Formatar CPF para exibição
   const formatarCPF = (cpf) => {
     if (!cpf) return '';
     const numeros = cpf.replace(/\D/g, '');
     return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
-  // Remover máscara do CPF para busca
   const removerMascaraCPF = (cpf) => {
     return cpf ? cpf.replace(/\D/g, '') : '';
   };
 
-  // Formatar data para exibição
   const formatarDataBrasil = (data) => {
     if (!data) return '';
     const d = new Date(data);
     return d.toLocaleDateString('pt-BR');
   };
 
-  // Buscar clientes baseado no tipo de pesquisa
   const buscarClientes = () => {
     if (!clientes) return [];
 
@@ -254,10 +401,9 @@ function ModernAgendamentos() {
         break;
     }
 
-    return resultados.slice(0, 10); // Limitar a 10 resultados
+    return resultados.slice(0, 10);
   };
 
-  // Efeito para buscar clientes quando os termos mudam
   useEffect(() => {
     if (showClientSearch) {
       const resultados = buscarClientes();
@@ -265,7 +411,6 @@ function ModernAgendamentos() {
     }
   }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch]);
 
-  // Abrir painel de busca de clientes
   const handleOpenClientSearch = () => {
     setShowClientSearch(true);
     setSearchClientTerm('');
@@ -274,55 +419,24 @@ function ModernAgendamentos() {
     setSearchClientType('nome');
   };
 
-  // Fechar painel de busca
   const handleCloseClientSearch = () => {
     setShowClientSearch(false);
   };
 
-  // Selecionar um cliente
   const handleSelectClient = (cliente) => {
     setFormData({ ...formData, clienteId: cliente.id });
     setShowClientSearch(false);
     toast.success(`Cliente ${cliente.nome} selecionado`);
   };
 
-  // Limpar cliente selecionado
   const handleClearClient = () => {
     setFormData({ ...formData, clienteId: '' });
   };
 
-  // Obter dados do cliente selecionado
   const getSelectedClientData = () => {
     if (!formData.clienteId) return null;
     return (clientes || []).find(c => c.id === formData.clienteId);
   };
-
-  // Reset form quando abrir modal
-  useEffect(() => {
-    if (openDialog) {
-      if (selectedAppointment) {
-        setFormData({
-          clienteId: selectedAppointment.clienteId || '',
-          profissionalId: selectedAppointment.profissionalId || '',
-          servicoId: selectedAppointment.servicoId || '',
-          data: selectedAppointment.data || selectedDate,
-          horario: selectedAppointment.horario || '',
-          observacoes: selectedAppointment.observacoes || '',
-          status: selectedAppointment.status || 'pendente'
-        });
-      } else {
-        setFormData({
-          clienteId: '',
-          profissionalId: '',
-          servicoId: '',
-          data: selectedDate,
-          horario: '',
-          observacoes: '',
-          status: 'pendente'
-        });
-      }
-    }
-  }, [openDialog, selectedAppointment, selectedDate]);
 
   // Filtrar eventos
   const filteredEvents = todosEventos.filter(event => {
@@ -332,13 +446,9 @@ function ModernAgendamentos() {
     return professionalMatch && statusMatch && tipoMatch;
   });
 
-  // Eventos do dia selecionado
   const dayEvents = filteredEvents.filter(event => event.data === selectedDate);
-
-  // Atendimentos em andamento
   const atendimentosEmAndamento = (atendimentos || []).filter(att => att.status === 'em_andamento');
 
-  // Agendamentos da semana
   const weekDays_list = getWeekDays(currentDate);
   const weekEvents = weekDays_list.map(day => ({
     date: formatDate(day),
@@ -346,7 +456,6 @@ function ModernAgendamentos() {
     events: filteredEvents.filter(event => event.data === formatDate(day))
   }));
 
-  // Eventos do mês
   const monthDays = getDaysInMonth(currentDate);
   const firstDay = getFirstDayOfMonth(currentDate);
   const monthMatrix = [];
@@ -378,7 +487,6 @@ function ModernAgendamentos() {
     if (dayCounter > monthDays) break;
   }
 
-  // Estatísticas
   const stats = {
     total: dayEvents.length,
     agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
@@ -475,8 +583,18 @@ function ModernAgendamentos() {
     event.preventDefault();
     
     try {
-      if (!formData.clienteId || !formData.profissionalId || !formData.servicoId || !formData.horario) {
-        toast.error('Preencha todos os campos obrigatórios');
+      if (!formData.clienteId) {
+        toast.error('Selecione um cliente');
+        return;
+      }
+
+      if (servicosSelecionados.length === 0) {
+        toast.error('Adicione pelo menos um serviço');
+        return;
+      }
+
+      if (!formData.horario) {
+        toast.error('Selecione um horário');
         return;
       }
 
@@ -497,11 +615,13 @@ function ModernAgendamentos() {
       const dadosParaSalvar = {
         clienteId: formData.clienteId,
         profissionalId: formData.profissionalId,
-        servicoId: formData.servicoId,
+        servicoId: servicosSelecionados[0]?.id, // Primeiro serviço para compatibilidade
+        servicos: servicosSelecionados,
         data: formData.data,
         horario: formData.horario,
         observacoes: formData.observacoes || '',
         status: formData.status || 'pendente',
+        valorTotal: formData.valorTotal,
         origem: 'sistema'
       };
 
@@ -516,7 +636,7 @@ function ModernAgendamentos() {
         toast.success('Agendamento criado!');
       }
 
-      // 🔥 NOTIFICAR PROFISSIONAL SOBRE NOVO AGENDAMENTO
+      // Notificar profissional
       if (usuario && formData.profissionalId) {
         try {
           const usuarios = await firebaseService.getAll('usuarios');
@@ -546,7 +666,6 @@ function ModernAgendamentos() {
 
       const toastId = toast.loading('Iniciando atendimento...');
 
-      // Verificar se já existe um atendimento para este agendamento
       const atendimentoExistente = (atendimentos || []).find(a => a.agendamentoId === agendamento.id);
       
       if (atendimentoExistente) {
@@ -556,35 +675,34 @@ function ModernAgendamentos() {
         return;
       }
 
-      const servico = (servicos || []).find(s => s.id === agendamento.servicoId);
+      const servicosLista = agendamento.servicos || [];
+      const primeiroServico = servicosLista[0] || {};
 
-      // Criar novo atendimento no Firebase
       const novoAtendimento = {
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
         profissionalId: agendamento.profissionalId,
-        servicoId: agendamento.servicoId,
+        servicoId: primeiroServico.id,
+        servicos: servicosLista,
         data: agendamento.data,
         horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
-        observacoes: '',
-        itensServico: [{
-          id: agendamento.servicoId,
-          nome: servico?.nome || 'Serviço',
-          preco: servico?.preco || 0,
-          principal: true
-        }],
+        observacoes: agendamento.observacoes || '',
+        itensServico: servicosLista.map(s => ({
+          id: s.id,
+          nome: s.nome,
+          preco: s.preco || 0,
+          principal: s.id === primeiroServico.id
+        })),
         itensProduto: [],
-        valorTotal: servico?.preco || 0,
+        valorTotal: agendamento.valorTotal || 0,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
 
-      // Usar firebaseService diretamente
       const atendimentoCriado = await firebaseService.add('atendimentos', novoAtendimento);
       
-      // Atualizar status do agendamento
       await atualizar(agendamento.id, { 
         status: 'em_andamento',
         updatedAt: Timestamp.now()
@@ -751,7 +869,7 @@ function ModernAgendamentos() {
         </Box>
       </Box>
 
-      {/* Atendimentos em Andamento - Destaque */}
+      {/* Atendimentos em Andamento */}
       {atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
           <CardContent>
@@ -766,7 +884,7 @@ function ModernAgendamentos() {
               {atendimentosEmAndamento.slice(0, 3).map(atendimento => {
                 const cliente = (clientes || []).find(c => c.id === atendimento.clienteId);
                 const profissional = (profissionais || []).find(p => p.id === atendimento.profissionalId);
-                const servico = (servicos || []).find(s => s.id === atendimento.servicoId);
+                const servicosLista = atendimento.servicos || [];
 
                 return (
                   <Grid item xs={12} md={4} key={atendimento.id}>
@@ -780,7 +898,7 @@ function ModernAgendamentos() {
                             {cliente?.nome}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {servico?.nome}
+                            {servicosLista.length} serviço(s)
                           </Typography>
                         </Box>
                       </Box>
@@ -969,7 +1087,7 @@ function ModernAgendamentos() {
                               {eventsAtTime.map(event => {
                                 const cliente = (clientes || []).find(c => c.id === event.clienteId);
                                 const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
-                                const servico = (servicos || []).find(s => s.id === event.servicoId);
+                                const servicosLista = event.servicos || [];
 
                                 return (
                                   <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
@@ -1006,10 +1124,10 @@ function ModernAgendamentos() {
 
                                           <Grid item xs={12} sm={6} md={2}>
                                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                              {servico?.nome || 'N/A'}
+                                              {servicosLista.length} serviço(s)
                                             </Typography>
                                             <Typography variant="caption" color="textSecondary">
-                                              R$ {servico?.preco?.toFixed(2) || '0,00'}
+                                              {servicosLista.map(s => s.nome).join(', ')}
                                             </Typography>
                                           </Grid>
 
@@ -1170,6 +1288,7 @@ function ModernAgendamentos() {
                         <Box>
                           {day.events.slice(0, 3).map(event => {
                             const cliente = (clientes || []).find(c => c.id === event.clienteId);
+                            const servicosLista = event.servicos || [];
                             return (
                               <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                 <Badge
@@ -1183,7 +1302,7 @@ function ModernAgendamentos() {
                                   )}
                                 </Badge>
                                 <Typography variant="caption">
-                                  {event.horario} - {cliente?.nome?.split(' ')[0]}
+                                  {event.horario} - {cliente?.nome?.split(' ')[0]} ({servicosLista.length})
                                 </Typography>
                               </Box>
                             );
@@ -1282,6 +1401,7 @@ function ModernAgendamentos() {
                             
                             {day.events.slice(0, 2).map(event => {
                               const cliente = (clientes || []).find(c => c.id === event.clienteId);
+                              const servicosLista = event.servicos || [];
                               return (
                                 <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                   <Box
@@ -1297,7 +1417,7 @@ function ModernAgendamentos() {
                                     }}
                                   />
                                   <Typography variant="caption" noWrap sx={{ fontSize: '0.65rem' }}>
-                                    {event.horario} - {cliente?.nome?.split(' ')[0]}
+                                    {event.horario} - {cliente?.nome?.split(' ')[0]} ({servicosLista.length})
                                   </Typography>
                                 </Box>
                               );
@@ -1339,7 +1459,7 @@ function ModernAgendamentos() {
             {selectedDayDetails?.events.map(event => {
               const cliente = (clientes || []).find(c => c.id === event.clienteId);
               const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
-              const servico = (servicos || []).find(s => s.id === event.servicoId);
+              const servicosLista = event.servicos || [];
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2 }}>
@@ -1354,11 +1474,20 @@ function ModernAgendamentos() {
                       <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
                       <Typography variant="body1">{event.horario}</Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">Serviço</Typography>
-                      <Typography variant="body1">{servico?.nome}</Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        R$ {servico?.preco?.toFixed(2)}
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="textSecondary">Serviços</Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                        {servicosLista.map(servico => (
+                          <Chip
+                            key={servico.id}
+                            label={`${servico.nome} - R$ ${servico.preco?.toFixed(2)}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Box>
+                      <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                        Total: R$ {event.valorTotal?.toFixed(2)}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -1452,7 +1581,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento - COM PESQUISA DE CLIENTES */}
+      {/* Dialog de Agendamento - COM MÚLTIPLOS SERVIÇOS */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -1460,7 +1589,7 @@ function ModernAgendamentos() {
         <form onSubmit={handleSave}>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              {/* CAMPO DE CLIENTE COM PESQUISA */}
+              {/* Campo de Cliente com Pesquisa */}
               <Grid item xs={12}>
                 <Box sx={{ mb: 2 }}>
                   {!formData.clienteId ? (
@@ -1482,7 +1611,7 @@ function ModernAgendamentos() {
                         </Button>
                       </Box>
 
-                      {/* PAINEL DE PESQUISA */}
+                      {/* Painel de Pesquisa */}
                       <Collapse in={showClientSearch}>
                         <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
                           <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
@@ -1556,7 +1685,7 @@ function ModernAgendamentos() {
                             </LocalizationProvider>
                           )}
 
-                          {/* RESULTADOS DA BUSCA */}
+                          {/* Resultados da Busca */}
                           {searchClientResults.length > 0 && (
                             <Box sx={{ mt: 2 }}>
                               <Typography variant="caption" color="textSecondary">
@@ -1626,7 +1755,7 @@ function ModernAgendamentos() {
                       </Collapse>
                     </Box>
                   ) : (
-                    // CLIENTE SELECIONADO
+                    // Cliente Selecionado
                     <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                         <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
@@ -1660,39 +1789,130 @@ function ModernAgendamentos() {
                 </Box>
               </Grid>
 
-              {/* DEMAIS CAMPOS DO FORMULÁRIO */}
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Profissional</InputLabel>
-                  <Select
-                    value={formData.profissionalId}
-                    label="Profissional"
-                    onChange={(e) => setFormData({ ...formData, profissionalId: e.target.value })}
-                  >
-                    {(profissionais || []).map(prof => (
-                      <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+              {/* Seção de Serviços Múltiplos */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                  Serviços do Agendamento
+                </Typography>
+
+                {/* Lista de Serviços Selecionados */}
+                {servicosSelecionados.length > 0 && (
+                  <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: '#faf5ff' }}>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Serviço</TableCell>
+                            <TableCell align="right">Preço</TableCell>
+                            <TableCell align="right">Duração</TableCell>
+                            <TableCell align="center">Ações</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {servicosSelecionados.map((servico) => (
+                            <TableRow key={servico.id}>
+                              <TableCell>{servico.nome}</TableCell>
+                              <TableCell align="right">R$ {servico.preco?.toFixed(2)}</TableCell>
+                              <TableCell align="right">{servico.duracao} min</TableCell>
+                              <TableCell align="center">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => removerServico(servico.id)}
+                                >
+                                  <RemoveCircleIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                        <TableFooter>
+                          <TableRow>
+                            <TableCell colSpan={3} align="right">
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                Total:
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                                R$ {formData.valorTotal?.toFixed(2)}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        </TableFooter>
+                      </Table>
+                    </TableContainer>
+                  </Card>
+                )}
+
+                {/* Adicionar Novo Serviço */}
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} md={5}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Profissional</InputLabel>
+                      <Select
+                        value={formData.profissionalId}
+                        label="Profissional"
+                        onChange={(e) => {
+                          setFormData({ ...formData, profissionalId: e.target.value });
+                          setProfissionalSelecionado(e.target.value);
+                        }}
+                      >
+                        <MenuItem value="">Selecione um profissional</MenuItem>
+                        {(profissionais || []).map(prof => (
+                          <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid item xs={12} md={5}>
+                    <FormControl fullWidth size="small" disabled={!formData.profissionalId}>
+                      <InputLabel>Serviço</InputLabel>
+                      <Select
+                        value={servicoAtual}
+                        label="Serviço"
+                        onChange={(e) => setServicoAtual(e.target.value)}
+                      >
+                        <MenuItem value="">Selecione um serviço</MenuItem>
+                        {servicosDisponiveis.map(servico => (
+                          <MenuItem key={servico.id} value={servico.id}>
+                            {servico.nome} - R$ {servico.preco?.toFixed(2)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid item xs={12} md={2}>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<AddCircleIcon />}
+                      onClick={adicionarServico}
+                      disabled={!servicoAtual}
+                      sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                    >
+                      Adicionar
+                    </Button>
+                  </Grid>
+                </Grid>
+
+                {servicosSelecionados.length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={limparServicos}
+                    >
+                      Limpar todos
+                    </Button>
+                  </Box>
+                )}
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Serviço</InputLabel>
-                  <Select
-                    value={formData.servicoId}
-                    label="Serviço"
-                    onChange={(e) => setFormData({ ...formData, servicoId: e.target.value })}
-                  >
-                    {(servicos || []).map(service => (
-                      <MenuItem key={service.id} value={service.id}>
-                        {service.nome} - R$ {service.preco?.toFixed(2)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
+              {/* Data e Hora */}
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -1714,6 +1934,7 @@ function ModernAgendamentos() {
                     label="Horário"
                     onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
                   >
+                    <MenuItem value="">Selecione um horário</MenuItem>
                     {timeSlots.map(time => (
                       <MenuItem 
                         key={time} 
