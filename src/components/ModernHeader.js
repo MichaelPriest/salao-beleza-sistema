@@ -20,6 +20,7 @@ import {
   Popover,
   Chip,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -36,9 +37,7 @@ import {
   Inventory as InventoryIcon,
   Receipt as ReceiptIcon,
   People as PeopleIcon,
-  Spa as SpaIcon,
   ContentCut as CutIcon,
-  AttachMoney as MoneyIcon,
   AccessTime as AccessTimeIcon,
   CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
@@ -115,6 +114,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   '& .MuiInputBase-input': {
     padding: theme.spacing(1, 1, 1, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+    paddingRight: theme.spacing(4),
     transition: theme.transitions.create('width'),
     width: '100%',
     [theme.breakpoints.up('md')]: {
@@ -164,7 +164,6 @@ function ModernHeader() {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationsAnchor, setNotificationsAnchor] = useState(null);
-  const [searchAnchor, setSearchAnchor] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [usuario, setUsuario] = useState(null);
@@ -181,7 +180,7 @@ function ModernHeader() {
     atendimentos: [],
   });
   const [searchLoading, setSearchLoading] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchAnchorEl, setSearchAnchorEl] = useState(null);
   
   // 🔥 REFS PARA CONTROLE DA BUSCA
   const searchTimeout = useRef(null);
@@ -402,14 +401,13 @@ function ModernHeader() {
   const handleSearchChange = useCallback((e) => {
     const value = e.target.value;
     setSearchTerm(value);
-    setShowSearchResults(value.length >= 2);
 
     // Limpar timeout anterior
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
 
-    // Se o valor for menor que 2, limpar resultados
+    // Se o valor for menor que 2, limpar resultados e fechar popover
     if (value.length < 2) {
       setSearchResults({
         clientes: [],
@@ -419,7 +417,13 @@ function ModernHeader() {
         agendamentos: [],
         atendimentos: [],
       });
+      setSearchAnchorEl(null);
       return;
+    }
+
+    // Abrir popover se houver pelo menos 2 caracteres
+    if (value.length >= 2 && searchInputRef.current) {
+      setSearchAnchorEl(searchInputRef.current);
     }
 
     // Debounce de 500ms
@@ -429,15 +433,51 @@ function ModernHeader() {
   }, [realizarBusca]);
 
   // 🔥 HANDLER DE FOCO NA BUSCA
-  const handleSearchFocus = () => {
+  const handleSearchFocus = (e) => {
     if (searchTerm.length >= 2) {
-      setShowSearchResults(true);
+      setSearchAnchorEl(e.currentTarget);
     }
   };
 
+  // 🔥 HANDLER DE CLIQUE NO INPUT
+  const handleSearchClick = (e) => {
+    if (searchTerm.length >= 2) {
+      setSearchAnchorEl(e.currentTarget);
+    }
+  };
+
+  // 🔥 FUNÇÃO CORRIGIDA PARA FECHAR A BUSCA
   const handleSearchClose = () => {
-    setShowSearchResults(false);
-    setSearchAnchor(null);
+    setSearchAnchorEl(null);
+  };
+
+  // 🔥 FUNÇÃO PARA LIMPAR A BUSCA COMPLETAMENTE
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setSearchAnchorEl(null);
+    setSearchResults({
+      clientes: [],
+      profissionais: [],
+      servicos: [],
+      produtos: [],
+      agendamentos: [],
+      atendimentos: [],
+    });
+    
+    // Limpar timeout se existir
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+    
+    // Cancelar busca em andamento
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Focar no input após limpar
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
   };
 
   // 🔥 FUNÇÃO PARA NAVEGAR PARA O RESULTADO
@@ -470,21 +510,8 @@ function ModernHeader() {
       navigate(rotas[tipo]);
     }
     
-    setSearchTerm('');
-    setSearchResults({
-      clientes: [],
-      profissionais: [],
-      servicos: [],
-      produtos: [],
-      agendamentos: [],
-      atendimentos: [],
-    });
-    setShowSearchResults(false);
-    
-    // Limpar timeout se existir
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
+    // Limpar busca após navegar
+    handleClearSearch();
   };
 
   // 🔥 RENDERIZAR RESULTADOS DA BUSCA
@@ -870,45 +897,6 @@ function ModernHeader() {
     return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
-  // Memoização do popover de busca
-  const searchPopover = useMemo(() => (
-    <Popover
-      open={showSearchResults}
-      anchorEl={searchInputRef.current}
-      onClose={handleSearchClose}
-      anchorOrigin={{
-        vertical: 'bottom',
-        horizontal: 'left',
-      }}
-      transformOrigin={{
-        vertical: 'top',
-        horizontal: 'left',
-      }}
-      PaperProps={{
-        sx: {
-          mt: 1,
-          width: 500,
-          maxHeight: 500,
-          borderRadius: 2,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-        },
-      }}
-    >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Resultados da busca
-        </Typography>
-        <IconButton size="small" onClick={handleSearchClose}>
-          <CloseIcon />
-        </IconButton>
-      </Box>
-      <Divider />
-      <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
-        {renderSearchResults()}
-      </Box>
-    </Popover>
-  ), [showSearchResults, searchTerm, searchLoading, searchResults]);
-
   return (
     <AppBar 
       position="static" 
@@ -941,12 +929,60 @@ function ModernHeader() {
             value={searchTerm}
             onChange={handleSearchChange}
             onFocus={handleSearchFocus}
+            onClick={handleSearchClick}
+            endAdornment={
+              searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton 
+                    size="small" 
+                    onClick={handleClearSearch}
+                    sx={{ mr: 0.5 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              )
+            }
             inputProps={{ 'aria-label': 'search' }}
           />
         </Search>
 
         {/* 🔥 POPOVER DE RESULTADOS DA BUSCA */}
-        {searchPopover}
+        <Popover
+          open={Boolean(searchAnchorEl) && searchTerm.length >= 2}
+          anchorEl={searchAnchorEl}
+          onClose={handleSearchClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+          PaperProps={{
+            sx: {
+              mt: 1,
+              width: 500,
+              maxHeight: 500,
+              borderRadius: 2,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            },
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Resultados da busca
+            </Typography>
+            <IconButton size="small" onClick={handleSearchClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <Divider />
+          <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
+            {renderSearchResults()}
+          </Box>
+        </Popover>
 
         <Box sx={{ flexGrow: 1 }} />
 
