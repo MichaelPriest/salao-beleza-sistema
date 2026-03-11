@@ -36,6 +36,9 @@ import {
   useMediaQuery,
   useTheme,
   CircularProgress,
+  Link,
+  CardMedia,
+  CardActions,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -51,12 +54,17 @@ import {
   ContentCut as CutIcon,
   Brush as BrushIcon,
   Face as FaceIcon,
+  Favorite as FavoriteIcon,
+  Comment as CommentIcon,
+  Share as ShareIcon,
+  ThumbUp as ThumbUpIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
+import { InstagramEmbed, FacebookEmbed } from 'react-social-media-embed';
 
-// 🔥 Mapa de nomes dos dias
+// Mapa de nomes dos dias
 const nomesDias = {
   segunda: 'Segunda-feira',
   terca: 'Terça-feira',
@@ -79,6 +87,50 @@ const LoadingSpinner = () => (
   </Box>
 );
 
+// Componente de Post do Instagram
+const InstagramPost = ({ url }) => {
+  const [loading, setLoading] = useState(true);
+  
+  if (!url) return null;
+  
+  return (
+    <Box sx={{ mb: 2 }}>
+      <InstagramEmbed
+        url={url}
+        width="100%"
+        onLoad={() => setLoading(false)}
+      />
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <CircularProgress size={30} />
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// Componente de Post do Facebook
+const FacebookPost = ({ url }) => {
+  const [loading, setLoading] = useState(true);
+  
+  if (!url) return null;
+  
+  return (
+    <Box sx={{ mb: 2 }}>
+      <FacebookEmbed
+        url={url}
+        width="100%"
+        onLoad={() => setLoading(false)}
+      />
+      {loading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <CircularProgress size={30} />
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 function SiteSalao() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -90,6 +142,12 @@ function SiteSalao() {
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
+  const [redesSociais, setRedesSociais] = useState({
+    instagram: null,
+    facebook: null,
+    postsInstagram: [],
+    postsFacebook: []
+  });
   
   const [openAgendamento, setOpenAgendamento] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState({
@@ -114,6 +172,7 @@ function SiteSalao() {
 
   useEffect(() => {
     carregarDados();
+    carregarPostsRedesSociais();
   }, []);
 
   const carregarDados = async () => {
@@ -137,6 +196,65 @@ function SiteSalao() {
       toast.error('Erro ao carregar dados do salão');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const carregarPostsRedesSociais = async () => {
+    try {
+      // Simular posts do Instagram (em produção, viria da API do Instagram)
+      const postsInstagram = [
+        {
+          id: 1,
+          url: 'https://www.instagram.com/p/Cxample1/',
+          imagem: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=400',
+          legenda: 'Novo corte disponível! ✂️',
+          curtidas: 45,
+          comentarios: 12
+        },
+        {
+          id: 2,
+          url: 'https://www.instagram.com/p/Cxample2/',
+          imagem: 'https://images.unsplash.com/photo-1522337360782-3b13b78a3a6b?w=400',
+          legenda: 'Hidratação profunda 💆‍♀️',
+          curtidas: 67,
+          comentarios: 8
+        },
+        {
+          id: 3,
+          url: 'https://www.instagram.com/p/Cxample3/',
+          imagem: 'https://images.unsplash.com/photo-1487412947148-5cce1659a9f5?w=400',
+          legenda: 'Maquiagem para festas ✨',
+          curtidas: 89,
+          comentarios: 15
+        }
+      ];
+
+      // Simular posts do Facebook
+      const postsFacebook = [
+        {
+          id: 1,
+          url: 'https://www.facebook.com/permalink.php?story_fbid=example1',
+          mensagem: 'Promoção especial essa semana! 🎉',
+          curtidas: 32,
+          compartilhamentos: 8
+        },
+        {
+          id: 2,
+          url: 'https://www.facebook.com/permalink.php?story_fbid=example2',
+          mensagem: 'Novo profissional na equipe! 👋',
+          curtidas: 28,
+          compartilhamentos: 5
+        }
+      ];
+
+      setRedesSociais({
+        instagram: config?.salao?.contato?.instagram || null,
+        facebook: config?.salao?.contato?.facebook || null,
+        postsInstagram,
+        postsFacebook
+      });
+    } catch (error) {
+      console.error('Erro ao carregar posts:', error);
     }
   };
 
@@ -244,7 +362,7 @@ function SiteSalao() {
   const salaoEndereco = config?.salao?.endereco;
   const contato = config?.salao?.contato;
 
-  // 🔥 Função para formatar horário de funcionamento
+  // Função para formatar horário de funcionamento
   const formatarHorarioFuncionamento = () => {
     if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
     
@@ -285,17 +403,20 @@ function SiteSalao() {
             <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
           )}
           
-          <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, color: '#9c27b0' }}>
-            {salaoNome}
-          </Typography>
+          {/* 🔥 Só mostra o nome se não tiver logo */}
+          {!salaoLogo && (
+            <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, color: '#9c27b0' }}>
+              {salaoNome}
+            </Typography>
+          )}
           
           {isMobile ? (
             <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: '#9c27b0' }}>
               <MenuIcon />
             </IconButton>
           ) : (
-            <Box sx={{ display: 'flex', gap: 3 }}>
-              {['home', 'servicos', 'profissionais', 'contato'].map((item) => (
+            <Box sx={{ display: 'flex', gap: 3, flexGrow: 1, justifyContent: 'flex-end' }}>
+              {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
                 <Button
                   key={item}
                   onClick={() => scrollToSection(item)}
@@ -306,7 +427,8 @@ function SiteSalao() {
                 >
                   {item === 'home' ? 'Início' : 
                    item === 'servicos' ? 'Serviços' : 
-                   item === 'profissionais' ? 'Profissionais' : 'Contato'}
+                   item === 'profissionais' ? 'Profissionais' : 
+                   item === 'redes' ? 'Redes Sociais' : 'Contato'}
                 </Button>
               ))}
               <Button
@@ -353,19 +475,23 @@ function SiteSalao() {
                 }}
                 variant="rounded"
               />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {salaoNome}
-              </Typography>
+              {/* 🔥 Só mostra o nome se não tiver logo */}
+              {!salaoLogo && (
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  {salaoNome}
+                </Typography>
+              )}
             </Box>
           )}
           
           <List>
-            {['home', 'servicos', 'profissionais', 'contato'].map((item) => (
+            {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
               <ListItem key={item} button onClick={() => scrollToSection(item)}>
                 <ListItemText 
                   primary={item === 'home' ? 'Início' : 
                           item === 'servicos' ? 'Serviços' : 
-                          item === 'profissionais' ? 'Profissionais' : 'Contato'}
+                          item === 'profissionais' ? 'Profissionais' : 
+                          item === 'redes' ? 'Redes Sociais' : 'Contato'}
                 />
               </ListItem>
             ))}
@@ -566,43 +692,134 @@ function SiteSalao() {
         </Container>
       </Box>
 
-      {/* Depoimentos Section */}
-      <Box sx={{ bgcolor: 'white', py: 8 }}>
+      {/* Redes Sociais Section */}
+      <Box sx={{ bgcolor: 'white', py: 8 }} id="redes">
         <Container maxWidth="lg">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
-            O que nossos <span style={{ color: '#9c27b0' }}>clientes</span> dizem
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+            Siga-nos nas <span style={{ color: '#9c27b0' }}>Redes Sociais</span>
+          </Typography>
+          <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
+            Acompanhe nosso trabalho e novidades
           </Typography>
 
-          <Grid container spacing={3}>
-            {depoimentos.map((dep, index) => (
-              <Grid item xs={12} md={4} key={dep.id}>
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                >
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <Avatar sx={{ mr: 2, bgcolor: '#9c27b0' }}>
-                          {dep.nome.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {dep.nome}
+          <Grid container spacing={4}>
+            {/* Instagram Feed */}
+            <Grid item xs={12} md={6}>
+              <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                  <InstagramIcon sx={{ fontSize: 40, color: '#E1306C', mr: 2 }} />
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    Instagram
+                  </Typography>
+                  {redesSociais.instagram && (
+                    <Button
+                      href={`https://instagram.com/${redesSociais.instagram.replace('@', '')}`}
+                      target="_blank"
+                      size="small"
+                      sx={{ ml: 'auto' }}
+                    >
+                      Ver perfil
+                    </Button>
+                  )}
+                </Box>
+
+                <Grid container spacing={2}>
+                  {redesSociais.postsInstagram.map((post) => (
+                    <Grid item xs={12} key={post.id}>
+                      <Card variant="outlined">
+                        <CardMedia
+                          component="img"
+                          height="200"
+                          image={post.imagem}
+                          alt={post.legenda}
+                        />
+                        <CardContent>
+                          <Typography variant="body2" gutterBottom>
+                            {post.legenda}
                           </Typography>
-                          <Rating value={dep.avaliacao} readOnly size="small" />
-                        </Box>
-                      </Box>
-                      <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-                        "{dep.comentario}"
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Grid>
-            ))}
+                          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
+                              <Typography variant="caption">{post.curtidas}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <CommentIcon fontSize="small" sx={{ mr: 0.5, color: '#E1306C' }} />
+                              <Typography variant="caption">{post.comentarios}</Typography>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                        <CardActions>
+                          <Button 
+                            size="small" 
+                            href={post.url} 
+                            target="_blank"
+                            sx={{ color: '#E1306C' }}
+                          >
+                            Ver no Instagram
+                          </Button>
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Grid>
+
+            {/* Facebook Feed */}
+            <Grid item xs={12} md={6}>
+              <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                  <FacebookIcon sx={{ fontSize: 40, color: '#4267B2', mr: 2 }} />
+                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                    Facebook
+                  </Typography>
+                  {redesSociais.facebook && (
+                    <Button
+                      href={`https://facebook.com/${redesSociais.facebook}`}
+                      target="_blank"
+                      size="small"
+                      sx={{ ml: 'auto' }}
+                    >
+                      Ver página
+                    </Button>
+                  )}
+                </Box>
+
+                <Grid container spacing={2}>
+                  {redesSociais.postsFacebook.map((post) => (
+                    <Grid item xs={12} key={post.id}>
+                      <Card variant="outlined" sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="body1" gutterBottom>
+                            {post.mensagem}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <ThumbUpIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
+                              <Typography variant="caption">{post.curtidas}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <ShareIcon fontSize="small" sx={{ mr: 0.5, color: '#4267B2' }} />
+                              <Typography variant="caption">{post.compartilhamentos}</Typography>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                        <CardActions>
+                          <Button 
+                            size="small" 
+                            href={post.url} 
+                            target="_blank"
+                            sx={{ color: '#4267B2' }}
+                          >
+                            Ver no Facebook
+                          </Button>
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Grid>
           </Grid>
         </Container>
       </Box>
@@ -655,7 +872,7 @@ function SiteSalao() {
                   </ListItemIcon>
                   <ListItemText 
                     primary="Horário de Funcionamento"
-                    secondary={formatarHorarioFuncionamento()} // 🔥 Usando a função formatada
+                    secondary={formatarHorarioFuncionamento()}
                   />
                 </ListItem>
               </List>
@@ -759,7 +976,10 @@ function SiteSalao() {
                 ) : (
                   <SpaIcon sx={{ mr: 1 }} />
                 )}
-                <Typography variant="h6">{salaoNome}</Typography>
+                {/* 🔥 Só mostra o nome se não tiver logo */}
+                {!salaoLogo && (
+                  <Typography variant="h6">{salaoNome}</Typography>
+                )}
               </Box>
             </Grid>
             <Grid item>
