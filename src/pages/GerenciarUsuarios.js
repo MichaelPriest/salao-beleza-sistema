@@ -77,7 +77,8 @@ const CARGOS = {
       'gerenciar_estoque',
       'visualizar_relatorios',
       'configurar_sistema',
-      'visualizar_comissoes', // NOVA PERMISSÃO
+      'visualizar_comissoes',
+      'gerenciar_backup',
     ]
   },
   gerente: {
@@ -1027,7 +1028,8 @@ function GerenciarUsuarios() {
                 { valor: 'visualizar_clientes', label: 'Visualizar Clientes' },
                 { valor: 'visualizar_agenda', label: 'Visualizar Agenda' },
                 { valor: 'gerenciar_atendimentos', label: 'Gerenciar Atendimentos' },
-                { valor: 'visualizar_comissoes', label: 'Visualizar Comissões' }, // NOVA PERMISSÃO
+                { valor: 'visualizar_comissoes', label: 'Visualizar Comissões' },
+                { valor: 'gerenciar_backup', label: 'Gerenciar Backup' },
               ].map((permissao) => (
                 <Grid item xs={12} sm={6} key={permissao.valor}>
                   <FormControlLabel
