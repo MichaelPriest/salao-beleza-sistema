@@ -1,5 +1,5 @@
 // src/components/ModernHeader.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -17,9 +17,9 @@ import {
   ListItemIcon,
   Divider,
   Button,
-  Drawer,
   Popover,
   Chip,
+  CircularProgress,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -39,6 +39,8 @@ import {
   Spa as SpaIcon,
   ContentCut as CutIcon,
   AttachMoney as MoneyIcon,
+  AccessTime as AccessTimeIcon,
+  CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,7 +48,41 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
-import { getAuth } from 'firebase/auth';
+
+// 🔥 FUNÇÃO PARA OBTER DATA E HORA NO HORÁRIO DE BRASÍLIA
+const getBrasiliaTime = () => {
+  const now = new Date();
+  
+  // Formatar data no padrão brasileiro
+  const data = now.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  
+  // Formatar hora no padrão brasileiro
+  const hora = now.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  
+  // Nome do dia da semana
+  const diaSemana = now.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    weekday: 'long'
+  });
+  
+  return {
+    data,
+    hora,
+    diaSemana,
+    completo: `${data} ${hora}`,
+    extenso: `${diaSemana}, ${data} às ${hora}`
+  };
+};
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -82,10 +118,47 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
     transition: theme.transitions.create('width'),
     width: '100%',
     [theme.breakpoints.up('md')]: {
-      width: '30ch',
+      width: '40ch',
     },
   },
 }));
+
+// Componente de Relógio Digital
+const RelogioDigital = () => {
+  const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
+
+  useEffect(() => {
+    // Atualizar a cada segundo
+    const timer = setInterval(() => {
+      setHoraBrasilia(getBrasiliaTime());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        bgcolor: '#f5f5f5',
+        borderRadius: 3,
+        px: 2,
+        py: 0.5,
+        mr: 2,
+      }}
+    >
+      <CalendarIcon sx={{ fontSize: 18, color: '#9c27b0', mr: 1 }} />
+      <Typography variant="body2" sx={{ fontWeight: 500, mr: 1 }}>
+        {horaBrasilia.data}
+      </Typography>
+      <AccessTimeIcon sx={{ fontSize: 18, color: '#ff4081', mr: 1 }} />
+      <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff4081' }}>
+        {horaBrasilia.hora}
+      </Typography>
+    </Box>
+  );
+};
 
 function ModernHeader() {
   const navigate = useNavigate();
@@ -97,7 +170,7 @@ function ModernHeader() {
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   
-  // 🔥 ESTADOS PARA BUSCA
+  // 🔥 ESTADOS PARA BUSCA OTIMIZADA
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState({
     clientes: [],
@@ -108,7 +181,13 @@ function ModernHeader() {
     atendimentos: [],
   });
   const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  
+  // 🔥 REFS PARA CONTROLE DA BUSCA
   const searchTimeout = useRef(null);
+  const lastSearchTerm = useRef('');
+  const abortControllerRef = useRef(null);
+  const searchInputRef = useRef(null);
   
   const usuarioRef = useRef(usuario);
 
@@ -180,9 +259,158 @@ function ModernHeader() {
     }
   };
 
-  // 🔥 FUNÇÃO DE BUSCA GLOBAL
-  const realizarBusca = async (termo) => {
+  // 🔥 FUNÇÃO DE BUSCA GLOBAL OTIMIZADA
+  const realizarBusca = useCallback(async (termo) => {
+    // Cancelar busca anterior se existir
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Criar novo AbortController
+    abortControllerRef.current = new AbortController();
+
     if (!termo || termo.length < 2) {
+      setSearchResults({
+        clientes: [],
+        profissionais: [],
+        servicos: [],
+        produtos: [],
+        agendamentos: [],
+        atendimentos: [],
+      });
+      setSearchLoading(false);
+      return;
+    }
+
+    // Se o termo for igual ao último, não precisa buscar de novo
+    if (termo === lastSearchTerm.current) {
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    const termoLower = termo.toLowerCase();
+    lastSearchTerm.current = termo;
+
+    try {
+      // Usar Promise.race com timeout para evitar travamentos
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+
+      const buscaPromise = Promise.all([
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('agendamentos').catch(() => []),
+        firebaseService.getAll('atendimentos').catch(() => []),
+      ]);
+
+      const [
+        clientesData,
+        profissionaisData,
+        servicosData,
+        produtosData,
+        agendamentosData,
+        atendimentosData,
+      ] = await Promise.race([buscaPromise, timeoutPromise]);
+
+      // Verificar se não foi cancelado
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
+      // Filtrar resultados com limite por categoria
+      const resultados = {
+        clientes: (clientesData || [])
+          .filter(c => 
+            c.nome?.toLowerCase().includes(termoLower) ||
+            c.email?.toLowerCase().includes(termoLower) ||
+            c.telefone?.includes(termo)
+          )
+          .slice(0, 5)
+          .map(c => ({ ...c, tipo: 'cliente' })),
+
+        profissionais: (profissionaisData || [])
+          .filter(p => 
+            p.nome?.toLowerCase().includes(termoLower) ||
+            p.especialidade?.toLowerCase().includes(termoLower) ||
+            p.email?.toLowerCase().includes(termoLower)
+          )
+          .slice(0, 5)
+          .map(p => ({ ...p, tipo: 'profissional' })),
+
+        servicos: (servicosData || [])
+          .filter(s => 
+            s.nome?.toLowerCase().includes(termoLower) ||
+            s.descricao?.toLowerCase().includes(termoLower)
+          )
+          .slice(0, 5)
+          .map(s => ({ ...s, tipo: 'servico' })),
+
+        produtos: (produtosData || [])
+          .filter(p => 
+            p.nome?.toLowerCase().includes(termoLower) ||
+            p.descricao?.toLowerCase().includes(termoLower) ||
+            p.codigoBarras?.includes(termo)
+          )
+          .slice(0, 5)
+          .map(p => ({ ...p, tipo: 'produto' })),
+
+        agendamentos: (agendamentosData || [])
+          .filter(a => 
+            a.clienteNome?.toLowerCase().includes(termoLower) ||
+            a.profissionalNome?.toLowerCase().includes(termoLower) ||
+            a.servicoNome?.toLowerCase().includes(termoLower)
+          )
+          .slice(0, 5)
+          .map(a => ({ ...a, tipo: 'agendamento' })),
+
+        atendimentos: (atendimentosData || [])
+          .filter(a => 
+            a.clienteNome?.toLowerCase().includes(termoLower) ||
+            a.profissionalNome?.toLowerCase().includes(termoLower) ||
+            a.servicoNome?.toLowerCase().includes(termoLower)
+          )
+          .slice(0, 5)
+          .map(a => ({ ...a, tipo: 'atendimento' })),
+      };
+
+      setSearchResults(resultados);
+    } catch (error) {
+      if (error.message === 'Timeout') {
+        console.error('Busca excedeu o tempo limite');
+        toast.error('Busca muito lenta. Tente novamente.');
+      } else if (error.name !== 'AbortError') {
+        console.error('Erro na busca:', error);
+      }
+      setSearchResults({
+        clientes: [],
+        profissionais: [],
+        servicos: [],
+        produtos: [],
+        agendamentos: [],
+        atendimentos: [],
+      });
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // 🔥 HANDLER DE MUDANÇA NA BUSCA COM DEBOUNCE
+  const handleSearchChange = useCallback((e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setShowSearchResults(value.length >= 2);
+
+    // Limpar timeout anterior
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    // Se o valor for menor que 2, limpar resultados
+    if (value.length < 2) {
       setSearchResults({
         clientes: [],
         profissionais: [],
@@ -194,99 +422,26 @@ function ModernHeader() {
       return;
     }
 
-    setSearchLoading(true);
-    const termoLower = termo.toLowerCase();
-
-    try {
-      // Buscar em paralelo todas as coleções
-      const [
-        clientesData,
-        profissionaisData,
-        servicosData,
-        produtosData,
-        agendamentosData,
-        atendimentosData,
-      ] = await Promise.all([
-        firebaseService.getAll('clientes').catch(() => []),
-        firebaseService.getAll('profissionais').catch(() => []),
-        firebaseService.getAll('servicos').catch(() => []),
-        firebaseService.getAll('produtos').catch(() => []),
-        firebaseService.getAll('agendamentos').catch(() => []),
-        firebaseService.getAll('atendimentos').catch(() => []),
-      ]);
-
-      // Filtrar resultados
-      const resultados = {
-        clientes: (clientesData || []).filter(c => 
-          c.nome?.toLowerCase().includes(termoLower) ||
-          c.email?.toLowerCase().includes(termoLower) ||
-          c.telefone?.includes(termo)
-        ).slice(0, 5),
-
-        profissionais: (profissionaisData || []).filter(p => 
-          p.nome?.toLowerCase().includes(termoLower) ||
-          p.especialidade?.toLowerCase().includes(termoLower) ||
-          p.email?.toLowerCase().includes(termoLower)
-        ).slice(0, 5),
-
-        servicos: (servicosData || []).filter(s => 
-          s.nome?.toLowerCase().includes(termoLower) ||
-          s.descricao?.toLowerCase().includes(termoLower)
-        ).slice(0, 5),
-
-        produtos: (produtosData || []).filter(p => 
-          p.nome?.toLowerCase().includes(termoLower) ||
-          p.descricao?.toLowerCase().includes(termoLower) ||
-          p.codigoBarras?.includes(termo)
-        ).slice(0, 5),
-
-        agendamentos: (agendamentosData || []).filter(a => 
-          a.clienteNome?.toLowerCase().includes(termoLower) ||
-          a.profissionalNome?.toLowerCase().includes(termoLower) ||
-          a.servicoNome?.toLowerCase().includes(termoLower)
-        ).slice(0, 5),
-
-        atendimentos: (atendimentosData || []).filter(a => 
-          a.clienteNome?.toLowerCase().includes(termoLower) ||
-          a.profissionalNome?.toLowerCase().includes(termoLower) ||
-          a.servicoNome?.toLowerCase().includes(termoLower)
-        ).slice(0, 5),
-      };
-
-      setSearchResults(resultados);
-    } catch (error) {
-      console.error('Erro na busca:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  // 🔥 HANDLER DE MUDANÇA NA BUSCA
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-
-    // Debounce para evitar muitas requisições
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
+    // Debounce de 500ms
     searchTimeout.current = setTimeout(() => {
       realizarBusca(value);
     }, 500);
-  };
+  }, [realizarBusca]);
 
   // 🔥 HANDLER DE FOCO NA BUSCA
-  const handleSearchFocus = (e) => {
-    setSearchAnchor(e.currentTarget);
+  const handleSearchFocus = () => {
+    if (searchTerm.length >= 2) {
+      setShowSearchResults(true);
+    }
   };
 
   const handleSearchClose = () => {
+    setShowSearchResults(false);
     setSearchAnchor(null);
   };
 
   // 🔥 FUNÇÃO PARA NAVEGAR PARA O RESULTADO
-  const handleResultClick = (tipo, id) => {
+  const handleResultClick = (tipo, id, item) => {
     const rotas = {
       cliente: `/clientes`,
       profissional: `/profissionais`,
@@ -299,8 +454,18 @@ function ModernHeader() {
     // Para tipos que precisam abrir o item específico
     if (tipo === 'cliente') {
       navigate(`/clientes`);
-      // Idealmente abriria o detalhe, mas precisa de um estado global
-      toast.success(`Cliente encontrado! Verifique na lista.`);
+      toast.success(`${item.nome} encontrado! Verifique na lista.`);
+    } else if (tipo === 'profissional') {
+      navigate(`/profissionais`);
+      toast.success(`${item.nome} encontrado! Verifique na lista.`);
+    } else if (tipo === 'servico') {
+      navigate(`/servicos`);
+      toast.success(`${item.nome} encontrado! Verifique na lista.`);
+    } else if (tipo === 'produto') {
+      navigate(`/estoque`);
+      // Disparar evento para o componente de estoque filtrar
+      window.dispatchEvent(new CustomEvent('buscarProduto', { detail: item.nome }));
+      toast.success(`${item.nome} encontrado! Verifique na lista.`);
     } else {
       navigate(rotas[tipo]);
     }
@@ -314,7 +479,12 @@ function ModernHeader() {
       agendamentos: [],
       atendimentos: [],
     });
-    handleSearchClose();
+    setShowSearchResults(false);
+    
+    // Limpar timeout se existir
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
   };
 
   // 🔥 RENDERIZAR RESULTADOS DA BUSCA
@@ -335,13 +505,8 @@ function ModernHeader() {
     if (searchLoading) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          >
-            <SearchIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-          </motion.div>
-          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+          <CircularProgress size={40} sx={{ color: '#9c27b0', mb: 2 }} />
+          <Typography variant="body2" color="textSecondary">
             Buscando...
           </Typography>
         </Box>
@@ -380,7 +545,7 @@ function ModernHeader() {
               <ListItem 
                 key={cliente.id} 
                 button 
-                onClick={() => handleResultClick('cliente', cliente.id)}
+                onClick={() => handleResultClick('cliente', cliente.id, cliente)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -413,7 +578,7 @@ function ModernHeader() {
               <ListItem 
                 key={prof.id} 
                 button 
-                onClick={() => handleResultClick('profissional', prof.id)}
+                onClick={() => handleResultClick('profissional', prof.id, prof)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -446,7 +611,7 @@ function ModernHeader() {
               <ListItem 
                 key={servico.id} 
                 button 
-                onClick={() => handleResultClick('servico', servico.id)}
+                onClick={() => handleResultClick('servico', servico.id, servico)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -479,7 +644,7 @@ function ModernHeader() {
               <ListItem 
                 key={produto.id} 
                 button 
-                onClick={() => handleResultClick('produto', produto.id)}
+                onClick={() => handleResultClick('produto', produto.id, produto)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -512,7 +677,7 @@ function ModernHeader() {
               <ListItem 
                 key={agendamento.id} 
                 button 
-                onClick={() => handleResultClick('agendamento', agendamento.id)}
+                onClick={() => handleResultClick('agendamento', agendamento.id, agendamento)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -552,7 +717,7 @@ function ModernHeader() {
               <ListItem 
                 key={atendimento.id} 
                 button 
-                onClick={() => handleResultClick('atendimento', atendimento.id)}
+                onClick={() => handleResultClick('atendimento', atendimento.id, atendimento)}
                 sx={{ pl: 4 }}
               >
                 <ListItemText
@@ -662,9 +827,9 @@ function ModernHeader() {
   const formatDate = (date) => {
     if (!date) return '';
     if (date.toDate) {
-      return date.toDate().toLocaleString('pt-BR');
+      return date.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     }
-    return new Date(date).toLocaleString('pt-BR');
+    return new Date(date).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   };
 
   const handleLogout = async () => {
@@ -705,6 +870,45 @@ function ModernHeader() {
     return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
+  // Memoização do popover de busca
+  const searchPopover = useMemo(() => (
+    <Popover
+      open={showSearchResults}
+      anchorEl={searchInputRef.current}
+      onClose={handleSearchClose}
+      anchorOrigin={{
+        vertical: 'bottom',
+        horizontal: 'left',
+      }}
+      transformOrigin={{
+        vertical: 'top',
+        horizontal: 'left',
+      }}
+      PaperProps={{
+        sx: {
+          mt: 1,
+          width: 500,
+          maxHeight: 500,
+          borderRadius: 2,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Resultados da busca
+        </Typography>
+        <IconButton size="small" onClick={handleSearchClose}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+      <Divider />
+      <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
+        {renderSearchResults()}
+      </Box>
+    </Popover>
+  ), [showSearchResults, searchTerm, searchLoading, searchResults]);
+
   return (
     <AppBar 
       position="static" 
@@ -726,12 +930,13 @@ function ModernHeader() {
           Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋
         </Typography>
 
-        {/* 🔥 CAMPO DE BUSCA */}
+        {/* 🔥 CAMPO DE BUSCA OTIMIZADO */}
         <Search>
           <SearchIconWrapper>
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
+            inputRef={searchInputRef}
             placeholder="Buscar clientes, serviços, produtos..."
             value={searchTerm}
             onChange={handleSearchChange}
@@ -741,45 +946,14 @@ function ModernHeader() {
         </Search>
 
         {/* 🔥 POPOVER DE RESULTADOS DA BUSCA */}
-        <Popover
-          open={Boolean(searchAnchor) && searchTerm.length > 0}
-          anchorEl={searchAnchor}
-          onClose={handleSearchClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
-          PaperProps={{
-            sx: {
-              mt: 1,
-              width: 500,
-              maxHeight: 500,
-              borderRadius: 2,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-            },
-          }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Resultados da busca
-            </Typography>
-            <IconButton size="small" onClick={handleSearchClose}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <Divider />
-          <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
-            {renderSearchResults()}
-          </Box>
-        </Popover>
+        {searchPopover}
 
         <Box sx={{ flexGrow: 1 }} />
 
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* 🔥 RELÓGIO COM HORÁRIO DE BRASÍLIA */}
+          <RelogioDigital />
+
           {/* Notificações */}
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
             <IconButton color="inherit" onClick={handleNotificationsOpen}>
