@@ -27,6 +27,17 @@ import {
   Badge,
   Divider,
   LinearProgress,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
+  Collapse,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,7 +56,16 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Timer as TimerIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  PersonSearch as PersonSearchIcon,
+  Fingerprint as FingerprintIcon,
+  Cake as CakeIcon,
 } from '@mui/icons-material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -119,6 +139,14 @@ function ModernAgendamentos() {
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   const [usuario, setUsuario] = useState(null);
 
+  // NOVOS ESTADOS PARA PESQUISA DE CLIENTES
+  const [searchClientTerm, setSearchClientTerm] = useState('');
+  const [searchClientType, setSearchClientType] = useState('nome'); // 'nome', 'cpf', 'dataNascimento'
+  const [searchClientResults, setSearchClientResults] = useState([]);
+  const [showClientSearch, setShowClientSearch] = useState(false);
+  const [cpfInput, setCpfInput] = useState('');
+  const [dataNascimentoInput, setDataNascimentoInput] = useState(null);
+
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
   const { data: atendimentos, loading: loadingAtendimentos } = useFirebase('atendimentos');
@@ -165,6 +193,109 @@ function ModernAgendamentos() {
     observacoes: '',
     status: 'pendente'
   });
+
+  // ============================================
+  // FUNÇÕES DE PESQUISA DE CLIENTES
+  // ============================================
+
+  // Formatar CPF para exibição
+  const formatarCPF = (cpf) => {
+    if (!cpf) return '';
+    const numeros = cpf.replace(/\D/g, '');
+    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
+  // Remover máscara do CPF para busca
+  const removerMascaraCPF = (cpf) => {
+    return cpf ? cpf.replace(/\D/g, '') : '';
+  };
+
+  // Formatar data para exibição
+  const formatarDataBrasil = (data) => {
+    if (!data) return '';
+    const d = new Date(data);
+    return d.toLocaleDateString('pt-BR');
+  };
+
+  // Buscar clientes baseado no tipo de pesquisa
+  const buscarClientes = () => {
+    if (!clientes) return [];
+
+    let resultados = [];
+
+    switch (searchClientType) {
+      case 'nome':
+        if (!searchClientTerm || searchClientTerm.length < 2) return [];
+        resultados = clientes.filter(cliente => 
+          cliente.nome?.toLowerCase().includes(searchClientTerm.toLowerCase())
+        );
+        break;
+
+      case 'cpf':
+        if (!cpfInput || cpfInput.length < 3) return [];
+        const cpfBusca = removerMascaraCPF(cpfInput);
+        resultados = clientes.filter(cliente => {
+          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
+          return cpfCliente.includes(cpfBusca);
+        });
+        break;
+
+      case 'dataNascimento':
+        if (!dataNascimentoInput) return [];
+        const dataBusca = formatDate(dataNascimentoInput);
+        resultados = clientes.filter(cliente => {
+          const dataCliente = cliente.dataNascimento ? 
+            formatDate(new Date(cliente.dataNascimento)) : '';
+          return dataCliente === dataBusca;
+        });
+        break;
+
+      default:
+        break;
+    }
+
+    return resultados.slice(0, 10); // Limitar a 10 resultados
+  };
+
+  // Efeito para buscar clientes quando os termos mudam
+  useEffect(() => {
+    if (showClientSearch) {
+      const resultados = buscarClientes();
+      setSearchClientResults(resultados);
+    }
+  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch]);
+
+  // Abrir painel de busca de clientes
+  const handleOpenClientSearch = () => {
+    setShowClientSearch(true);
+    setSearchClientTerm('');
+    setCpfInput('');
+    setDataNascimentoInput(null);
+    setSearchClientType('nome');
+  };
+
+  // Fechar painel de busca
+  const handleCloseClientSearch = () => {
+    setShowClientSearch(false);
+  };
+
+  // Selecionar um cliente
+  const handleSelectClient = (cliente) => {
+    setFormData({ ...formData, clienteId: cliente.id });
+    setShowClientSearch(false);
+    toast.success(`Cliente ${cliente.nome} selecionado`);
+  };
+
+  // Limpar cliente selecionado
+  const handleClearClient = () => {
+    setFormData({ ...formData, clienteId: '' });
+  };
+
+  // Obter dados do cliente selecionado
+  const getSelectedClientData = () => {
+    if (!formData.clienteId) return null;
+    return (clientes || []).find(c => c.id === formData.clienteId);
+  };
 
   // Reset form quando abrir modal
   useEffect(() => {
@@ -1321,7 +1452,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento */}
+      {/* Dialog de Agendamento - COM PESQUISA DE CLIENTES */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -1329,23 +1460,207 @@ function ModernAgendamentos() {
         <form onSubmit={handleSave}>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Cliente</InputLabel>
-                  <Select
-                    value={formData.clienteId}
-                    label="Cliente"
-                    onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
-                  >
-                    {(clientes || []).map(cliente => (
-                      <MenuItem key={cliente.id} value={cliente.id}>
-                        {cliente.nome}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+              {/* CAMPO DE CLIENTE COM PESQUISA */}
+              <Grid item xs={12}>
+                <Box sx={{ mb: 2 }}>
+                  {!formData.clienteId ? (
+                    <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
+                          Selecione o Cliente
+                        </Typography>
+                        <Button
+                          size="small"
+                          startIcon={<PersonSearchIcon />}
+                          onClick={handleOpenClientSearch}
+                          variant="contained"
+                          sx={{
+                            background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                          }}
+                        >
+                          Buscar Cliente
+                        </Button>
+                      </Box>
+
+                      {/* PAINEL DE PESQUISA */}
+                      <Collapse in={showClientSearch}>
+                        <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
+                          <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
+                            🔍 Buscar cliente por:
+                          </Typography>
+                          
+                          <RadioGroup
+                            row
+                            value={searchClientType}
+                            onChange={(e) => setSearchClientType(e.target.value)}
+                            sx={{ mb: 2 }}
+                          >
+                            <FormControlLabel value="nome" control={<Radio />} label="Nome" />
+                            <FormControlLabel value="cpf" control={<Radio />} label="CPF" />
+                            <FormControlLabel value="dataNascimento" control={<Radio />} label="Data de Nascimento" />
+                          </RadioGroup>
+
+                          {searchClientType === 'nome' && (
+                            <TextField
+                              fullWidth
+                              size="small"
+                              placeholder="Digite o nome do cliente..."
+                              value={searchClientTerm}
+                              onChange={(e) => setSearchClientTerm(e.target.value)}
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    <PersonSearchIcon color="action" />
+                                  </InputAdornment>
+                                ),
+                                endAdornment: searchClientTerm && (
+                                  <InputAdornment position="end">
+                                    <IconButton size="small" onClick={() => setSearchClientTerm('')}>
+                                      <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                  </InputAdornment>
+                                )
+                              }}
+                              autoFocus
+                            />
+                          )}
+
+                          {searchClientType === 'cpf' && (
+                            <TextField
+                              fullWidth
+                              size="small"
+                              placeholder="Digite o CPF (apenas números)"
+                              value={cpfInput}
+                              onChange={(e) => setCpfInput(e.target.value)}
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    <FingerprintIcon color="action" />
+                                  </InputAdornment>
+                                ),
+                              }}
+                              autoFocus
+                            />
+                          )}
+
+                          {searchClientType === 'dataNascimento' && (
+                            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                              <DatePicker
+                                label="Data de Nascimento"
+                                value={dataNascimentoInput}
+                                onChange={(newValue) => setDataNascimentoInput(newValue)}
+                                renderInput={(params) => 
+                                  <TextField {...params} fullWidth size="small" />
+                                }
+                              />
+                            </LocalizationProvider>
+                          )}
+
+                          {/* RESULTADOS DA BUSCA */}
+                          {searchClientResults.length > 0 && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="caption" color="textSecondary">
+                                {searchClientResults.length} cliente(s) encontrado(s):
+                              </Typography>
+                              <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                                {searchClientResults.map((cliente) => (
+                                  <React.Fragment key={cliente.id}>
+                                    <ListItem 
+                                      button
+                                      onClick={() => handleSelectClient(cliente)}
+                                      sx={{
+                                        borderRadius: 1,
+                                        '&:hover': { bgcolor: '#f3e5f5' }
+                                      }}
+                                    >
+                                      <ListItemAvatar>
+                                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                                          {cliente.nome?.charAt(0)}
+                                        </Avatar>
+                                      </ListItemAvatar>
+                                      <ListItemText
+                                        primary={
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                              {cliente.nome}
+                                            </Typography>
+                                            {cliente.cpf && (
+                                              <Chip
+                                                label={formatarCPF(cliente.cpf)}
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ fontSize: '0.7rem' }}
+                                              />
+                                            )}
+                                          </Box>
+                                        }
+                                        secondary={
+                                          <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+                                            {cliente.telefone && (
+                                              <Typography variant="caption">
+                                                📞 {cliente.telefone}
+                                              </Typography>
+                                            )}
+                                            {cliente.dataNascimento && (
+                                              <Typography variant="caption">
+                                                🎂 {formatarDataBrasil(cliente.dataNascimento)}
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        }
+                                      />
+                                    </ListItem>
+                                    <Divider />
+                                  </React.Fragment>
+                                ))}
+                              </List>
+                            </Box>
+                          )}
+
+                          {searchClientTerm && searchClientResults.length === 0 && (
+                            <Alert severity="info" sx={{ mt: 2 }}>
+                              Nenhum cliente encontrado com os dados informados.
+                            </Alert>
+                          )}
+                        </Card>
+                      </Collapse>
+                    </Box>
+                  ) : (
+                    // CLIENTE SELECIONADO
+                    <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                        <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
+                          {getSelectedClientData()?.nome?.charAt(0)}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {getSelectedClientData()?.nome}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            {getSelectedClientData()?.cpf && (
+                              <Typography variant="caption">
+                                CPF: {formatarCPF(getSelectedClientData()?.cpf)}
+                              </Typography>
+                            )}
+                            {getSelectedClientData()?.telefone && (
+                              <Typography variant="caption">
+                                📞 {getSelectedClientData()?.telefone}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                        <Tooltip title="Trocar cliente">
+                          <IconButton onClick={handleClearClient} color="primary">
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </Card>
+                  )}
+                </Box>
               </Grid>
 
+              {/* DEMAIS CAMPOS DO FORMULÁRIO */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Profissional</InputLabel>
