@@ -1,4 +1,4 @@
-// src/pages/ModernServicos.js
+// src/pages/ModernServicos.js (versão corrigida)
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -35,6 +35,8 @@ import {
   Tooltip,
   Fab,
   Zoom,
+  Avatar,
+  AvatarGroup,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -49,6 +51,7 @@ import {
   FileDownload as ExportIcon,
   FilterList as FilterIcon,
   Category as CategoryIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -72,7 +75,7 @@ function ModernServicos() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(12);
   
-  // Diálogos existentes
+  // Diálogos
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
@@ -87,7 +90,8 @@ function ModernServicos() {
     preco: '',
     categoria: 'Cabelo',
     comissaoProfissional: 50,
-    ativo: true
+    ativo: true,
+    profissionaisIds: [] // 👈 IMPORTANTE: Array para associar profissionais
   });
 
   useEffect(() => {
@@ -172,7 +176,8 @@ function ModernServicos() {
           preco: selectedService.preco || '',
           categoria: selectedService.categoria || 'Cabelo',
           comissaoProfissional: selectedService.comissaoProfissional || 50,
-          ativo: selectedService.ativo !== undefined ? selectedService.ativo : true
+          ativo: selectedService.ativo !== undefined ? selectedService.ativo : true,
+          profissionaisIds: selectedService.profissionaisIds || [] // 👈 Carregar profissionais associados
         });
       } else {
         setFormData({
@@ -182,7 +187,8 @@ function ModernServicos() {
           preco: '',
           categoria: 'Cabelo',
           comissaoProfissional: 50,
-          ativo: true
+          ativo: true,
+          profissionaisIds: [] // 👈 Iniciar vazio
         });
       }
     }
@@ -307,24 +313,15 @@ function ModernServicos() {
     return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
   };
 
-  // Função para verificar se um profissional realiza este serviço
-  const profissionalRealizaServico = (profissional, servico) => {
-    if (profissional.especialidade && 
-        profissional.especialidade.toLowerCase().includes(servico.categoria.toLowerCase())) {
-      return true;
+  // 👇 FUNÇÃO PARA BUSCAR PROFISSIONAIS DO SERVIÇO
+  const getProfissionaisDoServico = (servico) => {
+    if (!servico.profissionaisIds || servico.profissionaisIds.length === 0) {
+      return [];
     }
     
-    if (servico.nome.toLowerCase().includes('cabelo') && 
-        profissional.especialidade?.toLowerCase().includes('cabelo')) {
-      return true;
-    }
-    
-    if (servico.nome.toLowerCase().includes('barba') && 
-        profissional.especialidade?.toLowerCase().includes('barba')) {
-      return true;
-    }
-    
-    return false;
+    return profissionais.filter(prof => 
+      servico.profissionaisIds.includes(prof.id)
+    );
   };
 
   if (loading) {
@@ -485,9 +482,7 @@ function ModernServicos() {
             <Grid container spacing={3}>
               <AnimatePresence>
                 {paginatedServicos.map((service, index) => {
-                  const profissionaisDoServico = profissionais.filter(prof => 
-                    profissionalRealizaServico(prof, service)
-                  );
+                  const profissionaisDoServico = getProfissionaisDoServico(service);
 
                   return (
                     <Grid item xs={12} sm={6} md={4} lg={3} key={service.id}>
@@ -571,12 +566,25 @@ function ModernServicos() {
                               </Typography>
                             )}
 
+                            {/* 👇 SEÇÃO DE PROFISSIONAIS ASSOCIADOS - RESTAURADA */}
                             {profissionaisDoServico.length > 0 ? (
                               <>
                                 <Typography variant="body2" color="textSecondary" gutterBottom sx={{ fontSize: '0.75rem' }}>
                                   Profissionais:
                                 </Typography>
-                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                <AvatarGroup max={4} sx={{ justifyContent: 'flex-start' }}>
+                                  {profissionaisDoServico.map(prof => (
+                                    <Tooltip key={prof.id} title={prof.nome}>
+                                      <Avatar 
+                                        sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}
+                                        src={prof.fotoUrl}
+                                      >
+                                        {prof.nome?.charAt(0) || <PersonIcon />}
+                                      </Avatar>
+                                    </Tooltip>
+                                  ))}
+                                </AvatarGroup>
+                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
                                   {profissionaisDoServico.slice(0, 3).map(prof => (
                                     <Chip
                                       key={prof.id}
@@ -631,77 +639,111 @@ function ModernServicos() {
                     <TableCell><strong>Duração</strong></TableCell>
                     <TableCell><strong>Preço</strong></TableCell>
                     <TableCell><strong>Comissão</strong></TableCell>
+                    <TableCell><strong>Profissionais</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
                     <TableCell align="center"><strong>Ações</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedServicos.map((service) => (
-                    <TableRow 
-                      key={service.id}
-                      sx={{ 
-                        '&:hover': { bgcolor: '#faf5ff' },
-                        opacity: service.ativo ? 1 : 0.7
-                      }}
-                    >
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {service.nome}
+                  {paginatedServicos.map((service) => {
+                    const profissionaisDoServico = getProfissionaisDoServico(service);
+                    
+                    return (
+                      <TableRow 
+                        key={service.id}
+                        sx={{ 
+                          '&:hover': { bgcolor: '#faf5ff' },
+                          opacity: service.ativo ? 1 : 0.7
+                        }}
+                      >
+                        <TableCell>
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                              {service.nome}
+                            </Typography>
+                            {service.descricao && (
+                              <Typography variant="caption" color="textSecondary">
+                                {service.descricao.length > 50 
+                                  ? `${service.descricao.substring(0, 50)}...` 
+                                  : service.descricao}
+                              </Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={service.categoria}
+                            size="small"
+                            sx={{
+                              backgroundColor: '#f3e5f5',
+                              color: '#9c27b0',
+                              fontSize: '0.75rem'
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>{formatarDuracao(service.duracao)}</TableCell>
+                        <TableCell>
+                          <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                            {formatarPreco(service.preco)}
                           </Typography>
-                          {service.descricao && (
+                        </TableCell>
+                        <TableCell>{service.comissaoProfissional || 50}%</TableCell>
+                        <TableCell>
+                          {profissionaisDoServico.length > 0 ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <AvatarGroup 
+                                max={3} 
+                                sx={{ 
+                                  '& .MuiAvatar-root': { 
+                                    width: 28, 
+                                    height: 28,
+                                    fontSize: '0.8rem',
+                                    bgcolor: '#9c27b0'
+                                  } 
+                                }}
+                              >
+                                {profissionaisDoServico.map(prof => (
+                                  <Tooltip key={prof.id} title={prof.nome}>
+                                    <Avatar src={prof.fotoUrl}>
+                                      {prof.nome?.charAt(0) || <PersonIcon />}
+                                    </Avatar>
+                                  </Tooltip>
+                                ))}
+                              </AvatarGroup>
+                            </Box>
+                          ) : (
                             <Typography variant="caption" color="textSecondary">
-                              {service.descricao.length > 50 
-                                ? `${service.descricao.substring(0, 50)}...` 
-                                : service.descricao}
+                              -
                             </Typography>
                           )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={service.categoria}
-                          size="small"
-                          sx={{
-                            backgroundColor: '#f3e5f5',
-                            color: '#9c27b0',
-                            fontSize: '0.75rem'
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{formatarDuracao(service.duracao)}</TableCell>
-                      <TableCell>
-                        <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                          {formatarPreco(service.preco)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{service.comissaoProfissional || 50}%</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={service.ativo ? 'Ativo' : 'Inativo'}
-                          size="small"
-                          color={service.ativo ? 'success' : 'error'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleEdit(service)}
-                          sx={{ color: '#9c27b0', mr: 1 }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDelete(service.id)}
-                          sx={{ color: '#f44336' }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={service.ativo ? 'Ativo' : 'Inativo'}
+                            size="small"
+                            color={service.ativo ? 'success' : 'error'}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEdit(service)}
+                            sx={{ color: '#9c27b0', mr: 1 }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDelete(service.id)}
+                            sx={{ color: '#f44336' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -741,7 +783,7 @@ function ModernServicos() {
         </Fab>
       </Zoom>
 
-      {/* Dialog de Serviço (igual ao original) */}
+      {/* Dialog de Serviço - ATUALIZADO COM SELEÇÃO DE PROFISSIONAIS */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedService ? 'Editar Serviço' : 'Novo Serviço'}
@@ -836,6 +878,61 @@ function ModernServicos() {
                     <MenuItem value="false">Inativo</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+
+              {/* 👇 NOVO CAMPO PARA ASSOCIAR PROFISSIONAIS */}
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Profissionais</InputLabel>
+                  <Select
+                    multiple
+                    value={formData.profissionaisIds || []}
+                    label="Profissionais"
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      profissionaisIds: e.target.value 
+                    })}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((id) => {
+                          const prof = profissionais.find(p => p.id === id);
+                          return (
+                            <Chip 
+                              key={id} 
+                              label={prof?.nome || id} 
+                              size="small"
+                              sx={{ bgcolor: '#f3e5f5' }}
+                            />
+                          );
+                        })}
+                      </Box>
+                    )}
+                  >
+                    {profissionais
+                      .filter(prof => prof.ativo !== false)
+                      .map(prof => (
+                        <MenuItem key={prof.id} value={prof.id}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar 
+                              sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}
+                              src={prof.fotoUrl}
+                            >
+                              {prof.nome?.charAt(0)}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2">{prof.nome}</Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {prof.especialidade || 'Profissional'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="textSecondary">
+                  Selecione os profissionais que realizam este serviço
+                </Typography>
               </Grid>
             </Grid>
           </DialogContent>
