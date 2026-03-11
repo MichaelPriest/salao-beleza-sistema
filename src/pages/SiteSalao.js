@@ -62,7 +62,6 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
-import { InstagramEmbed, FacebookEmbed } from 'react-social-media-embed';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -87,50 +86,6 @@ const LoadingSpinner = () => (
   </Box>
 );
 
-// Componente de Post do Instagram
-const InstagramPost = ({ url }) => {
-  const [loading, setLoading] = useState(true);
-  
-  if (!url) return null;
-  
-  return (
-    <Box sx={{ mb: 2 }}>
-      <InstagramEmbed
-        url={url}
-        width="100%"
-        onLoad={() => setLoading(false)}
-      />
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <CircularProgress size={30} />
-        </Box>
-      )}
-    </Box>
-  );
-};
-
-// Componente de Post do Facebook
-const FacebookPost = ({ url }) => {
-  const [loading, setLoading] = useState(true);
-  
-  if (!url) return null;
-  
-  return (
-    <Box sx={{ mb: 2 }}>
-      <FacebookEmbed
-        url={url}
-        width="100%"
-        onLoad={() => setLoading(false)}
-      />
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <CircularProgress size={30} />
-        </Box>
-      )}
-    </Box>
-  );
-};
-
 function SiteSalao() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -142,12 +97,6 @@ function SiteSalao() {
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
-  const [redesSociais, setRedesSociais] = useState({
-    instagram: null,
-    facebook: null,
-    postsInstagram: [],
-    postsFacebook: []
-  });
   
   const [openAgendamento, setOpenAgendamento] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState({
@@ -162,6 +111,14 @@ function SiteSalao() {
   });
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Dados simulados das redes sociais
+  const [redesSociais, setRedesSociais] = useState({
+    instagram: null,
+    facebook: null,
+    postsInstagram: [],
+    postsFacebook: []
+  });
 
   // Depoimentos simulados
   const depoimentos = [
@@ -199,63 +156,59 @@ function SiteSalao() {
     }
   };
 
-  const carregarPostsRedesSociais = async () => {
-    try {
-      // Simular posts do Instagram (em produção, viria da API do Instagram)
-      const postsInstagram = [
-        {
-          id: 1,
-          url: 'https://www.instagram.com/p/Cxample1/',
-          imagem: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=400',
-          legenda: 'Novo corte disponível! ✂️',
-          curtidas: 45,
-          comentarios: 12
-        },
-        {
-          id: 2,
-          url: 'https://www.instagram.com/p/Cxample2/',
-          imagem: 'https://images.unsplash.com/photo-1522337360782-3b13b78a3a6b?w=400',
-          legenda: 'Hidratação profunda 💆‍♀️',
-          curtidas: 67,
-          comentarios: 8
-        },
-        {
-          id: 3,
-          url: 'https://www.instagram.com/p/Cxample3/',
-          imagem: 'https://images.unsplash.com/photo-1487412947148-5cce1659a9f5?w=400',
-          legenda: 'Maquiagem para festas ✨',
-          curtidas: 89,
-          comentarios: 15
-        }
-      ];
+  const carregarPostsRedesSociais = () => {
+    // Simular posts do Instagram
+    const postsInstagram = [
+      {
+        id: 1,
+        url: 'https://www.instagram.com/p/Cxample1/',
+        imagem: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?w=400',
+        legenda: 'Novo corte disponível! ✂️',
+        curtidas: 45,
+        comentarios: 12
+      },
+      {
+        id: 2,
+        url: 'https://www.instagram.com/p/Cxample2/',
+        imagem: 'https://images.unsplash.com/photo-1522337360782-3b13b78a3a6b?w=400',
+        legenda: 'Hidratação profunda 💆‍♀️',
+        curtidas: 67,
+        comentarios: 8
+      },
+      {
+        id: 3,
+        url: 'https://www.instagram.com/p/Cxample3/',
+        imagem: 'https://images.unsplash.com/photo-1487412947148-5cce1659a9f5?w=400',
+        legenda: 'Maquiagem para festas ✨',
+        curtidas: 89,
+        comentarios: 15
+      }
+    ];
 
-      // Simular posts do Facebook
-      const postsFacebook = [
-        {
-          id: 1,
-          url: 'https://www.facebook.com/permalink.php?story_fbid=example1',
-          mensagem: 'Promoção especial essa semana! 🎉',
-          curtidas: 32,
-          compartilhamentos: 8
-        },
-        {
-          id: 2,
-          url: 'https://www.facebook.com/permalink.php?story_fbid=example2',
-          mensagem: 'Novo profissional na equipe! 👋',
-          curtidas: 28,
-          compartilhamentos: 5
-        }
-      ];
+    // Simular posts do Facebook
+    const postsFacebook = [
+      {
+        id: 1,
+        url: 'https://www.facebook.com/permalink.php?story_fbid=example1',
+        mensagem: 'Promoção especial essa semana! 🎉',
+        curtidas: 32,
+        compartilhamentos: 8
+      },
+      {
+        id: 2,
+        url: 'https://www.facebook.com/permalink.php?story_fbid=example2',
+        mensagem: 'Novo profissional na equipe! 👋',
+        curtidas: 28,
+        compartilhamentos: 5
+      }
+    ];
 
-      setRedesSociais({
-        instagram: config?.salao?.contato?.instagram || null,
-        facebook: config?.salao?.contato?.facebook || null,
-        postsInstagram,
-        postsFacebook
-      });
-    } catch (error) {
-      console.error('Erro ao carregar posts:', error);
-    }
+    setRedesSociais({
+      instagram: config?.salao?.contato?.instagram || null,
+      facebook: config?.salao?.contato?.facebook || null,
+      postsInstagram,
+      postsFacebook
+    });
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -403,7 +356,7 @@ function SiteSalao() {
             <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
           )}
           
-          {/* 🔥 Só mostra o nome se não tiver logo */}
+          {/* Só mostra o nome se não tiver logo */}
           {!salaoLogo && (
             <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, color: '#9c27b0' }}>
               {salaoNome}
@@ -475,7 +428,7 @@ function SiteSalao() {
                 }}
                 variant="rounded"
               />
-              {/* 🔥 Só mostra o nome se não tiver logo */}
+              {/* Só mostra o nome se não tiver logo */}
               {!salaoLogo && (
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                   {salaoNome}
@@ -976,7 +929,7 @@ function SiteSalao() {
                 ) : (
                   <SpaIcon sx={{ mr: 1 }} />
                 )}
-                {/* 🔥 Só mostra o nome se não tiver logo */}
+                {/* Só mostra o nome se não tiver logo */}
                 {!salaoLogo && (
                   <Typography variant="h6">{salaoNome}</Typography>
                 )}
