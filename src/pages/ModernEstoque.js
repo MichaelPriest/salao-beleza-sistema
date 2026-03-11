@@ -60,7 +60,7 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   GridOn as GridIcon,
-  ViewModule as ViewModuleIcon, // 🔥 CORREÇÃO: Nome correto do ícone
+  ViewModule as ViewModuleIcon,
   LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -164,7 +164,7 @@ const PRATELEIRAS_POR_SETOR = {
 
 // Componente de seleção de prateleira
 const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
-  const [modoVisualizacao, setModoVisualizacao] = useState('grade'); // 'grade' ou 'lista'
+  const [modoVisualizacao, setModoVisualizacao] = useState('grade');
   
   if (!setor) {
     return (
@@ -191,19 +191,19 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
         <Typography variant="caption" color="textSecondary">
           Prateleiras disponíveis no {SETORES.find(s => s.id === setor)?.nome}
         </Typography>
-          <ToggleButtonGroup
-            size="small"
-            value={modoVisualizacao}
-            exclusive
-            onChange={(e, novoModo) => novoModo && setModoVisualizacao(novoModo)}
-          >
-            <ToggleButton value="grade">
-              <GridIcon fontSize="small" />
-            </ToggleButton>
-            <ToggleButton value="lista">
-              <ViewModuleIcon fontSize="small" /> {/* 🔥 CORREÇÃO: Usando ViewModuleIcon */}
-            </ToggleButton>
-          </ToggleButtonGroup>
+        <ToggleButtonGroup
+          size="small"
+          value={modoVisualizacao}
+          exclusive
+          onChange={(e, novoModo) => novoModo && setModoVisualizacao(novoModo)}
+        >
+          <ToggleButton value="grade">
+            <GridIcon fontSize="small" />
+          </ToggleButton>
+          <ToggleButton value="lista">
+            <ViewModuleIcon fontSize="small" />
+          </ToggleButton>
+        </ToggleButtonGroup>
       </Box>
 
       {modoVisualizacao === 'grade' ? (
@@ -279,77 +279,122 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
 const RelatorioEstoque = React.forwardRef((props, ref) => {
   const { produtos, categorias, fornecedores, stats, SETORES, getUnidadeSimbolo } = props;
   
+  const getEstoqueStatus = (quantidade, minimo) => {
+    const qtd = Number(quantidade || 0);
+    const min = Number(minimo || 5);
+    if (qtd === 0) return { label: 'Sem Estoque', color: '#f44336' };
+    if (qtd <= min) return { label: 'Estoque Baixo', color: '#ff9800' };
+    return { label: 'Normal', color: '#4caf50' };
+  };
+
   return (
     <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minWidth: '800px' }}>
       {/* Cabeçalho */}
-      <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700, mb: 1 }}>
-          Relatório de Estoque
+      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <Typography variant="h3" sx={{ color: '#9c27b0', fontWeight: 700, mb: 1 }}>
+          RELATÓRIO DE ESTOQUE
         </Typography>
-        <Typography variant="subtitle1" color="textSecondary">
+        <Typography variant="h6" color="textSecondary">
           Data: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
         </Typography>
       </Box>
 
-      {/* Resumo */}
+      {/* Resumo em Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={4}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f3e5f5' }}>
-            <Typography variant="h6" sx={{ color: '#9c27b0' }}>Total de Produtos</Typography>
-            <Typography variant="h4">{stats.totalProdutos}</Typography>
+        <Grid item xs={3}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f3e5f5', borderRadius: 2 }}>
+            <Typography variant="body2" color="textSecondary">Total de Produtos</Typography>
+            <Typography variant="h3" sx={{ color: '#9c27b0', fontWeight: 700 }}>{stats.totalProdutos}</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={4}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e8f5e9' }}>
-            <Typography variant="h6" sx={{ color: '#4caf50' }}>Valor em Estoque</Typography>
-            <Typography variant="h4">R$ {stats.valorEstoque.toFixed(2)}</Typography>
+        <Grid item xs={3}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#e8f5e9', borderRadius: 2 }}>
+            <Typography variant="body2" color="textSecondary">Valor em Estoque</Typography>
+            <Typography variant="h4" sx={{ color: '#4caf50', fontWeight: 700 }}>R$ {stats.valorEstoque.toFixed(2)}</Typography>
           </Paper>
         </Grid>
-        <Grid item xs={4}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#fff3e0' }}>
-            <Typography variant="h6" sx={{ color: '#ff9800' }}>Estoque Baixo</Typography>
-            <Typography variant="h4">{stats.produtosBaixo}</Typography>
+        <Grid item xs={3}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#fff3e0', borderRadius: 2 }}>
+            <Typography variant="body2" color="textSecondary">Estoque Baixo</Typography>
+            <Typography variant="h3" sx={{ color: '#ff9800', fontWeight: 700 }}>{stats.produtosBaixo}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={3}>
+          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#ffebee', borderRadius: 2 }}>
+            <Typography variant="body2" color="textSecondary">Sem Estoque</Typography>
+            <Typography variant="h3" sx={{ color: '#f44336', fontWeight: 700 }}>{stats.produtosSemEstoque}</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Informações Adicionais */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={6}>
+          <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Resumo Financeiro</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography>Valor Total (Custo):</Typography>
+              <Typography sx={{ fontWeight: 600 }}>R$ {stats.valorTotalCusto.toFixed(2)}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography>Valor Total (Venda):</Typography>
+              <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>R$ {stats.valorEstoque.toFixed(2)}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography>Lucro Potencial:</Typography>
+              <Typography sx={{ fontWeight: 600, color: stats.lucroPotencial > 0 ? '#4caf50' : '#f44336' }}>
+                R$ {stats.lucroPotencial.toFixed(2)}
+              </Typography>
+            </Box>
+          </Paper>
+        </Grid>
+        <Grid item xs={6}>
+          <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Distribuição por Setor</Typography>
+            {SETORES.map(setor => {
+              const produtosNoSetor = produtos.filter(p => p.setor === setor.id);
+              if (produtosNoSetor.length === 0) return null;
+              return (
+                <Box key={setor.id} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="body2">{setor.nome}:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {produtosNoSetor.length} produtos
+                  </Typography>
+                </Box>
+              );
+            })}
           </Paper>
         </Grid>
       </Grid>
 
       {/* Tabela de Produtos */}
-      <Typography variant="h6" sx={{ mb: 2, color: '#9c27b0', fontWeight: 600 }}>
-        Lista de Produtos
+      <Typography variant="h5" sx={{ mb: 2, color: '#9c27b0', fontWeight: 600 }}>
+        Lista Detalhada de Produtos
       </Typography>
       
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer component={Paper} variant="outlined" sx={{ mb: 4 }}>
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-              <TableCell><strong>Produto</strong></TableCell>
-              <TableCell><strong>Categoria</strong></TableCell>
-              <TableCell><strong>Fornecedor</strong></TableCell>
-              <TableCell align="right"><strong>Preço Custo</strong></TableCell>
-              <TableCell align="right"><strong>Preço Venda</strong></TableCell>
-              <TableCell align="right"><strong>Estoque</strong></TableCell>
-              <TableCell><strong>Localização</strong></TableCell>
-              <TableCell><strong>Status</strong></TableCell>
+            <TableRow sx={{ backgroundColor: '#9c27b0' }}>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>Produto</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>Categoria</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>Fornecedor</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 600 }}>Preço Custo</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 600 }}>Preço Venda</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 600 }}>Estoque</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localização</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {produtos.map((produto) => {
+            {produtos.map((produto, index) => {
               const categoria = categorias.find(c => c.id === produto.categoria);
               const fornecedor = fornecedores.find(f => f.id === produto.fornecedorId);
               const setor = SETORES.find(s => s.id === produto.setor);
-              
-              const getEstoqueStatus = (quantidade, minimo) => {
-                const qtd = Number(quantidade || 0);
-                const min = Number(minimo || 5);
-                if (qtd === 0) return { label: 'Sem Estoque', color: '#f44336' };
-                if (qtd <= min) return { label: 'Estoque Baixo', color: '#ff9800' };
-                return { label: 'Normal', color: '#4caf50' };
-              };
-              
               const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
               
               return (
-                <TableRow key={produto.id}>
+                <TableRow key={produto.id} sx={{ backgroundColor: index % 2 === 0 ? '#fafafa' : 'white' }}>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
                       {produto.nome}
@@ -373,7 +418,7 @@ const RelatorioEstoque = React.forwardRef((props, ref) => {
                         <Typography variant="body2">{setor.nome}</Typography>
                         {produto.prateleira && (
                           <Typography variant="caption" color="textSecondary">
-                            Prateleira: {produto.prateleira}
+                            Prat: {produto.prateleira}
                           </Typography>
                         )}
                       </Box>
@@ -383,13 +428,13 @@ const RelatorioEstoque = React.forwardRef((props, ref) => {
                     <Box
                       sx={{
                         display: 'inline-block',
-                        px: 1,
+                        px: 1.5,
                         py: 0.5,
                         borderRadius: 1,
                         bgcolor: status.color + '20',
                         color: status.color,
-                        fontSize: '0.75rem',
                         fontWeight: 600,
+                        fontSize: '0.75rem',
                       }}
                     >
                       {status.label}
@@ -403,9 +448,12 @@ const RelatorioEstoque = React.forwardRef((props, ref) => {
       </TableContainer>
 
       {/* Rodapé */}
-      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary' }}>
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #e0e0e0', pt: 2 }}>
+        <Typography variant="body2">
+          Relatório gerado em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+        </Typography>
         <Typography variant="caption">
-          Relatório gerado automaticamente pelo Sistema de Gestão
+          Documento gerado pelo Sistema de Gestão - Todos os direitos reservados
         </Typography>
       </Box>
     </Box>
@@ -460,6 +508,9 @@ function ModernEstoque() {
     colunas: 8,
     celulas: [],
   });
+
+  // Estado para controlar a visualização do mapa
+  const [modoVisualizacaoMapa, setModoVisualizacaoMapa] = useState('grade');
 
   // Stats
   const [stats, setStats] = useState({
@@ -963,103 +1014,214 @@ function ModernEstoque() {
   };
 
   // COMPONENTE DE MAPA DE LOCALIZAÇÃO
-  const MapaLocalizacao = () => (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-        {SETORES.map(setor => (
-          <Chip
-            key={setor.id}
-            label={setor.nome}
-            size="small"
-            sx={{ bgcolor: setor.cor, color: 'white', fontWeight: 500 }}
-          />
-        ))}
-      </Box>
+  const MapaLocalizacao = () => {
+    // Função para agrupar produtos por setor na visualização de módulos
+    const produtosPorSetor = () => {
+      const setoresMap = {};
+      produtos.forEach(produto => {
+        if (produto.setor) {
+          if (!setoresMap[produto.setor]) {
+            setoresMap[produto.setor] = {
+              setor: SETORES.find(s => s.id === produto.setor),
+              produtos: [],
+              totalQuantidade: 0
+            };
+          }
+          setoresMap[produto.setor].produtos.push(produto);
+          setoresMap[produto.setor].totalQuantidade += produto.quantidadeEstoque || 0;
+        }
+      });
+      return Object.values(setoresMap);
+    };
 
-      <Paper variant="outlined" sx={{ p: 2, overflow: 'auto' }}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${mapaConfig.colunas}, 1fr)`,
-            gap: 1,
-            minWidth: 600,
-          }}
-        >
-          {mapaConfig.celulas.map((celula) => {
-            const setor = SETORES.find(s => s.id === celula.setor);
-            const temProdutos = celula.produtos && celula.produtos.length > 0;
-            
-            return (
-              <Tooltip
-                key={celula.id}
-                title={
-                  <Box>
-                    <Typography variant="body2"><strong>Setor:</strong> {setor?.nome}</Typography>
-                    <Typography variant="body2"><strong>Posição:</strong> {celula.linha + 1}-{celula.coluna + 1}</Typography>
-                    {temProdutos && (
-                      <>
-                        <Typography variant="body2"><strong>Produtos:</strong> {celula.produtos.length}</Typography>
-                        <Typography variant="body2"><strong>Quantidade:</strong> {celula.quantidade}</Typography>
-                        <Box sx={{ mt: 1 }}>
-                          {celula.produtos.map(p => (
-                            <Typography key={p.id} variant="caption" display="block">
-                              • {p.nome} ({p.quantidadeEstoque} {getUnidadeSimbolo(p.unidadeEstoque)})
-                            </Typography>
-                          ))}
-                        </Box>
-                      </>
-                    )}
-                  </Box>
-                }
-              >
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    p: 2,
-                    textAlign: 'center',
-                    bgcolor: temProdutos ? `${setor?.cor}20` : '#f5f5f5',
-                    borderColor: temProdutos ? setor?.cor : '#e0e0e0',
-                    borderWidth: temProdutos ? 2 : 1,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'scale(1.05)',
-                      boxShadow: 3,
-                    },
-                  }}
-                  onClick={() => {
-                    if (temProdutos) {
-                      setSearchTerm(setor?.nome || '');
-                      setTabValue(0);
-                      setOpenMapaDialog(false);
+    if (modoVisualizacaoMapa === 'grade') {
+      return (
+        <Box>
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+            {SETORES.map(setor => (
+              <Chip
+                key={setor.id}
+                label={setor.nome}
+                size="small"
+                sx={{ bgcolor: setor.cor, color: 'white', fontWeight: 500 }}
+              />
+            ))}
+          </Box>
+
+          <Paper variant="outlined" sx={{ p: 2, overflow: 'auto' }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${mapaConfig.colunas}, 1fr)`,
+                gap: 1,
+                minWidth: 600,
+              }}
+            >
+              {mapaConfig.celulas.map((celula) => {
+                const setor = SETORES.find(s => s.id === celula.setor);
+                const temProdutos = celula.produtos && celula.produtos.length > 0;
+                
+                return (
+                  <Tooltip
+                    key={celula.id}
+                    title={
+                      <Box>
+                        <Typography variant="body2"><strong>Setor:</strong> {setor?.nome}</Typography>
+                        <Typography variant="body2"><strong>Posição:</strong> {celula.linha + 1}-{celula.coluna + 1}</Typography>
+                        {temProdutos && (
+                          <>
+                            <Typography variant="body2"><strong>Produtos:</strong> {celula.produtos.length}</Typography>
+                            <Typography variant="body2"><strong>Quantidade:</strong> {celula.quantidade}</Typography>
+                            <Box sx={{ mt: 1, maxHeight: 100, overflow: 'auto' }}>
+                              {celula.produtos.map(p => (
+                                <Typography key={p.id} variant="caption" display="block">
+                                  • {p.nome} ({p.quantidadeEstoque} {getUnidadeSimbolo(p.unidadeEstoque)})
+                                </Typography>
+                              ))}
+                            </Box>
+                          </>
+                        )}
+                      </Box>
                     }
-                  }}
-                >
-                  <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
-                    {celula.linha + 1}-{celula.coluna + 1}
-                  </Typography>
-                  {temProdutos && (
-                    <Badge badgeContent={celula.produtos.length} color="primary" sx={{ mt: 1 }}>
-                      <InventoryIcon sx={{ fontSize: 20, color: setor?.cor }} />
-                    </Badge>
-                  )}
-                </Paper>
-              </Tooltip>
-            );
-          })}
+                  >
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        textAlign: 'center',
+                        bgcolor: temProdutos ? `${setor?.cor}20` : '#f5f5f5',
+                        borderColor: temProdutos ? setor?.cor : '#e0e0e0',
+                        borderWidth: temProdutos ? 2 : 1,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.05)',
+                          boxShadow: 3,
+                        },
+                      }}
+                      onClick={() => {
+                        if (temProdutos) {
+                          setSearchTerm(setor?.nome || '');
+                          setTabValue(0);
+                          setOpenMapaDialog(false);
+                        }
+                      }}
+                    >
+                      <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                        {celula.linha + 1}-{celula.coluna + 1}
+                      </Typography>
+                      {temProdutos && (
+                        <Badge badgeContent={celula.produtos.length} color="primary" sx={{ mt: 1 }}>
+                          <InventoryIcon sx={{ fontSize: 20, color: setor?.cor }} />
+                        </Badge>
+                      )}
+                    </Paper>
+                  </Tooltip>
+                );
+              })}
+            </Box>
+          </Paper>
         </Box>
-      </Paper>
+      );
+    } else {
+      // Visualização de Módulos (agrupado por setor)
+      const setoresComProdutos = produtosPorSetor();
+      
+      return (
+        <Box>
+          <Grid container spacing={2}>
+            {SETORES.map(setor => {
+              const setorData = setoresComProdutos.find(s => s.setor?.id === setor.id);
+              const temProdutos = setorData && setorData.produtos.length > 0;
+              
+              return (
+                <Grid item xs={12} md={6} lg={4} key={setor.id}>
+                  <Card 
+                    variant="outlined"
+                    sx={{ 
+                      borderColor: setor.cor,
+                      borderWidth: temProdutos ? 2 : 1,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        transform: 'scale(1.02)',
+                        boxShadow: 3,
+                      },
+                    }}
+                    onClick={() => {
+                      if (temProdutos) {
+                        setSearchTerm(setor.nome);
+                        setTabValue(0);
+                        setOpenMapaDialog(false);
+                      }
+                    }}
+                  >
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <Avatar sx={{ bgcolor: setor.cor, mr: 2 }}>
+                          <InventoryIcon />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {setor.nome}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {temProdutos ? `${setorData.produtos.length} produtos` : 'Vazio'}
+                          </Typography>
+                        </Box>
+                      </Box>
 
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-        <Button size="small" startIcon={<MapIcon />} variant="outlined">
-          Grade
-        </Button>
-        <Button size="small" startIcon={<MapIcon />} variant="outlined">
-          Módulos
-        </Button>
-      </Box>
-    </Box>
-  );
+                      {temProdutos ? (
+                        <>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                            <Typography variant="body2">
+                              Total: {setorData.totalQuantidade} unidades
+                            </Typography>
+                            <Chip 
+                              size="small" 
+                              label={`${setorData.produtos.length} itens`}
+                              sx={{ bgcolor: `${setor.cor}20`, color: setor.cor }}
+                            />
+                          </Box>
+
+                          <Paper variant="outlined" sx={{ maxHeight: 150, overflow: 'auto', p: 1 }}>
+                            {setorData.produtos.slice(0, 5).map(produto => (
+                              <Box key={produto.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="caption" noWrap sx={{ maxWidth: '60%' }}>
+                                  • {produto.nome}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={`${produto.quantidadeEstoque} ${getUnidadeSimbolo(produto.unidadeEstoque)}`}
+                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                />
+                              </Box>
+                            ))}
+                            {setorData.produtos.length > 5 && (
+                              <Typography variant="caption" color="textSecondary">
+                                + {setorData.produtos.length - 5} produtos...
+                              </Typography>
+                            )}
+                          </Paper>
+                        </>
+                      ) : (
+                        <Box sx={{ textAlign: 'center', py: 3, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                          <InventoryIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+                          <Typography variant="body2" color="textSecondary">
+                            Nenhum produto neste setor
+                          </Typography>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Box>
+      );
+    }
+  };
 
   if (loading) {
     return (
@@ -1518,7 +1680,7 @@ function ModernEstoque() {
                       setFormData({ 
                         ...formData, 
                         setor: e.target.value,
-                        prateleira: '' // Limpa a prateleira quando muda o setor
+                        prateleira: ''
                       });
                     }}
                   >
@@ -1785,19 +1947,43 @@ function ModernEstoque() {
         <DialogContent>
           <MapaLocalizacao />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenMapaDialog(false)}>Fechar</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setOpenMapaDialog(false);
-              handlePrintRelatorio();
-            }}
-            startIcon={<PrintIcon />}
-            sx={{ bgcolor: '#4caf50' }}
-          >
-            Imprimir Mapa
-          </Button>
+        <DialogActions sx={{ justifyContent: 'space-between', p: 2 }}>
+          <Box>
+            <Button 
+              size="small" 
+              startIcon={<GridIcon />} 
+              variant={modoVisualizacaoMapa === 'grade' ? 'contained' : 'outlined'}
+              onClick={() => setModoVisualizacaoMapa('grade')}
+              sx={modoVisualizacaoMapa === 'grade' ? { bgcolor: '#4caf50', mr: 1 } : { mr: 1 }}
+            >
+              Grade
+            </Button>
+            <Button 
+              size="small" 
+              startIcon={<ViewModuleIcon />} 
+              variant={modoVisualizacaoMapa === 'modulos' ? 'contained' : 'outlined'}
+              onClick={() => setModoVisualizacaoMapa('modulos')}
+              sx={modoVisualizacaoMapa === 'modulos' ? { bgcolor: '#4caf50' } : {}}
+            >
+              Módulos
+            </Button>
+          </Box>
+          <Box>
+            <Button onClick={() => setOpenMapaDialog(false)} sx={{ mr: 1 }}>
+              Fechar
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setOpenMapaDialog(false);
+                handlePrintRelatorio();
+              }}
+              startIcon={<PrintIcon />}
+              sx={{ bgcolor: '#4caf50' }}
+            >
+              Imprimir Relatório
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
 
@@ -1929,7 +2115,7 @@ function ModernEstoque() {
             }}
             sx={{ bgcolor: '#ff4081' }}
           >
-            Imprimir
+            Imprimir Relatório
           </Button>
         </DialogActions>
       </Dialog>
