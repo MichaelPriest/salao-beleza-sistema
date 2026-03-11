@@ -16,6 +16,11 @@ import {
   IconButton,
   Tooltip,
   Collapse,
+  SwipeableDrawer,
+  useMediaQuery,
+  useTheme,
+  Fab,
+  Zoom,
 } from '@mui/material';
 import {
   // Dashboard
@@ -59,7 +64,7 @@ import {
   Handyman as HandymanIcon,
   
   // Financeiro
-  AttachMoney as MoneyIcon, // ✅ IMPORTADO CORRETAMENTE
+  AttachMoney as MoneyIcon,
   AccountBalance as AccountBalanceIcon,
   AccountBalanceWallet as AccountBalanceWalletIcon,
   TrendingUp as TrendingUpIcon,
@@ -111,6 +116,7 @@ import {
   ChevronRight as ChevronRightIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
+  Menu as MenuIcon,
   
   // Ícones adicionais
   Spa as SpaIcon,
@@ -128,6 +134,7 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -165,7 +172,7 @@ const menuGroups = [
     items: [
       { text: 'Profissionais', icon: <BadgeIcon />, path: '/profissionais', permission: 'gerenciar_profissionais' },
       { text: 'Serviços', icon: <HandymanIcon />, path: '/servicos', permission: 'gerenciar_servicos' },
-      { text: 'Minhas Comissões', icon: <MoneyIcon />, path: '/minhas-comissoes', permission: 'visualizar_comissoes' }, // ✅ CORRIGIDO
+      { text: 'Minhas Comissões', icon: <MoneyIcon />, path: '/minhas-comissoes', permission: 'visualizar_comissoes' },
     ],
   },
   {
@@ -218,8 +225,203 @@ export const extraIcons = {
   qrCode: <QrCodeIcon />,
 };
 
+// Componente Mobile Sidebar
+const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
+  const theme = useTheme();
+  
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const temFotoValida = () => {
+    return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
+  };
+
+  return (
+    <SwipeableDrawer
+      anchor="left"
+      open={open}
+      onClose={onClose}
+      onOpen={() => {}}
+      disableBackdropTransition={true}
+      ModalProps={{
+        keepMounted: true,
+      }}
+      sx={{
+        '& .MuiDrawer-paper': {
+          width: 280,
+          backgroundColor: '#ffffff',
+          boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
+        },
+      }}
+    >
+      {/* Header Mobile */}
+      <Box sx={{ 
+        p: 2, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SpaIcon sx={{ fontSize: 32, color: 'white' }} />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
+            BeautyPro
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} sx={{ color: 'white' }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      {/* Perfil Mobile */}
+      <Box sx={{ p: 2, bgcolor: '#faf5ff' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar 
+            alt={usuario?.nome || 'Usuário'}
+            src={temFotoValida() ? fotoUrl : undefined}
+            sx={{ 
+              width: 48, 
+              height: 48,
+              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+            }}
+          >
+            {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
+          </Avatar>
+          <Box>
+            <Typography variant="subtitle2" color="textSecondary">
+              Bem-vindo(a)
+            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {usuario?.nome?.split(' ')[0] || 'Usuário'}
+            </Typography>
+            <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }}>
+              {usuario?.cargo || 'Usuário'}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Menu Mobile */}
+      <Box sx={{ 
+        flex: 1, 
+        overflowY: 'auto',
+        p: 1,
+      }}>
+        {filteredGroups.map((group) => {
+          const groupActive = isGroupActive(group);
+          const isOpen = openGroups[group.title] || false;
+          
+          return (
+            <Box key={group.title} sx={{ mb: 1 }}>
+              <ListItemButton
+                onClick={() => handleGroupClick(group.title)}
+                sx={{
+                  py: 1.5,
+                  px: 2,
+                  borderRadius: 2,
+                  backgroundColor: groupActive && !isOpen ? '#f3e5f5' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: '#f5f5f5',
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#9c27b0' : '#666' }}>
+                  {group.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={group.title}
+                  primaryTypographyProps={{
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    color: 'textSecondary',
+                  }}
+                />
+                {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </ListItemButton>
+
+              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {group.items.map((item) => {
+                    const isActive = location.pathname === item.path || 
+                      (item.path !== '/' && location.pathname.startsWith(item.path));
+                    
+                    return (
+                      <motion.div
+                        key={item.text}
+                        whileHover={{ x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <ListItem
+                          button
+                          component={Link}
+                          to={item.path}
+                          onClick={onClose}
+                          sx={{
+                            pl: 4,
+                            py: 1.5,
+                            borderRadius: 2,
+                            ml: 1,
+                            backgroundColor: isActive ? '#f3e5f5' : 'transparent',
+                            color: isActive ? '#9c27b0' : '#666',
+                            '&:hover': {
+                              backgroundColor: '#f3e5f5',
+                            },
+                            '& .MuiListItemIcon-root': {
+                              color: isActive ? '#9c27b0' : '#999',
+                              minWidth: 36,
+                            },
+                          }}
+                        >
+                          <ListItemIcon>
+                            {item.text === 'Notificações' ? (
+                              <Badge badgeContent={unreadCount} color="secondary">
+                                {item.icon}
+                              </Badge>
+                            ) : (
+                              item.icon
+                            )}
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary={item.text}
+                            primaryTypographyProps={{
+                              fontSize: '0.95rem',
+                              fontWeight: isActive ? 600 : 400,
+                            }}
+                          />
+                        </ListItem>
+                      </motion.div>
+                    );
+                  })}
+                </List>
+              </Collapse>
+            </Box>
+          );
+        })}
+      </Box>
+
+      {/* Versão Mobile */}
+      <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+        <Typography variant="caption" color="textSecondary">
+          Versão 2.0.0
+        </Typography>
+      </Box>
+    </SwipeableDrawer>
+  );
+};
+
 function ModernSidebar() {
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -278,15 +480,11 @@ function ModernSidebar() {
     try {
       const user = usuariosService.getUsuarioAtual();
       if (user && user.uid) {
-        console.log('Buscando notificações para usuário:', user.uid);
-        
         const data = await firebaseService.query('notificacoes', [
           { field: 'usuarioId', operator: '==', value: user.uid }
         ], 'data');
         
         setUnreadCount(data.filter(n => !n.lida).length);
-      } else {
-        console.log('Usuário não tem uid:', user);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
@@ -320,7 +518,15 @@ function ModernSidebar() {
     setCollapsed(!collapsed);
   };
 
-  const toggleGroup = (groupTitle) => {
+  const handleMobileOpen = () => {
+    setMobileOpen(true);
+  };
+
+  const handleMobileClose = () => {
+    setMobileOpen(false);
+  };
+
+  const handleGroupClick = (groupTitle) => {
     setOpenGroups(prev => ({
       ...prev,
       [groupTitle]: !prev[groupTitle]
@@ -360,6 +566,49 @@ function ModernSidebar() {
     }))
     .filter(group => group.items.length > 0);
 
+  // Versão Mobile com Floating Action Button
+  if (isMobile) {
+    return (
+      <>
+        {/* Botão flutuante para abrir o menu mobile */}
+        <Zoom in={!mobileOpen}>
+          <Fab
+            color="primary"
+            aria-label="menu"
+            onClick={handleMobileOpen}
+            sx={{
+              position: 'fixed',
+              bottom: 16,
+              left: 16,
+              zIndex: 1000,
+              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #7b1fa2 30%, #f50057 90%)',
+              },
+            }}
+          >
+            <MenuIcon />
+          </Fab>
+        </Zoom>
+
+        {/* Mobile Drawer */}
+        <MobileSidebar
+          open={mobileOpen}
+          onClose={handleMobileClose}
+          usuario={usuario}
+          fotoUrl={fotoUrl}
+          unreadCount={unreadCount}
+          filteredGroups={filteredGroups}
+          location={location}
+          handleGroupClick={handleGroupClick}
+          openGroups={openGroups}
+          isGroupActive={isGroupActive}
+        />
+      </>
+    );
+  }
+
+  // Versão Desktop (mantida igual)
   return (
     <Drawer
       variant="permanent"
@@ -490,7 +739,7 @@ function ModernSidebar() {
               {!collapsed ? (
                 <>
                   <ListItemButton
-                    onClick={() => toggleGroup(group.title)}
+                    onClick={() => handleGroupClick(group.title)}
                     sx={{
                       py: 1,
                       px: 3,
