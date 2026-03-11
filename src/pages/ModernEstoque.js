@@ -1,5 +1,5 @@
 // src/pages/ModernEstoque.js
-import React, { useState, useEffect, useRef } from 'react'; // 🔥 CORREÇÃO: adicionar useRef
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -39,9 +39,7 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  CardMedia,
   Badge,
-  Fab,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -54,18 +52,10 @@ import {
   Clear as ClearIcon,
   Category as CategoryIcon,
   Save as SaveIcon,
-  Business as BusinessIcon,
   Assessment as AssessmentIcon,
   Map as MapIcon,
-  GridOn as GridIcon,
-  ViewModule as ModuleIcon,
-  AddLocation as LocationIcon,
-  DeleteSweep as DeleteSweepIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  PieChart as PieChartIcon,
-  Timeline as TimelineIcon,
-  Storage as StorageIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -85,7 +75,7 @@ import {
   Cell,
 } from 'recharts';
 
-// 🔥 Lista completa de unidades de medida
+// Lista completa de unidades de medida
 const UNIDADES_MEDIDA = [
   { value: 'un', label: 'Unidade', simbolo: 'un' },
   { value: 'pç', label: 'Peça', simbolo: 'pç' },
@@ -107,10 +97,10 @@ const UNIDADES_MEDIDA = [
   { value: 'tb', label: 'Tablete', simbolo: 'tb' },
 ];
 
-// 🔥 CORES PARA GRÁFICOS
+// CORES PARA GRÁFICOS
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3', '#00bcd4', '#795548'];
 
-// 🔥 TIPOS DE SETORES PARA O MAPA
+// TIPOS DE SETORES PARA O MAPA
 const SETORES = [
   { id: 'A', nome: 'Setor A - Cosméticos', cor: '#9c27b0' },
   { id: 'B', nome: 'Setor B - Cabelos', cor: '#ff4081' },
@@ -121,6 +111,134 @@ const SETORES = [
   { id: 'G', nome: 'Setor G - Perfumaria', cor: '#00bcd4' },
   { id: 'H', nome: 'Setor H - Promoções', cor: '#795548' },
 ];
+
+// Componente de relatório para impressão
+const RelatorioEstoque = React.forwardRef((props, ref) => {
+  const { produtos, categorias, fornecedores, stats, SETORES, getUnidadeSimbolo } = props;
+  
+  return (
+    <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minWidth: '800px' }}>
+      {/* Cabeçalho */}
+      <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700, mb: 1 }}>
+          Relatório de Estoque
+        </Typography>
+        <Typography variant="subtitle1" color="textSecondary">
+          Data: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+        </Typography>
+      </Box>
+
+      {/* Resumo */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f3e5f5' }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0' }}>Total de Produtos</Typography>
+            <Typography variant="h4">{stats.totalProdutos}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e8f5e9' }}>
+            <Typography variant="h6" sx={{ color: '#4caf50' }}>Valor em Estoque</Typography>
+            <Typography variant="h4">R$ {stats.valorEstoque.toFixed(2)}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={4}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#fff3e0' }}>
+            <Typography variant="h6" sx={{ color: '#ff9800' }}>Estoque Baixo</Typography>
+            <Typography variant="h4">{stats.produtosBaixo}</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Tabela de Produtos */}
+      <Typography variant="h6" sx={{ mb: 2, color: '#9c27b0', fontWeight: 600 }}>
+        Lista de Produtos
+      </Typography>
+      
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+              <TableCell><strong>Produto</strong></TableCell>
+              <TableCell><strong>Categoria</strong></TableCell>
+              <TableCell><strong>Fornecedor</strong></TableCell>
+              <TableCell align="right"><strong>Preço Custo</strong></TableCell>
+              <TableCell align="right"><strong>Preço Venda</strong></TableCell>
+              <TableCell align="right"><strong>Estoque</strong></TableCell>
+              <TableCell><strong>Localização</strong></TableCell>
+              <TableCell><strong>Status</strong></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {produtos.map((produto) => {
+              const categoria = categorias.find(c => c.id === produto.categoria);
+              const fornecedor = fornecedores.find(f => f.id === produto.fornecedorId);
+              const setor = SETORES.find(s => s.id === produto.setor);
+              
+              const getEstoqueStatus = (quantidade, minimo) => {
+                const qtd = Number(quantidade || 0);
+                const min = Number(minimo || 5);
+                if (qtd === 0) return { label: 'Sem Estoque', color: '#f44336' };
+                if (qtd <= min) return { label: 'Estoque Baixo', color: '#ff9800' };
+                return { label: 'Normal', color: '#4caf50' };
+              };
+              
+              const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
+              
+              return (
+                <TableRow key={produto.id}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {produto.nome}
+                    </Typography>
+                    {produto.codigoBarras && (
+                      <Typography variant="caption" color="textSecondary">
+                        Cód: {produto.codigoBarras}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>{categoria?.nome || '-'}</TableCell>
+                  <TableCell>{fornecedor?.nome || '-'}</TableCell>
+                  <TableCell align="right">R$ {Number(produto.precoCusto || 0).toFixed(2)}</TableCell>
+                  <TableCell align="right">R$ {Number(produto.precoVenda || 0).toFixed(2)}</TableCell>
+                  <TableCell align="right">
+                    {Number(produto.quantidadeEstoque || 0)} {getUnidadeSimbolo(produto.unidadeEstoque)}
+                  </TableCell>
+                  <TableCell>
+                    {setor ? `${setor.nome} ${produto.prateleira ? `- ${produto.prateleira}` : ''}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Box
+                      sx={{
+                        display: 'inline-block',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        bgcolor: status.color + '20',
+                        color: status.color,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {status.label}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* Rodapé */}
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary' }}>
+        <Typography variant="caption">
+          Relatório gerado automaticamente pelo Sistema de Gestão
+        </Typography>
+      </Box>
+    </Box>
+  );
+});
 
 function TabPanel({ children, value, index }) {
   return (
@@ -160,10 +278,10 @@ function ModernEstoque() {
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
-  // 🔥 REF PARA IMPRESSÃO
+  // REF PARA IMPRESSÃO
   const relatorioRef = useRef();
   
-  // 🔥 ESTADO PARA O MAPA DE LOCALIZAÇÃO
+  // ESTADO PARA O MAPA DE LOCALIZAÇÃO
   const [mapaConfig, setMapaConfig] = useState({
     setores: SETORES,
     linhas: 5,
@@ -181,7 +299,7 @@ function ModernEstoque() {
     lucroPotencial: 0,
   });
 
-  // 🔥 ESTATÍSTICAS PARA RELATÓRIOS
+  // ESTATÍSTICAS PARA RELATÓRIOS
   const [dadosGrafico, setDadosGrafico] = useState({
     porCategoria: [],
     porFornecedor: [],
@@ -213,6 +331,37 @@ function ModernEstoque() {
     nome: '',
     descricao: '',
   });
+
+  // Configuração do react-to-print
+  const handlePrint = useReactToPrint({
+    contentRef: relatorioRef,
+    documentTitle: `relatorio_estoque_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando relatório para impressão...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Relatório enviado para impressão!', { id: 'print' });
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir relatório', { id: 'print' });
+    },
+  });
+
+  // Função segura para imprimir
+  const handlePrintRelatorio = () => {
+    if (!relatorioRef.current) {
+      toast.error('Não há dados para imprimir');
+      return;
+    }
+    
+    if (produtos.length === 0) {
+      toast.error('Não há produtos cadastrados para gerar relatório');
+      return;
+    }
+    
+    handlePrint();
+  };
 
   useEffect(() => {
     carregarDados();
@@ -250,7 +399,7 @@ function ModernEstoque() {
     }
   };
 
-  // 🔥 INICIALIZAR MAPA DE LOCALIZAÇÃO
+  // INICIALIZAR MAPA DE LOCALIZAÇÃO
   const inicializarMapa = () => {
     const celulas = [];
     for (let l = 0; l < mapaConfig.linhas; l++) {
@@ -268,7 +417,7 @@ function ModernEstoque() {
     setMapaConfig(prev => ({ ...prev, celulas }));
   };
 
-  // 🔥 ATUALIZAR MAPA COM PRODUTOS
+  // ATUALIZAR MAPA COM PRODUTOS
   useEffect(() => {
     if (produtos.length > 0 && mapaConfig.celulas.length > 0) {
       const novasCelulas = mapaConfig.celulas.map(celula => {
@@ -326,7 +475,7 @@ function ModernEstoque() {
     });
   };
 
-  // 🔥 GERAR DADOS PARA GRÁFICOS
+  // GERAR DADOS PARA GRÁFICOS
   const gerarDadosGraficos = () => {
     // Por categoria
     const categoriasMap = {};
@@ -597,18 +746,7 @@ function ModernEstoque() {
     return { label: 'Normal', color: 'success' };
   };
 
-  // 🔥 FUNÇÕES PARA RELATÓRIOS
-  const handlePrintRelatorio = useReactToPrint({
-    content: () => relatorioRef.current,
-    documentTitle: `relatorio_estoque_${new Date().toISOString().split('T')[0]}`,
-    onBeforeGetContent: () => {
-      toast.loading('Preparando relatório...', { id: 'print' });
-    },
-    onAfterPrint: () => {
-      toast.success('Relatório enviado para impressão!', { id: 'print' });
-    },
-  });
-
+  // FUNÇÕES PARA RELATÓRIOS
   const handleExportCSV = () => {
     try {
       const headers = ['Nome', 'Categoria', 'Fornecedor', 'Preço Custo', 'Preço Venda', 'Estoque', 'Setor', 'Status'];
@@ -646,7 +784,7 @@ function ModernEstoque() {
     }
   };
 
-  // 🔥 COMPONENTE DE MAPA DE LOCALIZAÇÃO
+  // COMPONENTE DE MAPA DE LOCALIZAÇÃO
   const MapaLocalizacao = () => (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
@@ -728,10 +866,10 @@ function ModernEstoque() {
       </Paper>
 
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-        <Button size="small" startIcon={<GridIcon />} variant="outlined">
+        <Button size="small" startIcon={<MapIcon />} variant="outlined">
           Grade
         </Button>
-        <Button size="small" startIcon={<ModuleIcon />} variant="outlined">
+        <Button size="small" startIcon={<MapIcon />} variant="outlined">
           Módulos
         </Button>
       </Box>
@@ -1619,6 +1757,19 @@ function ModernEstoque() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <RelatorioEstoque 
+          ref={relatorioRef}
+          produtos={produtos}
+          categorias={categorias}
+          fornecedores={fornecedores}
+          stats={stats}
+          SETORES={SETORES}
+          getUnidadeSimbolo={getUnidadeSimbolo}
+        />
+      </Box>
 
       {/* Snackbar */}
       <Snackbar
