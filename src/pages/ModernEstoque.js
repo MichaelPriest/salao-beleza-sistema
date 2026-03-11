@@ -37,6 +37,11 @@ import {
   ListItemSecondaryAction,
   Divider,
   Tooltip,
+  Tabs,
+  Tab,
+  CardMedia,
+  Badge,
+  Fab,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -50,10 +55,35 @@ import {
   Category as CategoryIcon,
   Save as SaveIcon,
   Business as BusinessIcon,
+  Assessment as AssessmentIcon,
+  Map as MapIcon,
+  GridOn as GridIcon,
+  ViewModule as ModuleIcon,
+  AddLocation as LocationIcon,
+  DeleteSweep as DeleteSweepIcon,
+  Print as PrintIcon,
+  Download as DownloadIcon,
+  PieChart as PieChartIcon,
+  Timeline as TimelineIcon,
+  Storage as StorageIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { useReactToPrint } from 'react-to-print';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 
 // 🔥 Lista completa de unidades de medida
 const UNIDADES_MEDIDA = [
@@ -77,6 +107,29 @@ const UNIDADES_MEDIDA = [
   { value: 'tb', label: 'Tablete', simbolo: 'tb' },
 ];
 
+// 🔥 CORES PARA GRÁFICOS
+const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3', '#00bcd4', '#795548'];
+
+// 🔥 TIPOS DE SETORES PARA O MAPA
+const SETORES = [
+  { id: 'A', nome: 'Setor A - Cosméticos', cor: '#9c27b0' },
+  { id: 'B', nome: 'Setor B - Cabelos', cor: '#ff4081' },
+  { id: 'C', nome: 'Setor C - Unhas', cor: '#4caf50' },
+  { id: 'D', nome: 'Setor D - Estética', cor: '#ff9800' },
+  { id: 'E', nome: 'Setor E - Descartáveis', cor: '#2196f3' },
+  { id: 'F', nome: 'Setor F - Equipamentos', cor: '#f44336' },
+  { id: 'G', nome: 'Setor G - Perfumaria', cor: '#00bcd4' },
+  { id: 'H', nome: 'Setor H - Promoções', cor: '#795548' },
+];
+
+function TabPanel({ children, value, index }) {
+  return (
+    <div hidden={value !== index}>
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
 function ModernEstoque() {
   const [loading, setLoading] = useState(true);
   const [produtos, setProdutos] = useState([]);
@@ -85,10 +138,15 @@ function ModernEstoque() {
   const [filteredProdutos, setFilteredProdutos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Tabs
+  const [tabValue, setTabValue] = useState(0);
+  
   // Dialogs
   const [openDialog, setOpenDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
+  const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [openMapaDialog, setOpenMapaDialog] = useState(false);
   
   // Selected items
   const [selectedProduto, setSelectedProduto] = useState(null);
@@ -102,15 +160,36 @@ function ModernEstoque() {
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
+  // 🔥 REF PARA IMPRESSÃO
+  const relatorioRef = useRef();
+  
+  // 🔥 ESTADO PARA O MAPA DE LOCALIZAÇÃO
+  const [mapaConfig, setMapaConfig] = useState({
+    setores: SETORES,
+    linhas: 5,
+    colunas: 8,
+    celulas: [],
+  });
+
   // Stats
   const [stats, setStats] = useState({
     totalProdutos: 0,
     valorEstoque: 0,
     produtosBaixo: 0,
     produtosSemEstoque: 0,
+    valorTotalCusto: 0,
+    lucroPotencial: 0,
   });
 
-  // 🔥 Formulário de produto
+  // 🔥 ESTATÍSTICAS PARA RELATÓRIOS
+  const [dadosGrafico, setDadosGrafico] = useState({
+    porCategoria: [],
+    porFornecedor: [],
+    porSetor: [],
+    movimentacoes: [],
+  });
+
+  // Formulário de produto
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
@@ -124,10 +203,12 @@ function ModernEstoque() {
     fornecedorId: '',
     estoqueMinimo: '',
     localizacao: '',
+    setor: '',
+    prateleira: '',
     codigoBarras: '',
   });
 
-  // 🔥 Formulário de categoria
+  // Formulário de categoria
   const [categoriaForm, setCategoriaForm] = useState({
     nome: '',
     descricao: '',
@@ -140,13 +221,13 @@ function ModernEstoque() {
   useEffect(() => {
     filtrarProdutos();
     calcularStats();
+    gerarDadosGraficos();
   }, [produtos, searchTerm]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
       
-      // Buscar produtos, categorias e fornecedores
       const [produtosData, categoriasData, fornecedoresData] = await Promise.all([
         firebaseService.getAll('produtos').catch(() => []),
         firebaseService.getAll('categorias_produtos').catch(() => []),
@@ -157,6 +238,9 @@ function ModernEstoque() {
       setCategorias(categoriasData || []);
       setFornecedores(fornecedoresData || []);
       
+      // Inicializar mapa
+      inicializarMapa();
+      
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -165,6 +249,42 @@ function ModernEstoque() {
       setLoading(false);
     }
   };
+
+  // 🔥 INICIALIZAR MAPA DE LOCALIZAÇÃO
+  const inicializarMapa = () => {
+    const celulas = [];
+    for (let l = 0; l < mapaConfig.linhas; l++) {
+      for (let c = 0; c < mapaConfig.colunas; c++) {
+        const setorId = SETORES[Math.floor(Math.random() * SETORES.length)].id;
+        celulas.push({
+          id: `${l}-${c}`,
+          linha: l,
+          coluna: c,
+          setor: setorId,
+          produtos: [],
+        });
+      }
+    }
+    setMapaConfig(prev => ({ ...prev, celulas }));
+  };
+
+  // 🔥 ATUALIZAR MAPA COM PRODUTOS
+  useEffect(() => {
+    if (produtos.length > 0 && mapaConfig.celulas.length > 0) {
+      const novasCelulas = mapaConfig.celulas.map(celula => {
+        const produtosNaCelula = produtos.filter(p => 
+          p.setor === celula.setor && 
+          p.prateleira === `${celula.linha}-${celula.coluna}`
+        );
+        return {
+          ...celula,
+          produtos: produtosNaCelula,
+          quantidade: produtosNaCelula.reduce((acc, p) => acc + (p.quantidadeEstoque || 0), 0),
+        };
+      });
+      setMapaConfig(prev => ({ ...prev, celulas: novasCelulas }));
+    }
+  }, [produtos]);
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -181,7 +301,8 @@ function ModernEstoque() {
       filtered = filtered.filter(p =>
         p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.codigoBarras?.includes(searchTerm)
+        p.codigoBarras?.includes(searchTerm) ||
+        p.setor?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -190,25 +311,60 @@ function ModernEstoque() {
 
   const calcularStats = () => {
     const total = produtos.length;
-    const valor = produtos.reduce((acc, p) => acc + (Number(p.precoVenda) * Number(p.quantidadeEstoque || 0)), 0);
+    const valorVenda = produtos.reduce((acc, p) => acc + (Number(p.precoVenda) * Number(p.quantidadeEstoque || 0)), 0);
+    const valorCusto = produtos.reduce((acc, p) => acc + (Number(p.precoCusto) * Number(p.quantidadeEstoque || 0)), 0);
     const baixo = produtos.filter(p => Number(p.quantidadeEstoque) <= Number(p.estoqueMinimo || 5)).length;
     const semEstoque = produtos.filter(p => Number(p.quantidadeEstoque) === 0).length;
 
     setStats({
       totalProdutos: total,
-      valorEstoque: valor,
+      valorEstoque: valorVenda,
       produtosBaixo: baixo,
       produtosSemEstoque: semEstoque,
+      valorTotalCusto: valorCusto,
+      lucroPotencial: valorVenda - valorCusto,
     });
   };
 
-  // 🔥 Função para obter o símbolo da unidade
+  // 🔥 GERAR DADOS PARA GRÁFICOS
+  const gerarDadosGraficos = () => {
+    // Por categoria
+    const categoriasMap = {};
+    produtos.forEach(p => {
+      const cat = p.categoria || 'Sem categoria';
+      categoriasMap[cat] = (categoriasMap[cat] || 0) + (p.quantidadeEstoque || 0);
+    });
+    
+    const porCategoria = Object.keys(categoriasMap).map(key => ({
+      name: categorias.find(c => c.id === key)?.nome || key,
+      quantidade: categoriasMap[key],
+      valor: produtos.filter(p => p.categoria === key).reduce((acc, p) => acc + (Number(p.precoVenda) * Number(p.quantidadeEstoque || 0)), 0),
+    }));
+
+    // Por setor
+    const setoresMap = {};
+    produtos.forEach(p => {
+      const setor = p.setor || 'Sem setor';
+      setoresMap[setor] = (setoresMap[setor] || 0) + (p.quantidadeEstoque || 0);
+    });
+
+    const porSetor = Object.keys(setoresMap).map(key => ({
+      name: SETORES.find(s => s.id === key)?.nome || key,
+      quantidade: setoresMap[key],
+    }));
+
+    setDadosGrafico({
+      porCategoria,
+      porSetor,
+    });
+  };
+
   const getUnidadeSimbolo = (unidade) => {
     const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
     return unidadeEncontrada?.simbolo || unidade;
   };
 
-  // 🔥 Funções para categorias
+  // Funções para categorias
   const handleOpenCategoriaDialog = (categoria = null) => {
     if (categoria) {
       setCategoriaEditando(categoria);
@@ -246,14 +402,10 @@ function ModernEstoque() {
       };
 
       if (categoriaEditando) {
-        // 🔥 CORREÇÃO: Atualizar categoria existente
         await firebaseService.update('categorias_produtos', categoriaEditando.id, categoriaData);
-        
-        // Atualizar estado local
         setCategorias(categorias.map(c => 
           c.id === categoriaEditando.id ? { ...c, ...categoriaData, id: categoriaEditando.id } : c
         ));
-        
         mostrarSnackbar('Categoria atualizada com sucesso!');
       } else {
         categoriaData.dataCriacao = new Date().toISOString();
@@ -270,7 +422,6 @@ function ModernEstoque() {
   };
 
   const handleExcluirCategoria = async (id) => {
-    // Verificar se existem produtos usando esta categoria
     const produtosNaCategoria = produtos.filter(p => p.categoria === id);
     
     if (produtosNaCategoria.length > 0) {
@@ -290,7 +441,7 @@ function ModernEstoque() {
     }
   };
 
-  // 🔥 Funções para produtos
+  // Funções para produtos
   const handleAdd = () => {
     setSelectedProduto(null);
     setFormData({
@@ -306,6 +457,8 @@ function ModernEstoque() {
       fornecedorId: '',
       estoqueMinimo: '',
       localizacao: '',
+      setor: '',
+      prateleira: '',
       codigoBarras: '',
     });
     setOpenDialog(true);
@@ -326,6 +479,8 @@ function ModernEstoque() {
       fornecedorId: produto.fornecedorId || '',
       estoqueMinimo: produto.estoqueMinimo || '',
       localizacao: produto.localizacao || '',
+      setor: produto.setor || '',
+      prateleira: produto.prateleira || '',
       codigoBarras: produto.codigoBarras || '',
     });
     setOpenDialog(true);
@@ -352,7 +507,6 @@ function ModernEstoque() {
   const handleSave = async (event) => {
     event.preventDefault();
 
-    // Validações
     if (!formData.nome) {
       mostrarSnackbar('Nome do produto é obrigatório', 'error');
       return;
@@ -397,28 +551,24 @@ function ModernEstoque() {
       fornecedorId: formData.fornecedorId || '',
       estoqueMinimo: Number(estoqueMinimoNum),
       localizacao: formData.localizacao ? String(formData.localizacao).trim() : '',
+      setor: formData.setor || '',
+      prateleira: formData.prateleira || '',
       codigoBarras: formData.codigoBarras ? String(formData.codigoBarras).trim() : '',
       updatedAt: new Date().toISOString(),
     };
 
     try {
       if (selectedProduto) {
-        // 🔥 CORREÇÃO: Usar update em vez de add
         await firebaseService.update('produtos', selectedProduto.id, produtoData);
-        
-        // Atualizar estado local
         const produtosAtualizados = produtos.map(p => 
           p.id === selectedProduto.id ? { ...p, ...produtoData, id: selectedProduto.id } : p
         );
         setProdutos(produtosAtualizados);
-        
         mostrarSnackbar('Produto atualizado com sucesso!');
       } else {
         produtoData.dataCriacao = new Date().toISOString();
-        
         const novoId = await firebaseService.add('produtos', produtoData);
         setProdutos([...produtos, { ...produtoData, id: novoId }]);
-        
         mostrarSnackbar('Produto adicionado com sucesso!');
       }
       
@@ -447,6 +597,147 @@ function ModernEstoque() {
     return { label: 'Normal', color: 'success' };
   };
 
+  // 🔥 FUNÇÕES PARA RELATÓRIOS
+  const handlePrintRelatorio = useReactToPrint({
+    content: () => relatorioRef.current,
+    documentTitle: `relatorio_estoque_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando relatório...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Relatório enviado para impressão!', { id: 'print' });
+    },
+  });
+
+  const handleExportCSV = () => {
+    try {
+      const headers = ['Nome', 'Categoria', 'Fornecedor', 'Preço Custo', 'Preço Venda', 'Estoque', 'Setor', 'Status'];
+      const data = produtos.map(p => {
+        const categoria = categorias.find(c => c.id === p.categoria);
+        const fornecedor = fornecedores.find(f => f.id === p.fornecedorId);
+        const status = getEstoqueStatus(p.quantidadeEstoque, p.estoqueMinimo);
+        
+        return [
+          p.nome,
+          categoria?.nome || '-',
+          fornecedor?.nome || '-',
+          p.precoCusto?.toFixed(2),
+          p.precoVenda?.toFixed(2),
+          `${p.quantidadeEstoque} ${getUnidadeSimbolo(p.unidadeEstoque)}`,
+          p.setor || '-',
+          status.label,
+        ];
+      });
+
+      const csvContent = [headers, ...data]
+        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `estoque_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      
+      mostrarSnackbar('Relatório exportado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      mostrarSnackbar('Erro ao exportar relatório', 'error');
+    }
+  };
+
+  // 🔥 COMPONENTE DE MAPA DE LOCALIZAÇÃO
+  const MapaLocalizacao = () => (
+    <Box sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        {SETORES.map(setor => (
+          <Chip
+            key={setor.id}
+            label={setor.nome}
+            size="small"
+            sx={{ bgcolor: setor.cor, color: 'white', fontWeight: 500 }}
+          />
+        ))}
+      </Box>
+
+      <Paper variant="outlined" sx={{ p: 2, overflow: 'auto' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${mapaConfig.colunas}, 1fr)`,
+            gap: 1,
+            minWidth: 600,
+          }}
+        >
+          {mapaConfig.celulas.map((celula) => {
+            const setor = SETORES.find(s => s.id === celula.setor);
+            const temProdutos = celula.produtos && celula.produtos.length > 0;
+            
+            return (
+              <Tooltip
+                key={celula.id}
+                title={
+                  <Box>
+                    <Typography variant="body2"><strong>Setor:</strong> {setor?.nome}</Typography>
+                    <Typography variant="body2"><strong>Posição:</strong> {celula.linha + 1}-{celula.coluna + 1}</Typography>
+                    {temProdutos && (
+                      <>
+                        <Typography variant="body2"><strong>Produtos:</strong> {celula.produtos.length}</Typography>
+                        <Typography variant="body2"><strong>Quantidade:</strong> {celula.quantidade}</Typography>
+                      </>
+                    )}
+                  </Box>
+                }
+              >
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    textAlign: 'center',
+                    bgcolor: temProdutos ? `${setor?.cor}20` : '#f5f5f5',
+                    borderColor: temProdutos ? setor?.cor : '#e0e0e0',
+                    borderWidth: temProdutos ? 2 : 1,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: 3,
+                    },
+                  }}
+                  onClick={() => {
+                    if (temProdutos) {
+                      setSearchTerm(setor?.nome || '');
+                      setTabValue(0);
+                      setOpenMapaDialog(false);
+                    }
+                  }}
+                >
+                  <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                    {celula.linha + 1}-{celula.coluna + 1}
+                  </Typography>
+                  {temProdutos && (
+                    <Badge badgeContent={celula.produtos.length} color="primary" sx={{ mt: 1 }}>
+                      <InventoryIcon sx={{ fontSize: 20, color: setor?.cor }} />
+                    </Badge>
+                  )}
+                </Paper>
+              </Tooltip>
+            );
+          })}
+        </Box>
+      </Paper>
+
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+        <Button size="small" startIcon={<GridIcon />} variant="outlined">
+          Grade
+        </Button>
+        <Button size="small" startIcon={<ModuleIcon />} variant="outlined">
+          Módulos
+        </Button>
+      </Box>
+    </Box>
+  );
+
   if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
@@ -465,11 +756,31 @@ function ModernEstoque() {
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
               variant="outlined"
-              startIcon={<CategoryIcon />}
-              onClick={() => handleOpenCategoriaDialog()}
+              startIcon={<MapIcon />}
+              onClick={() => setOpenMapaDialog(true)}
+              sx={{ borderColor: '#4caf50', color: '#4caf50' }}
+            >
+              Mapa do Estoque
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<AssessmentIcon />}
+              onClick={() => setOpenRelatorioDialog(true)}
               sx={{ borderColor: '#ff4081', color: '#ff4081' }}
             >
-              Gerenciar Categorias
+              Relatórios
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<CategoryIcon />}
+              onClick={() => handleOpenCategoriaDialog()}
+              sx={{ borderColor: '#ff9800', color: '#ff9800' }}
+            >
+              Categorias
             </Button>
           </motion.div>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -588,13 +899,24 @@ function ModernEstoque() {
         </Grid>
       </Grid>
 
+      {/* Tabs */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent sx={{ p: 0 }}>
+          <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
+            <Tab label="Produtos" />
+            <Tab label="Categorias" />
+            <Tab label="Fornecedores" />
+          </Tabs>
+        </CardContent>
+      </Card>
+
       {/* Barra de Pesquisa */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <TextField
             fullWidth
             variant="outlined"
-            placeholder="Buscar produtos por nome, descrição ou código de barras..."
+            placeholder="Buscar produtos por nome, descrição, código de barras ou setor..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -610,11 +932,6 @@ function ModernEstoque() {
                   </IconButton>
                 </InputAdornment>
               ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 3,
-              },
             }}
           />
         </CardContent>
@@ -634,6 +951,7 @@ function ModernEstoque() {
                   <TableCell align="right"><strong>Preço Venda</strong></TableCell>
                   <TableCell align="right"><strong>Lucro</strong></TableCell>
                   <TableCell align="right"><strong>Estoque</strong></TableCell>
+                  <TableCell><strong>Localização</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell align="center"><strong>Ações</strong></TableCell>
                 </TableRow>
@@ -646,6 +964,7 @@ function ModernEstoque() {
                       const status = getEstoqueStatus(produto.quantidadeEstoque, produto.estoqueMinimo);
                       const categoria = categorias.find(c => c.id === produto.categoria);
                       const fornecedor = fornecedores.find(f => f.id === produto.fornecedorId);
+                      const setor = SETORES.find(s => s.id === produto.setor);
                       const lucro = produto.precoCusto > 0 
                         ? ((Number(produto.precoVenda) - Number(produto.precoCusto)) / Number(produto.precoCusto) * 100).toFixed(1)
                         : '0';
@@ -722,6 +1041,21 @@ function ModernEstoque() {
                             </Typography>
                           </TableCell>
                           <TableCell>
+                            {setor ? (
+                              <Tooltip title={`Setor: ${setor.nome}`}>
+                                <Chip
+                                  label={`${setor.id}${produto.prateleira ? ` - ${produto.prateleira}` : ''}`}
+                                  size="small"
+                                  sx={{ bgcolor: `${setor.cor}20`, color: setor.cor }}
+                                />
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="caption" color="textSecondary">
+                                Não definido
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             <Chip
                               label={status.label}
                               size="small"
@@ -755,7 +1089,7 @@ function ModernEstoque() {
                 
                 {filteredProdutos.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
+                    <TableCell colSpan={10} align="center" sx={{ py: 8 }}>
                       <InventoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                       <Typography variant="body1" color="textSecondary">
                         Nenhum produto encontrado
@@ -840,10 +1174,42 @@ function ModernEstoque() {
                   size="small"
                 />
               </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Setor</InputLabel>
+                  <Select
+                    value={formData.setor}
+                    label="Setor"
+                    onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
+                  >
+                    <MenuItem value="">
+                      <em>Nenhum</em>
+                    </MenuItem>
+                    {SETORES.map(setor => (
+                      <MenuItem key={setor.id} value={setor.id}>
+                        {setor.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Localização"
+                  label="Prateleira / Posição"
+                  value={formData.prateleira}
+                  onChange={(e) => setFormData({ ...formData, prateleira: e.target.value })}
+                  size="small"
+                  placeholder="Ex: A-01 ou 1-1"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Localização Detalhada"
                   value={formData.localizacao}
                   onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
                   size="small"
@@ -1017,7 +1383,6 @@ function ModernEstoque() {
               />
             </Grid>
 
-            {/* Lista de categorias existentes */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>
                 Categorias Existentes
@@ -1069,6 +1434,163 @@ function ModernEstoque() {
             sx={{ bgcolor: '#ff4081' }}
           >
             {categoriaEditando ? 'Atualizar' : 'Salvar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Mapa do Estoque */}
+      <Dialog open={openMapaDialog} onClose={() => setOpenMapaDialog(false)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+          Mapa do Estoque
+        </DialogTitle>
+        <DialogContent>
+          <MapaLocalizacao />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenMapaDialog(false)}>Fechar</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setOpenMapaDialog(false);
+              handlePrintRelatorio();
+            }}
+            startIcon={<PrintIcon />}
+            sx={{ bgcolor: '#4caf50' }}
+          >
+            Imprimir Mapa
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Relatórios */}
+      <Dialog open={openRelatorioDialog} onClose={() => setOpenRelatorioDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff4081', color: 'white' }}>
+          Relatórios do Estoque
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                    Resumo do Estoque
+                  </Typography>
+                  <List>
+                    <ListItem>
+                      <ListItemText primary="Total de Produtos" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{stats.totalProdutos}</Typography>
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText primary="Valor em Estoque (Venda)" />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                        R$ {stats.valorEstoque.toFixed(2)}
+                      </Typography>
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText primary="Valor em Estoque (Custo)" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        R$ {stats.valorTotalCusto.toFixed(2)}
+                      </Typography>
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText primary="Lucro Potencial" />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: stats.lucroPotencial > 0 ? '#4caf50' : '#f44336' }}>
+                        R$ {stats.lucroPotencial.toFixed(2)}
+                      </Typography>
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText primary="Produtos com Estoque Baixo" />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                        {stats.produtosBaixo}
+                      </Typography>
+                    </ListItem>
+                    <ListItem>
+                      <ListItemText primary="Produtos sem Estoque" />
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#f44336' }}>
+                        {stats.produtosSemEstoque}
+                      </Typography>
+                    </ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                    Distribuição por Setor
+                  </Typography>
+                  <Box sx={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={dadosGrafico.porSetor}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                          outerRadius={60}
+                          dataKey="quantidade"
+                        >
+                          {dadosGrafico.porSetor.map((entry, index) => {
+                            const setor = SETORES.find(s => s.nome === entry.name);
+                            return (
+                              <Cell key={`cell-${index}`} fill={setor?.cor || COLORS[index % COLORS.length]} />
+                            );
+                          })}
+                        </Pie>
+                        <RechartsTooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                    Distribuição por Categoria
+                  </Typography>
+                  <Box sx={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dadosGrafico.porCategoria}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar dataKey="quantidade" fill="#9c27b0" />
+                        <Bar dataKey="valor" fill="#ff4081" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenRelatorioDialog(false)}>Fechar</Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCSV}
+          >
+            Exportar CSV
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PrintIcon />}
+            onClick={() => {
+              setOpenRelatorioDialog(false);
+              handlePrintRelatorio();
+            }}
+            sx={{ bgcolor: '#ff4081' }}
+          >
+            Imprimir
           </Button>
         </DialogActions>
       </Dialog>
