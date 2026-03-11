@@ -3,7 +3,7 @@ import { firebaseService } from './firebase';
 import { toast } from 'react-hot-toast';
 
 export const backupService = {
-  // Buscar histórico de backups
+  // Listar histórico de backups
   listarBackups: async () => {
     try {
       const backups = await firebaseService.getAll('backups');
@@ -91,10 +91,6 @@ export const backupService = {
           // Restaurar cada coleção
           for (const [collection, dados] of Object.entries(backupData.dados)) {
             try {
-              // Primeiro, limpar a coleção atual (opcional)
-              // await firebaseService.deleteCollection(collection);
-              
-              // Depois, inserir os dados do backup
               for (const item of dados) {
                 await firebaseService.add(collection, item);
               }
