@@ -56,7 +56,6 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
-import { InstagramEmbed, FacebookEmbed } from 'react-social-media-embed';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -160,13 +159,11 @@ function SiteSalao() {
       if (instagramAtivo) {
         const user = contato.instagram.replace('@', '').trim();
         setInstagramUser(user);
-        // URL do perfil do Instagram
-        setInstagramUrl(`https://www.instagram.com/${user}/`);
+        setInstagramUrl(`https://instagram.com/${user}`);
       }
       
       if (facebookAtivo) {
         let fbUrl = contato.facebook;
-        // Se for nome de usuário, converter para URL completa
         if (!fbUrl.startsWith('http')) {
           fbUrl = `https://facebook.com/${fbUrl}`;
         }
@@ -607,7 +604,7 @@ function SiteSalao() {
         </Container>
       </Box>
 
-      {/* Redes Sociais Section - Só aparece se alguma rede estiver configurada */}
+      {/* Redes Sociais Section - Versão com Cards e Links Diretos */}
       {(redesAtivas.instagram || redesAtivas.facebook) && (
         <Box sx={{ bgcolor: 'white', py: 8 }} id="redes">
           <Container maxWidth="lg">
@@ -618,73 +615,116 @@ function SiteSalao() {
               Acompanhe nosso trabalho e novidades
             </Typography>
 
-            <Grid container spacing={4}>
-              {/* Instagram Feed - Só aparece se Instagram estiver configurado */}
+            <Grid container spacing={4} justifyContent="center">
+              {/* Instagram Card */}
               {redesAtivas.instagram && instagramUser && (
-                <Grid item xs={12} md={redesAtivas.facebook ? 6 : 12}>
-                  <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                      <InstagramIcon sx={{ fontSize: 40, color: '#E1306C', mr: 2 }} />
-                      <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                        Instagram
-                      </Typography>
-                      <Button
-                        href={`https://instagram.com/${instagramUser}`}
-                        target="_blank"
-                        size="small"
-                        sx={{ ml: 'auto' }}
-                      >
-                        Ver perfil
-                      </Button>
-                    </Box>
-
-                    <Box sx={{ 
-                      width: '100%', 
-                      display: 'flex', 
+                <Grid item xs={12} md={6} lg={redesAtivas.facebook ? 4 : 6}>
+                  <Card 
+                    sx={{ 
+                      textAlign: 'center', 
+                      p: 4,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
                       justifyContent: 'center',
-                      '& > div': { width: '100% !important' }
-                    }}>
-                      <InstagramEmbed
-                        url={`https://www.instagram.com/${instagramUser}/`}
-                        width="100%"
-                        captioned={true}
-                      />
-                    </Box>
-                  </Paper>
+                      cursor: 'pointer',
+                      transition: 'transform 0.3s',
+                      '&:hover': {
+                        transform: 'translateY(-10px)',
+                        boxShadow: '0 10px 40px rgba(225,48,108,0.3)',
+                      }
+                    }}
+                    onClick={() => window.open(instagramUrl, '_blank')}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        bgcolor: '#E1306C',
+                        mb: 2,
+                      }}
+                    >
+                      <InstagramIcon sx={{ fontSize: 60 }} />
+                    </Avatar>
+                    <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+                      Instagram
+                    </Typography>
+                    <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                      @{instagramUser}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      startIcon={<InstagramIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(instagramUrl, '_blank');
+                      }}
+                      sx={{
+                        bgcolor: '#E1306C',
+                        '&:hover': { bgcolor: '#C13584' },
+                        mt: 2
+                      }}
+                    >
+                      Seguir no Instagram
+                    </Button>
+                  </Card>
                 </Grid>
               )}
 
-              {/* Facebook Feed - Só aparece se Facebook estiver configurado */}
+              {/* Facebook Card */}
               {redesAtivas.facebook && facebookUrl && (
-                <Grid item xs={12} md={redesAtivas.instagram ? 6 : 12}>
-                  <Paper elevation={3} sx={{ p: 3, height: '100%' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                      <FacebookIcon sx={{ fontSize: 40, color: '#4267B2', mr: 2 }} />
-                      <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                        Facebook
-                      </Typography>
-                      <Button
-                        href={facebookUrl}
-                        target="_blank"
-                        size="small"
-                        sx={{ ml: 'auto' }}
-                      >
-                        Ver página
-                      </Button>
-                    </Box>
-
-                    <Box sx={{ 
-                      width: '100%', 
-                      display: 'flex', 
+                <Grid item xs={12} md={6} lg={redesAtivas.instagram ? 4 : 6}>
+                  <Card 
+                    sx={{ 
+                      textAlign: 'center', 
+                      p: 4,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
                       justifyContent: 'center',
-                      '& > div': { width: '100% !important' }
-                    }}>
-                      <FacebookEmbed
-                        url={facebookUrl}
-                        width="100%"
-                      />
-                    </Box>
-                  </Paper>
+                      cursor: 'pointer',
+                      transition: 'transform 0.3s',
+                      '&:hover': {
+                        transform: 'translateY(-10px)',
+                        boxShadow: '0 10px 40px rgba(66,103,178,0.3)',
+                      }
+                    }}
+                    onClick={() => window.open(facebookUrl, '_blank')}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        bgcolor: '#4267B2',
+                        mb: 2,
+                      }}
+                    >
+                      <FacebookIcon sx={{ fontSize: 60 }} />
+                    </Avatar>
+                    <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+                      Facebook
+                    </Typography>
+                    <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                      {contato.facebook}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      startIcon={<FacebookIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(facebookUrl, '_blank');
+                      }}
+                      sx={{
+                        bgcolor: '#4267B2',
+                        '&:hover': { bgcolor: '#365899' },
+                        mt: 2
+                      }}
+                    >
+                      Curtir no Facebook
+                    </Button>
+                  </Card>
                 </Grid>
               )}
             </Grid>
@@ -763,7 +803,7 @@ function SiteSalao() {
                 
                 {redesAtivas.instagram && instagramUser && (
                   <IconButton 
-                    href={`https://instagram.com/${instagramUser}`} 
+                    href={instagramUrl} 
                     target="_blank" 
                     sx={{ color: '#E1306C' }}
                   >
