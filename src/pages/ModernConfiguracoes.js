@@ -51,6 +51,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { masks, MaskedInput } from '../utils/plugins';
+import { backupService } from '../services/backupService';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (
@@ -113,6 +114,18 @@ function ModernConfiguracoes() {
   useEffect(() => {
     carregarConfiguracoes();
   }, []);
+
+  // 🔥 Carregar último backup quando config estiver disponível
+  useEffect(() => {
+    const carregarUltimoBackup = async () => {
+      if (config) {
+        const ultimo = await backupService.buscarUltimoBackup();
+        setBackup(ultimo);
+      }
+    };
+    
+    carregarUltimoBackup();
+  }, [config]);
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -203,11 +216,6 @@ function ModernConfiguracoes() {
         }
       }
       
-      const backups = await firebaseService.getAll('backups').catch(() => []);
-      if (backups && backups.length > 0) {
-        setBackup(backups.sort((a, b) => new Date(b.dataBackup) - new Date(a.dataBackup))[0]);
-      }
-      
     } catch (error) {
       console.error('❌ Erro ao carregar configurações:', error);
       setError(error.message || 'Erro ao carregar configurações');
@@ -270,85 +278,38 @@ function ModernConfiguracoes() {
     handleSalaoChange('logo', null);
   };
 
+  // 🔥 Função de backup atualizada usando backupService
   const handleBackup = async () => {
     try {
-      // Buscar todos os dados do Firebase
-      const collections = [
-        'clientes',
-        'profissionais',
-        'servicos',
-        'agendamentos',
-        'atendimentos',
-        'comissoes',
-        'pagamentos',
-        'produtos',
-        'entradas',
-        'fornecedores',
-        'compras',
-        'usuarios',
-        'configuracoes',
-        'notificacoes',
-        'auditoria'
-      ];
-
-      const backupData = {
-        dataBackup: new Date().toISOString(),
-        versao: '2.0',
-        dados: {}
-      };
-
-      for (const collection of collections) {
-        const dados = await firebaseService.getAll(collection).catch(() => []);
-        backupData.dados[collection] = dados;
-      }
-
-      // Salvar backup no Firebase
-      await firebaseService.add('backups', backupData);
-      setBackup(backupData);
-
-      // Download do backup
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `backup_completo_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-
+      setSaving(true);
+      await backupService.criarBackup();
+      
+      // Atualizar último backup
+      const ultimoBackup = await backupService.buscarUltimoBackup();
+      setBackup(ultimoBackup);
+      
       mostrarSnackbar('Backup completo realizado com sucesso!');
     } catch (error) {
       console.error('❌ Erro no backup:', error);
       mostrarSnackbar('Erro ao realizar backup', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
+  // 🔥 Função de restauração atualizada usando backupService
   const handleRestore = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const backupData = JSON.parse(e.target.result);
-        
-        if (!backupData.dados) {
-          throw new Error('Arquivo de backup inválido');
-        }
-
-        // Restaurar cada coleção
-        for (const [collection, dados] of Object.entries(backupData.dados)) {
-          for (const item of dados) {
-            await firebaseService.add(collection, item);
-          }
-        }
-
-        await carregarConfiguracoes();
-        mostrarSnackbar('Backup restaurado com sucesso!');
-      } catch (error) {
-        console.error('❌ Erro ao restaurar:', error);
-        mostrarSnackbar('Erro ao restaurar backup', 'error');
-      }
-    };
-    reader.readAsText(file);
+    try {
+      await backupService.restaurarBackup(file);
+      await carregarConfiguracoes();
+      mostrarSnackbar('Backup restaurado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao restaurar:', error);
+      mostrarSnackbar('Erro ao restaurar backup', 'error');
+    }
     
     event.target.value = '';
   };
