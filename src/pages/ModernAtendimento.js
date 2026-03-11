@@ -57,6 +57,7 @@ import {
   AttachMoney as MoneyIcon,
   Inventory as InventoryIcon,
   RemoveShoppingCart as NoCostIcon,
+  CompareArrows as ConversionIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -160,7 +161,7 @@ function ModernAtendimento() {
   const calcularTotalProdutos = () => {
     return itensProduto.reduce((acc, item) => {
       if (item.semCobranca) return acc; // Não cobra se for sem cobrança
-      return acc + ((item.preco || 0) * (item.quantidade || 1));
+      return acc + ((item.preco || 0) * (item.quantidadeVenda || 1));
     }, 0);
   };
 
@@ -257,6 +258,20 @@ function ModernAtendimento() {
     return unidadeEncontrada?.simbolo || unidade;
   };
 
+  // 🔥 Função para calcular quantidade em estoque baseado na unidade de venda
+  const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
+    if (!produto) return 0;
+    
+    const estoqueEmUnidadeVenda = produto.quantidadeEstoque * (produto.fatorConversao || 1);
+    return Math.floor(estoqueEmUnidadeVenda);
+  };
+
+  // 🔥 Função para converter quantidade de venda para estoque
+  const converterParaEstoque = (produto, quantidadeVenda) => {
+    if (!produto) return 0;
+    return quantidadeVenda / (produto.fatorConversao || 1);
+  };
+
   // Adicionar serviço ao ARRAY itensServico
   const handleAdicionarServico = () => {
     if (!servicoSelecionado) {
@@ -283,7 +298,7 @@ function ModernAtendimento() {
     toast.success('Serviço adicionado!');
   };
 
-  // 🔥 Adicionar produto ao ARRAY itensProduto (com opção sem cobrança)
+  // 🔥 Adicionar produto ao ARRAY itensProduto (com unidades de medida)
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado) {
       toast.error('Selecione um produto');
@@ -295,11 +310,18 @@ function ModernAtendimento() {
       return;
     }
 
-    // Verificar estoque
-    if (produtoSelecionado.quantidadeEstoque < quantidadeProduto) {
-      toast.error('Quantidade indisponível em estoque');
+    // Calcular quantidade disponível na unidade de venda
+    const quantidadeDisponivel = calcularQuantidadeDisponivel(produtoSelecionado, quantidadeProduto);
+    
+    if (quantidadeProduto > quantidadeDisponivel) {
+      toast.error(
+        `Quantidade indisponível. Disponível: ${quantidadeDisponivel} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
+      );
       return;
     }
+
+    // Calcular quanto será baixado do estoque
+    const quantidadeEstoque = converterParaEstoque(produtoSelecionado, quantidadeProduto);
 
     // Verificar se o produto já foi adicionado
     const produtoExistente = itensProduto.find(item => item.id === produtoSelecionado.id);
@@ -310,7 +332,8 @@ function ModernAtendimento() {
         item.id === produtoSelecionado.id 
           ? { 
               ...item, 
-              quantidade: item.quantidade + quantidadeProduto,
+              quantidadeVenda: item.quantidadeVenda + quantidadeProduto,
+              quantidadeEstoque: item.quantidadeEstoque + quantidadeEstoque,
               semCobranca: item.semCobranca // Manter status de cobrança
             }
           : item
@@ -321,36 +344,49 @@ function ModernAtendimento() {
         id: produtoSelecionado.id,
         nome: produtoSelecionado.nome,
         preco: produtoSelecionado.precoVenda,
-        unidade: produtoSelecionado.unidade || 'un',
-        quantidade: quantidadeProduto,
-        semCobranca: itemSemCobranca, // 🔥 Flag para item sem cobrança
-        apenasBaixa: itemSemCobranca // 🔥 Flag para apenas dar baixa no estoque
+        unidadeEstoque: produtoSelecionado.unidadeEstoque,
+        unidadeVenda: produtoSelecionado.unidadeVenda,
+        fatorConversao: produtoSelecionado.fatorConversao || 1,
+        quantidadeVenda: quantidadeProduto,
+        quantidadeEstoque: quantidadeEstoque,
+        semCobranca: itemSemCobranca,
+        apenasBaixa: itemSemCobranca
       }]);
     }
 
     // Atualizar estoque (sempre dá baixa, independente de cobrança)
-    const novaQuantidade = produtoSelecionado.quantidadeEstoque - quantidadeProduto;
+    const novaQuantidadeEstoque = produtoSelecionado.quantidadeEstoque - quantidadeEstoque;
     firebaseService.update('produtos', produtoSelecionado.id, {
-      quantidadeEstoque: novaQuantidade,
+      quantidadeEstoque: novaQuantidadeEstoque,
       updatedAt: Timestamp.now()
     });
 
     // Registrar movimentação de estoque
-    registrarMovimentacaoEstoque(produtoSelecionado, quantidadeProduto, itemSemCobranca ? 'uso_sem_cobranca' : 'venda');
+    registrarMovimentacaoEstoque(
+      produtoSelecionado, 
+      quantidadeEstoque, 
+      produtoSelecionado.unidadeEstoque,
+      itemSemCobranca ? 'uso_sem_cobranca' : 'venda'
+    );
 
     setProdutoSelecionado(null);
     setQuantidadeProduto(1);
     setItemSemCobranca(false);
-    toast.success(itemSemCobranca ? 'Produto adicionado (sem cobrança)!' : 'Produto adicionado!');
+    toast.success(
+      itemSemCobranca 
+        ? `Produto adicionado (sem cobrança)! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}` 
+        : `Produto adicionado! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
+    );
   };
 
   // 🔥 Registrar movimentação de estoque
-  const registrarMovimentacaoEstoque = async (produto, quantidade, tipo) => {
+  const registrarMovimentacaoEstoque = async (produto, quantidade, unidade, tipo) => {
     try {
       const movimentacao = {
         produtoId: produto.id,
         produtoNome: produto.nome,
         quantidade: quantidade,
+        unidade: unidade,
         tipo: tipo,
         data: new Date().toISOString(),
         atendimentoId: id,
@@ -379,7 +415,7 @@ function ModernAtendimento() {
     // Devolver ao estoque
     if (itemRemovido) {
       firebaseService.getById('produtos', itemRemovido.id).then(produto => {
-        const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidade;
+        const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidadeEstoque;
         firebaseService.update('produtos', itemRemovido.id, {
           quantidadeEstoque: novaQuantidade,
           updatedAt: Timestamp.now()
@@ -388,7 +424,8 @@ function ModernAtendimento() {
         // Registrar devolução
         registrarMovimentacaoEstoque(
           produto, 
-          itemRemovido.quantidade, 
+          itemRemovido.quantidadeEstoque, 
+          itemRemovido.unidadeEstoque,
           'devolucao'
         );
       });
@@ -625,7 +662,9 @@ function ModernAtendimento() {
         const mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
           `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
           (produtosCobrados.length > 0 ? 
-            `🛍️ *Produtos:*\n${produtosCobrados.map(p => `• ${p.nome} (${p.quantidade}x): R$ ${((p.preco || 0) * (p.quantidade || 1)).toFixed(2)}`).join('\n')}\n\n` 
+            `🛍️ *Produtos:*\n${produtosCobrados.map(p => 
+              `• ${p.nome} (${p.quantidadeVenda} ${getUnidadeSimbolo(p.unidadeVenda)}): R$ ${((p.preco || 0) * (p.quantidadeVenda || 1)).toFixed(2)}`
+            ).join('\n')}\n\n` 
             : '') +
           `💰 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
           `💳 *Pago: R$ ${totalPago.toFixed(2)}*\n\n` +
@@ -809,7 +848,7 @@ function ModernAtendimento() {
                   {itensProduto.map((item, index) => (
                     <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2">
-                        {item.nome} x{item.quantidade} {getUnidadeSimbolo(item.unidade)}
+                        {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
                         {item.semCobranca && (
                           <Chip
                             label="Sem cobrança"
@@ -819,7 +858,7 @@ function ModernAtendimento() {
                         )}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}`}
+                        {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}`}
                       </Typography>
                     </Box>
                   ))}
@@ -1005,7 +1044,9 @@ function ModernAtendimento() {
                             <Autocomplete
                               options={produtosDisponiveis}
                               getOptionLabel={(option) => 
-                                `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} (Estoque: ${option.quantidadeEstoque} ${getUnidadeSimbolo(option.unidade)})`
+                                `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} ` +
+                                `(Estoque: ${option.quantidadeEstoque} ${getUnidadeSimbolo(option.unidadeEstoque)} ` +
+                                `= ${option.quantidadeEstoque * (option.fatorConversao || 1)} ${getUnidadeSimbolo(option.unidadeVenda)})`
                               }
                               value={produtoSelecionado}
                               onChange={(e, newValue) => setProdutoSelecionado(newValue)}
@@ -1021,8 +1062,8 @@ function ModernAtendimento() {
                             type="number"
                             label="Quantidade"
                             value={quantidadeProduto}
-                            onChange={(e) => setQuantidadeProduto(parseInt(e.target.value) || 1)}
-                            InputProps={{ inputProps: { min: 1 } }}
+                            onChange={(e) => setQuantidadeProduto(parseFloat(e.target.value) || 1)}
+                            InputProps={{ inputProps: { min: 0.01, step: 0.01 } }}
                             size="small"
                           />
                         </Grid>
@@ -1118,13 +1159,13 @@ function ModernAtendimento() {
                               {itensProduto.map((item, index) => (
                                 <TableRow key={index}>
                                   <TableCell>{item.nome}</TableCell>
-                                  <TableCell align="right">{item.quantidade}</TableCell>
-                                  <TableCell align="right">{getUnidadeSimbolo(item.unidade)}</TableCell>
+                                  <TableCell align="right">{item.quantidadeVenda}</TableCell>
+                                  <TableCell align="right">{getUnidadeSimbolo(item.unidadeVenda)}</TableCell>
                                   <TableCell align="right">
                                     {item.semCobranca ? 'Grátis' : `R$ ${(item.preco || 0).toFixed(2)}`}
                                   </TableCell>
                                   <TableCell align="right">
-                                    {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}`}
+                                    {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}`}
                                   </TableCell>
                                   <TableCell align="center">
                                     {item.semCobranca ? (
@@ -1362,8 +1403,10 @@ function ModernAtendimento() {
                             </Typography>
                             {itensProduto.filter(p => !p.semCobranca).map((item, idx) => (
                               <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
-                                <Typography variant="body2">R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</Typography>
+                                <Typography variant="body2">
+                                  {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
+                                </Typography>
+                                <Typography variant="body2">R$ {((item.preco || 0) * (item.quantidadeVenda || 1)).toFixed(2)}</Typography>
                               </Box>
                             ))}
                           </Grid>
@@ -1376,7 +1419,9 @@ function ModernAtendimento() {
                             </Typography>
                             {itensProduto.filter(p => p.semCobranca).map((item, idx) => (
                               <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
+                                <Typography variant="body2">
+                                  {item.nome} {item.quantidadeVenda} {getUnidadeSimbolo(item.unidadeVenda)}
+                                </Typography>
                                 <Typography variant="body2" sx={{ color: '#ff9800' }}>Grátis</Typography>
                               </Box>
                             ))}
