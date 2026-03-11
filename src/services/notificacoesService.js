@@ -130,71 +130,294 @@ export const notificacoesService = {
     }
   },
 
-  // Métodos helpers para criar notificações específicas
+  // 🔥 NOTIFICAÇÃO DE AGENDAMENTO COM TODOS OS DADOS
   notificarAgendamento: async (agendamento, usuarioId) => {
+    // Buscar dados completos
+    const [cliente, profissional, servico] = await Promise.all([
+      firebaseService.getById('clientes', agendamento.clienteId).catch(() => null),
+      firebaseService.getById('profissionais', agendamento.profissionalId).catch(() => null),
+      firebaseService.getById('servicos', agendamento.servicoId).catch(() => null)
+    ]);
+
+    const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
       tipo: 'agendamento',
-      titulo: 'Novo Agendamento',
-      mensagem: `Agendamento para ${new Date(agendamento.data).toLocaleDateString('pt-BR')} às ${agendamento.horario}`,
+      titulo: '📅 Novo Agendamento',
+      mensagem: `${cliente?.nome || 'Cliente'} agendou ${servico?.nome || 'serviço'} com ${profissional?.nome || 'profissional'} para ${dataFormatada} às ${agendamento.horario}`,
+      detalhes: {
+        // Dados do agendamento
+        id: agendamento.id,
+        data: agendamento.data,
+        dataFormatada,
+        horario: agendamento.horario,
+        status: agendamento.status,
+        observacoes: agendamento.observacoes || 'Sem observações',
+        origem: agendamento.origem || 'sistema',
+        
+        // Dados do cliente
+        clienteId: agendamento.clienteId,
+        clienteNome: cliente?.nome || 'Não informado',
+        clienteEmail: cliente?.email || 'Não informado',
+        clienteTelefone: cliente?.telefone || 'Não informado',
+        
+        // Dados do profissional
+        profissionalId: agendamento.profissionalId,
+        profissionalNome: profissional?.nome || 'Não informado',
+        profissionalEspecialidade: profissional?.especialidade || 'Não informada',
+        
+        // Dados do serviço
+        servicoId: agendamento.servicoId,
+        servicoNome: servico?.nome || 'Não informado',
+        servicoPreco: servico?.preco || 0,
+        servicoDuracao: servico?.duracao || 0,
+        
+        // Metadados
+        criadoEm: agora,
+        link: `/agendamentos/${agendamento.id}`
+      },
       link: `/agendamentos/${agendamento.id}`,
       icone: 'event'
     });
   },
 
+  // 🔥 NOTIFICAÇÃO DE AGENDAMENTO DO SITE
+  notificarAgendamentoSite: async (agendamento, usuarioId) => {
+    const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+    const agora = new Date().toLocaleString('pt-BR');
+
+    return notificacoesService.criar({
+      usuarioId,
+      tipo: 'agendamento',
+      titulo: '🌐 Novo Agendamento pelo Site',
+      mensagem: `${agendamento.clienteNome} agendou ${agendamento.servicoNome} com ${agendamento.profissionalNome} para ${dataFormatada} às ${agendamento.horario}`,
+      detalhes: {
+        // Dados do agendamento
+        id: agendamento.id,
+        data: agendamento.data,
+        dataFormatada,
+        horario: agendamento.horario,
+        status: agendamento.status,
+        observacoes: agendamento.observacoes || 'Sem observações',
+        origem: 'site',
+        
+        // Dados do cliente
+        clienteNome: agendamento.clienteNome,
+        clienteEmail: agendamento.clienteEmail,
+        clienteTelefone: agendamento.clienteTelefone,
+        
+        // Dados do profissional
+        profissionalNome: agendamento.profissionalNome,
+        
+        // Dados do serviço
+        servicoNome: agendamento.servicoNome,
+        servicoPreco: agendamento.valor || 0,
+        
+        // Metadados
+        criadoEm: agora,
+        link: `/agendamentos/${agendamento.id}`
+      },
+      link: `/agendamentos/${agendamento.id}`,
+      icone: 'public'
+    });
+  },
+
+  // 🔥 NOTIFICAÇÃO DE LEMBRETE
   notificarLembrete: async (agendamento, usuarioId) => {
+    const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
       tipo: 'lembrete',
-      titulo: 'Lembrete de Agendamento',
+      titulo: '⏰ Lembrete de Agendamento',
       mensagem: `Você tem um agendamento amanhã às ${agendamento.horario}`,
+      detalhes: {
+        id: agendamento.id,
+        data: agendamento.data,
+        dataFormatada,
+        horario: agendamento.horario,
+        clienteNome: agendamento.clienteNome,
+        servicoNome: agendamento.servicoNome,
+        profissionalNome: agendamento.profissionalNome,
+        criadoEm: agora,
+        link: `/agendamentos/${agendamento.id}`
+      },
       link: `/agendamentos/${agendamento.id}`,
       icone: 'alarm'
     });
   },
 
+  // 🔥 NOTIFICAÇÃO DE NOVO CLIENTE
   notificarNovoCliente: async (cliente, usuarioId) => {
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
       tipo: 'cliente',
-      titulo: 'Novo Cliente',
+      titulo: '👤 Novo Cliente Cadastrado',
       mensagem: `${cliente.nome} se cadastrou no sistema`,
+      detalhes: {
+        id: cliente.id,
+        nome: cliente.nome,
+        email: cliente.email || 'Não informado',
+        telefone: cliente.telefone || 'Não informado',
+        celular: cliente.celular || 'Não informado',
+        cpf: cliente.cpf || 'Não informado',
+        dataNascimento: cliente.dataNascimento || 'Não informada',
+        status: cliente.status || 'Regular',
+        dataCadastro: cliente.dataCadastro,
+        criadoEm: agora,
+        link: `/clientes/${cliente.id}`
+      },
       link: `/clientes/${cliente.id}`,
       icone: 'person'
     });
   },
 
+  // 🔥 NOTIFICAÇÃO DE ESTOQUE BAIXO
   notificarEstoqueBaixo: async (produto, usuarioId) => {
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
       tipo: 'estoque',
-      titulo: 'Estoque Baixo',
-      mensagem: `${produto.nome} está com estoque baixo (${produto.quantidadeEstoque} unidades)`,
-      link: `/estoque/${produto.id}`,
+      titulo: '⚠️ Alerta de Estoque Baixo',
+      mensagem: `${produto.nome} - Estoque: ${produto.quantidadeEstoque} unidades (Mínimo: ${produto.estoqueMinimo || 5})`,
+      detalhes: {
+        id: produto.id,
+        nome: produto.nome,
+        codigo: produto.codigo || 'Não informado',
+        categoria: produto.categoria || 'Não informada',
+        quantidadeEstoque: produto.quantidadeEstoque,
+        estoqueMinimo: produto.estoqueMinimo || 5,
+        precoCusto: produto.precoCusto,
+        precoVenda: produto.precoVenda,
+        localizacao: produto.localizacao || 'Não informada',
+        fornecedor: produto.fornecedor || 'Não informado',
+        criadoEm: agora,
+        link: `/estoque`
+      },
+      link: `/estoque`,
       icone: 'warning'
     });
   },
 
+  // 🔥 NOTIFICAÇÃO DE PAGAMENTO
   notificarPagamento: async (pagamento, usuarioId) => {
+    const [cliente, atendimento] = await Promise.all([
+      firebaseService.getById('clientes', pagamento.clienteId).catch(() => null),
+      firebaseService.getById('atendimentos', pagamento.atendimentoId).catch(() => null)
+    ]);
+
+    const formasPagamento = {
+      dinheiro: '💵 Dinheiro',
+      cartao_credito: '💳 Cartão de Crédito',
+      cartao_debito: '💳 Cartão de Débito',
+      pix: '📱 PIX',
+      boleto: '📄 Boleto',
+      transferencia: '🏦 Transferência'
+    };
+
+    const dataFormatada = new Date(pagamento.data).toLocaleDateString('pt-BR');
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
       tipo: 'pagamento',
-      titulo: 'Pagamento Recebido',
-      mensagem: `Pagamento de R$ ${pagamento.valor.toFixed(2)} recebido`,
-      link: `/pagamentos/${pagamento.id}`,
+      titulo: '💰 Novo Pagamento Recebido',
+      mensagem: `${cliente?.nome || 'Cliente'} - R$ ${pagamento.valor?.toFixed(2)} (${formasPagamento[pagamento.formaPagamento] || pagamento.formaPagamento})`,
+      detalhes: {
+        id: pagamento.id,
+        atendimentoId: pagamento.atendimentoId,
+        clienteNome: cliente?.nome || 'Não informado',
+        clienteId: pagamento.clienteId,
+        valor: pagamento.valor,
+        formaPagamento: pagamento.formaPagamento,
+        formaPagamentoLabel: formasPagamento[pagamento.formaPagamento] || pagamento.formaPagamento,
+        parcelas: pagamento.parcelas || 1,
+        status: pagamento.status,
+        data: pagamento.data,
+        dataFormatada,
+        observacoes: pagamento.observacoes || 'Sem observações',
+        criadoEm: agora,
+        link: `/financeiro/receber`
+      },
+      link: `/financeiro/receber`,
       icone: 'payment'
     });
   },
 
-  notificarAgendamentoSite: async (agendamento, usuarioId) => {
+  // 🔥 NOTIFICAÇÃO DE ATENDIMENTO INICIADO
+  notificarAtendimentoIniciado: async (atendimento, usuarioId) => {
+    const [cliente, profissional, servico] = await Promise.all([
+      firebaseService.getById('clientes', atendimento.clienteId).catch(() => null),
+      firebaseService.getById('profissionais', atendimento.profissionalId).catch(() => null),
+      firebaseService.getById('servicos', atendimento.servicoId).catch(() => null)
+    ]);
+
+    const agora = new Date().toLocaleString('pt-BR');
+
     return notificacoesService.criar({
       usuarioId,
-      tipo: 'agendamento',
-      titulo: 'Novo Agendamento pelo Site',
-      mensagem: `Cliente ${agendamento.clienteNome} agendou ${agendamento.servicoNome} para ${new Date(agendamento.data).toLocaleDateString('pt-BR')} às ${agendamento.horario}`,
-      link: `/agendamentos/${agendamento.id}`,
-      icone: 'event',
-      origem: 'site'
+      tipo: 'atendimento',
+      titulo: '▶️ Atendimento Iniciado',
+      mensagem: `${cliente?.nome || 'Cliente'} - ${servico?.nome || 'Serviço'} com ${profissional?.nome || 'Profissional'}`,
+      detalhes: {
+        id: atendimento.id,
+        agendamentoId: atendimento.agendamentoId,
+        clienteNome: cliente?.nome || 'Não informado',
+        profissionalNome: profissional?.nome || 'Não informado',
+        servicoNome: servico?.nome || 'Não informado',
+        servicoPreco: servico?.preco || 0,
+        data: atendimento.data,
+        horaInicio: atendimento.horaInicio,
+        status: atendimento.status,
+        criadoEm: agora,
+        link: `/atendimento/${atendimento.id}`
+      },
+      link: `/atendimento/${atendimento.id}`,
+      icone: 'play'
+    });
+  },
+
+  // 🔥 NOTIFICAÇÃO DE ATENDIMENTO FINALIZADO
+  notificarAtendimentoFinalizado: async (atendimento, usuarioId) => {
+    const [cliente, profissional] = await Promise.all([
+      firebaseService.getById('clientes', atendimento.clienteId).catch(() => null),
+      firebaseService.getById('profissionais', atendimento.profissionalId).catch(() => null)
+    ]);
+
+    const agora = new Date().toLocaleString('pt-BR');
+    const totalServicos = atendimento.itensServico?.reduce((acc, item) => acc + (item.preco || 0), 0) || 0;
+    const totalProdutos = atendimento.itensProduto?.reduce((acc, item) => acc + ((item.preco || 0) * (item.quantidade || 1)), 0) || 0;
+
+    return notificacoesService.criar({
+      usuarioId,
+      tipo: 'atendimento',
+      titulo: '✅ Atendimento Finalizado',
+      mensagem: `${cliente?.nome || 'Cliente'} - Total: R$ ${atendimento.valorTotal?.toFixed(2)}`,
+      detalhes: {
+        id: atendimento.id,
+        agendamentoId: atendimento.agendamentoId,
+        clienteNome: cliente?.nome || 'Não informado',
+        profissionalNome: profissional?.nome || 'Não informado',
+        data: atendimento.data,
+        horaInicio: atendimento.horaInicio,
+        horaFim: atendimento.horaFim,
+        totalServicos: totalServicos,
+        totalProdutos: totalProdutos,
+        valorTotal: atendimento.valorTotal || 0,
+        servicos: atendimento.itensServico || [],
+        produtos: atendimento.itensProduto || [],
+        observacoes: atendimento.observacoes || 'Sem observações',
+        criadoEm: agora,
+        link: `/atendimento/${atendimento.id}`
+      },
+      link: `/atendimento/${atendimento.id}`,
+      icone: 'check'
     });
   }
 };
