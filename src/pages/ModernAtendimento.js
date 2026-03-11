@@ -1,3 +1,4 @@
+// src/pages/ModernAtendimento.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -38,6 +39,7 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
+  Checkbox,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -53,12 +55,36 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   AttachMoney as MoneyIcon,
+  Inventory as InventoryIcon,
+  RemoveShoppingCart as NoCostIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
+
+// 🔥 Lista de unidades de medida
+const UNIDADES_MEDIDA = [
+  { value: 'un', label: 'Unidade', simbolo: 'un' },
+  { value: 'pç', label: 'Peça', simbolo: 'pç' },
+  { value: 'cx', label: 'Caixa', simbolo: 'cx' },
+  { value: 'pct', label: 'Pacote', simbolo: 'pct' },
+  { value: 'kit', label: 'Kit', simbolo: 'kit' },
+  { value: 'par', label: 'Par', simbolo: 'par' },
+  { value: 'dz', label: 'Dúzia', simbolo: 'dz' },
+  { value: 'kg', label: 'Quilograma', simbolo: 'kg' },
+  { value: 'g', label: 'Grama', simbolo: 'g' },
+  { value: 'mg', label: 'Miligrama', simbolo: 'mg' },
+  { value: 'L', label: 'Litro', simbolo: 'L' },
+  { value: 'ml', label: 'Mililitro', simbolo: 'ml' },
+  { value: 'm', label: 'Metro', simbolo: 'm' },
+  { value: 'cm', label: 'Centímetro', simbolo: 'cm' },
+  { value: 'mm', label: 'Milímetro', simbolo: 'mm' },
+  { value: 'm²', label: 'Metro Quadrado', simbolo: 'm²' },
+  { value: 'fr', label: 'Frasco', simbolo: 'fr' },
+  { value: 'tb', label: 'Tablete', simbolo: 'tb' },
+];
 
 const steps = ['Confirmar Atendimento', 'Adicionar Itens', 'Registrar Pagamentos', 'Finalizar'];
 
@@ -81,6 +107,9 @@ function ModernAtendimento() {
   const [servicoSelecionado, setServicoSelecionado] = useState(null);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidadeProduto, setQuantidadeProduto] = useState(1);
+  
+  // 🔥 NOVO: controle para item sem cobrança
+  const [itemSemCobranca, setItemSemCobranca] = useState(false);
   
   // Pagamentos - ARRAY
   const [pagamentos, setPagamentos] = useState([]);
@@ -127,9 +156,12 @@ function ModernAtendimento() {
     return itensServico.reduce((acc, item) => acc + (item.preco || 0), 0);
   };
 
-  // Calcular valor total dos produtos
+  // Calcular valor total dos produtos (considerando itens sem cobrança)
   const calcularTotalProdutos = () => {
-    return itensProduto.reduce((acc, item) => acc + ((item.preco || 0) * (item.quantidade || 1)), 0);
+    return itensProduto.reduce((acc, item) => {
+      if (item.semCobranca) return acc; // Não cobra se for sem cobrança
+      return acc + ((item.preco || 0) * (item.quantidade || 1));
+    }, 0);
   };
 
   // Calcular valor total do atendimento
@@ -219,6 +251,12 @@ function ModernAtendimento() {
     }
   };
 
+  // 🔥 Função para obter o símbolo da unidade
+  const getUnidadeSimbolo = (unidade) => {
+    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
+    return unidadeEncontrada?.simbolo || unidade;
+  };
+
   // Adicionar serviço ao ARRAY itensServico
   const handleAdicionarServico = () => {
     if (!servicoSelecionado) {
@@ -245,7 +283,7 @@ function ModernAtendimento() {
     toast.success('Serviço adicionado!');
   };
 
-  // Adicionar produto ao ARRAY itensProduto
+  // 🔥 Adicionar produto ao ARRAY itensProduto (com opção sem cobrança)
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado) {
       toast.error('Selecione um produto');
@@ -270,7 +308,11 @@ function ModernAtendimento() {
       // Atualizar quantidade no array
       setItensProduto(itensProduto.map(item => 
         item.id === produtoSelecionado.id 
-          ? { ...item, quantidade: item.quantidade + quantidadeProduto }
+          ? { 
+              ...item, 
+              quantidade: item.quantidade + quantidadeProduto,
+              semCobranca: item.semCobranca // Manter status de cobrança
+            }
           : item
       ));
     } else {
@@ -279,20 +321,45 @@ function ModernAtendimento() {
         id: produtoSelecionado.id,
         nome: produtoSelecionado.nome,
         preco: produtoSelecionado.precoVenda,
-        quantidade: quantidadeProduto
+        unidade: produtoSelecionado.unidade || 'un',
+        quantidade: quantidadeProduto,
+        semCobranca: itemSemCobranca, // 🔥 Flag para item sem cobrança
+        apenasBaixa: itemSemCobranca // 🔥 Flag para apenas dar baixa no estoque
       }]);
     }
 
-    // Atualizar estoque
+    // Atualizar estoque (sempre dá baixa, independente de cobrança)
     const novaQuantidade = produtoSelecionado.quantidadeEstoque - quantidadeProduto;
     firebaseService.update('produtos', produtoSelecionado.id, {
       quantidadeEstoque: novaQuantidade,
       updatedAt: Timestamp.now()
     });
 
+    // Registrar movimentação de estoque
+    registrarMovimentacaoEstoque(produtoSelecionado, quantidadeProduto, itemSemCobranca ? 'uso_sem_cobranca' : 'venda');
+
     setProdutoSelecionado(null);
     setQuantidadeProduto(1);
-    toast.success('Produto adicionado!');
+    setItemSemCobranca(false);
+    toast.success(itemSemCobranca ? 'Produto adicionado (sem cobrança)!' : 'Produto adicionado!');
+  };
+
+  // 🔥 Registrar movimentação de estoque
+  const registrarMovimentacaoEstoque = async (produto, quantidade, tipo) => {
+    try {
+      const movimentacao = {
+        produtoId: produto.id,
+        produtoNome: produto.nome,
+        quantidade: quantidade,
+        tipo: tipo,
+        data: new Date().toISOString(),
+        atendimentoId: id,
+        usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema'
+      };
+      await firebaseService.add('movimentacoes_estoque', movimentacao);
+    } catch (error) {
+      console.error('Erro ao registrar movimentação:', error);
+    }
   };
 
   // Remover serviço do ARRAY itensServico
@@ -305,17 +372,25 @@ function ModernAtendimento() {
     setItensServico(novosItens);
   };
 
-  // Remover produto do ARRAY itensProduto
+  // 🔥 Remover produto do ARRAY itensProduto (com devolução ao estoque)
   const handleRemoverProduto = (index) => {
     const itemRemovido = itensProduto[index];
     
     // Devolver ao estoque
     if (itemRemovido) {
       firebaseService.getById('produtos', itemRemovido.id).then(produto => {
+        const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidade;
         firebaseService.update('produtos', itemRemovido.id, {
-          quantidadeEstoque: (produto.quantidadeEstoque || 0) + itemRemovido.quantidade,
+          quantidadeEstoque: novaQuantidade,
           updatedAt: Timestamp.now()
         });
+        
+        // Registrar devolução
+        registrarMovimentacaoEstoque(
+          produto, 
+          itemRemovido.quantidade, 
+          'devolucao'
+        );
       });
     }
 
@@ -443,98 +518,98 @@ function ModernAtendimento() {
     setPagamentoEditando(null);
   };
 
-const handleFinalizarAtendimento = async () => {
-  try {
-    setSaving(true);
-    
-    const valorTotal = calcularValorTotal();
-    const totalPago = calcularTotalPago();
-    const saldoRestante = valorTotal - totalPago;
-    const MARGEM_ERRO = 0.01;
+  const handleFinalizarAtendimento = async () => {
+    try {
+      setSaving(true);
+      
+      const valorTotal = calcularValorTotal();
+      const totalPago = calcularTotalPago();
+      const saldoRestante = valorTotal - totalPago;
+      const MARGEM_ERRO = 0.01;
 
-    if (Math.abs(saldoRestante) > MARGEM_ERRO) {
-      toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
-      return;
+      if (Math.abs(saldoRestante) > MARGEM_ERRO) {
+        toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
+        return;
+      }
+
+      console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
+      console.log('📌 Atendimento ID:', id);
+      console.log('📌 Valor total:', valorTotal);
+      console.log('📌 Itens serviço:', itensServico);
+      console.log('📌 Itens produto:', itensProduto);
+
+      // 1. Atualizar o atendimento no Firebase
+      console.log('📌 Atualizando atendimento...');
+      await firebaseService.update('atendimentos', id, {
+        status: 'finalizado',
+        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        valorTotal,
+        itensServico,
+        itensProduto,
+        updatedAt: Timestamp.now()
+      });
+      console.log('✅ Atendimento atualizado');
+
+      // 2. Buscar dados para comissão
+      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
+      const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
+      
+      console.log('📌 Profissional:', profissional);
+      console.log('📌 Serviço principal:', servicoPrincipal);
+
+      // 3. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
+      const percentual = profissional?.comissao || 40;
+      const valorComissao = (calcularTotalServicos() * percentual) / 100;
+
+      console.log('📊 Cálculo da comissão:');
+      console.log('   - Percentual:', percentual);
+      console.log('   - Valor serviços:', calcularTotalServicos());
+      console.log('   - Comissão:', valorComissao);
+
+      const comissaoData = {
+        atendimentoId: id,
+        profissionalId: atendimento.profissionalId,
+        profissionalNome: profissional?.nome || atendimento.profissionalNome,
+        servicoId: servicoPrincipal?.id || atendimento.servicoId,
+        servicoNome: servicoPrincipal?.nome || atendimento.servicoNome || 'Serviço',
+        valorAtendimento: calcularTotalServicos(),
+        percentual,
+        valor: valorComissao,
+        data: atendimento.data,
+        status: 'pendente',
+        dataRegistro: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      console.log('📌 Salvando comissão no Firebase...');
+      const comissaoId = await firebaseService.add('comissoes', comissaoData);
+      console.log('✅ Comissão registrada com ID:', comissaoId);
+
+      // 4. Atualizar cliente
+      console.log('📌 Atualizando cliente...');
+      await firebaseService.update('clientes', cliente.id, {
+        ultimaVisita: new Date().toISOString().split('T')[0],
+        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(), // Só serviços entram no total gasto
+        updatedAt: Timestamp.now()
+      });
+
+      setActiveStep(3);
+      toast.success('Atendimento finalizado com sucesso!');
+      
+      // 5. Verificar se a comissão foi criada
+      setTimeout(async () => {
+        const comissoes = await firebaseService.getAll('comissoes');
+        const minhaComissao = comissoes.find(c => c.atendimentoId === id);
+        console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('❌ Erro ao finalizar atendimento:', error);
+      toast.error('Erro ao finalizar atendimento');
+    } finally {
+      setSaving(false);
     }
-
-    console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
-    console.log('📌 Atendimento ID:', id);
-    console.log('📌 Valor total:', valorTotal);
-    console.log('📌 Itens serviço:', itensServico);
-    console.log('📌 Itens produto:', itensProduto);
-
-    // 1. Atualizar o atendimento no Firebase
-    console.log('📌 Atualizando atendimento...');
-    await firebaseService.update('atendimentos', id, {
-      status: 'finalizado',
-      horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      valorTotal,
-      itensServico,
-      itensProduto,
-      updatedAt: Timestamp.now()
-    });
-    console.log('✅ Atendimento atualizado');
-
-    // 2. Buscar dados para comissão
-    const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
-    const servico = await firebaseService.getById('servicos', atendimento.servicoId);
-    
-    console.log('📌 Profissional:', profissional);
-    console.log('📌 Serviço:', servico);
-
-    // 3. Calcular e registrar comissão
-    const percentual = profissional?.comissao || servico?.comissaoProfissional || 40;
-    const valorComissao = (valorTotal * percentual) / 100;
-
-    console.log('📊 Cálculo da comissão:');
-    console.log('   - Percentual:', percentual);
-    console.log('   - Valor total:', valorTotal);
-    console.log('   - Comissão:', valorComissao);
-
-    const comissaoData = {
-      atendimentoId: id,
-      profissionalId: atendimento.profissionalId,
-      profissionalNome: profissional?.nome || atendimento.profissionalNome,
-      servicoId: atendimento.servicoId,
-      servicoNome: servico?.nome || atendimento.servicoNome,
-      valorAtendimento: valorTotal,
-      percentual,
-      valor: valorComissao,
-      data: atendimento.data,
-      status: 'pendente',
-      dataRegistro: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    console.log('📌 Salvando comissão no Firebase...');
-    const comissaoId = await firebaseService.add('comissoes', comissaoData);
-    console.log('✅ Comissão registrada com ID:', comissaoId);
-
-    // 4. Atualizar cliente
-    console.log('📌 Atualizando cliente...');
-    await firebaseService.update('clientes', cliente.id, {
-      ultimaVisita: new Date().toISOString().split('T')[0],
-      totalGasto: (cliente.totalGasto || 0) + valorTotal,
-      updatedAt: Timestamp.now()
-    });
-
-    setActiveStep(3);
-    toast.success('Atendimento finalizado com sucesso!');
-    
-    // 5. Verificar se a comissão foi criada
-    setTimeout(async () => {
-      const comissoes = await firebaseService.getAll('comissoes');
-      const minhaComissao = comissoes.find(c => c.atendimentoId === id);
-      console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
-    }, 2000);
-    
-  } catch (error) {
-    console.error('❌ Erro ao finalizar atendimento:', error);
-    toast.error('Erro ao finalizar atendimento');
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handleEnviarComprovante = async (metodo) => {
     try {
@@ -543,9 +618,15 @@ const handleFinalizarAtendimento = async () => {
       
       if (metodo === 'whatsapp') {
         const numero = cliente?.telefone?.replace(/\D/g, '') || '';
+        
+        // Filtrar produtos sem cobrança para não aparecer no comprovante de pagamento
+        const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
+        
         const mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
           `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
-          `🛍️ *Produtos:*\n${itensProduto.map(p => `• ${p.nome} (${p.quantidade}x): R$ ${((p.preco || 0) * (p.quantidade || 1)).toFixed(2)}`).join('\n')}\n\n` +
+          (produtosCobrados.length > 0 ? 
+            `🛍️ *Produtos:*\n${produtosCobrados.map(p => `• ${p.nome} (${p.quantidade}x): R$ ${((p.preco || 0) * (p.quantidade || 1)).toFixed(2)}`).join('\n')}\n\n` 
+            : '') +
           `💰 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
           `💳 *Pago: R$ ${totalPago.toFixed(2)}*\n\n` +
           `Obrigado pela preferência!`;
@@ -728,10 +809,17 @@ const handleFinalizarAtendimento = async () => {
                   {itensProduto.map((item, index) => (
                     <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2">
-                        {item.nome} x{item.quantidade}
+                        {item.nome} x{item.quantidade} {getUnidadeSimbolo(item.unidade)}
+                        {item.semCobranca && (
+                          <Chip
+                            label="Sem cobrança"
+                            size="small"
+                            sx={{ ml: 1, bgcolor: '#ff9800', color: 'white', height: 20 }}
+                          />
+                        )}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}
+                        {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}`}
                       </Typography>
                     </Box>
                   ))}
@@ -912,11 +1000,13 @@ const handleFinalizarAtendimento = async () => {
                         Adicionar Produto
                       </Typography>
                       <Grid container spacing={2}>
-                        <Grid item xs={12} md={6}>
+                        <Grid item xs={12} md={4}>
                           <FormControl fullWidth>
                             <Autocomplete
                               options={produtosDisponiveis}
-                              getOptionLabel={(option) => `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} (Estoque: ${option.quantidadeEstoque})`}
+                              getOptionLabel={(option) => 
+                                `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} (Estoque: ${option.quantidadeEstoque} ${getUnidadeSimbolo(option.unidade)})`
+                              }
                               value={produtoSelecionado}
                               onChange={(e, newValue) => setProdutoSelecionado(newValue)}
                               renderInput={(params) => (
@@ -925,7 +1015,7 @@ const handleFinalizarAtendimento = async () => {
                             />
                           </FormControl>
                         </Grid>
-                        <Grid item xs={12} md={3}>
+                        <Grid item xs={12} md={2}>
                           <TextField
                             fullWidth
                             type="number"
@@ -934,6 +1024,19 @@ const handleFinalizarAtendimento = async () => {
                             onChange={(e) => setQuantidadeProduto(parseInt(e.target.value) || 1)}
                             InputProps={{ inputProps: { min: 1 } }}
                             size="small"
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={3}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={itemSemCobranca}
+                                onChange={(e) => setItemSemCobranca(e.target.checked)}
+                                icon={<InventoryIcon />}
+                                checkedIcon={<NoCostIcon />}
+                              />
+                            }
+                            label="Sem cobrança (apenas baixa)"
                           />
                         </Grid>
                         <Grid item xs={12} md={3}>
@@ -1004,8 +1107,10 @@ const handleFinalizarAtendimento = async () => {
                               <TableRow>
                                 <TableCell>Produto</TableCell>
                                 <TableCell align="right">Quantidade</TableCell>
+                                <TableCell align="right">Unidade</TableCell>
                                 <TableCell align="right">Preço Unit.</TableCell>
                                 <TableCell align="right">Total</TableCell>
+                                <TableCell align="center">Status</TableCell>
                                 <TableCell align="center">Ações</TableCell>
                               </TableRow>
                             </TableHead>
@@ -1014,8 +1119,28 @@ const handleFinalizarAtendimento = async () => {
                                 <TableRow key={index}>
                                   <TableCell>{item.nome}</TableCell>
                                   <TableCell align="right">{item.quantidade}</TableCell>
-                                  <TableCell align="right">R$ {(item.preco || 0).toFixed(2)}</TableCell>
-                                  <TableCell align="right">R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</TableCell>
+                                  <TableCell align="right">{getUnidadeSimbolo(item.unidade)}</TableCell>
+                                  <TableCell align="right">
+                                    {item.semCobranca ? 'Grátis' : `R$ ${(item.preco || 0).toFixed(2)}`}
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}`}
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    {item.semCobranca ? (
+                                      <Chip
+                                        label="Sem cobrança"
+                                        size="small"
+                                        sx={{ bgcolor: '#ff9800', color: 'white', height: 20 }}
+                                      />
+                                    ) : (
+                                      <Chip
+                                        label="Cobrado"
+                                        size="small"
+                                        sx={{ bgcolor: '#4caf50', color: 'white', height: 20 }}
+                                      />
+                                    )}
+                                  </TableCell>
                                   <TableCell align="center">
                                     <IconButton size="small" onClick={() => handleRemoverProduto(index)}>
                                       <DeleteIcon fontSize="small" />
@@ -1032,7 +1157,12 @@ const handleFinalizarAtendimento = async () => {
                     {/* Total */}
                     <Paper variant="outlined" sx={{ p: 3, bgcolor: '#f3e5f5' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="h6">Total:</Typography>
+                        <Box>
+                          <Typography variant="h6">Total a pagar:</Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            *Itens marcados como "sem cobrança" não entram no total
+                          </Typography>
+                        </Box>
                         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
                           R$ {valorTotal.toFixed(2)}
                         </Typography>
@@ -1143,7 +1273,7 @@ const handleFinalizarAtendimento = async () => {
                         variant="contained"
                         onClick={handleFinalizarAtendimento}
                         startIcon={<CheckIcon />}
-                        disabled={saving || Math.abs(calcularSaldoRestante()) > 0.01} // 🔥 CORREÇÃO: Usar Math.abs
+                        disabled={saving || Math.abs(calcularSaldoRestante()) > 0.01}
                         sx={{
                           background: Math.abs(calcularSaldoRestante()) <= 0.01 
                             ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' 
@@ -1225,15 +1355,29 @@ const handleFinalizarAtendimento = async () => {
                           ))}
                         </Grid>
 
-                        {itensProduto.length > 0 && (
+                        {itensProduto.filter(p => !p.semCobranca).length > 0 && (
                           <Grid item xs={12}>
                             <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                              Produtos:
+                              Produtos (cobrados):
                             </Typography>
-                            {itensProduto.map((item, idx) => (
+                            {itensProduto.filter(p => !p.semCobranca).map((item, idx) => (
                               <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                 <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
                                 <Typography variant="body2">R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}</Typography>
+                              </Box>
+                            ))}
+                          </Grid>
+                        )}
+
+                        {itensProduto.filter(p => p.semCobranca).length > 0 && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                              Produtos (cortesia):
+                            </Typography>
+                            {itensProduto.filter(p => p.semCobranca).map((item, idx) => (
+                              <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
+                                <Typography variant="body2" sx={{ color: '#ff9800' }}>Grátis</Typography>
                               </Box>
                             ))}
                           </Grid>
