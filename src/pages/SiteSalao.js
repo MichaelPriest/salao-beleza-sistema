@@ -56,6 +56,8 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
+import { firebaseService } from '../services/firebase';
+import { notificacoesService } from '../services/notificacoesService';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -231,7 +233,8 @@ function SiteSalao() {
         return;
       }
 
-      await siteService.criarAgendamento({
+      // Criar agendamento
+      const agendamentoCriado = await siteService.criarAgendamento({
         clienteNome: agendamentoData.clienteNome,
         clienteEmail: agendamentoData.clienteEmail,
         clienteTelefone: agendamentoData.clienteTelefone,
@@ -244,7 +247,23 @@ function SiteSalao() {
         horario: agendamentoData.horario,
         observacoes: agendamentoData.observacoes
       });
-      
+
+      // 🔥 NOTIFICAR ADMINISTRADORES SOBRE NOVO AGENDAMENTO
+      try {
+        const usuarios = await firebaseService.getAll('usuarios');
+        const admins = usuarios.filter(u => 
+          u.cargo === 'admin' || u.permissoes?.includes('gerenciar_agendamentos')
+        );
+
+        for (const admin of admins) {
+          await notificacoesService.notificarAgendamentoSite(agendamentoCriado, admin.id);
+        }
+        console.log('✅ Notificações enviadas para administradores');
+      } catch (notifError) {
+        console.error('Erro ao enviar notificações:', notifError);
+        // Não interrompe o fluxo principal
+      }
+
       mostrarSnackbar('Agendamento realizado com sucesso! Entraremos em contato para confirmar.', 'success');
       setOpenAgendamento(false);
       setAgendamentoData({
@@ -604,7 +623,7 @@ function SiteSalao() {
         </Container>
       </Box>
 
-      {/* Redes Sociais Section - Versão com Cards e Links Diretos */}
+      {/* Redes Sociais Section */}
       {(redesAtivas.instagram || redesAtivas.facebook) && (
         <Box sx={{ bgcolor: 'white', py: 8 }} id="redes">
           <Container maxWidth="lg">
