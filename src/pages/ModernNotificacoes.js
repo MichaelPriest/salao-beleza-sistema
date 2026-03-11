@@ -22,6 +22,11 @@ import {
   DialogActions,
   TextField,
   Avatar,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -37,9 +42,17 @@ import {
   AccessTime as TimeIcon,
   Inventory as InventoryIcon,
   Payment as PaymentIcon,
+  Visibility as VisibilityIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  LocationOn as LocationIcon,
+  AttachMoney as MoneyIcon,
+  CalendarToday as CalendarIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { notificacoesService } from '../services/notificacoesService';
 
 function TabPanel({ children, value, index }) {
@@ -51,6 +64,7 @@ function TabPanel({ children, value, index }) {
 }
 
 function ModernNotificacoes() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [filteredNotifications, setFilteredNotifications] = useState([]);
@@ -58,6 +72,8 @@ function ModernNotificacoes() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
+  const [notificationDetails, setNotificationDetails] = useState(null);
   const [filterType, setFilterType] = useState('todos');
   const [usuario, setUsuario] = useState(null);
 
@@ -168,6 +184,16 @@ function ModernNotificacoes() {
     setSelectedNotification(null);
   };
 
+  const handleViewDetails = (notification) => {
+    setNotificationDetails(notification);
+    setOpenDetailsDialog(true);
+  };
+
+  const handleNavigate = (link) => {
+    setOpenDetailsDialog(false);
+    navigate(link);
+  };
+
   const getNotificationIcon = (tipo) => {
     switch (tipo) {
       case 'agendamento':
@@ -211,6 +237,286 @@ function ModernNotificacoes() {
     if (!date) return '';
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     return dateObj.toLocaleString('pt-BR');
+  };
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value || 0);
+  };
+
+  const renderDetalhesAgendamento = (detalhes) => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, bgcolor: '#f3e5f5' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+            Informações do Agendamento
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Data</Typography>
+              <Typography variant="body2">{detalhes.dataFormatada || detalhes.data}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Horário</Typography>
+              <Typography variant="body2">{detalhes.horario}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Status</Typography>
+              <Chip
+                label={detalhes.status}
+                size="small"
+                color={detalhes.status === 'confirmado' ? 'success' : 
+                       detalhes.status === 'pendente' ? 'warning' : 
+                       detalhes.status === 'cancelado' ? 'error' : 'default'}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Origem</Typography>
+              <Typography variant="body2">{detalhes.origem === 'site' ? 'Site' : 'Sistema'}</Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+
+      <Grid item xs={12} md={6}>
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+            Dados do Cliente
+          </Typography>
+          <Typography variant="body2"><strong>Nome:</strong> {detalhes.clienteNome}</Typography>
+          {detalhes.clienteEmail && <Typography variant="body2"><strong>Email:</strong> {detalhes.clienteEmail}</Typography>}
+          {detalhes.clienteTelefone && <Typography variant="body2"><strong>Telefone:</strong> {detalhes.clienteTelefone}</Typography>}
+        </Paper>
+      </Grid>
+
+      <Grid item xs={12} md={6}>
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+            Dados do Serviço
+          </Typography>
+          <Typography variant="body2"><strong>Serviço:</strong> {detalhes.servicoNome}</Typography>
+          {detalhes.servicoPreco && <Typography variant="body2"><strong>Valor:</strong> {formatCurrency(detalhes.servicoPreco)}</Typography>}
+          {detalhes.servicoDuracao && <Typography variant="body2"><strong>Duração:</strong> {detalhes.servicoDuracao} min</Typography>}
+          <Typography variant="body2"><strong>Profissional:</strong> {detalhes.profissionalNome}</Typography>
+          {detalhes.profissionalEspecialidade && <Typography variant="body2"><strong>Especialidade:</strong> {detalhes.profissionalEspecialidade}</Typography>}
+        </Paper>
+      </Grid>
+
+      {detalhes.observacoes && (
+        <Grid item xs={12}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+              Observações
+            </Typography>
+            <Typography variant="body2">{detalhes.observacoes}</Typography>
+          </Paper>
+        </Grid>
+      )}
+    </Grid>
+  );
+
+  const renderDetalhesCliente = (detalhes) => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, bgcolor: '#f3e5f5' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
+            Informações do Cliente
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Nome</Typography>
+              <Typography variant="body2">{detalhes.nome}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Status</Typography>
+              <Chip
+                label={detalhes.status}
+                size="small"
+                color={detalhes.status === 'VIP' ? 'secondary' : 
+                       detalhes.status === 'Regular' ? 'primary' : 'default'}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Email</Typography>
+              <Typography variant="body2">{detalhes.email}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Telefone</Typography>
+              <Typography variant="body2">{detalhes.telefone}</Typography>
+            </Grid>
+            {detalhes.cpf && (
+              <Grid item xs={6}>
+                <Typography variant="caption" color="textSecondary">CPF</Typography>
+                <Typography variant="body2">{detalhes.cpf}</Typography>
+              </Grid>
+            )}
+            {detalhes.dataNascimento && (
+              <Grid item xs={6}>
+                <Typography variant="caption" color="textSecondary">Data Nasc.</Typography>
+                <Typography variant="body2">{detalhes.dataNascimento}</Typography>
+              </Grid>
+            )}
+            <Grid item xs={12}>
+              <Typography variant="caption" color="textSecondary">Data Cadastro</Typography>
+              <Typography variant="body2">{new Date(detalhes.dataCadastro).toLocaleDateString('pt-BR')}</Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+    </Grid>
+  );
+
+  const renderDetalhesEstoque = (detalhes) => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, bgcolor: '#ffebee' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#f44336' }}>
+            Alerta de Estoque Baixo
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Produto</Typography>
+              <Typography variant="body2"><strong>{detalhes.nome}</strong></Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Código</Typography>
+              <Typography variant="body2">{detalhes.codigo}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Categoria</Typography>
+              <Typography variant="body2">{detalhes.categoria}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Localização</Typography>
+              <Typography variant="body2">{detalhes.localizacao}</Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="caption" color="textSecondary">Estoque Atual</Typography>
+              <Typography variant="h6" color="error">{detalhes.quantidadeEstoque} unid.</Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="caption" color="textSecondary">Estoque Mínimo</Typography>
+              <Typography variant="h6">{detalhes.estoqueMinimo} unid.</Typography>
+            </Grid>
+            <Grid item xs={4}>
+              <Typography variant="caption" color="textSecondary">Fornecedor</Typography>
+              <Typography variant="body2">{detalhes.fornecedor}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Preço Custo</Typography>
+              <Typography variant="body2">{formatCurrency(detalhes.precoCusto)}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Preço Venda</Typography>
+              <Typography variant="body2">{formatCurrency(detalhes.precoVenda)}</Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+    </Grid>
+  );
+
+  const renderDetalhesPagamento = (detalhes) => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#4caf50' }}>
+            Pagamento Recebido
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Cliente</Typography>
+              <Typography variant="body2"><strong>{detalhes.clienteNome}</strong></Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Valor</Typography>
+              <Typography variant="h6" color="#4caf50">{formatCurrency(detalhes.valor)}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Forma de Pagamento</Typography>
+              <Typography variant="body2">{detalhes.formaPagamentoLabel}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Parcelas</Typography>
+              <Typography variant="body2">{detalhes.parcelas}x</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Data</Typography>
+              <Typography variant="body2">{detalhes.dataFormatada}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Status</Typography>
+              <Chip label={detalhes.status} size="small" color="success" />
+            </Grid>
+            {detalhes.observacoes && (
+              <Grid item xs={12}>
+                <Typography variant="caption" color="textSecondary">Observações</Typography>
+                <Typography variant="body2">{detalhes.observacoes}</Typography>
+              </Grid>
+            )}
+          </Grid>
+        </Paper>
+      </Grid>
+    </Grid>
+  );
+
+  const renderDetalhesLembrete = (detalhes) => (
+    <Grid container spacing={2}>
+      <Grid item xs={12}>
+        <Paper sx={{ p: 2, bgcolor: '#fff3e0' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, color: '#ff9800' }}>
+            Lembrete de Agendamento
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Cliente</Typography>
+              <Typography variant="body2"><strong>{detalhes.clienteNome}</strong></Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Data</Typography>
+              <Typography variant="body2"><strong>{detalhes.dataFormatada}</strong> às {detalhes.horario}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Serviço</Typography>
+              <Typography variant="body2">{detalhes.servicoNome}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="textSecondary">Profissional</Typography>
+              <Typography variant="body2">{detalhes.profissionalNome}</Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+    </Grid>
+  );
+
+  const renderDetalhes = () => {
+    if (!notificationDetails || !notificationDetails.detalhes) return null;
+
+    switch (notificationDetails.tipo) {
+      case 'agendamento':
+        return renderDetalhesAgendamento(notificationDetails.detalhes);
+      case 'cliente':
+        return renderDetalhesCliente(notificationDetails.detalhes);
+      case 'estoque':
+        return renderDetalhesEstoque(notificationDetails.detalhes);
+      case 'pagamento':
+        return renderDetalhesPagamento(notificationDetails.detalhes);
+      case 'lembrete':
+        return renderDetalhesLembrete(notificationDetails.detalhes);
+      default:
+        return (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="body2">Detalhes não disponíveis</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        );
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.lida).length;
@@ -462,6 +768,14 @@ function ModernNotificacoes() {
                             
                             <Grid item xs={12} sm={2}>
                               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleViewDetails(notification)}
+                                  sx={{ color: '#9c27b0' }}
+                                  title="Ver detalhes"
+                                >
+                                  <VisibilityIcon />
+                                </IconButton>
                                 {!notification.lida && (
                                   <IconButton
                                     size="small"
@@ -512,6 +826,52 @@ function ModernNotificacoes() {
           <DeleteIcon sx={{ mr: 1, fontSize: 20, color: '#f44336' }} /> Excluir
         </MenuItem>
       </Menu>
+
+      {/* Dialog de Detalhes */}
+      <Dialog open={openDetailsDialog} onClose={() => setOpenDetailsDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Detalhes da Notificação
+        </DialogTitle>
+        <DialogContent>
+          {notificationDetails && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                {notificationDetails.titulo}
+              </Typography>
+              <Typography variant="body1" paragraph>
+                {notificationDetails.mensagem}
+              </Typography>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {renderDetalhes()}
+              
+              <Divider sx={{ my: 2 }} />
+              
+              <Typography variant="caption" color="textSecondary" display="block">
+                Recebido em: {formatDate(notificationDetails.data)}
+              </Typography>
+              {notificationDetails.detalhes?.criadoEm && (
+                <Typography variant="caption" color="textSecondary" display="block">
+                  Processado em: {notificationDetails.detalhes.criadoEm}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDetailsDialog(false)}>Fechar</Button>
+          {notificationDetails?.link && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate(notificationDetails.link)}
+              sx={{ bgcolor: '#9c27b0' }}
+            >
+              Ir para {notificationDetails.tipo}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog de Confirmação */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
