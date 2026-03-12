@@ -36,6 +36,11 @@ import {
   Step,
   StepLabel,
   StepContent,
+  Checkbox,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +56,9 @@ import {
   Payment as PaymentIcon,
   Print as PrintIcon,
   RemoveShoppingCart as EmptyCartIcon,
+  Inventory as InventoryIcon,
+  CheckBox as CheckBoxIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -74,10 +82,15 @@ function ModernCompras() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openDialog, setOpenDialog] = useState(false);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
+  const [openRecebimentoDialog, setOpenRecebimentoDialog] = useState(false);
   const [compraEditando, setCompraEditando] = useState(null);
   const [compraSelecionada, setCompraSelecionada] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Estado para controle de recebimento
+  const [itensRecebimento, setItensRecebimento] = useState([]);
+  const [recebimentoCompleto, setRecebimentoCompleto] = useState(true);
 
   const [formData, setFormData] = useState({
     fornecedorId: '',
@@ -181,6 +194,27 @@ function ModernCompras() {
   const handleCloseDetalhes = () => {
     setOpenDetalhesDialog(false);
     setCompraSelecionada(null);
+  };
+
+  // Abrir diálogo de recebimento
+  const handleOpenRecebimento = (compra) => {
+    setCompraSelecionada(compra);
+    // Inicializar itens de recebimento com quantidades pendentes
+    const itensIniciais = compra.itens.map(item => ({
+      ...item,
+      quantidadeRecebida: Number(item.quantidade), // Por padrão, recebe tudo
+      recebido: true, // Por padrão, todos marcados como recebidos
+    }));
+    setItensRecebimento(itensIniciais);
+    setRecebimentoCompleto(true);
+    setOpenRecebimentoDialog(true);
+  };
+
+  const handleCloseRecebimento = () => {
+    setOpenRecebimentoDialog(false);
+    setCompraSelecionada(null);
+    setItensRecebimento([]);
+    setRecebimentoCompleto(true);
   };
 
   const handleInputChange = (e) => {
@@ -292,7 +326,6 @@ function ModernCompras() {
       if (compraEditando) {
         await firebaseService.update('compras', compraEditando.id, dadosParaSalvar);
         
-        // Atualizar estado local
         const comprasAtualizadas = compras.map(c => 
           c.id === compraEditando.id ? { ...c, ...dadosParaSalvar, id: compraEditando.id } : c
         );
@@ -322,7 +355,6 @@ function ModernCompras() {
         updatedAt: new Date().toISOString(),
       });
 
-      // Atualizar estado local
       setCompras(prev => prev.map(c => 
         c.id === compra.id ? { ...c, status: novoStatus } : c
       ));
@@ -331,6 +363,127 @@ function ModernCompras() {
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       mostrarSnackbar('Erro ao atualizar status', 'error');
+    }
+  };
+
+  // Handler para mudança na quantidade recebida
+  const handleQuantidadeRecebidaChange = (index, valor) => {
+    const novaQuantidade = Math.max(0, Number(valor) || 0);
+    setItensRecebimento(prev => {
+      const novosItens = [...prev];
+      novosItens[index] = {
+        ...novosItens[index],
+        quantidadeRecebida: novaQuantidade,
+        recebido: novaQuantidade > 0,
+      };
+      return novosItens;
+    });
+  };
+
+  // Handler para toggle de item recebido
+  const handleToggleRecebido = (index) => {
+    setItensRecebimento(prev => {
+      const novosItens = [...prev];
+      const item = novosItens[index];
+      novosItens[index] = {
+        ...item,
+        recebido: !item.recebido,
+        quantidadeRecebida: !item.recebido ? Number(item.quantidade) : 0,
+      };
+      return novosItens;
+    });
+  };
+
+  // Toggle para recebimento completo/parcial
+  const handleToggleRecebimentoCompleto = () => {
+    const novoStatus = !recebimentoCompleto;
+    setRecebimentoCompleto(novoStatus);
+    setItensRecebimento(prev => prev.map(item => ({
+      ...item,
+      recebido: novoStatus,
+      quantidadeRecebida: novoStatus ? Number(item.quantidade) : 0,
+    })));
+  };
+
+  // Confirmar recebimento e dar baixa no estoque
+  const handleConfirmarRecebimento = async () => {
+    try {
+      const itensRecebidos = itensRecebimento.filter(item => item.recebido && item.quantidadeRecebida > 0);
+      
+      if (itensRecebidos.length === 0) {
+        mostrarSnackbar('Selecione pelo menos um item para receber', 'error');
+        return;
+      }
+
+      // Atualizar estoque dos produtos
+      for (const item of itensRecebidos) {
+        const produto = produtos.find(p => p.id === item.produtoId);
+        if (produto) {
+          const novaQuantidade = (Number(produto.quantidadeEstoque) || 0) + Number(item.quantidadeRecebida);
+          await firebaseService.update('produtos', item.produtoId, {
+            quantidadeEstoque: novaQuantidade,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Verificar se foi recebimento parcial ou completo
+      const totalEsperado = compraSelecionada.itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
+      const totalRecebido = itensRecebidos.reduce((acc, item) => acc + Number(item.quantidadeRecebida), 0);
+      
+      const statusFinal = totalRecebido >= totalEsperado ? 'entregue' : 'aprovada';
+      const observacaoRecebimento = totalRecebido < totalEsperado 
+        ? `\n[Recebimento Parcial em ${new Date().toLocaleDateString('pt-BR')}]: Recebidos ${totalRecebido} de ${totalEsperado} itens.`
+        : `\n[Recebimento Completo em ${new Date().toLocaleDateString('pt-BR')}]: Todos os ${totalEsperado} itens recebidos.`;
+
+      // Atualizar compra com dados de recebimento
+      const dadosAtualizacao = {
+        status: statusFinal,
+        itensRecebidos: itensRecebimento.map(item => ({
+          produtoId: item.produtoId,
+          produtoNome: item.produtoNome,
+          quantidadeEsperada: Number(item.quantidade),
+          quantidadeRecebida: Number(item.quantidadeRecebida),
+          recebido: item.recebido,
+        })),
+        dataRecebimento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        observacoes: (compraSelecionada.observacoes || '') + observacaoRecebimento,
+      };
+
+      await firebaseService.update('compras', compraSelecionada.id, dadosAtualizacao);
+
+      // Atualizar estado local
+      setCompras(prev => prev.map(c => 
+        c.id === compraSelecionada.id 
+          ? { ...c, ...dadosAtualizacao, id: compraSelecionada.id } 
+          : c
+      ));
+
+      // Atualizar estado local dos produtos
+      const produtosAtualizados = produtos.map(p => {
+        const itemRecebido = itensRecebidos.find(ir => ir.produtoId === p.id);
+        if (itemRecebido) {
+          return {
+            ...p,
+            quantidadeEstoque: (Number(p.quantidadeEstoque) || 0) + Number(itemRecebido.quantidadeRecebida),
+          };
+        }
+        return p;
+      });
+      setProdutos(produtosAtualizados);
+
+      mostrarSnackbar(
+        totalRecebido < totalEsperado 
+          ? `Recebimento parcial confirmado! ${totalRecebido} itens adicionados ao estoque.` 
+          : 'Recebimento completo confirmado! Estoque atualizado.',
+        'success'
+      );
+
+      handleCloseRecebimento();
+    } catch (error) {
+      console.error('Erro ao confirmar recebimento:', error);
+      mostrarSnackbar('Erro ao processar recebimento', 'error');
     }
   };
 
@@ -580,6 +733,9 @@ function ModernCompras() {
               <AnimatePresence>
                 {paginatedCompras.map((compra, index) => {
                   const fornecedor = fornecedores.find(f => f.id === compra.fornecedorId);
+                  const podeReceber = compra.status === 'pendente' || compra.status === 'aprovada';
+                  const jaEntregue = compra.status === 'entregue';
+                  
                   return (
                     <motion.tr
                       key={compra.id}
@@ -632,41 +788,44 @@ function ModernCompras() {
                             </IconButton>
                           </Tooltip>
 
-                          <Tooltip title="Editar">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDialog(compra)}
-                              sx={{ color: '#ff4081' }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-
-                          {compra.status === 'pendente' && (
-                            <>
-                              <Tooltip title="Aprovar">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleAtualizarStatus(compra, 'aprovada')}
-                                  sx={{ color: '#2196f3' }}
-                                >
-                                  <CheckCircleIcon />
-                                </IconButton>
-                              </Tooltip>
-                              
-                              <Tooltip title="Receber">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleAtualizarStatus(compra, 'entregue')}
-                                  sx={{ color: '#4caf50' }}
-                                >
-                                  <ShippingIcon />
-                                </IconButton>
-                              </Tooltip>
-                            </>
+                          {!jaEntregue && (
+                            <Tooltip title="Editar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDialog(compra)}
+                                sx={{ color: '#ff4081' }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
                           )}
 
-                          {compra.status !== 'cancelada' && compra.status !== 'entregue' && (
+                          {compra.status === 'pendente' && (
+                            <Tooltip title="Aprovar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleAtualizarStatus(compra, 'aprovada')}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <CheckCircleIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {/* Botão Receber - ativo para pendente OU aprovada, desde que não entregue */}
+                          {podeReceber && (
+                            <Tooltip title="Receber Mercadoria">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenRecebimento(compra)}
+                                sx={{ color: '#4caf50' }}
+                              >
+                                <ShippingIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {compra.status !== 'cancelada' && !jaEntregue && (
                             <Tooltip title="Cancelar">
                               <IconButton
                                 size="small"
@@ -1047,9 +1206,17 @@ function ModernCompras() {
                       </Typography>
                     </Grid>
                   )}
+                  {compraSelecionada.dataRecebimento && (
+                    <Grid item xs={6}>
+                      <Typography variant="subtitle2" color="textSecondary">Data do Recebimento</Typography>
+                      <Typography variant="body1">
+                        {new Date(compraSelecionada.dataRecebimento).toLocaleDateString('pt-BR')}
+                      </Typography>
+                    </Grid>
+                  )}
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
                       {compraSelecionada.observacoes || 'Sem observações'}
                     </Typography>
                   </Grid>
@@ -1062,25 +1229,50 @@ function ModernCompras() {
                   <TableHead>
                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                       <TableCell>Produto</TableCell>
-                      <TableCell align="right">Quantidade</TableCell>
+                      <TableCell align="right">Qtd Esperada</TableCell>
+                      <TableCell align="right">Qtd Recebida</TableCell>
                       <TableCell align="right">Valor Unit.</TableCell>
                       <TableCell align="right">Total</TableCell>
+                      <TableCell align="center">Status</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {compraSelecionada.itens?.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{item.produtoNome}</TableCell>
-                        <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
-                        <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
-                        <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {compraSelecionada.itens?.map((item, index) => {
+                      const itemRecebido = compraSelecionada.itensRecebidos?.find(
+                        ir => ir.produtoId === item.produtoId
+                      );
+                      const qtdRecebida = itemRecebido ? itemRecebido.quantidadeRecebida : 0;
+                      const completamenteRecebido = qtdRecebida >= Number(item.quantidade);
+                      
+                      return (
+                        <TableRow key={index}>
+                          <TableCell>{item.produtoNome}</TableCell>
+                          <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
+                          <TableCell align="right">
+                            <Typography color={completamenteRecebido ? 'success.main' : 'warning.main'}>
+                              {Number(qtdRecebida).toFixed(2)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
+                          <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
+                          <TableCell align="center">
+                            {completamenteRecebido ? (
+                              <CheckCircleIcon color="success" fontSize="small" />
+                            ) : qtdRecebida > 0 ? (
+                              <Chip label="Parcial" size="small" color="warning" />
+                            ) : (
+                              <Chip label="Pendente" size="small" color="default" />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                      <TableCell colSpan={3} align="right"><strong>VALOR TOTAL</strong></TableCell>
+                      <TableCell colSpan={4} align="right"><strong>VALOR TOTAL</strong></TableCell>
                       <TableCell align="right">
                         <strong>R$ {Number(compraSelecionada.valorTotal).toFixed(2)}</strong>
                       </TableCell>
+                      <TableCell />
                     </TableRow>
                   </TableBody>
                 </Table>
@@ -1096,6 +1288,187 @@ function ModernCompras() {
             onClick={() => window.print()}
           >
             Imprimir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Recebimento */}
+      <Dialog 
+        open={openRecebimentoDialog} 
+        onClose={handleCloseRecebimento} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <InventoryIcon />
+            Recebimento de Mercadoria - {compraSelecionada?.numeroPedido}
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {compraSelecionada && (
+            <Box sx={{ mt: 2 }}>
+              <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body2" color="textSecondary">Fornecedor</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {fornecedores.find(f => f.id === compraSelecionada.fornecedorId)?.nome}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body2" color="textSecondary">Data Prevista</Typography>
+                    <Typography variant="body1">
+                      {compraSelecionada.prazoEntrega 
+                        ? new Date(compraSelecionada.prazoEntrega).toLocaleDateString('pt-BR')
+                        : 'Não informada'
+                      }
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                  Itens a Receber
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Recebimento Completo
+                  </Typography>
+                  <Checkbox
+                    checked={recebimentoCompleto}
+                    onChange={handleToggleRecebimentoCompleto}
+                    icon={<CheckBoxOutlineBlankIcon />}
+                    checkedIcon={<CheckBoxIcon />}
+                  />
+                </Box>
+              </Box>
+
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#e8f5e9' }}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={itensRecebimento.every(i => i.recebido)}
+                          indeterminate={
+                            itensRecebimento.some(i => i.recebido) && 
+                            !itensRecebimento.every(i => i.recebido)
+                          }
+                          onChange={handleToggleRecebimentoCompleto}
+                        />
+                      </TableCell>
+                      <TableCell>Produto</TableCell>
+                      <TableCell align="right">Qtd Esperada</TableCell>
+                      <TableCell align="right">Qtd a Receber</TableCell>
+                      <TableCell align="right">Estoque Atual</TableCell>
+                      <TableCell align="right">Estoque Após</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {itensRecebimento.map((item, index) => {
+                      const produto = produtos.find(p => p.id === item.produtoId);
+                      const estoqueAtual = Number(produto?.quantidadeEstoque) || 0;
+                      const estoqueApos = estoqueAtual + Number(item.quantidadeRecebida);
+                      
+                      return (
+                        <TableRow 
+                          key={index}
+                          sx={{ 
+                            bgcolor: item.recebido ? '#e8f5e9' : 'inherit',
+                            '&:hover': { bgcolor: item.recebido ? '#c8e6c9' : '#f5f5f5' }
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={item.recebido}
+                              onChange={() => handleToggleRecebido(index)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {item.produtoNome}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography color="textSecondary">
+                              {Number(item.quantidade).toFixed(2)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.quantidadeRecebida}
+                              onChange={(e) => handleQuantidadeRecebidaChange(index, e.target.value)}
+                              disabled={!item.recebido}
+                              inputProps={{ 
+                                min: 0, 
+                                max: item.quantidade * 2, // Permite até 2x a quantidade esperada
+                                step: 0.01 
+                              }}
+                              sx={{ width: 100 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip 
+                              label={estoqueAtual.toFixed(2)} 
+                              size="small" 
+                              variant="outlined"
+                              color="default"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip 
+                              label={estoqueApos.toFixed(2)} 
+                              size="small"
+                              color={item.recebido ? 'success' : 'default'}
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Importante:</strong> Ao confirmar o recebimento, o sistema atualizará automaticamente 
+                  o estoque dos produtos. Se houver divergências na quantidade recebida, 
+                  anote nas observações da compra.
+                </Typography>
+              </Alert>
+
+              {itensRecebimento.some(item => Number(item.quantidadeRecebida) !== Number(item.quantidade)) && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Atenção:</strong> Existem itens com quantidades recebidas diferentes do esperado. 
+                    Isso será registrado como recebimento parcial.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: '#fafafa' }}>
+          <Button onClick={handleCloseRecebimento} variant="outlined">
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmarRecebimento}
+            startIcon={<CheckCircleIcon />}
+            sx={{ 
+              bgcolor: '#4caf50', 
+              '&:hover': { bgcolor: '#388e3c' },
+              '&:disabled': { bgcolor: '#cccccc' }
+            }}
+            disabled={!itensRecebimento.some(i => i.recebido && i.quantidadeRecebida > 0)}
+          >
+            Confirmar Recebimento e Atualizar Estoque
           </Button>
         </DialogActions>
       </Dialog>
