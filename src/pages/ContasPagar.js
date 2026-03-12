@@ -49,6 +49,7 @@ import {
   Warning as WarningIcon,
   Receipt as ReceiptIcon,
   Percent as PercentIcon,
+  Cancel as CancelIcon,
   ShoppingCart as ShoppingCartIcon,
   Store as StoreIcon,
   Person as PersonIcon,
