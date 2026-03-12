@@ -40,6 +40,11 @@ import {
   DialogActions,
   InputAdornment,
   Checkbox,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Fade,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -58,6 +63,9 @@ import {
   Inventory as InventoryIcon,
   RemoveShoppingCart as NoCostIcon,
   CompareArrows as ConversionIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -87,6 +95,17 @@ const UNIDADES_MEDIDA = [
   { value: 'tb', label: 'Tablete', simbolo: 'tb' },
 ];
 
+// 🔥 Formas de pagamento
+const FORMAS_PAGAMENTO = [
+  { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
+  { value: 'cartao_debito', label: 'Cartão de Débito', icon: '💳' },
+  { value: 'pix', label: 'PIX', icon: '⚡' },
+  { value: 'boleto', label: 'Boleto', icon: '📄' },
+  { value: 'transferencia', label: 'Transferência', icon: '🔄' },
+  { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
+];
+
 const steps = ['Confirmar Atendimento', 'Adicionar Itens', 'Registrar Pagamentos', 'Finalizar'];
 
 function ModernAtendimento() {
@@ -111,6 +130,10 @@ function ModernAtendimento() {
   
   // 🔥 NOVO: controle para item sem cobrança
   const [itemSemCobranca, setItemSemCobranca] = useState(false);
+  
+  // 🔥 NOVO: busca nos selects
+  const [buscaServico, setBuscaServico] = useState('');
+  const [buscaProduto, setBuscaProduto] = useState('');
   
   // Pagamentos - ARRAY
   const [pagamentos, setPagamentos] = useState([]);
@@ -272,6 +295,19 @@ function ModernAtendimento() {
     return quantidadeVenda / (produto.fatorConversao || 1);
   };
 
+  // 🔥 Filtrar serviços pela busca
+  const servicosFiltrados = servicosDisponiveis.filter(servico => 
+    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase()) ||
+    servico.categoria?.toLowerCase().includes(buscaServico.toLowerCase())
+  );
+
+  // 🔥 Filtrar produtos pela busca
+  const produtosFiltrados = produtosDisponiveis.filter(produto => 
+    produto.nome?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+    produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+    produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
+  );
+
   // Adicionar serviço ao ARRAY itensServico
   const handleAdicionarServico = () => {
     if (!servicoSelecionado) {
@@ -295,6 +331,7 @@ function ModernAtendimento() {
     }]);
 
     setServicoSelecionado(null);
+    setBuscaServico('');
     toast.success('Serviço adicionado!');
   };
 
@@ -372,6 +409,7 @@ function ModernAtendimento() {
     setProdutoSelecionado(null);
     setQuantidadeProduto(1);
     setItemSemCobranca(false);
+    setBuscaProduto('');
     toast.success(
       itemSemCobranca 
         ? `Produto adicionado (sem cobrança)! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}` 
@@ -464,6 +502,49 @@ function ModernAtendimento() {
     }
   };
 
+  // 🔥 Função para criar transação financeira
+  const criarTransacaoFinanceira = async (pagamento) => {
+    try {
+      console.log('💰 CRIANDO TRANSAÇÃO FINANCEIRA - INÍCIO');
+      
+      const transacao = {
+        tipo: 'receita',
+        descricao: `Atendimento - ${cliente?.nome}`,
+        valor: pagamento.valor,
+        data: new Date().toISOString().split('T')[0],
+        dataVencimento: new Date().toISOString().split('T')[0],
+        categoria: 'Serviços',
+        formaPagamento: pagamento.formaPagamento,
+        status: 'pago',
+        clienteId: cliente?.id,
+        atendimentoId: id,
+        observacoes: `Pagamento referente ao atendimento ${id}. Forma: ${FORMAS_PAGAMENTO.find(f => f.value === pagamento.formaPagamento)?.label || pagamento.formaPagamento}${pagamento.parcelas > 1 ? ` em ${pagamento.parcelas}x` : ''}. ${pagamento.observacoes || ''}`,
+        parcelas: pagamento.parcelas || 1,
+        dataPagamento: new Date().toISOString(),
+        origem: 'atendimento',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      console.log('📌 Dados da transação:', transacao);
+      
+      const transacaoId = await firebaseService.add('transacoes', transacao);
+      console.log('✅ Transação criada com ID:', transacaoId);
+
+      // 🔥 Verificar se a transação foi criada
+      setTimeout(async () => {
+        const transacoes = await firebaseService.getAll('transacoes');
+        const minhaTransacao = transacoes.find(t => t.atendimentoId === id);
+        console.log('🔍 Verificação - Transação encontrada:', minhaTransacao);
+      }, 2000);
+
+      return transacaoId;
+    } catch (error) {
+      console.error('❌ Erro ao criar transação financeira:', error);
+      throw error;
+    }
+  };
+
   // Adicionar pagamento ao ARRAY pagamentos
   const handleSalvarPagamento = async () => {
     try {
@@ -496,16 +577,23 @@ function ModernAtendimento() {
         updatedAt: agora
       };
 
+      let pagamentoSalvo;
+
       if (pagamentoEditando) {
         // Atualizar pagamento no array
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
-        setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? { ...pagamentoData, id: pagamentoEditando.id } : p));
+        pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
+        setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
         toast.success('Pagamento atualizado!');
       } else {
         // Adicionar novo pagamento ao array
-        const novoPagamento = await firebaseService.add('pagamentos', pagamentoData);
-        setPagamentos([...pagamentos, novoPagamento]);
+        pagamentoSalvo = await firebaseService.add('pagamentos', pagamentoData);
+        setPagamentos([...pagamentos, pagamentoSalvo]);
         toast.success('Pagamento registrado!');
+
+        // 🔥 CRIAR TRANSAÇÃO FINANCEIRA AUTOMATICAMENTE
+        console.log('💰 Chamando criarTransacaoFinanceira para novo pagamento');
+        await criarTransacaoFinanceira(pagamentoSalvo);
       }
 
       handleClosePagamentoDialog();
@@ -519,9 +607,21 @@ function ModernAtendimento() {
   const handleRemoverPagamento = async (pagamentoId) => {
     if (window.confirm('Deseja remover este pagamento?')) {
       try {
+        // Buscar transações relacionadas a este atendimento
+        const transacoes = await firebaseService.query('transacoes', [
+          { field: 'atendimentoId', operator: '==', value: id }
+        ]);
+
+        // Remover transações relacionadas
+        for (const transacao of transacoes) {
+          await firebaseService.delete('transacoes', transacao.id);
+        }
+
+        // Remover pagamento
         await firebaseService.delete('pagamentos', pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
-        toast.success('Pagamento removido!');
+        
+        toast.success('Pagamento e transações removidos!');
       } catch (error) {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
@@ -574,6 +674,7 @@ function ModernAtendimento() {
       console.log('📌 Valor total:', valorTotal);
       console.log('📌 Itens serviço:', itensServico);
       console.log('📌 Itens produto:', itensProduto);
+      console.log('📌 Pagamentos:', pagamentos);
 
       // 1. Atualizar o atendimento no Firebase
       console.log('📌 Atualizando atendimento...');
@@ -638,6 +739,10 @@ function ModernAtendimento() {
         const comissoes = await firebaseService.getAll('comissoes');
         const minhaComissao = comissoes.find(c => c.atendimentoId === id);
         console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
+        
+        const transacoes = await firebaseService.getAll('transacoes');
+        const minhasTransacoes = transacoes.filter(t => t.atendimentoId === id);
+        console.log('🔍 Verificação pós-finalização - Transações encontradas:', minhasTransacoes);
       }, 2000);
       
     } catch (error) {
@@ -884,10 +989,7 @@ function ModernAtendimento() {
                 {pagamentos.map((p, index) => (
                   <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                     <Typography variant="body2">
-                      {p.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                       p.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                       p.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                       p.formaPagamento === 'pix' ? 'PIX' : p.formaPagamento}
+                      {FORMAS_PAGAMENTO.find(f => f.value === p.formaPagamento)?.label || p.formaPagamento}
                       {p.parcelas > 1 ? ` (${p.parcelas}x)` : ''}
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -933,6 +1035,21 @@ function ModernAtendimento() {
                   sx={{ width: '100%', py: 2 }}
                 />
               </Box>
+
+              {/* Link para o financeiro */}
+              {atendimento.status === 'finalizado' && (
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AccountBalanceIcon />}
+                    onClick={() => navigate('/financeiro')}
+                    sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                  >
+                    Ver no Financeiro
+                  </Button>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -1007,17 +1124,32 @@ function ModernAtendimento() {
                       </Typography>
                       <Grid container spacing={2}>
                         <Grid item xs={12} md={8}>
-                          <FormControl fullWidth>
-                            <Autocomplete
-                              options={servicosDisponiveis}
-                              getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
-                              value={servicoSelecionado}
-                              onChange={(e, newValue) => setServicoSelecionado(newValue)}
-                              renderInput={(params) => (
-                                <TextField {...params} label="Selecione um serviço" size="small" />
-                              )}
-                            />
-                          </FormControl>
+                          <Autocomplete
+                            options={servicosFiltrados}
+                            getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
+                            value={servicoSelecionado}
+                            onChange={(e, newValue) => setServicoSelecionado(newValue)}
+                            inputValue={buscaServico}
+                            onInputChange={(e, newValue) => setBuscaServico(newValue)}
+                            renderInput={(params) => (
+                              <TextField 
+                                {...params} 
+                                label="Buscar serviço..." 
+                                size="small"
+                                placeholder="Digite para buscar..."
+                              />
+                            )}
+                            renderOption={(props, option) => (
+                              <li {...props}>
+                                <Box>
+                                  <Typography variant="body2">{option.nome}</Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {option.categoria} - R$ {option.preco?.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              </li>
+                            )}
+                          />
                         </Grid>
                         <Grid item xs={12} md={4}>
                           <Button
@@ -1040,21 +1172,39 @@ function ModernAtendimento() {
                       </Typography>
                       <Grid container spacing={2}>
                         <Grid item xs={12} md={4}>
-                          <FormControl fullWidth>
-                            <Autocomplete
-                              options={produtosDisponiveis}
-                              getOptionLabel={(option) => 
-                                `${option.nome} - R$ ${option.precoVenda?.toFixed(2)} ` +
-                                `(Estoque: ${option.quantidadeEstoque} ${getUnidadeSimbolo(option.unidadeEstoque)} ` +
-                                `= ${option.quantidadeEstoque * (option.fatorConversao || 1)} ${getUnidadeSimbolo(option.unidadeVenda)})`
-                              }
-                              value={produtoSelecionado}
-                              onChange={(e, newValue) => setProdutoSelecionado(newValue)}
-                              renderInput={(params) => (
-                                <TextField {...params} label="Selecione um produto" size="small" />
-                              )}
-                            />
-                          </FormControl>
+                          <Autocomplete
+                            options={produtosFiltrados}
+                            getOptionLabel={(option) => 
+                              `${option.nome} - R$ ${option.precoVenda?.toFixed(2)}`
+                            }
+                            value={produtoSelecionado}
+                            onChange={(e, newValue) => setProdutoSelecionado(newValue)}
+                            inputValue={buscaProduto}
+                            onInputChange={(e, newValue) => setBuscaProduto(newValue)}
+                            renderInput={(params) => (
+                              <TextField 
+                                {...params} 
+                                label="Buscar produto..." 
+                                size="small"
+                                placeholder="Digite para buscar..."
+                              />
+                            )}
+                            renderOption={(props, option) => {
+                              const disponivel = calcularQuantidadeDisponivel(option, 1);
+                              return (
+                                <li {...props}>
+                                  <Box>
+                                    <Typography variant="body2">{option.nome}</Typography>
+                                    <Typography variant="caption" color="textSecondary">
+                                      R$ {option.precoVenda?.toFixed(2)} | 
+                                      Estoque: {option.quantidadeEstoque} {getUnidadeSimbolo(option.unidadeEstoque)} 
+                                      ({disponivel} {getUnidadeSimbolo(option.unidadeVenda)})
+                                    </Typography>
+                                  </Box>
+                                </li>
+                              );
+                            }}
+                          />
                         </Grid>
                         <Grid item xs={12} md={2}>
                           <TextField
@@ -1077,7 +1227,7 @@ function ModernAtendimento() {
                                 checkedIcon={<NoCostIcon />}
                               />
                             }
-                            label="Sem cobrança (apenas baixa)"
+                            label="Sem cobrança"
                           />
                         </Grid>
                         <Grid item xs={12} md={3}>
@@ -1282,10 +1432,7 @@ function ModernAtendimento() {
                               {pagamentos.map((pagamento, index) => (
                                 <TableRow key={index}>
                                   <TableCell>
-                                    {pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                                     pagamento.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                                     pagamento.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                                     pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento}
+                                    {FORMAS_PAGAMENTO.find(f => f.value === pagamento.formaPagamento)?.label || pagamento.formaPagamento}
                                   </TableCell>
                                   <TableCell align="right">R$ {pagamento.valor?.toFixed(2)}</TableCell>
                                   <TableCell>{pagamento.parcelas > 1 ? `${pagamento.parcelas}x` : '-'}</TableCell>
@@ -1340,7 +1487,7 @@ function ModernAtendimento() {
                     </Typography>
 
                     <Alert severity="success" sx={{ mb: 3 }}>
-                      Pagamentos registrados e atendimento concluído.
+                      Pagamentos registrados, comissão calculada e transação lançada no financeiro.
                     </Alert>
 
                     <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
@@ -1445,10 +1592,7 @@ function ModernAtendimento() {
                           {pagamentos.map((pagamento, idx) => (
                             <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                               <Typography variant="body2">
-                                {pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                                 pagamento.formaPagamento === 'cartao_credito' ? 'Cartão Crédito' :
-                                 pagamento.formaPagamento === 'cartao_debito' ? 'Cartão Débito' :
-                                 pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento}
+                                {FORMAS_PAGAMENTO.find(f => f.value === pagamento.formaPagamento)?.label || pagamento.formaPagamento}
                                 {pagamento.parcelas > 1 ? ` (${pagamento.parcelas}x)` : ''}
                               </Typography>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1504,13 +1648,13 @@ function ModernAtendimento() {
                       </Button>
                       <Button
                         variant="contained"
-                        onClick={() => navigate('/agendamentos')}
-                        startIcon={<ReceiptIcon />}
+                        onClick={() => navigate('/financeiro')}
+                        startIcon={<AccountBalanceIcon />}
                         sx={{
                           background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
                         }}
                       >
-                        Concluir e Voltar
+                        Ver no Financeiro
                       </Button>
                     </Box>
                   </Box>
@@ -1536,10 +1680,14 @@ function ModernAtendimento() {
                   value={pagamentoForm.formaPagamento}
                   onChange={(e) => setPagamentoForm({ ...pagamentoForm, formaPagamento: e.target.value })}
                 >
-                  <FormControlLabel value="dinheiro" control={<Radio />} label="Dinheiro" />
-                  <FormControlLabel value="cartao_credito" control={<Radio />} label="Cartão de Crédito" />
-                  <FormControlLabel value="cartao_debito" control={<Radio />} label="Cartão de Débito" />
-                  <FormControlLabel value="pix" control={<Radio />} label="PIX" />
+                  {FORMAS_PAGAMENTO.map(fp => (
+                    <FormControlLabel 
+                      key={fp.value}
+                      value={fp.value} 
+                      control={<Radio />} 
+                      label={`${fp.icon} ${fp.label}`} 
+                    />
+                  ))}
                 </RadioGroup>
               </FormControl>
             </Grid>
@@ -1589,6 +1737,12 @@ function ModernAtendimento() {
                 placeholder="Observações sobre o pagamento..."
               />
             </Grid>
+
+            <Grid item xs={12}>
+              <Alert severity="info" sx={{ fontSize: '0.875rem' }}>
+                <strong>Importante:</strong> Ao registrar o pagamento, uma transação será automaticamente criada no módulo financeiro.
+              </Alert>
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1598,7 +1752,7 @@ function ModernAtendimento() {
             variant="contained"
             sx={{ bgcolor: '#9c27b0' }}
           >
-            {pagamentoEditando ? 'Atualizar' : 'Registrar'}
+            {pagamentoEditando ? 'Atualizar' : 'Registrar Pagamento'}
           </Button>
         </DialogActions>
       </Dialog>
