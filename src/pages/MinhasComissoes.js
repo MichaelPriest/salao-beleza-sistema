@@ -54,7 +54,6 @@ import {
   Download as DownloadIcon,
   Print as PrintIcon,
   PictureAsPdf as PdfIcon,
-  FileExcel as ExcelIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
@@ -167,7 +166,7 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, fil
                   </TableCell>
                   <TableCell align="right">R$ {atendimento.valorTotal?.toFixed(2)}</TableCell>
                   <TableCell align="right">
-                    <strong>R$ {atendimento.comissao?.toFixed(2)}</strong>
+                    <strong>R$ {atendimento.comissaoTotal?.toFixed(2)}</strong>
                   </TableCell>
                   <TableCell>
                     {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
@@ -294,10 +293,16 @@ function MinhasComissoes() {
     if (profissional) {
       carregarComissoes();
       carregarAtendimentos();
+    }
+  }, [profissional, filtroMes, filtroAno, filtroStatus]);
+
+  // Recalcular resumo quando comissões mudarem
+  useEffect(() => {
+    if (comissoes.length > 0) {
       calcularResumo();
       calcularEstatisticas();
     }
-  }, [profissional, filtroMes, filtroAno, filtroStatus]);
+  }, [comissoes]);
 
   const carregarDados = async () => {
     try {
@@ -357,7 +362,7 @@ function MinhasComissoes() {
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         comissoesFiltradas = comissoesFiltradas.filter(c => {
-          const data = new Date(c.dataRegistro || c.createdAt);
+          const data = new Date(c.dataRegistro || c.createdAt || c.data);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
       }
@@ -369,14 +374,24 @@ function MinhasComissoes() {
 
       // Ordenar por data (mais recentes primeiro)
       comissoesFiltradas.sort((a, b) => {
-        const dataA = new Date(a.dataRegistro || a.createdAt);
-        const dataB = new Date(b.dataRegistro || b.createdAt);
+        const dataA = new Date(a.dataRegistro || a.createdAt || a.data || 0);
+        const dataB = new Date(b.dataRegistro || b.createdAt || b.data || 0);
         return dataB - dataA;
       });
+
+      // Formatar datas para exibição
+      comissoesFiltradas = comissoesFiltradas.map(c => ({
+        ...c,
+        dataFormatada: formatarData(c.dataRegistro || c.createdAt || c.data),
+        valor: Number(c.valor) || 0,
+        valorAtendimento: Number(c.valorAtendimento) || 0,
+        percentual: Number(c.percentual) || 0
+      }));
 
       setComissoes(comissoesFiltradas);
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
+      setComissoes([]);
     }
   };
 
@@ -413,6 +428,7 @@ function MinhasComissoes() {
         return {
           ...atendimento,
           cliente: cliente || { nome: 'Cliente não encontrado' },
+          valorTotal: Number(atendimento.valorTotal) || 0,
           // Calcular comissão total do atendimento para este profissional
           comissaoTotal: calcularComissaoProfissional(atendimento, profissionalId)
         };
@@ -424,6 +440,7 @@ function MinhasComissoes() {
       setAtendimentos(atendimentosFiltrados);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
+      setAtendimentos([]);
     }
   };
 
@@ -440,10 +457,10 @@ function MinhasComissoes() {
             c.servicoId === item.servicoId
           );
           if (comissao) {
-            total += comissao.valor || 0;
+            total += Number(comissao.valor) || 0;
           } else {
             // Calcular comissão estimada
-            total += (item.preco * (item.comissao || 0)) / 100;
+            total += (Number(item.preco) * (Number(item.comissao) || 0)) / 100;
           }
         }
       });
@@ -458,9 +475,9 @@ function MinhasComissoes() {
             c.servicoId === servico.id
           );
           if (comissao) {
-            total += comissao.valor || 0;
+            total += Number(comissao.valor) || 0;
           } else {
-            total += (servico.preco * (servico.comissao || 0)) / 100;
+            total += (Number(servico.preco) * (Number(servico.comissao) || 0)) / 100;
           }
         }
       });
@@ -532,7 +549,7 @@ function MinhasComissoes() {
     const mesesDados = {};
 
     comissoes.forEach(c => {
-      const data = new Date(c.dataRegistro || c.createdAt);
+      const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
       const mes = data.getMonth() + 1;
       const ano = data.getFullYear();
       const chave = `${ano}-${mes}`;
@@ -919,7 +936,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<PdfIcon />}
+                  startIcon={<PictureAsPdfIcon />}
                   onClick={handleExportPDF}
                   color="error"
                 >
@@ -928,7 +945,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<ExcelIcon />}
+                  startIcon={<DownloadIcon />}
                   onClick={handleExportExcel}
                   color="success"
                 >
@@ -982,7 +999,7 @@ function MinhasComissoes() {
                   {comissoesFiltradas.map((comissao) => (
                     <TableRow key={comissao.id} hover>
                       <TableCell>
-                        {formatarData(comissao.dataRegistro || comissao.createdAt)}
+                        {formatarData(comissao.dataRegistro || comissao.createdAt || comissao.data)}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1366,7 +1383,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<PdfIcon />}
+                  startIcon={<PictureAsPdfIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportPDF();
@@ -1387,7 +1404,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<ExcelIcon />}
+                  startIcon={<DownloadIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportExcel();
