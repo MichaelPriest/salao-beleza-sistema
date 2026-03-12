@@ -25,7 +25,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Avatar,
   Tooltip,
   Alert,
   Snackbar,
@@ -38,9 +37,6 @@ import {
   StepContent,
   Checkbox,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -53,7 +49,6 @@ import {
   LocalShipping as ShippingIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  Payment as PaymentIcon,
   Print as PrintIcon,
   RemoveShoppingCart as EmptyCartIcon,
   Inventory as InventoryIcon,
@@ -69,6 +64,11 @@ const statusColors = {
   aprovada: { color: '#2196f3', label: 'Aprovada' },
   entregue: { color: '#4caf50', label: 'Entregue' },
   cancelada: { color: '#f44336', label: 'Cancelada' },
+};
+
+// Função utilitária para garantir precisão decimal no estoque
+const formatarQuantidade = (valor) => {
+  return parseFloat(parseFloat(valor).toFixed(3));
 };
 
 function ModernCompras() {
@@ -202,7 +202,7 @@ function ModernCompras() {
     // Inicializar itens de recebimento com quantidades pendentes
     const itensIniciais = compra.itens.map(item => ({
       ...item,
-      quantidadeRecebida: Number(item.quantidade), // Por padrão, recebe tudo
+      quantidadeRecebida: formatarQuantidade(item.quantidade), // Por padrão, recebe tudo
       recebido: true, // Por padrão, todos marcados como recebidos
     }));
     setItensRecebimento(itensIniciais);
@@ -255,7 +255,7 @@ function ModernCompras() {
     const itemCompleto = {
       produtoId: novoItem.produtoId,
       produtoNome: produto?.nome || 'Produto',
-      quantidade: Number(novoItem.quantidade),
+      quantidade: formatarQuantidade(novoItem.quantidade),
       valorUnitario: Number(novoItem.valorUnitario),
       total: Number(novoItem.quantidade) * Number(novoItem.valorUnitario),
     };
@@ -312,7 +312,7 @@ function ModernCompras() {
         observacoes: formData.observacoes ? String(formData.observacoes) : null,
         itens: formData.itens.map(item => ({
           ...item,
-          quantidade: Number(item.quantidade),
+          quantidade: formatarQuantidade(item.quantidade),
           valorUnitario: Number(item.valorUnitario),
           total: Number(item.total),
         })),
@@ -368,7 +368,7 @@ function ModernCompras() {
 
   // Handler para mudança na quantidade recebida
   const handleQuantidadeRecebidaChange = (index, valor) => {
-    const novaQuantidade = Math.max(0, Number(valor) || 0);
+    const novaQuantidade = Math.max(0, formatarQuantidade(valor) || 0);
     setItensRecebimento(prev => {
       const novosItens = [...prev];
       novosItens[index] = {
@@ -385,10 +385,11 @@ function ModernCompras() {
     setItensRecebimento(prev => {
       const novosItens = [...prev];
       const item = novosItens[index];
+      const novoRecebido = !item.recebido;
       novosItens[index] = {
         ...item,
-        recebido: !item.recebido,
-        quantidadeRecebida: !item.recebido ? Number(item.quantidade) : 0,
+        recebido: novoRecebido,
+        quantidadeRecebida: novoRecebido ? formatarQuantidade(item.quantidade) : 0,
       };
       return novosItens;
     });
@@ -401,11 +402,11 @@ function ModernCompras() {
     setItensRecebimento(prev => prev.map(item => ({
       ...item,
       recebido: novoStatus,
-      quantidadeRecebida: novoStatus ? Number(item.quantidade) : 0,
+      quantidadeRecebida: novoStatus ? formatarQuantidade(item.quantidade) : 0,
     })));
   };
 
-  // Confirmar recebimento e dar baixa no estoque
+  // Confirmar recebimento e dar baixa no estoque - VERSÃO CORRIGIDA
   const handleConfirmarRecebimento = async () => {
     try {
       const itensRecebidos = itensRecebimento.filter(item => item.recebido && item.quantidadeRecebida > 0);
@@ -415,11 +416,20 @@ function ModernCompras() {
         return;
       }
 
-      // Atualizar estoque dos produtos
+      // Atualizar estoque dos produtos - SOMANDO ao estoque existente
       for (const item of itensRecebidos) {
         const produto = produtos.find(p => p.id === item.produtoId);
         if (produto) {
-          const novaQuantidade = (Number(produto.quantidadeEstoque) || 0) + Number(item.quantidadeRecebida);
+          // Converte para número garantido e soma ao estoque existente
+          const estoqueAtual = formatarQuantidade(produto.quantidadeEstoque || 0);
+          const quantidadeRecebida = formatarQuantidade(item.quantidadeRecebida || 0);
+          const novaQuantidade = formatarQuantidade(estoqueAtual + quantidadeRecebida);
+          
+          console.log(`Atualizando estoque - Produto: ${produto.nome}`);
+          console.log(`  Estoque atual: ${estoqueAtual}`);
+          console.log(`  Quantidade recebida: ${quantidadeRecebida}`);
+          console.log(`  Novo estoque: ${novaQuantidade}`);
+          
           await firebaseService.update('produtos', item.produtoId, {
             quantidadeEstoque: novaQuantidade,
             updatedAt: new Date().toISOString(),
@@ -428,13 +438,13 @@ function ModernCompras() {
       }
 
       // Verificar se foi recebimento parcial ou completo
-      const totalEsperado = compraSelecionada.itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
-      const totalRecebido = itensRecebidos.reduce((acc, item) => acc + Number(item.quantidadeRecebida), 0);
+      const totalEsperado = compraSelecionada.itens.reduce((acc, item) => acc + formatarQuantidade(item.quantidade), 0);
+      const totalRecebido = itensRecebidos.reduce((acc, item) => acc + formatarQuantidade(item.quantidadeRecebida), 0);
       
       const statusFinal = totalRecebido >= totalEsperado ? 'entregue' : 'aprovada';
       const observacaoRecebimento = totalRecebido < totalEsperado 
-        ? `\n[Recebimento Parcial em ${new Date().toLocaleDateString('pt-BR')}]: Recebidos ${totalRecebido} de ${totalEsperado} itens.`
-        : `\n[Recebimento Completo em ${new Date().toLocaleDateString('pt-BR')}]: Todos os ${totalEsperado} itens recebidos.`;
+        ? `\n[Recebimento Parcial em ${new Date().toLocaleDateString('pt-BR')}]: Recebidos ${totalRecebido.toFixed(3)} de ${totalEsperado.toFixed(3)} unidades.`
+        : `\n[Recebimento Completo em ${new Date().toLocaleDateString('pt-BR')}]: Todas as ${totalEsperado.toFixed(3)} unidades recebidas.`;
 
       // Atualizar compra com dados de recebimento
       const dadosAtualizacao = {
@@ -442,8 +452,8 @@ function ModernCompras() {
         itensRecebidos: itensRecebimento.map(item => ({
           produtoId: item.produtoId,
           produtoNome: item.produtoNome,
-          quantidadeEsperada: Number(item.quantidade),
-          quantidadeRecebida: Number(item.quantidadeRecebida),
+          quantidadeEsperada: formatarQuantidade(item.quantidade),
+          quantidadeRecebida: formatarQuantidade(item.quantidadeRecebida),
           recebido: item.recebido,
         })),
         dataRecebimento: new Date().toISOString(),
@@ -453,37 +463,38 @@ function ModernCompras() {
 
       await firebaseService.update('compras', compraSelecionada.id, dadosAtualizacao);
 
-      // Atualizar estado local
+      // Atualizar estado local das compras
       setCompras(prev => prev.map(c => 
         c.id === compraSelecionada.id 
           ? { ...c, ...dadosAtualizacao, id: compraSelecionada.id } 
           : c
       ));
 
-      // Atualizar estado local dos produtos
-      const produtosAtualizados = produtos.map(p => {
+      // Atualizar estado local dos produtos imediatamente para refletir na UI
+      setProdutos(prev => prev.map(p => {
         const itemRecebido = itensRecebidos.find(ir => ir.produtoId === p.id);
         if (itemRecebido) {
+          const estoqueAtual = formatarQuantidade(p.quantidadeEstoque || 0);
+          const quantidadeRecebida = formatarQuantidade(itemRecebido.quantidadeRecebida || 0);
           return {
             ...p,
-            quantidadeEstoque: (Number(p.quantidadeEstoque) || 0) + Number(itemRecebido.quantidadeRecebida),
+            quantidadeEstoque: formatarQuantidade(estoqueAtual + quantidadeRecebida),
           };
         }
         return p;
-      });
-      setProdutos(produtosAtualizados);
+      }));
 
       mostrarSnackbar(
         totalRecebido < totalEsperado 
-          ? `Recebimento parcial confirmado! ${totalRecebido} itens adicionados ao estoque.` 
-          : 'Recebimento completo confirmado! Estoque atualizado.',
+          ? `Recebimento parcial confirmado! ${totalRecebido.toFixed(3)} unidades adicionadas ao estoque.` 
+          : `Recebimento completo! ${totalRecebido.toFixed(3)} unidades adicionadas ao estoque.`,
         'success'
       );
 
       handleCloseRecebimento();
     } catch (error) {
       console.error('Erro ao confirmar recebimento:', error);
-      mostrarSnackbar('Erro ao processar recebimento', 'error');
+      mostrarSnackbar('Erro ao processar recebimento: ' + error.message, 'error');
     }
   };
 
@@ -1001,7 +1012,7 @@ function ModernCompras() {
                       value={novoItem.quantidade}
                       onChange={handleItemChange}
                       size="small"
-                      inputProps={{ min: 1, step: 0.01 }}
+                      inputProps={{ min: 0.001, step: 0.001 }}
                     />
                   </Grid>
                   <Grid item xs={6} md={2}>
@@ -1053,7 +1064,7 @@ function ModernCompras() {
                       {formData.itens.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell>{item.produtoNome}</TableCell>
-                          <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
+                          <TableCell align="right">{formatarQuantidade(item.quantidade).toFixed(3)}</TableCell>
                           <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
                           <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
                           <TableCell align="center">
@@ -1241,24 +1252,26 @@ function ModernCompras() {
                       const itemRecebido = compraSelecionada.itensRecebidos?.find(
                         ir => ir.produtoId === item.produtoId
                       );
-                      const qtdRecebida = itemRecebido ? itemRecebido.quantidadeRecebida : 0;
-                      const completamenteRecebido = qtdRecebida >= Number(item.quantidade);
+                      const qtdRecebida = itemRecebido ? formatarQuantidade(itemRecebido.quantidadeRecebida) : 0;
+                      const qtdEsperada = formatarQuantidade(item.quantidade);
+                      const completamenteRecebido = qtdRecebida >= qtdEsperada;
+                      const parcialmenteRecebido = qtdRecebida > 0 && qtdRecebida < qtdEsperada;
                       
                       return (
                         <TableRow key={index}>
                           <TableCell>{item.produtoNome}</TableCell>
-                          <TableCell align="right">{Number(item.quantidade).toFixed(2)}</TableCell>
+                          <TableCell align="right">{qtdEsperada.toFixed(3)}</TableCell>
                           <TableCell align="right">
-                            <Typography color={completamenteRecebido ? 'success.main' : 'warning.main'}>
-                              {Number(qtdRecebida).toFixed(2)}
+                            <Typography color={completamenteRecebido ? 'success.main' : parcialmenteRecebido ? 'warning.main' : 'textSecondary'}>
+                              {qtdRecebida.toFixed(3)}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">R$ {Number(item.valorUnitario).toFixed(2)}</TableCell>
                           <TableCell align="right">R$ {Number(item.total).toFixed(2)}</TableCell>
                           <TableCell align="center">
                             {completamenteRecebido ? (
-                              <CheckCircleIcon color="success" fontSize="small" />
-                            ) : qtdRecebida > 0 ? (
+                              <Chip label="Recebido" size="small" color="success" />
+                            ) : parcialmenteRecebido ? (
                               <Chip label="Parcial" size="small" color="warning" />
                             ) : (
                               <Chip label="Pendente" size="small" color="default" />
@@ -1369,8 +1382,9 @@ function ModernCompras() {
                   <TableBody>
                     {itensRecebimento.map((item, index) => {
                       const produto = produtos.find(p => p.id === item.produtoId);
-                      const estoqueAtual = Number(produto?.quantidadeEstoque) || 0;
-                      const estoqueApos = estoqueAtual + Number(item.quantidadeRecebida);
+                      const estoqueAtual = formatarQuantidade(produto?.quantidadeEstoque || 0);
+                      const qtdReceber = formatarQuantidade(item.quantidadeRecebida || 0);
+                      const estoqueApos = formatarQuantidade(estoqueAtual + qtdReceber);
                       
                       return (
                         <TableRow 
@@ -1393,7 +1407,7 @@ function ModernCompras() {
                           </TableCell>
                           <TableCell align="right">
                             <Typography color="textSecondary">
-                              {Number(item.quantidade).toFixed(2)}
+                              {formatarQuantidade(item.quantidade).toFixed(3)}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
@@ -1405,15 +1419,15 @@ function ModernCompras() {
                               disabled={!item.recebido}
                               inputProps={{ 
                                 min: 0, 
-                                max: item.quantidade * 2, // Permite até 2x a quantidade esperada
-                                step: 0.01 
+                                max: formatarQuantidade(item.quantidade) * 2,
+                                step: 0.001
                               }}
                               sx={{ width: 100 }}
                             />
                           </TableCell>
                           <TableCell align="right">
                             <Chip 
-                              label={estoqueAtual.toFixed(2)} 
+                              label={estoqueAtual.toFixed(3)} 
                               size="small" 
                               variant="outlined"
                               color="default"
@@ -1421,7 +1435,7 @@ function ModernCompras() {
                           </TableCell>
                           <TableCell align="right">
                             <Chip 
-                              label={estoqueApos.toFixed(2)} 
+                              label={estoqueApos.toFixed(3)} 
                               size="small"
                               color={item.recebido ? 'success' : 'default'}
                               sx={{ fontWeight: 600 }}
@@ -1436,13 +1450,17 @@ function ModernCompras() {
 
               <Alert severity="info" sx={{ mt: 2 }}>
                 <Typography variant="body2">
-                  <strong>Importante:</strong> Ao confirmar o recebimento, o sistema atualizará automaticamente 
-                  o estoque dos produtos. Se houver divergências na quantidade recebida, 
-                  anote nas observações da compra.
+                  <strong>Importante:</strong> Ao confirmar o recebimento, o sistema somará automaticamente 
+                  as quantidades recebidas ao estoque existente. Exemplo: se você tem 0.800L e recebe 1.000L, 
+                  o estoque será atualizado para 1.800L.
                 </Typography>
               </Alert>
 
-              {itensRecebimento.some(item => Number(item.quantidadeRecebida) !== Number(item.quantidade)) && (
+              {itensRecebimento.some(item => {
+                const qtdEsperada = formatarQuantidade(item.quantidade);
+                const qtdRecebida = formatarQuantidade(item.quantidadeRecebida);
+                return item.recebido && qtdRecebida !== qtdEsperada;
+              }) && (
                 <Alert severity="warning" sx={{ mt: 2 }}>
                   <Typography variant="body2">
                     <strong>Atenção:</strong> Existem itens com quantidades recebidas diferentes do esperado. 
