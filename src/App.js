@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
+import { DadosProvider } from './contexts/DadosContext'; // 🔥 NOVO CONTEXTO
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -62,6 +63,7 @@ import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -193,6 +195,7 @@ function AnimatedRoutes() {
           <Route path="/configuracoes" element={<ModernConfiguracoes />} />
           <Route path="/minhas-comissoes" element={<MinhasComissoes />} />
           <Route path="/importar-servicos" element={<ImportarServicos />} />
+          
           {/* Rota 404 - DEVE SER A ÚLTIMA */}
           <Route path="*" element={<Page404 />} />
         </Routes>
@@ -206,81 +209,84 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <FeedbackProvider>
-        {/* Loading Global */}
-        <GlobalLoading />
-        
-        {/* Toaster do react-hot-toast */}
-        <Toaster 
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-              borderRadius: '10px',
-            },
-            success: {
-              icon: '✅',
+        {/* 🔥 DADOS PROVIDER - ENVOLVE TUDO PARA COMPARTILHAR DADOS */}
+        <DadosProvider>
+          {/* Loading Global */}
+          <GlobalLoading />
+          
+          {/* Toaster do react-hot-toast */}
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
               style: {
-                background: '#4caf50',
+                background: '#363636',
+                color: '#fff',
+                borderRadius: '10px',
               },
-            },
-            error: {
-              icon: '❌',
-              style: {
-                background: '#f44336',
+              success: {
+                icon: '✅',
+                style: {
+                  background: '#4caf50',
+                },
               },
-            },
-            loading: {
-              icon: '⏳',
-              style: {
-                background: '#ff9800',
+              error: {
+                icon: '❌',
+                style: {
+                  background: '#f44336',
+                },
               },
-            },
-          }}
-        />
-        
-        {/* Snackbar Global do MUI */}
-        <GlobalSnackbar />
-        
-        <Router>
-          <Routes>
-            {/* Rotas sem sidebar - PÚBLICAS */}
-            <Route path="/login" element={<ModernLogin />} />
-            <Route path="/teste" element={<TesteAPI />} />
-            <Route path="/site" element={<SiteSalao />} />
-            <Route path="/403" element={<Page403 />} />
-            <Route path="/500" element={<Page500 />} />
-            <Route path="/manutencao" element={<Manutencao />} />
-            
-            {/* Rotas com sidebar - todas as outras rotas (privadas) */}
-            <Route path="/*" element={
-              <PrivateRoute>
-                <div style={{ display: 'flex', minHeight: '100vh' }}>
-                  <ModernSidebar />
-                  <div style={{ 
-                    flexGrow: 1, 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    width: 'calc(100% - 300px)',
-                    transition: 'width 0.3s ease',
-                  }}>
-                    <ModernHeader />
-                    <main style={{ 
+              loading: {
+                icon: '⏳',
+                style: {
+                  background: '#ff9800',
+                },
+              },
+            }}
+          />
+          
+          {/* Snackbar Global do MUI */}
+          <GlobalSnackbar />
+          
+          <Router>
+            <Routes>
+              {/* Rotas sem sidebar - PÚBLICAS */}
+              <Route path="/login" element={<ModernLogin />} />
+              <Route path="/teste" element={<TesteAPI />} />
+              <Route path="/site" element={<SiteSalao />} />
+              <Route path="/403" element={<Page403 />} />
+              <Route path="/500" element={<Page500 />} />
+              <Route path="/manutencao" element={<Manutencao />} />
+              
+              {/* Rotas com sidebar - todas as outras rotas (privadas) */}
+              <Route path="/*" element={
+                <PrivateRoute>
+                  <div style={{ display: 'flex', minHeight: '100vh' }}>
+                    <ModernSidebar />
+                    <div style={{ 
                       flexGrow: 1, 
-                      padding: '24px',
-                      backgroundColor: '#faf5ff',
-                      minHeight: 'calc(100vh - 64px)',
-                      overflow: 'auto'
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      width: 'calc(100% - 300px)',
+                      transition: 'width 0.3s ease',
                     }}>
-                      <AnimatedRoutes />
-                    </main>
+                      <ModernHeader />
+                      <main style={{ 
+                        flexGrow: 1, 
+                        padding: '24px',
+                        backgroundColor: '#faf5ff',
+                        minHeight: 'calc(100vh - 64px)',
+                        overflow: 'auto'
+                      }}>
+                        <AnimatedRoutes />
+                      </main>
+                    </div>
                   </div>
-                </div>
-              </PrivateRoute>
-            } />
-          </Routes>
-        </Router>
+                </PrivateRoute>
+              } />
+            </Routes>
+          </Router>
+        </DadosProvider>
       </FeedbackProvider>
     </ThemeProvider>
   );
