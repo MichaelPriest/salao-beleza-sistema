@@ -35,25 +35,6 @@ export function DadosProvider({ children }) {
   const fornecedores = useDados('fornecedores');
   const notificacoes = useDados('notificacoes');
 
-  // Função para recarregar todos os dados
-  const recarregarTodos = useCallback(async () => {
-    await Promise.all([
-      clientes.carregar(),
-      profissionais.carregar(),
-      servicos.carregar(),
-      produtos.carregar(),
-      agendamentos.carregar(),
-      atendimentos.carregar(),
-      transacoes.carregar(),
-      compras.carregar(),
-      caixa.carregar(),
-      usuarios.carregar(),
-      fornecedores.carregar(),
-      notificacoes.carregar(),
-    ]);
-    setUltimaAtualizacao(new Date().toISOString());
-  }, []);
-
   // Função para recarregar endpoints específicos
   const recarregar = useCallback(async (endpoints) => {
     const endpointsMap = {
@@ -75,6 +56,32 @@ export function DadosProvider({ children }) {
     await Promise.all(promises);
     setUltimaAtualizacao(new Date().toISOString());
   }, [clientes, profissionais, servicos, produtos, agendamentos, atendimentos, transacoes, compras, caixa, usuarios, fornecedores, notificacoes]);
+
+  // Função para recarregar todos os dados
+  const recarregarTodos = useCallback(async () => {
+    await Promise.all([
+      clientes.carregar(),
+      profissionais.carregar(),
+      servicos.carregar(),
+      produtos.carregar(),
+      agendamentos.carregar(),
+      atendimentos.carregar(),
+      transacoes.carregar(),
+      compras.carregar(),
+      caixa.carregar(),
+      usuarios.carregar(),
+      fornecedores.carregar(),
+      notificacoes.carregar(),
+    ]);
+    setUltimaAtualizacao(new Date().toISOString());
+  }, [clientes, profissionais, servicos, produtos, agendamentos, atendimentos, transacoes, compras, caixa, usuarios, fornecedores, notificacoes]);
+
+  // Obter caixa atual
+  const caixaAtual = useCallback(() => {
+    return caixa.dados
+      .filter(c => c.status === 'aberto')
+      .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0] || null;
+  }, [caixa.dados]);
 
   // Calcular totais financeiros
   const calcularTotaisFinanceiros = useCallback((dataInicio, dataFim) => {
@@ -102,13 +109,6 @@ export function DadosProvider({ children }) {
       saldo: receitas - despesas,
     };
   }, [transacoes.dados]);
-
-  // Obter caixa atual
-  const caixaAtual = useCallback(() => {
-    return caixa.dados
-      .filter(c => c.status === 'aberto')
-      .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0] || null;
-  }, [caixa.dados]);
 
   // Estatísticas de agendamentos
   const estatisticasAgendamentos = useCallback((data) => {
@@ -146,7 +146,7 @@ export function DadosProvider({ children }) {
       // Usuário
       usuario,
       
-      // Dados
+      // Dados (arrays)
       clientes: clientes.dados,
       profissionais: profissionais.dados,
       servicos: servicos.dados,
@@ -160,7 +160,7 @@ export function DadosProvider({ children }) {
       fornecedores: fornecedores.dados,
       notificacoes: notificacoes.dados,
       
-      // Funções CRUD
+      // Funções CRUD (hooks completos)
       clientesCrud: clientes,
       profissionaisCrud: profissionais,
       servicosCrud: servicos,
@@ -179,8 +179,8 @@ export function DadosProvider({ children }) {
       ultimaAtualizacao,
       
       // Funções auxiliares
-      recarregarTodos,
       recarregar,
+      recarregarTodos,
       calcularTotaisFinanceiros,
       caixaAtual: caixaAtual(),
       estatisticasAgendamentos,
