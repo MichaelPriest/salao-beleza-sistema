@@ -1,4 +1,4 @@
-// src/pages/ModernNotificacoes.js - CORRIGIDO COM DEBUG
+// src/pages/ModernNotificacoes.js - CORREÇÃO COMPLETA
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
@@ -69,7 +69,15 @@ function ModernNotificacoes() {
       if (userStr) {
         const user = JSON.parse(userStr);
         console.log('👤 Usuário carregado do localStorage:', user);
-        setUsuario(user);
+        
+        // 🔥 CORREÇÃO: Normalizar o objeto do usuário para ter uid
+        const userNormalized = {
+          ...user,
+          uid: user.uid || user.id  // Se não tiver uid, usa o id
+        };
+        
+        console.log('👤 Usuário normalizado:', userNormalized);
+        setUsuario(userNormalized);
       } else {
         console.log('❌ Nenhum usuário encontrado no localStorage');
         setError('Usuário não encontrado. Faça login novamente.');
@@ -87,13 +95,16 @@ function ModernNotificacoes() {
     let mounted = true;
 
     const loadNotifications = async () => {
-      if (!usuario?.uid) {
-        console.log('⏳ Aguardando usuário...');
+      // 🔥 CORREÇÃO: Usar uid ou id do usuário
+      const userId = usuario?.uid || usuario?.id;
+      
+      if (!userId) {
+        console.log('⏳ Aguardando usuário...', { usuario });
         return;
       }
 
       try {
-        console.log('📥 Iniciando carregamento de notificações para UID:', usuario.uid);
+        console.log('📥 Iniciando carregamento de notificações para userId:', userId);
         setLoading(true);
         setError(null);
         
@@ -102,7 +113,7 @@ function ModernNotificacoes() {
           setTimeout(() => reject(new Error('Timeout ao carregar notificações')), 10000)
         );
 
-        const dataPromise = notificacoesService.listar(usuario.uid);
+        const dataPromise = notificacoesService.listar(userId);
         
         const data = await Promise.race([dataPromise, timeoutPromise]);
         
@@ -129,18 +140,20 @@ function ModernNotificacoes() {
     return () => {
       mounted = false;
     };
-  }, [usuario?.uid]);
+  }, [usuario]); // Depende do objeto usuario completo, não apenas uid
 
   // Log para debug
   useEffect(() => {
+    const userId = usuario?.uid || usuario?.id;
     console.log('📊 Estado atual:', {
       loading,
       carregado,
       error,
       notificationsCount: notifications.length,
-      usuario: usuario?.uid
+      userId,
+      usuario: usuario ? 'presente' : 'ausente'
     });
-  }, [loading, carregado, error, notifications.length, usuario?.uid]);
+  }, [loading, carregado, error, notifications.length, usuario]);
 
   // 🔥 FILTRAGEM MEMOIZADA
   const filteredNotifications = useMemo(() => {
@@ -175,14 +188,16 @@ function ModernNotificacoes() {
     return notifications.filter(n => !n.lida).length;
   }, [notifications]);
 
+  // 🔥 FUNÇÕES CORRIGIDAS PARA USAR uid OU id
   const carregarNotificacoes = useCallback(async () => {
-    if (!usuario?.uid) return;
+    const userId = usuario?.uid || usuario?.id;
+    if (!userId) return;
     
     try {
       setLoading(true);
       setError(null);
-      console.log('📥 Recarregando notificações manualmente...');
-      const data = await notificacoesService.listar(usuario.uid);
+      console.log('📥 Recarregando notificações manualmente para userId:', userId);
+      const data = await notificacoesService.listar(userId);
       console.log('📊 Notificações recarregadas:', data.length);
       setNotifications(data);
     } catch (error) {
@@ -192,7 +207,7 @@ function ModernNotificacoes() {
     } finally {
       setLoading(false);
     }
-  }, [usuario?.uid]);
+  }, [usuario]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -210,8 +225,11 @@ function ModernNotificacoes() {
   };
 
   const handleMarkAllAsRead = async () => {
+    const userId = usuario?.uid || usuario?.id;
+    if (!userId) return;
+    
     try {
-      const success = await notificacoesService.marcarTodasComoLidas(usuario.uid);
+      const success = await notificacoesService.marcarTodasComoLidas(userId);
       if (success) {
         setNotifications(prev => prev.map(n => ({ ...n, lida: true })));
         toast.success('Todas as notificações marcadas como lidas');
@@ -237,8 +255,11 @@ function ModernNotificacoes() {
   };
 
   const handleDeleteAll = async () => {
+    const userId = usuario?.uid || usuario?.id;
+    if (!userId) return;
+    
     try {
-      const success = await notificacoesService.excluirTodas(usuario.uid);
+      const success = await notificacoesService.excluirTodas(userId);
       if (success) {
         setNotifications([]);
         toast.success('Todas as notificações removidas');
@@ -364,7 +385,7 @@ function ModernNotificacoes() {
           Carregando notificações...
         </Typography>
         <Typography variant="caption" color="textSecondary">
-          {usuario?.uid ? `UID: ${usuario.uid}` : 'Aguardando usuário...'}
+          {usuario?.uid || usuario?.id ? `ID: ${usuario.uid || usuario.id}` : 'Aguardando usuário...'}
         </Typography>
       </Box>
     );
@@ -408,7 +429,7 @@ function ModernNotificacoes() {
       {/* Debug info (remover em produção) */}
       <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
         <Typography variant="caption" component="div">
-          <strong>Debug:</strong> UID: {usuario?.uid || 'N/A'} | 
+          <strong>Debug:</strong> ID: {usuario?.uid || usuario?.id || 'N/A'} | 
           Notificações: {notifications.length} | 
           Carregado: {carregado ? 'Sim' : 'Não'}
         </Typography>
