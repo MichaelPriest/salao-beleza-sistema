@@ -77,7 +77,6 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, parse, startOfDay, endOfDay, addDays, addWeeks, addMonths, getDay, getDate, getMonth, getYear } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -86,74 +85,37 @@ import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
 import { Timestamp } from 'firebase/firestore';
 
-// ============================================
-// FUNÇÕES AUXILIARES COM HORÁRIO DE BRASÍLIA
-// ============================================
-
-// Obter data atual no horário de Brasília
-const getDataBrasilia = () => {
-  const now = new Date();
-  // Converter para UTC-3 (Brasília)
-  const brasiliaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  return brasiliaTime;
-};
-
-// Formatar data para YYYY-MM-DD (para o Firestore)
-const formatarDataBrasilia = (date) => {
-  if (!date) return '';
-  // Garantir que a data está no horário de Brasília
-  const brasiliaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  return format(brasiliaDate, 'yyyy-MM-dd');
-};
-
-// Formatar data para exibição (DD/MM/YYYY)
-const formatarDataExibicao = (date) => {
-  if (!date) return '';
-  const brasiliaDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  return format(brasiliaDate, 'dd/MM/yyyy');
-};
-
-// Obter hora atual no formato HH:MM
-const getHoraBrasilia = () => {
-  const now = getDataBrasilia();
-  return format(now, 'HH:mm');
-};
-
-// Converter string YYYY-MM-DD para Date no horário de Brasília
-const parseDataBrasilia = (dateStr) => {
-  if (!dateStr) return null;
-  // Criar data ao meio-dia para evitar problemas de fuso
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-};
-
-// Dias da semana
-const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-
-// Slots de horário
-const timeSlots = [
-  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
-];
-
-// Obter dias do mês
+// Funções auxiliares de data
 const getDaysInMonth = (date) => {
-  const year = getYear(date);
-  const month = getMonth(date);
-  return new Date(year, month + 1, 0).getDate();
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 };
 
-// Obter primeiro dia do mês
 const getFirstDayOfMonth = (date) => {
-  const year = getYear(date);
-  const month = getMonth(date);
-  const firstDay = new Date(year, month, 1).getDay();
-  // Ajustar para começar na segunda (0 = domingo, 1 = segunda...)
-  return firstDay === 0 ? 6 : firstDay - 1;
+  return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
 
-// Obter dias da semana atual
+const formatDate = (date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const addWeeks = (date, weeks) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + weeks * 7);
+  return result;
+};
+
+const addMonths = (date, months) => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+};
+
 const getWeekDays = (date) => {
   const start = new Date(date);
   start.setDate(start.getDate() - start.getDay() + 1);
@@ -164,14 +126,19 @@ const getWeekDays = (date) => {
   return days;
 };
 
+const timeSlots = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
+];
+
+const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
 function ModernAgendamentos() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('day');
-  
-  // Data atual em Brasília
-  const [currentDate, setCurrentDate] = useState(getDataBrasilia());
-  const [selectedDate, setSelectedDate] = useState(formatarDataBrasilia(getDataBrasilia()));
-  
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [selectedProfessional, setSelectedProfessional] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [openDialog, setOpenDialog] = useState(false);
@@ -243,7 +210,7 @@ function ModernAgendamentos() {
     horario: '',
     observacoes: '',
     status: 'pendente',
-    servicos: [],
+    servicos: [], // Array para múltiplos serviços
     valorTotal: 0
   });
 
@@ -251,16 +218,20 @@ function ModernAgendamentos() {
   // FUNÇÕES PARA FILTRAR SERVIÇOS POR PROFISSIONAL
   // ============================================
 
+  // Atualizar serviços disponíveis quando profissional é selecionado
   useEffect(() => {
     if (formData.profissionalId && servicos) {
+      // Buscar o profissional selecionado
       const profissional = profissionais?.find(p => p.id === formData.profissionalId);
       
       if (profissional && profissional.servicosIds) {
+        // Filtrar serviços pelos IDs associados ao profissional
         const servicosDoProfissional = servicos.filter(s => 
           profissional.servicosIds.includes(s.id) && s.ativo !== false
         );
         setServicosDisponiveis(servicosDoProfissional);
       } else {
+        // Se profissional não tem serviços específicos, mostrar todos ativos
         setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
       }
     } else {
@@ -268,11 +239,14 @@ function ModernAgendamentos() {
     }
   }, [formData.profissionalId, servicos, profissionais]);
 
+  // Atualizar profissionais disponíveis quando serviço é selecionado
   useEffect(() => {
     if (servicoAtual && profissionais) {
+      // Buscar o serviço selecionado
       const servico = servicos?.find(s => s.id === servicoAtual);
       
       if (servico && servico.profissionaisIds) {
+        // Filtrar profissionais pelos IDs associados ao serviço
         const profissionaisDoServico = profissionais.filter(p => 
           servico.profissionaisIds.includes(p.id) && p.ativo !== false
         );
@@ -287,6 +261,7 @@ function ModernAgendamentos() {
   // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
   // ============================================
 
+  // Adicionar serviço à lista
   const adicionarServico = () => {
     if (!servicoAtual) {
       toast.error('Selecione um serviço');
@@ -296,6 +271,7 @@ function ModernAgendamentos() {
     const servico = servicos?.find(s => s.id === servicoAtual);
     if (!servico) return;
 
+    // Verificar se serviço já foi adicionado
     if (servicosSelecionados.some(s => s.id === servico.id)) {
       toast.error('Este serviço já foi adicionado');
       return;
@@ -313,18 +289,22 @@ function ModernAgendamentos() {
     setServicosSelecionados([...servicosSelecionados, novoServico]);
     setServicoAtual('');
     
+    // Calcular novo valor total
     const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
     setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
   };
 
+  // Remover serviço da lista
   const removerServico = (id) => {
     const novosServicos = servicosSelecionados.filter(s => s.id !== id);
     setServicosSelecionados(novosServicos);
     
+    // Calcular novo valor total
     const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
     setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
   };
 
+  // Limpar lista de serviços
   const limparServicos = () => {
     setServicosSelecionados([]);
     setFormData({ ...formData, valorTotal: 0, servicos: [] });
@@ -379,6 +359,12 @@ function ModernAgendamentos() {
     return cpf ? cpf.replace(/\D/g, '') : '';
   };
 
+  const formatarDataBrasil = (data) => {
+    if (!data) return '';
+    const d = new Date(data);
+    return d.toLocaleDateString('pt-BR');
+  };
+
   const buscarClientes = () => {
     if (!clientes) return [];
 
@@ -403,10 +389,10 @@ function ModernAgendamentos() {
 
       case 'dataNascimento':
         if (!dataNascimentoInput) return [];
-        const dataBusca = formatarDataBrasilia(dataNascimentoInput);
+        const dataBusca = formatDate(dataNascimentoInput);
         resultados = clientes.filter(cliente => {
           const dataCliente = cliente.dataNascimento ? 
-            formatarDataBrasilia(new Date(cliente.dataNascimento)) : '';
+            formatDate(new Date(cliente.dataNascimento)) : '';
           return dataCliente === dataBusca;
         });
         break;
@@ -465,9 +451,9 @@ function ModernAgendamentos() {
 
   const weekDays_list = getWeekDays(currentDate);
   const weekEvents = weekDays_list.map(day => ({
-    date: formatarDataBrasilia(day),
+    date: formatDate(day),
     dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
-    events: filteredEvents.filter(event => event.data === formatarDataBrasilia(day))
+    events: filteredEvents.filter(event => event.data === formatDate(day))
   }));
 
   const monthDays = getDaysInMonth(currentDate);
@@ -478,11 +464,11 @@ function ModernAgendamentos() {
   for (let i = 0; i < 6; i++) {
     const week = [];
     for (let j = 0; j < 7; j++) {
-      if (i === 0 && j < firstDay) {
+      if (i === 0 && j < firstDay - 1) {
         week.push(null);
       } else if (dayCounter <= monthDays) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
-        const dateStr = formatarDataBrasilia(date);
+        const dateStr = formatDate(date);
         const dayEvents = filteredEvents.filter(event => event.data === dateStr);
         week.push({
           day: dayCounter,
@@ -514,14 +500,13 @@ function ModernAgendamentos() {
 
   const handlePrevious = () => {
     if (viewMode === 'day') {
-      const currentDateObj = parseDataBrasilia(selectedDate);
-      const newDate = addDays(currentDateObj, -1);
-      setSelectedDate(formatarDataBrasilia(newDate));
+      const newDate = addDays(new Date(selectedDate), -1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, -1);
       setCurrentDate(newDate);
-      setSelectedDate(formatarDataBrasilia(newDate));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, -1);
       setCurrentDate(newDate);
@@ -530,14 +515,13 @@ function ModernAgendamentos() {
 
   const handleNext = () => {
     if (viewMode === 'day') {
-      const currentDateObj = parseDataBrasilia(selectedDate);
-      const newDate = addDays(currentDateObj, 1);
-      setSelectedDate(formatarDataBrasilia(newDate));
+      const newDate = addDays(new Date(selectedDate), 1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, 1);
       setCurrentDate(newDate);
-      setSelectedDate(formatarDataBrasilia(newDate));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, 1);
       setCurrentDate(newDate);
@@ -545,9 +529,9 @@ function ModernAgendamentos() {
   };
 
   const handleToday = () => {
-    const today = getDataBrasilia();
+    const today = new Date();
     setCurrentDate(today);
-    setSelectedDate(formatarDataBrasilia(today));
+    setSelectedDate(formatDate(today));
   };
 
   const handleAdd = () => {
@@ -631,7 +615,7 @@ function ModernAgendamentos() {
       const dadosParaSalvar = {
         clienteId: formData.clienteId,
         profissionalId: formData.profissionalId,
-        servicoId: servicosSelecionados[0]?.id,
+        servicoId: servicosSelecionados[0]?.id, // Primeiro serviço para compatibilidade
         servicos: servicosSelecionados,
         data: formData.data,
         horario: formData.horario,
@@ -694,9 +678,6 @@ function ModernAgendamentos() {
       const servicosLista = agendamento.servicos || [];
       const primeiroServico = servicosLista[0] || {};
 
-      // Hora atual em Brasília
-      const horaAtual = getHoraBrasilia();
-
       const novoAtendimento = {
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
@@ -704,7 +685,7 @@ function ModernAgendamentos() {
         servicoId: primeiroServico.id,
         servicos: servicosLista,
         data: agendamento.data,
-        horaInicio: horaAtual,
+        horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
         observacoes: agendamento.observacoes || '',
@@ -807,14 +788,18 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      const dateObj = parseDataBrasilia(selectedDate);
-      return dateObj ? format(dateObj, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : '';
+      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     } else if (viewMode === 'week') {
       const start = weekDays_list[0];
       const end = weekDays_list[6];
-      return `${format(start, 'dd/MM')} - ${format(end, 'dd/MM/yyyy')}`;
+      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
     } else {
-      return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
+      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
 
@@ -972,7 +957,7 @@ function ModernAgendamentos() {
                 <IconButton onClick={handlePrevious} size="small">
                   <ChevronLeftIcon />
                 </IconButton>
-                <Typography variant="body2" sx={{ flex: 1, textAlign: 'center', fontWeight: 500, textTransform: 'capitalize' }}>
+                <Typography variant="body2" sx={{ flex: 1, textAlign: 'center', fontWeight: 500 }}>
                   {getHeaderText()}
                 </Typography>
                 <IconButton onClick={handleNext} size="small">
@@ -1296,7 +1281,7 @@ function ModernAgendamentos() {
                         {day.dayName}
                       </Typography>
                       <Typography variant="h6" sx={{ mb: 2 }}>
-                        {parseDataBrasilia(day.date)?.getDate()}
+                        {new Date(day.date + 'T12:00:00').getDate()}
                       </Typography>
                       
                       {day.events.length > 0 ? (
@@ -1347,7 +1332,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </Typography>
 
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -1461,7 +1446,12 @@ function ModernAgendamentos() {
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedDayDetails?.date && 
-            format(parseDataBrasilia(selectedDayDetails.date), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+            new Date(selectedDayDetails.date + 'T12:00:00').toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
           }
         </DialogTitle>
         <DialogContent>
@@ -1591,7 +1581,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento */}
+      {/* Dialog de Agendamento - COM MÚLTIPLOS SERVIÇOS */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -1742,7 +1732,7 @@ function ModernAgendamentos() {
                                             )}
                                             {cliente.dataNascimento && (
                                               <Typography variant="caption">
-                                                🎂 {format(parseDataBrasilia(cliente.dataNascimento), 'dd/MM/yyyy')}
+                                                🎂 {formatarDataBrasil(cliente.dataNascimento)}
                                               </Typography>
                                             )}
                                           </Box>
