@@ -38,12 +38,22 @@ import {
   ListItemText,
   ListItemAvatar,
   Badge,
+  Snackbar,
+  RadioGroup,
+  Radio,
+  FormControlLabel,
+  FormLabel,
+  Checkbox,
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useReactToPrint } from 'react-to-print';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 // Ícones
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -68,9 +78,17 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import WarningIcon from '@mui/icons-material/Warning';
 import PeopleIcon from '@mui/icons-material/People';
+import DescriptionIcon from '@mui/icons-material/Description';
+import TableChartIcon from '@mui/icons-material/TableChart';
 
 // Componente para impressão
-const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, filtros }, ref) => {
+const RelatorioComissoes = React.forwardRef(({ 
+  dados, 
+  profissional, 
+  periodo, 
+  filtros,
+  tipo = 'completo' 
+}, ref) => {
   const formatarMoeda = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -84,16 +102,19 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, fil
   };
 
   return (
-    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial' }}>
+    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Cabeçalho */}
-      <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0', mb: 1 }}>
+          Salão de Beleza
+        </Typography>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
           Relatório de Comissões
         </Typography>
-        <Typography variant="h6" sx={{ mt: 1 }}>
+        <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>
           {profissional?.nome || 'Todos os Profissionais'}
         </Typography>
-        <Typography variant="subtitle1" color="textSecondary">
+        <Typography variant="subtitle1" color="textSecondary" sx={{ mt: 1 }}>
           Período: {periodo}
         </Typography>
         <Typography variant="subtitle2" color="textSecondary">
@@ -103,30 +124,30 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, fil
 
       {/* Resumo */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
           Resumo do Período
         </Typography>
         <Grid container spacing={2}>
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-              <Typography variant="body2" color="textSecondary">Total de Comissões</Typography>
-              <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body1" color="textSecondary">Total de Comissões</Typography>
+              <Typography variant="h5" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
                 {formatarMoeda(dados.resumo.totalPeriodo)}
               </Typography>
             </Paper>
           </Grid>
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-              <Typography variant="body2" color="textSecondary">A Receber</Typography>
-              <Typography variant="h6" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body1" color="textSecondary">A Receber</Typography>
+              <Typography variant="h5" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
                 {formatarMoeda(dados.resumo.aReceber)}
               </Typography>
             </Paper>
           </Grid>
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-              <Typography variant="body2" color="textSecondary">Recebido</Typography>
-              <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body1" color="textSecondary">Recebido</Typography>
+              <Typography variant="h5" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
                 {formatarMoeda(dados.resumo.recebido)}
               </Typography>
             </Paper>
@@ -134,95 +155,172 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, fil
         </Grid>
       </Box>
 
-      {/* Atendimentos */}
+      {/* Estatísticas Adicionais */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Atendimentos no Período
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+          Estatísticas
         </Typography>
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                <TableCell><strong>Data</strong></TableCell>
-                <TableCell><strong>Cliente</strong></TableCell>
-                <TableCell><strong>Serviços</strong></TableCell>
-                <TableCell align="right"><strong>Valor</strong></TableCell>
-                <TableCell align="right"><strong>Comissão</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {dados.atendimentos.map((atendimento, index) => (
-                <TableRow key={index}>
-                  <TableCell>{formatarData(atendimento.data)}</TableCell>
-                  <TableCell>{atendimento.cliente?.nome || '—'}</TableCell>
-                  <TableCell>
-                    {atendimento.servicos?.map(s => s.nome).join(', ')}
-                  </TableCell>
-                  <TableCell align="right">R$ {atendimento.valorTotal?.toFixed(2)}</TableCell>
-                  <TableCell align="right">
-                    <strong>R$ {atendimento.comissaoTotal?.toFixed(2)}</strong>
-                  </TableCell>
-                  <TableCell>
-                    {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Grid container spacing={2}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Total de Comissões</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {dados.resumo.quantidade}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Comissões Pagas</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                {dados.resumo.quantidadePaga}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Comissões Pendentes</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+                {dados.resumo.quantidadePendente}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Total de Atendimentos</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {dados.atendimentos.length}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
       </Box>
+
+      {/* Atendimentos */}
+      {tipo !== 'apenas_comissoes' && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Atendimentos no Período
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Cliente</strong></TableCell>
+                  <TableCell><strong>Serviços</strong></TableCell>
+                  <TableCell align="right"><strong>Valor</strong></TableCell>
+                  <TableCell align="right"><strong>Comissão</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.atendimentos.map((atendimento, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatarData(atendimento.data)}</TableCell>
+                    <TableCell>{atendimento.cliente?.nome || '—'}</TableCell>
+                    <TableCell>
+                      {atendimento.servicos?.map(s => s.nome).join(', ')}
+                    </TableCell>
+                    <TableCell align="right">{formatarMoeda(atendimento.valorTotal)}</TableCell>
+                    <TableCell align="right">
+                      <strong>{formatarMoeda(atendimento.comissaoTotal)}</strong>
+                    </TableCell>
+                    <TableCell>
+                      {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
 
       {/* Comissões Detalhadas */}
-      <Box>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Detalhamento das Comissões
-        </Typography>
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                <TableCell><strong>Data</strong></TableCell>
-                <TableCell><strong>Serviço</strong></TableCell>
-                <TableCell align="right"><strong>%</strong></TableCell>
-                <TableCell align="right"><strong>Valor Base</strong></TableCell>
-                <TableCell align="right"><strong>Comissão</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
-                <TableCell><strong>Pagamento</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {dados.comissoes.map((comissao, index) => (
-                <TableRow key={index}>
-                  <TableCell>{formatarData(comissao.data)}</TableCell>
-                  <TableCell>{comissao.servicoNome}</TableCell>
-                  <TableCell align="right">{comissao.percentual}%</TableCell>
-                  <TableCell align="right">R$ {comissao.valorAtendimento?.toFixed(2)}</TableCell>
-                  <TableCell align="right">
-                    <strong>R$ {comissao.valor?.toFixed(2)}</strong>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={comissao.status}
-                      size="small"
-                      color={comissao.status === 'pago' ? 'success' : comissao.status === 'cancelado' ? 'error' : 'warning'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {comissao.dataPagamento ? formatarData(comissao.dataPagamento) : '—'}
-                  </TableCell>
+      {tipo !== 'apenas_atendimentos' && (
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Detalhamento das Comissões
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Serviço</strong></TableCell>
+                  <TableCell align="right"><strong>%</strong></TableCell>
+                  <TableCell align="right"><strong>Valor Base</strong></TableCell>
+                  <TableCell align="right"><strong>Comissão</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Pagamento</strong></TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
+              </TableHead>
+              <TableBody>
+                {dados.comissoes.map((comissao, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatarData(comissao.data)}</TableCell>
+                    <TableCell>{comissao.servicoNome}</TableCell>
+                    <TableCell align="right">{comissao.percentual}%</TableCell>
+                    <TableCell align="right">{formatarMoeda(comissao.valorAtendimento)}</TableCell>
+                    <TableCell align="right">
+                      <strong>{formatarMoeda(comissao.valor)}</strong>
+                    </TableCell>
+                    <TableCell>
+                      {comissao.status}
+                    </TableCell>
+                    <TableCell>
+                      {comissao.dataPagamento ? formatarData(comissao.dataPagamento) : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
+
+      {/* Resumo por Serviço */}
+      {tipo !== 'apenas_atendimentos' && dados.resumo?.porServico && dados.resumo.porServico.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Resumo por Serviço
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Serviço</strong></TableCell>
+                  <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                  <TableCell align="right"><strong>Total</strong></TableCell>
+                  <TableCell align="right"><strong>% do Total</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.resumo.porServico.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.nome}</TableCell>
+                    <TableCell align="right">{item.quantidade}</TableCell>
+                    <TableCell align="right">{formatarMoeda(item.valor)}</TableCell>
+                    <TableCell align="right">
+                      {((item.valor / dados.resumo.totalPeriodo) * 100).toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
 
       {/* Rodapé */}
-      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary' }}>
-        <Divider sx={{ mb: 2 }} />
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
         <Typography variant="caption">
           Relatório gerado automaticamente pelo sistema • Documento não fiscal
+        </Typography>
+        <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+          Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
+          Período: {periodo}
         </Typography>
       </Box>
     </Box>
@@ -257,6 +355,14 @@ function MinhasComissoes() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    tipo: 'completo',
+    incluirResumo: true,
+    incluirAtendimentos: true,
+    incluirComissoes: true,
+    incluirServicos: true,
+  });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // Refs para impressão
   const relatorioRef = useRef();
@@ -711,12 +817,320 @@ function MinhasComissoes() {
     setOpenRelatorioDialog(false);
   };
 
-  const handleExportPDF = () => {
-    toast.success('PDF gerado com sucesso!');
+  const handleExportOptionChange = (event) => {
+    const { name, value, checked, type } = event.target;
+    setExportOptions(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
-  const handleExportExcel = () => {
-    toast.success('Planilha exportada com sucesso!');
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const showNotification = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+    toast[severity](message);
+  };
+
+  // Função para exportar PDF
+  const handleExportPDF = async () => {
+    try {
+      showNotification('Gerando PDF...', 'info');
+      
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Título
+      doc.setFontSize(18);
+      doc.setTextColor(156, 39, 176); // Roxo
+      doc.text('Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
+      
+      // Subtítulo
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text(profissional?.nome || 'Todos os Profissionais', pageWidth / 2, 30, { align: 'center' });
+      
+      // Período
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      const periodo = `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`;
+      doc.text(`Período: ${periodo}`, pageWidth / 2, 38, { align: 'center' });
+      
+      // Data de emissão
+      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 46, { align: 'center' });
+      
+      let yPos = 55;
+      
+      // Resumo
+      if (exportOptions.incluirResumo && resumo) {
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Resumo do Período', 14, yPos);
+        yPos += 8;
+        
+        const resumoData = [
+          ['Total de Comissões', formatarMoeda(resumo.totalPeriodo)],
+          ['A Receber', formatarMoeda(resumo.aReceber)],
+          ['Recebido', formatarMoeda(resumo.recebido)],
+          ['Total de Comissões', resumo.quantidade.toString()],
+          ['Comissões Pagas', resumo.quantidadePaga.toString()],
+          ['Comissões Pendentes', resumo.quantidadePendente.toString()],
+        ];
+        
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Descrição', 'Valor']],
+          body: resumoData,
+          theme: 'striped',
+          headStyles: { fillColor: [156, 39, 176] },
+          margin: { left: 14, right: 14 },
+        });
+        
+        yPos = doc.lastAutoTable.finalY + 10;
+      }
+      
+      // Atendimentos
+      if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
+        // Verificar se precisa de nova página
+        if (yPos > pageHeight - 60) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Atendimentos no Período', 14, yPos);
+        yPos += 8;
+        
+        const atendimentosData = atendimentosFiltrados.map(a => [
+          formatarData(a.data),
+          a.cliente?.nome || '—',
+          a.servicos?.map(s => s.nome).join(', ') || '—',
+          formatarMoeda(a.valorTotal),
+          formatarMoeda(a.comissaoTotal),
+          a.comissaoPaga ? 'Pago' : 'Pendente'
+        ]);
+        
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Data', 'Cliente', 'Serviços', 'Valor', 'Comissão', 'Status']],
+          body: atendimentosData,
+          theme: 'striped',
+          headStyles: { fillColor: [156, 39, 176] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 50 },
+            3: { cellWidth: 25, halign: 'right' },
+            4: { cellWidth: 25, halign: 'right' },
+            5: { cellWidth: 20, halign: 'center' },
+          },
+        });
+        
+        yPos = doc.lastAutoTable.finalY + 10;
+      }
+      
+      // Comissões
+      if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
+        // Verificar se precisa de nova página
+        if (yPos > pageHeight - 60) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Detalhamento das Comissões', 14, yPos);
+        yPos += 8;
+        
+        const comissoesData = comissoesFiltradas.map(c => [
+          formatarData(c.data),
+          c.servicoNome,
+          `${c.percentual}%`,
+          formatarMoeda(c.valorAtendimento),
+          formatarMoeda(c.valor),
+          c.status,
+          c.dataPagamento ? formatarData(c.dataPagamento) : '—'
+        ]);
+        
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Data', 'Serviço', '%', 'Valor Base', 'Comissão', 'Status', 'Pagamento']],
+          body: comissoesData,
+          theme: 'striped',
+          headStyles: { fillColor: [156, 39, 176] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 22 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 15, halign: 'right' },
+            3: { cellWidth: 22, halign: 'right' },
+            4: { cellWidth: 22, halign: 'right' },
+            5: { cellWidth: 20, halign: 'center' },
+            6: { cellWidth: 22, halign: 'center' },
+          },
+        });
+        
+        yPos = doc.lastAutoTable.finalY + 10;
+      }
+      
+      // Resumo por Serviço
+      if (exportOptions.incluirServicos && resumo?.porServico && resumo.porServico.length > 0) {
+        // Verificar se precisa de nova página
+        if (yPos > pageHeight - 60) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Resumo por Serviço', 14, yPos);
+        yPos += 8;
+        
+        const servicosData = resumo.porServico.map(item => [
+          item.nome,
+          item.quantidade.toString(),
+          formatarMoeda(item.valor),
+          `${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`
+        ]);
+        
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Serviço', 'Qtd', 'Total', '%']],
+          body: servicosData,
+          theme: 'striped',
+          headStyles: { fillColor: [156, 39, 176] },
+          margin: { left: 14, right: 14 },
+        });
+      }
+      
+      // Salvar PDF
+      const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.pdf`;
+      doc.save(fileName);
+      
+      showNotification('PDF gerado com sucesso!', 'success');
+      handleCloseRelatorio();
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      showNotification('Erro ao gerar PDF', 'error');
+    }
+  };
+
+  // Função para exportar Excel
+  const handleExportExcel = async () => {
+    try {
+      showNotification('Gerando planilha...', 'info');
+      
+      // Criar workbook
+      const wb = XLSX.utils.book_new();
+      
+      const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
+      
+      // Aba de Resumo
+      if (exportOptions.incluirResumo && resumo) {
+        const resumoData = [
+          ['Resumo do Período'],
+          [''],
+          ['Descrição', 'Valor'],
+          ['Total de Comissões', formatarMoeda(resumo.totalPeriodo)],
+          ['A Receber', formatarMoeda(resumo.aReceber)],
+          ['Recebido', formatarMoeda(resumo.recebido)],
+          [''],
+          ['Estatísticas'],
+          ['Total de Comissões', resumo.quantidade],
+          ['Comissões Pagas', resumo.quantidadePaga],
+          ['Comissões Pendentes', resumo.quantidadePendente],
+          ['Comissões Canceladas', resumo.quantidadeCancelada],
+          ['Total de Atendimentos', atendimentosFiltrados.length],
+        ];
+        
+        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+      }
+      
+      // Aba de Atendimentos
+      if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
+        const atendimentosData = [
+          ['Data', 'Hora', 'Cliente', 'Serviços', 'Valor Total', 'Comissão Total', 'Status'],
+          ...atendimentosFiltrados.map(a => [
+            formatarData(a.data),
+            a.horaInicio || '--:--',
+            a.cliente?.nome || '—',
+            a.servicos?.map(s => s.nome).join(', ') || '—',
+            a.valorTotal,
+            a.comissaoTotal,
+            a.comissaoPaga ? 'Pago' : 'Pendente'
+          ])
+        ];
+        
+        const wsAtendimentos = XLSX.utils.aoa_to_sheet(atendimentosData);
+        XLSX.utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
+      }
+      
+      // Aba de Comissões
+      if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
+        const comissoesData = [
+          ['Data', 'Serviço', 'Percentual', 'Valor Base', 'Comissão', 'Status', 'Data Pagamento'],
+          ...comissoesFiltradas.map(c => [
+            formatarData(c.data),
+            c.servicoNome,
+            c.percentual,
+            c.valorAtendimento,
+            c.valor,
+            c.status,
+            c.dataPagamento ? formatarData(c.dataPagamento) : ''
+          ])
+        ];
+        
+        const wsComissoes = XLSX.utils.aoa_to_sheet(comissoesData);
+        XLSX.utils.book_append_sheet(wb, wsComissoes, 'Comissões');
+      }
+      
+      // Aba de Resumo por Serviço
+      if (exportOptions.incluirServicos && resumo?.porServico && resumo.porServico.length > 0) {
+        const servicosData = [
+          ['Serviço', 'Quantidade', 'Total', '% do Total'],
+          ...resumo.porServico.map(item => [
+            item.nome,
+            item.quantidade,
+            item.valor,
+            ((item.valor / resumo.totalPeriodo) * 100).toFixed(1)
+          ])
+        ];
+        
+        const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
+        XLSX.utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
+      }
+      
+      // Informações do relatório
+      const infoData = [
+        ['Informações do Relatório'],
+        [''],
+        ['Profissional', profissional?.nome || 'Todos os Profissionais'],
+        ['Período', periodo],
+        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
+        ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
+      ];
+      
+      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
+      
+      // Salvar arquivo
+      const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      showNotification('Planilha gerada com sucesso!', 'success');
+      handleCloseRelatorio();
+    } catch (error) {
+      console.error('Erro ao gerar Excel:', error);
+      showNotification('Erro ao gerar planilha', 'error');
+    }
   };
 
   // Filtrar comissões por busca
@@ -765,7 +1179,7 @@ function MinhasComissoes() {
   return (
     <Box>
       {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
             {isAdmin ? 'Gerenciar Comissões' : 'Minhas Comissões'}
@@ -1034,7 +1448,7 @@ function MinhasComissoes() {
                 <Button
                   variant="contained"
                   startIcon={<PictureAsPdfIcon />}
-                  onClick={handleExportPDF}
+                  onClick={handleOpenRelatorio}
                   color="error"
                 >
                   PDF
@@ -1042,8 +1456,8 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<DownloadIcon />}
-                  onClick={handleExportExcel}
+                  startIcon={<TableChartIcon />}
+                  onClick={handleOpenRelatorio}
                   color="success"
                 >
                   Excel
@@ -1464,77 +1878,175 @@ function MinhasComissoes() {
       </Dialog>
 
       {/* Dialog de Exportação/Relatório */}
-      <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
+      <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           Exportar Relatório
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Selecione o formato desejado:
+            <Typography variant="h6" gutterBottom>
+              Opções de Exportação
             </Typography>
             
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<PrintIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handlePrint();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Imprimir Relatório</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera uma versão para impressão
-                    </Typography>
-                  </Box>
-                </Button>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PictureAsPdfIcon color="error" /> PDF
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    Exportar como documento PDF formatado
+                  </Typography>
+                  <FormControl component="fieldset" sx={{ mt: 1 }}>
+                    <FormLabel component="legend">Incluir no PDF:</FormLabel>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirResumo}
+                          onChange={handleExportOptionChange}
+                          name="incluirResumo"
+                          size="small"
+                        />
+                      }
+                      label="Resumo"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirAtendimentos}
+                          onChange={handleExportOptionChange}
+                          name="incluirAtendimentos"
+                          size="small"
+                        />
+                      }
+                      label="Atendimentos"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirComissoes}
+                          onChange={handleExportOptionChange}
+                          name="incluirComissoes"
+                          size="small"
+                        />
+                      }
+                      label="Comissões"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirServicos}
+                          onChange={handleExportOptionChange}
+                          name="incluirServicos"
+                          size="small"
+                        />
+                      }
+                      label="Resumo por Serviço"
+                    />
+                  </FormControl>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    color="error"
+                    startIcon={<PictureAsPdfIcon />}
+                    onClick={handleExportPDF}
+                    sx={{ mt: 2 }}
+                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
+                  >
+                    Gerar PDF
+                  </Button>
+                </Card>
               </Grid>
-              
-              <Grid item xs={12}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<PictureAsPdfIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handleExportPDF();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                  color="error"
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Exportar como PDF</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera um arquivo PDF com todas as informações
-                    </Typography>
-                  </Box>
-                </Button>
+
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TableChartIcon color="success" /> Excel
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    Exportar como planilha Excel
+                  </Typography>
+                  <FormControl component="fieldset" sx={{ mt: 1 }}>
+                    <FormLabel component="legend">Incluir no Excel:</FormLabel>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirResumo}
+                          onChange={handleExportOptionChange}
+                          name="incluirResumo"
+                          size="small"
+                        />
+                      }
+                      label="Resumo"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirAtendimentos}
+                          onChange={handleExportOptionChange}
+                          name="incluirAtendimentos"
+                          size="small"
+                        />
+                      }
+                      label="Atendimentos"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirComissoes}
+                          onChange={handleExportOptionChange}
+                          name="incluirComissoes"
+                          size="small"
+                        />
+                      }
+                      label="Comissões"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          checked={exportOptions.incluirServicos}
+                          onChange={handleExportOptionChange}
+                          name="incluirServicos"
+                          size="small"
+                        />
+                      }
+                      label="Resumo por Serviço"
+                    />
+                  </FormControl>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    color="success"
+                    startIcon={<TableChartIcon />}
+                    onClick={handleExportExcel}
+                    sx={{ mt: 2 }}
+                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
+                  >
+                    Gerar Excel
+                  </Button>
+                </Card>
               </Grid>
-              
+
               <Grid item xs={12}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handleExportExcel();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                  color="success"
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Exportar como Excel</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera uma planilha com todos os dados
-                    </Typography>
-                  </Box>
-                </Button>
+                <Card variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PrintIcon /> Impressão
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    Imprimir relatório diretamente
+                  </Typography>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<PrintIcon />}
+                    onClick={() => {
+                      handleCloseRelatorio();
+                      handlePrint();
+                    }}
+                  >
+                    Imprimir Agora
+                  </Button>
+                </Card>
               </Grid>
             </Grid>
           </Box>
@@ -1549,15 +2061,28 @@ function MinhasComissoes() {
         <RelatorioComissoes
           ref={relatorioRef}
           dados={{
-            resumo: resumo || { totalPeriodo: 0, aReceber: 0, recebido: 0 },
+            resumo: resumo || { totalPeriodo: 0, aReceber: 0, recebido: 0, quantidade: 0, quantidadePaga: 0, quantidadePendente: 0, quantidadeCancelada: 0, porServico: [] },
             comissoes: comissoesFiltradas,
             atendimentos: atendimentosFiltrados
           }}
           profissional={isAdmin ? { nome: 'Todos os Profissionais' } : profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
           filtros={{ mes: filtroMes, ano: filtroAno, status: filtroStatus }}
+          tipo="completo"
         />
       </Box>
+
+      {/* Snackbar para notificações */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
