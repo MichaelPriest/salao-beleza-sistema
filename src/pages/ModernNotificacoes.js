@@ -1,4 +1,4 @@
-// src/pages/ModernNotificacoes.js - CORRIGIDO SEM LOOP
+// src/pages/ModernNotificacoes.js - CORRIGIDO COM DEBUG
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
@@ -56,30 +56,95 @@ function ModernNotificacoes() {
   const [notificationDetails, setNotificationDetails] = useState(null);
   const [filterType, setFilterType] = useState('todos');
   const [usuario, setUsuario] = useState(null);
+  const [error, setError] = useState(null);
+  const [carregado, setCarregado] = useState(false);
 
   // Carregar usuário do localStorage apenas uma vez
   useEffect(() => {
     try {
+      console.log('📝 Iniciando carregamento da página de notificações');
       const userStr = localStorage.getItem('usuario');
+      console.log('📝 userStr:', userStr);
+      
       if (userStr) {
         const user = JSON.parse(userStr);
-        console.log('👤 Usuário carregado:', user);
+        console.log('👤 Usuário carregado do localStorage:', user);
         setUsuario(user);
+      } else {
+        console.log('❌ Nenhum usuário encontrado no localStorage');
+        setError('Usuário não encontrado. Faça login novamente.');
+        setLoading(false);
       }
     } catch (error) {
-      console.error('Erro ao carregar usuário:', error);
+      console.error('❌ Erro ao carregar usuário:', error);
+      setError('Erro ao carregar usuário');
+      setLoading(false);
     }
   }, []);
 
   // Carregar notificações quando o usuário estiver disponível
   useEffect(() => {
-    if (usuario?.uid) {
-      carregarNotificacoes();
-    }
-  }, [usuario]); // Só executa quando usuario mudar
+    let mounted = true;
 
-  // 🔥 FILTRAGEM MEMOIZADA - Evita loops
+    const loadNotifications = async () => {
+      if (!usuario?.uid) {
+        console.log('⏳ Aguardando usuário...');
+        return;
+      }
+
+      try {
+        console.log('📥 Iniciando carregamento de notificações para UID:', usuario.uid);
+        setLoading(true);
+        setError(null);
+        
+        // Timeout para evitar loading infinito
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout ao carregar notificações')), 10000)
+        );
+
+        const dataPromise = notificacoesService.listar(usuario.uid);
+        
+        const data = await Promise.race([dataPromise, timeoutPromise]);
+        
+        if (mounted) {
+          console.log('✅ Notificações carregadas com sucesso:', data?.length || 0);
+          setNotifications(data || []);
+          setCarregado(true);
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error('❌ Erro ao carregar notificações:', error);
+          setError(error.message || 'Erro ao carregar notificações');
+          toast.error('Erro ao carregar notificações');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadNotifications();
+
+    return () => {
+      mounted = false;
+    };
+  }, [usuario?.uid]);
+
+  // Log para debug
+  useEffect(() => {
+    console.log('📊 Estado atual:', {
+      loading,
+      carregado,
+      error,
+      notificationsCount: notifications.length,
+      usuario: usuario?.uid
+    });
+  }, [loading, carregado, error, notifications.length, usuario?.uid]);
+
+  // 🔥 FILTRAGEM MEMOIZADA
   const filteredNotifications = useMemo(() => {
+    console.log('🔍 Filtrando notificações...');
     let filtered = [...notifications];
 
     // Filtro por status (tabs)
@@ -101,6 +166,7 @@ function ModernNotificacoes() {
       return dateB - dateA;
     });
 
+    console.log(`📊 ${filtered.length} notificações após filtros`);
     return filtered;
   }, [notifications, tabValue, filterType]);
 
@@ -114,13 +180,15 @@ function ModernNotificacoes() {
     
     try {
       setLoading(true);
-      console.log('📥 Carregando notificações para:', usuario.uid);
+      setError(null);
+      console.log('📥 Recarregando notificações manualmente...');
       const data = await notificacoesService.listar(usuario.uid);
-      console.log('📊 Notificações carregadas:', data.length);
+      console.log('📊 Notificações recarregadas:', data.length);
       setNotifications(data);
     } catch (error) {
-      console.error('❌ Erro ao carregar notificações:', error);
-      toast.error('Erro ao carregar notificações');
+      console.error('❌ Erro ao recarregar notificações:', error);
+      setError(error.message);
+      toast.error('Erro ao recarregar notificações');
     } finally {
       setLoading(false);
     }
@@ -130,13 +198,10 @@ function ModernNotificacoes() {
     try {
       const success = await notificacoesService.marcarComoLida(id);
       if (success) {
-        // Atualizar localmente sem recarregar tudo
         setNotifications(prev => 
           prev.map(n => n.id === id ? { ...n, lida: true } : n)
         );
         toast.success('Notificação marcada como lida');
-      } else {
-        toast.error('Erro ao marcar notificação');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -148,11 +213,8 @@ function ModernNotificacoes() {
     try {
       const success = await notificacoesService.marcarTodasComoLidas(usuario.uid);
       if (success) {
-        // Atualizar localmente
         setNotifications(prev => prev.map(n => ({ ...n, lida: true })));
         toast.success('Todas as notificações marcadas como lidas');
-      } else {
-        toast.error('Erro ao marcar notificações');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -164,11 +226,8 @@ function ModernNotificacoes() {
     try {
       const success = await notificacoesService.excluir(id);
       if (success) {
-        // Remover localmente
         setNotifications(prev => prev.filter(n => n.id !== id));
         toast.success('Notificação removida');
-      } else {
-        toast.error('Erro ao remover notificação');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -183,8 +242,6 @@ function ModernNotificacoes() {
       if (success) {
         setNotifications([]);
         toast.success('Todas as notificações removidas');
-      } else {
-        toast.error('Erro ao remover notificações');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -281,22 +338,53 @@ function ModernNotificacoes() {
     }
   };
 
+  // Renderização condicional
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert 
+          severity="error" 
+          action={
+            <Button color="inherit" size="small" onClick={carregarNotificacoes}>
+              Tentar novamente
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '50vh', gap: 2 }}>
+        <CircularProgress size={60} sx={{ color: '#9c27b0' }} />
+        <Typography variant="body1" color="textSecondary">
+          Carregando notificações...
+        </Typography>
+        <Typography variant="caption" color="textSecondary">
+          {usuario?.uid ? `UID: ${usuario.uid}` : 'Aguardando usuário...'}
+        </Typography>
       </Box>
     );
   }
 
   return (
     <Box>
-      {/* Header */}
+      {/* Header com botão de recarregar */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Notificações
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={carregarNotificacoes}
+            disabled={loading}
+          >
+            Recarregar
+          </Button>
           <Button
             variant="outlined"
             startIcon={<DoneAllIcon />}
@@ -316,6 +404,15 @@ function ModernNotificacoes() {
           </Button>
         </Box>
       </Box>
+
+      {/* Debug info (remover em produção) */}
+      <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
+        <Typography variant="caption" component="div">
+          <strong>Debug:</strong> UID: {usuario?.uid || 'N/A'} | 
+          Notificações: {notifications.length} | 
+          Carregado: {carregado ? 'Sim' : 'Não'}
+        </Typography>
+      </Paper>
 
       <Grid container spacing={3}>
         {/* Cards de Estatísticas */}
@@ -410,8 +507,19 @@ function ModernNotificacoes() {
                 <Box sx={{ textAlign: 'center', py: 8 }}>
                   <NotificationsIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
                   <Typography variant="h6" color="textSecondary">
-                    Nenhuma notificação encontrada
+                    {notifications.length === 0 
+                      ? 'Nenhuma notificação encontrada' 
+                      : 'Nenhuma notificação com os filtros selecionados'}
                   </Typography>
+                  {notifications.length === 0 && (
+                    <Button 
+                      variant="contained" 
+                      onClick={carregarNotificacoes}
+                      sx={{ mt: 2, bgcolor: '#9c27b0' }}
+                    >
+                      Recarregar
+                    </Button>
+                  )}
                 </Box>
               ) : (
                 <AnimatePresence>
