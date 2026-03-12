@@ -11,11 +11,14 @@ export const notificacoesService = {
         { field: 'usuarioId', operator: '==', value: usuarioId }
       ], 'data');
       
-      console.log('✅ Notificações encontradas:', notificacoes);
+      console.log('✅ Notificações encontradas:', notificacoes.length);
       
-      const notificacoesOrdenadas = notificacoes.sort((a, b) => 
-        new Date(b.data) - new Date(a.data)
-      );
+      // Ordenar por data (mais recentes primeiro)
+      const notificacoesOrdenadas = notificacoes.sort((a, b) => {
+        const dateA = a.data ? new Date(a.data) : new Date(0);
+        const dateB = b.data ? new Date(b.data) : new Date(0);
+        return dateB - dateA;
+      });
       
       return notificacoesOrdenadas;
     } catch (error) {
@@ -33,7 +36,7 @@ export const notificacoesService = {
       });
       console.log('✅ Notificação marcada como lida:', id);
       
-      // 🔥 Disparar evento para atualizar header
+      // Disparar evento para atualizar header
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
       return true;
@@ -61,7 +64,6 @@ export const notificacoesService = {
       await Promise.all(promises);
       console.log(`✅ ${notificacoesNaoLidas.length} notificações marcadas como lidas`);
       
-      // 🔥 Disparar evento para atualizar header
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
       return true;
@@ -77,7 +79,6 @@ export const notificacoesService = {
       await firebaseService.delete('notificacoes', id);
       console.log('✅ Notificação excluída:', id);
       
-      // 🔥 Disparar evento para atualizar header
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
       return true;
@@ -101,7 +102,6 @@ export const notificacoesService = {
       await Promise.all(promises);
       console.log(`✅ ${notificacoes.length} notificações excluídas`);
       
-      // 🔥 Disparar evento para atualizar header
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
       return true;
@@ -129,22 +129,26 @@ export const notificacoesService = {
   // Criar notificação base
   criar: async (dados) => {
     try {
+      const agora = new Date();
+      
       const novaNotificacao = {
         ...dados,
         lida: false,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        data: agora.toISOString(),
+        createdAt: agora.toISOString(),
+        updatedAt: agora.toISOString()
       };
       
-      const result = await firebaseService.add('notificacoes', novaNotificacao);
-      console.log('✅ Notificação criada:', result);
+      console.log('📝 Criando notificação:', novaNotificacao);
       
-      // 🔥 Disparar evento para atualizar header
+      const result = await firebaseService.add('notificacoes', novaNotificacao);
+      console.log('✅ Notificação criada com ID:', result.id);
+      
+      // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
-      return result;
+      return { ...novaNotificacao, id: result.id };
     } catch (error) {
       console.error('❌ Erro ao criar notificação:', error);
       throw error;
@@ -154,6 +158,8 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE AGENDAMENTO COM LINK CORRIGIDO
   notificarAgendamento: async (agendamento, usuarioId) => {
     try {
+      console.log('📨 Criando notificação de agendamento:', { agendamentoId: agendamento.id, usuarioId });
+      
       // Buscar dados completos
       const [cliente, profissional, servico] = await Promise.all([
         firebaseService.getById('clientes', agendamento.clienteId).catch(() => null),
@@ -161,57 +167,54 @@ export const notificacoesService = {
         firebaseService.getById('servicos', agendamento.servicoId).catch(() => null)
       ]);
 
-      const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+      // Formatar data
+      const dataObj = new Date(agendamento.data);
+      const dataFormatada = dataObj.toLocaleDateString('pt-BR');
       const agora = new Date().toLocaleString('pt-BR');
 
-      // 🔥 LINK CORRIGIDO - Agora vai para a lista de agendamentos
-      const linkCorreto = `/agendamentos`;  // ← CORRIGIDO: não tem ID específico
+      // 🔥 LINK CORRIGIDO - Agora é só /agendamentos (sem ID)
+      const linkCorreto = '/agendamentos';
 
-      console.log('📨 Criando notificação de agendamento:', {
-        agendamentoId: agendamento.id,
-        usuarioId,
-        link: linkCorreto
-      });
-
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'agendamento',
         titulo: '📅 Novo Agendamento',
-        mensagem: `${cliente?.nome || 'Cliente'} agendou ${servico?.nome || 'serviço'} com ${profissional?.nome || 'profissional'} para ${dataFormatada} às ${agendamento.horario}`,
+        mensagem: `${cliente?.nome || agendamento.clienteNome || 'Cliente'} agendou ${servico?.nome || agendamento.servicoNome || 'serviço'} com ${profissional?.nome || agendamento.profissionalNome || 'profissional'} para ${dataFormatada} às ${agendamento.horario}`,
+        icone: 'event',
+        link: linkCorreto,  // ← CORRIGIDO
         detalhes: {
-          // Dados do agendamento
           id: agendamento.id,
           data: agendamento.data,
           dataFormatada,
           horario: agendamento.horario,
-          status: agendamento.status,
+          status: agendamento.status || 'pendente',
           observacoes: agendamento.observacoes || 'Sem observações',
           origem: agendamento.origem || 'sistema',
           
           // Dados do cliente
           clienteId: agendamento.clienteId,
-          clienteNome: cliente?.nome || 'Não informado',
-          clienteEmail: cliente?.email || 'Não informado',
-          clienteTelefone: cliente?.telefone || 'Não informado',
+          clienteNome: cliente?.nome || agendamento.clienteNome || 'Não informado',
+          clienteEmail: cliente?.email || agendamento.clienteEmail || 'Não informado',
+          clienteTelefone: cliente?.telefone || agendamento.clienteTelefone || 'Não informado',
           
           // Dados do profissional
           profissionalId: agendamento.profissionalId,
-          profissionalNome: profissional?.nome || 'Não informado',
+          profissionalNome: profissional?.nome || agendamento.profissionalNome || 'Não informado',
           profissionalEspecialidade: profissional?.especialidade || 'Não informada',
           
           // Dados do serviço
-          servicoId: agendamento.servicoId,
-          servicoNome: servico?.nome || 'Não informado',
-          servicoPreco: servico?.preco || 0,
+          servicoId: agendamento.servicoId || (agendamento.servicos && agendamento.servicos[0]?.id),
+          servicoNome: servico?.nome || (agendamento.servicos && agendamento.servicos[0]?.nome) || 'Não informado',
+          servicoPreco: servico?.preco || (agendamento.servicos && agendamento.servicos[0]?.preco) || 0,
           servicoDuracao: servico?.duracao || 0,
           
           // Metadados
           criadoEm: agora,
           link: linkCorreto  // ← CORRIGIDO
-        },
-        link: linkCorreto,  // ← CORRIGIDO
-        icone: 'event'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de agendamento:', error);
       return null;
@@ -221,52 +224,46 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE AGENDAMENTO DO SITE
   notificarAgendamentoSite: async (agendamento, usuarioId) => {
     try {
-      const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+      console.log('📨 Criando notificação de agendamento do site:', { agendamentoId: agendamento.id, usuarioId });
+
+      const dataObj = new Date(agendamento.data);
+      const dataFormatada = dataObj.toLocaleDateString('pt-BR');
       const agora = new Date().toLocaleString('pt-BR');
 
       // 🔥 LINK CORRIGIDO
-      const linkCorreto = `/agendamentos`;
+      const linkCorreto = '/agendamentos';
 
-      console.log('📨 Criando notificação de agendamento do site:', {
-        agendamentoId: agendamento.id,
-        usuarioId,
-        link: linkCorreto
-      });
-
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'agendamento',
         titulo: '🌐 Novo Agendamento pelo Site',
         mensagem: `${agendamento.clienteNome} agendou ${agendamento.servicoNome} com ${agendamento.profissionalNome} para ${dataFormatada} às ${agendamento.horario}`,
+        icone: 'public',
+        link: linkCorreto,  // ← CORRIGIDO
         detalhes: {
-          // Dados do agendamento
           id: agendamento.id,
           data: agendamento.data,
           dataFormatada,
           horario: agendamento.horario,
-          status: agendamento.status,
+          status: agendamento.status || 'pendente',
           observacoes: agendamento.observacoes || 'Sem observações',
           origem: 'site',
           
-          // Dados do cliente
           clienteNome: agendamento.clienteNome,
           clienteEmail: agendamento.clienteEmail,
           clienteTelefone: agendamento.clienteTelefone,
           
-          // Dados do profissional
           profissionalNome: agendamento.profissionalNome,
           
-          // Dados do serviço
           servicoNome: agendamento.servicoNome,
           servicoPreco: agendamento.valor || 0,
           
-          // Metadados
           criadoEm: agora,
           link: linkCorreto  // ← CORRIGIDO
-        },
-        link: linkCorreto,  // ← CORRIGIDO
-        icone: 'public'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de agendamento do site:', error);
       return null;
@@ -276,17 +273,22 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE LEMBRETE
   notificarLembrete: async (agendamento, usuarioId) => {
     try {
-      const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
+      console.log('📨 Criando notificação de lembrete:', { agendamentoId: agendamento.id, usuarioId });
+
+      const dataObj = new Date(agendamento.data);
+      const dataFormatada = dataObj.toLocaleDateString('pt-BR');
       const agora = new Date().toLocaleString('pt-BR');
 
       // 🔥 LINK CORRIGIDO
-      const linkCorreto = `/agendamentos`;
+      const linkCorreto = '/agendamentos';
 
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'lembrete',
         titulo: '⏰ Lembrete de Agendamento',
         mensagem: `Você tem um agendamento amanhã às ${agendamento.horario}`,
+        icone: 'alarm',
+        link: linkCorreto,  // ← CORRIGIDO
         detalhes: {
           id: agendamento.id,
           data: agendamento.data,
@@ -297,10 +299,10 @@ export const notificacoesService = {
           profissionalNome: agendamento.profissionalNome,
           criadoEm: agora,
           link: linkCorreto  // ← CORRIGIDO
-        },
-        link: linkCorreto,  // ← CORRIGIDO
-        icone: 'alarm'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de lembrete:', error);
       return null;
@@ -310,14 +312,18 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE NOVO CLIENTE
   notificarNovoCliente: async (cliente, usuarioId) => {
     try {
-      const agora = new Date().toLocaleString('pt-BR');
-      const linkCorreto = `/clientes`;
+      console.log('📨 Criando notificação de novo cliente:', { clienteId: cliente.id, usuarioId });
 
-      return notificacoesService.criar({
+      const agora = new Date().toLocaleString('pt-BR');
+      const linkCorreto = '/clientes';
+
+      const notificacao = {
         usuarioId,
         tipo: 'cliente',
         titulo: '👤 Novo Cliente Cadastrado',
         mensagem: `${cliente.nome} se cadastrou no sistema`,
+        icone: 'person',
+        link: linkCorreto,
         detalhes: {
           id: cliente.id,
           nome: cliente.nome,
@@ -330,10 +336,10 @@ export const notificacoesService = {
           dataCadastro: cliente.dataCadastro,
           criadoEm: agora,
           link: linkCorreto
-        },
-        link: linkCorreto,
-        icone: 'person'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de novo cliente:', error);
       return null;
@@ -343,14 +349,18 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE ESTOQUE BAIXO
   notificarEstoqueBaixo: async (produto, usuarioId) => {
     try {
-      const agora = new Date().toLocaleString('pt-BR');
-      const linkCorreto = `/estoque`;
+      console.log('📨 Criando notificação de estoque baixo:', { produtoId: produto.id, usuarioId });
 
-      return notificacoesService.criar({
+      const agora = new Date().toLocaleString('pt-BR');
+      const linkCorreto = '/estoque';
+
+      const notificacao = {
         usuarioId,
         tipo: 'estoque',
         titulo: '⚠️ Alerta de Estoque Baixo',
         mensagem: `${produto.nome} - Estoque: ${produto.quantidadeEstoque} unidades (Mínimo: ${produto.estoqueMinimo || 5})`,
+        icone: 'warning',
+        link: linkCorreto,
         detalhes: {
           id: produto.id,
           nome: produto.nome,
@@ -364,10 +374,10 @@ export const notificacoesService = {
           fornecedor: produto.fornecedor || 'Não informado',
           criadoEm: agora,
           link: linkCorreto
-        },
-        link: linkCorreto,
-        icone: 'warning'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de estoque:', error);
       return null;
@@ -377,9 +387,10 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE PAGAMENTO
   notificarPagamento: async (pagamento, usuarioId) => {
     try {
-      const [cliente, atendimento] = await Promise.all([
-        firebaseService.getById('clientes', pagamento.clienteId).catch(() => null),
-        firebaseService.getById('atendimentos', pagamento.atendimentoId).catch(() => null)
+      console.log('📨 Criando notificação de pagamento:', { pagamentoId: pagamento.id, usuarioId });
+
+      const [cliente] = await Promise.all([
+        firebaseService.getById('clientes', pagamento.clienteId).catch(() => null)
       ]);
 
       const formasPagamento = {
@@ -391,15 +402,18 @@ export const notificacoesService = {
         transferencia: '🏦 Transferência'
       };
 
-      const dataFormatada = new Date(pagamento.data).toLocaleDateString('pt-BR');
+      const dataObj = new Date(pagamento.data);
+      const dataFormatada = dataObj.toLocaleDateString('pt-BR');
       const agora = new Date().toLocaleString('pt-BR');
-      const linkCorreto = `/financeiro/receber`;
+      const linkCorreto = '/financeiro/receber';
 
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'pagamento',
         titulo: '💰 Novo Pagamento Recebido',
         mensagem: `${cliente?.nome || 'Cliente'} - R$ ${pagamento.valor?.toFixed(2)} (${formasPagamento[pagamento.formaPagamento] || pagamento.formaPagamento})`,
+        icone: 'payment',
+        link: linkCorreto,
         detalhes: {
           id: pagamento.id,
           atendimentoId: pagamento.atendimentoId,
@@ -415,10 +429,10 @@ export const notificacoesService = {
           observacoes: pagamento.observacoes || 'Sem observações',
           criadoEm: agora,
           link: linkCorreto
-        },
-        link: linkCorreto,
-        icone: 'payment'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de pagamento:', error);
       return null;
@@ -428,36 +442,37 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE ATENDIMENTO INICIADO
   notificarAtendimentoIniciado: async (atendimento, usuarioId) => {
     try {
-      const [cliente, profissional, servico] = await Promise.all([
+      console.log('📨 Criando notificação de atendimento iniciado:', { atendimentoId: atendimento.id, usuarioId });
+
+      const [cliente, profissional] = await Promise.all([
         firebaseService.getById('clientes', atendimento.clienteId).catch(() => null),
-        firebaseService.getById('profissionais', atendimento.profissionalId).catch(() => null),
-        firebaseService.getById('servicos', atendimento.servicoId).catch(() => null)
+        firebaseService.getById('profissionais', atendimento.profissionalId).catch(() => null)
       ]);
 
       const agora = new Date().toLocaleString('pt-BR');
       const linkCorreto = `/atendimento/${atendimento.id}`;
 
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'atendimento',
         titulo: '▶️ Atendimento Iniciado',
-        mensagem: `${cliente?.nome || 'Cliente'} - ${servico?.nome || 'Serviço'} com ${profissional?.nome || 'Profissional'}`,
+        mensagem: `${cliente?.nome || 'Cliente'} - ${atendimento.servicos?.[0]?.nome || 'Serviço'} com ${profissional?.nome || 'Profissional'}`,
+        icone: 'play',
+        link: linkCorreto,
         detalhes: {
           id: atendimento.id,
           agendamentoId: atendimento.agendamentoId,
           clienteNome: cliente?.nome || 'Não informado',
           profissionalNome: profissional?.nome || 'Não informado',
-          servicoNome: servico?.nome || 'Não informado',
-          servicoPreco: servico?.preco || 0,
           data: atendimento.data,
           horaInicio: atendimento.horaInicio,
           status: atendimento.status,
           criadoEm: agora,
           link: linkCorreto
-        },
-        link: linkCorreto,
-        icone: 'play'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de atendimento iniciado:', error);
       return null;
@@ -467,21 +482,23 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE ATENDIMENTO FINALIZADO
   notificarAtendimentoFinalizado: async (atendimento, usuarioId) => {
     try {
+      console.log('📨 Criando notificação de atendimento finalizado:', { atendimentoId: atendimento.id, usuarioId });
+
       const [cliente, profissional] = await Promise.all([
         firebaseService.getById('clientes', atendimento.clienteId).catch(() => null),
         firebaseService.getById('profissionais', atendimento.profissionalId).catch(() => null)
       ]);
 
       const agora = new Date().toLocaleString('pt-BR');
-      const totalServicos = atendimento.itensServico?.reduce((acc, item) => acc + (item.preco || 0), 0) || 0;
-      const totalProdutos = atendimento.itensProduto?.reduce((acc, item) => acc + ((item.preco || 0) * (item.quantidade || 1)), 0) || 0;
       const linkCorreto = `/atendimento/${atendimento.id}`;
 
-      return notificacoesService.criar({
+      const notificacao = {
         usuarioId,
         tipo: 'atendimento',
         titulo: '✅ Atendimento Finalizado',
         mensagem: `${cliente?.nome || 'Cliente'} - Total: R$ ${atendimento.valorTotal?.toFixed(2)}`,
+        icone: 'check',
+        link: linkCorreto,
         detalhes: {
           id: atendimento.id,
           agendamentoId: atendimento.agendamentoId,
@@ -490,18 +507,13 @@ export const notificacoesService = {
           data: atendimento.data,
           horaInicio: atendimento.horaInicio,
           horaFim: atendimento.horaFim,
-          totalServicos: totalServicos,
-          totalProdutos: totalProdutos,
           valorTotal: atendimento.valorTotal || 0,
-          servicos: atendimento.itensServico || [],
-          produtos: atendimento.itensProduto || [],
-          observacoes: atendimento.observacoes || 'Sem observações',
           criadoEm: agora,
           link: linkCorreto
-        },
-        link: linkCorreto,
-        icone: 'check'
-      });
+        }
+      };
+
+      return notificacoesService.criar(notificacao);
     } catch (error) {
       console.error('❌ Erro ao criar notificação de atendimento finalizado:', error);
       return null;
