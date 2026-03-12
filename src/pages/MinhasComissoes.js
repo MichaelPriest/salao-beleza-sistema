@@ -70,7 +70,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import PeopleIcon from '@mui/icons-material/People';
 
 // Componente para impressão
-const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, ref) => {
+const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, filtros }, ref) => {
   const formatarMoeda = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -306,7 +306,8 @@ function MinhasComissoes() {
     try {
       setLoading(true);
       
-      // Buscar profissional atual do localStorage
+      // Buscar dados do usuário atual do localStorage
+      let usuarioLogado = null;
       let profissionalId = null;
       let profissionalNome = '';
       let usuarioTipo = 'profissional';
@@ -314,10 +315,21 @@ function MinhasComissoes() {
       try {
         const usuarioStr = localStorage.getItem('usuario');
         if (usuarioStr) {
-          const usuario = JSON.parse(usuarioStr);
-          profissionalId = usuario?.profissionalId;
-          profissionalNome = usuario?.nome;
-          usuarioTipo = usuario?.tipo || 'profissional';
+          usuarioLogado = JSON.parse(usuarioStr);
+          console.log('Usuário logado:', usuarioLogado);
+          
+          // Verificar se é admin pelo cargo
+          usuarioTipo = usuarioLogado?.cargo || 'profissional';
+          
+          // Se for admin, pode ter profissionalId ou não
+          if (usuarioTipo === 'admin') {
+            profissionalId = usuarioLogado?.profissionalId || null;
+            profissionalNome = usuarioLogado?.nome || 'Administrador';
+          } else {
+            // Se for profissional, usa o profissionalId
+            profissionalId = usuarioLogado?.profissionalId;
+            profissionalNome = usuarioLogado?.nome;
+          }
         }
       } catch (e) {
         console.warn('Erro ao parsear usuário:', e);
@@ -330,12 +342,16 @@ function MinhasComissoes() {
       // Carregar todos os profissionais
       const profissionaisData = await firebaseService.getAll('profissionais');
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      console.log('Profissionais carregados:', profissionaisArray);
       setProfissionais(profissionaisArray);
 
-      // Se não for admin e não tiver profissionalId, usar ID de exemplo
+      // Se não for admin e não tiver profissionalId, usar um padrão
       if (!isAdminUser && !profissionalId) {
-        profissionalId = 'k3yNJZdaVnrz0hrmSegt'; // ID da Rosangela Santana
-        profissionalNome = 'Rosangela Santana';
+        // Buscar o primeiro profissional da lista como fallback
+        if (profissionaisArray.length > 0) {
+          profissionalId = profissionaisArray[0].id;
+          profissionalNome = profissionaisArray[0].nome;
+        }
       }
 
       setProfissional({
@@ -343,6 +359,8 @@ function MinhasComissoes() {
         nome: profissionalNome,
         tipo: usuarioTipo
       });
+
+      console.log('Profissional configurado:', { id: profissionalId, nome: profissionalNome, tipo: usuarioTipo });
 
       // Carregar clientes
       const clientesData = await firebaseService.getAll('clientes');
@@ -384,7 +402,7 @@ function MinhasComissoes() {
           c && c.profissionalId === profissionalId
         );
       } 
-      // Se for admin e tiver filtro de profissional
+      // Se for admin e tiver filtro de profissional selecionado
       else if (isAdmin && filtroProfissional !== 'todos') {
         comissoesFiltradas = comissoesArray.filter(c => 
           c && c.profissionalId === filtroProfissional
@@ -447,7 +465,7 @@ function MinhasComissoes() {
       
       console.log('Todos os atendimentos:', atendimentosArray);
       
-      // Filtrar atendimentos
+      // Filtrar atendimentos finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => a && a.status === 'finalizado');
       
       // Se não for admin, filtrar por profissional
@@ -462,7 +480,7 @@ function MinhasComissoes() {
           return temProfissional;
         });
       } 
-      // Se for admin e tiver filtro de profissional
+      // Se for admin e tiver filtro de profissional selecionado
       else if (isAdmin && filtroProfissional !== 'todos') {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
           const temProfissional = a.itensServico?.some(
@@ -755,7 +773,7 @@ function MinhasComissoes() {
           <Typography variant="body2" color="textSecondary">
             {isAdmin 
               ? 'Visualize todas as comissões dos profissionais' 
-              : `Olá, ${profissional?.nome}! Acompanhe suas comissões e rendimentos`}
+              : profissional?.nome ? `Olá, ${profissional.nome}! Acompanhe suas comissões e rendimentos` : 'Carregando...'}
           </Typography>
         </Box>
         
@@ -928,7 +946,7 @@ function MinhasComissoes() {
               />
             </Grid>
 
-            <Grid item xs={12} md={isAdmin ? 2 : 2}>
+            <Grid item xs={12} md={isAdmin ? 1 : 2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Mês</InputLabel>
                 <Select
@@ -945,7 +963,7 @@ function MinhasComissoes() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={isAdmin ? 2 : 2}>
+            <Grid item xs={12} md={isAdmin ? 1 : 2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Ano</InputLabel>
                 <Select
@@ -1537,6 +1555,7 @@ function MinhasComissoes() {
           }}
           profissional={isAdmin ? { nome: 'Todos os Profissionais' } : profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
+          filtros={{ mes: filtroMes, ano: filtroAno, status: filtroStatus }}
         />
       </Box>
     </Box>
