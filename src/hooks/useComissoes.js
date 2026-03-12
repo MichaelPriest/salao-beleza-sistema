@@ -1,3 +1,4 @@
+// src/hooks/useComissoes.js
 import { useState, useEffect, useCallback } from 'react';
 import { firebaseService } from '../services/firebase';
 import { gerarDespesaComissao } from '../services/financeiroIntegration';
@@ -14,7 +15,6 @@ export const useComissoes = () => {
     quantidadePaga: 0,
   });
 
-  // Carregar comissões
   const carregarComissoes = useCallback(async (filtros = {}) => {
     try {
       setLoading(true);
@@ -22,7 +22,6 @@ export const useComissoes = () => {
       
       let comissoesFiltradas = dados;
       
-      // Aplicar filtros
       if (filtros.profissionalId) {
         comissoesFiltradas = comissoesFiltradas.filter(c => c.profissionalId === filtros.profissionalId);
       }
@@ -46,7 +45,6 @@ export const useComissoes = () => {
     }
   }, []);
 
-  // Calcular estatísticas
   const calcularStats = (dados) => {
     const pendente = dados.filter(c => c.status === 'pendente');
     const pago = dados.filter(c => c.status === 'pago');
@@ -60,7 +58,6 @@ export const useComissoes = () => {
     });
   };
 
-  // Criar nova comissão (geralmente chamado quando um atendimento é finalizado)
   const criarComissao = async (dados) => {
     try {
       const comissao = {
@@ -72,7 +69,6 @@ export const useComissoes = () => {
 
       const id = await firebaseService.add('comissoes', comissao);
       
-      // Gerar despesa no financeiro automaticamente
       const resultadoFinanceiro = await gerarDespesaComissao({ ...comissao, id });
       
       if (resultadoFinanceiro.success) {
@@ -90,7 +86,6 @@ export const useComissoes = () => {
     }
   };
 
-  // Pagar comissão (quando o profissional recebe)
   const pagarComissao = async (comissaoId) => {
     try {
       await firebaseService.update('comissoes', comissaoId, {
@@ -99,7 +94,6 @@ export const useComissoes = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      // Atualizar a despesa no financeiro também
       const transacoes = await firebaseService.getAll('transacoes');
       const despesa = transacoes.find(t => t.referenciaId === comissaoId && t.referenciaTipo === 'comissao');
       
@@ -121,7 +115,6 @@ export const useComissoes = () => {
     }
   };
 
-  // Calcular comissão baseada no valor do atendimento
   const calcularComissao = (valorAtendimento, percentual) => {
     return (valorAtendimento * percentual) / 100;
   };
@@ -138,7 +131,3 @@ export const useComissoes = () => {
 };
 
 export default useComissoes;
-'''
-
-print("✅ Hook useComissoes.js criado")
-print(codigo_hook_comissoes[:500] + "...")
