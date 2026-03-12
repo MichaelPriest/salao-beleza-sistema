@@ -77,6 +77,10 @@ import {
   Savings as SavingsIcon,
   ShowChart as ShowChartIcon,
   PieChart as PieChartIcon,
+  Person as PersonIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Percent as PercentIcon,
+  Store as StoreIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -115,6 +119,8 @@ const statusColors = {
   cancelado: { color: '#9e9e9e', label: 'Cancelado', icon: <CancelIcon /> },
   recebido: { color: '#4caf50', label: 'Recebido', icon: <CheckCircleIcon /> },
   agendado: { color: '#2196f3', label: 'Agendado', icon: <CalendarIcon /> },
+  concluida: { color: '#4caf50', label: 'Concluída', icon: <CheckCircleIcon /> },
+  cancelada: { color: '#f44336', label: 'Cancelada', icon: <CancelIcon /> },
 };
 
 const tipoColors = {
@@ -122,6 +128,8 @@ const tipoColors = {
   despesa: { color: '#f44336', label: 'Despesa', icon: <TrendingDownIcon /> },
   transferencia: { color: '#9c27b0', label: 'Transferência', icon: <SwapHorizIcon /> },
   investimento: { color: '#ff9800', label: 'Investimento', icon: <ShowChartIcon /> },
+  comissao: { color: '#9c27b0', label: 'Comissão', icon: <PercentIcon /> },
+  compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
 };
 
 const formasPagamento = [
@@ -167,12 +175,16 @@ function ModernFinanceiro() {
   
   // Dados
   const [transacoes, setTransacoes] = useState([]);
+  const [comissoes, setComissoes] = useState([]);
+  const [compras, setCompras] = useState([]);
   const [contasPagar, setContasPagar] = useState([]);
   const [contasReceber, setContasReceber] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [caixa, setCaixa] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
   
   // Filtros
   const [filtro, setFiltro] = useState('');
@@ -210,12 +222,22 @@ function ModernFinanceiro() {
     status: 'pendente',
     clienteId: '',
     fornecedorId: '',
+    profissionalId: '',
+    atendimentoId: '',
+    percentual: '',
     observacoes: '',
     parcelas: 1,
     recorrente: false,
     frequencia: 'mensal',
     anexos: [],
     tags: [],
+    // Para compras
+    itens: [],
+    numeroPedido: '',
+    prazoEntrega: '',
+    // Origem
+    origem: 'manual', // 'manual', 'comissao', 'compra'
+    origemId: '',
   });
 
   // Estado para relatórios
@@ -231,30 +253,118 @@ function ModernFinanceiro() {
       setLoading(true);
       
       const [
-        transacoesData, 
+        transacoesData,
+        comissoesData,
+        comprasData,
         caixaData, 
         clientesData, 
-        fornecedoresData
+        fornecedoresData,
+        profissionaisData,
+        servicosData
       ] = await Promise.all([
         firebaseService.getAll('transacoes').catch(() => []),
+        firebaseService.getAll('comissoes').catch(() => []),
+        firebaseService.getAll('compras').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
       ]);
       
       // Garantir que todos os dados são arrays
       const transacoesArray = Array.isArray(transacoesData) ? transacoesData : [];
+      const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
+      const comprasArray = Array.isArray(comprasData) ? comprasData : [];
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       const fornecedoresArray = Array.isArray(fornecedoresData) ? fornecedoresData : [];
+      const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      const servicosArray = Array.isArray(servicosData) ? servicosData : [];
       
-      setTransacoes(transacoesArray);
-      setContasPagar(transacoesArray.filter(t => t.tipo === 'despesa'));
-      setContasReceber(transacoesArray.filter(t => t.tipo === 'receita'));
+      setComissoes(comissoesArray);
+      setCompras(comprasArray);
+      
+      // Converter comissões para transações financeiras
+      const transacoesComissoes = comissoesArray
+        .filter(c => c.status !== 'cancelado')
+        .map(comissao => ({
+          id: `comissao_${comissao.id}`,
+          tipo: 'despesa', // Comissão é despesa para o salão
+          origem: 'comissao',
+          origemId: comissao.id,
+          descricao: `Comissão - ${comissao.servicoNome || 'Serviço'} - ${comissao.profissionalNome || ''}`,
+          valor: comissao.valor || 0,
+          data: comissao.dataRegistro ? comissao.dataRegistro.split('T')[0] : comissao.data,
+          dataVencimento: comissao.data,
+          categoria: 'Comissões',
+          formaPagamento: 'credito_loja',
+          status: comissao.status === 'pago' ? 'pago' : 'pendente',
+          profissionalId: comissao.profissionalId,
+          profissionalNome: comissao.profissionalNome,
+          atendimentoId: comissao.atendimentoId,
+          servicoId: comissao.servicoId,
+          servicoNome: comissao.servicoNome,
+          percentual: comissao.percentual,
+          valorAtendimento: comissao.valorAtendimento,
+          observacoes: `Comissão de ${comissao.percentual}% sobre atendimento de R$ ${comissao.valorAtendimento}`,
+          createdAt: comissao.createdAt,
+          updatedAt: comissao.updatedAt,
+        }));
+
+      // Converter compras para transações financeiras
+      const transacoesCompras = comprasArray
+        .filter(c => c.status !== 'cancelada')
+        .map(compra => ({
+          id: `compra_${compra.id}`,
+          tipo: 'despesa',
+          origem: 'compra',
+          origemId: compra.id,
+          descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
+          valor: compra.valorTotal || 0,
+          data: compra.dataCompra,
+          dataVencimento: compra.dataCompra,
+          categoria: 'Compras',
+          formaPagamento: compra.formaPagamento || 'pix',
+          status: compra.status === 'pago' ? 'pago' : (compra.status === 'cancelada' ? 'cancelado' : 'pendente'),
+          fornecedorId: compra.fornecedorId,
+          numeroPedido: compra.numeroPedido,
+          prazoEntrega: compra.prazoEntrega,
+          itens: compra.itens || [],
+          observacoes: compra.observacoes,
+          createdAt: compra.createdAt,
+          updatedAt: compra.updatedAt,
+        }));
+
+      // Combinar todas as transações
+      const todasTransacoes = [
+        ...transacoesArray,
+        ...transacoesComissoes,
+        ...transacoesCompras
+      ];
+
+      // Ordenar por data (mais recentes primeiro)
+      todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+      setTransacoes(todasTransacoes);
+      
+      // Separar contas a pagar e receber
+      const aPagar = todasTransacoes.filter(t => 
+        t.tipo === 'despesa' && t.status !== 'pago' && t.status !== 'cancelado'
+      );
+      const aReceber = todasTransacoes.filter(t => 
+        t.tipo === 'receita' && t.status !== 'pago' && t.status !== 'cancelado'
+      );
+      
+      setContasPagar(aPagar);
+      setContasReceber(aReceber);
+      
       setClientes(clientesArray);
       setFornecedores(fornecedoresArray);
+      setProfissionais(profissionaisArray);
+      setServicos(servicosArray);
       
       // Extrair categorias únicas
-      const categoriasUnicas = [...new Set(transacoesArray
+      const categoriasUnicas = [...new Set(todasTransacoes
         .map(t => t.categoria)
         .filter(Boolean)
       )];
@@ -276,6 +386,196 @@ function ModernFinanceiro() {
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Função para pagar comissão
+  const handlePagarComissao = async (comissaoId) => {
+    try {
+      // Atualizar comissão original
+      await firebaseService.update('comissoes', comissaoId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Atualizar estado local
+      const comissoesAtualizadas = comissoes.map(c => 
+        c.id === comissaoId ? { ...c, status: 'pago', dataPagamento: new Date().toISOString() } : c
+      );
+      setComissoes(comissoesAtualizadas);
+
+      // Recarregar transações
+      await carregarDados();
+
+      // Atualizar caixa
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const comissao = comissoes.find(c => c.id === comissaoId);
+        if (comissao) {
+          const novoSaldo = (caixa.saldoAtual || 0) - comissao.valor;
+          
+          const novaMovimentacao = {
+            id: Date.now().toString(),
+            tipo: 'despesa',
+            valor: comissao.valor,
+            descricao: `Pagamento de comissão - ${comissao.profissionalNome}`,
+            data: new Date().toISOString(),
+            comissaoId: comissaoId,
+          };
+          
+          const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+          const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+          
+          await firebaseService.update('caixa', caixa.id, {
+            saldoAtual: novoSaldo,
+            movimentacoes: novasMovimentacoes,
+            updatedAt: new Date().toISOString(),
+          });
+          
+          setCaixa({ 
+            ...caixa, 
+            saldoAtual: novoSaldo, 
+            movimentacoes: novasMovimentacoes 
+          });
+        }
+      }
+
+      mostrarSnackbar('✅ Comissão paga com sucesso!');
+    } catch (error) {
+      console.error('Erro ao pagar comissão:', error);
+      mostrarSnackbar('Erro ao pagar comissão', 'error');
+    }
+  };
+
+  // Função para pagar compra
+  const handlePagarCompra = async (compraId) => {
+    try {
+      // Atualizar compra original
+      await firebaseService.update('compras', compraId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Atualizar estado local
+      const comprasAtualizadas = compras.map(c => 
+        c.id === compraId ? { ...c, status: 'pago', dataPagamento: new Date().toISOString() } : c
+      );
+      setCompras(comprasAtualizadas);
+
+      // Recarregar transações
+      await carregarDados();
+
+      // Atualizar caixa
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const compra = compras.find(c => c.id === compraId);
+        if (compra) {
+          const novoSaldo = (caixa.saldoAtual || 0) - compra.valorTotal;
+          
+          const novaMovimentacao = {
+            id: Date.now().toString(),
+            tipo: 'despesa',
+            valor: compra.valorTotal,
+            descricao: `Pagamento de compra - ${compra.numeroPedido}`,
+            data: new Date().toISOString(),
+            compraId: compraId,
+          };
+          
+          const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+          const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+          
+          await firebaseService.update('caixa', caixa.id, {
+            saldoAtual: novoSaldo,
+            movimentacoes: novasMovimentacoes,
+            updatedAt: new Date().toISOString(),
+          });
+          
+          setCaixa({ 
+            ...caixa, 
+            saldoAtual: novoSaldo, 
+            movimentacoes: novasMovimentacoes 
+          });
+        }
+      }
+
+      mostrarSnackbar('✅ Compra paga com sucesso!');
+    } catch (error) {
+      console.error('Erro ao pagar compra:', error);
+      mostrarSnackbar('Erro ao pagar compra', 'error');
+    }
+  };
+
+  // Função para marcar transação como paga (genérica)
+  const handleMarcarComoPago = async (transacao) => {
+    try {
+      if (!transacao || !transacao.id) {
+        mostrarSnackbar('Transação inválida', 'error');
+        return;
+      }
+
+      // Se for uma comissão, chamar função específica
+      if (transacao.origem === 'comissao' && transacao.origemId) {
+        await handlePagarComissao(transacao.origemId);
+        return;
+      }
+
+      // Se for uma compra, chamar função específica
+      if (transacao.origem === 'compra' && transacao.origemId) {
+        await handlePagarCompra(transacao.origemId);
+        return;
+      }
+
+      // Para transações manuais
+      const dadosTransacao = {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      await firebaseService.update('transacoes', transacao.id, dadosTransacao);
+
+      // Atualizar estado local
+      const transacoesAtualizadas = transacoes.map(t => 
+        t.id === transacao.id ? { ...t, ...dadosTransacao } : t
+      );
+      setTransacoes(transacoesAtualizadas);
+      setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa' && t.status !== 'pago'));
+      setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita' && t.status !== 'pago'));
+
+      // Atualizar caixa
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
+        const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: transacao.tipo,
+          valor: Number(transacao.valor),
+          descricao: String(transacao.descricao || ''),
+          data: new Date().toISOString(),
+          transacaoId: String(transacao.id),
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        await firebaseService.update('caixa', caixa.id, {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        });
+        
+        setCaixa({ 
+          ...caixa, 
+          saldoAtual: novoSaldo, 
+          movimentacoes: novasMovimentacoes 
+        });
+      }
+
+      mostrarSnackbar('✅ Transação marcada como paga!');
+    } catch (error) {
+      console.error('Erro ao marcar como pago:', error);
+      mostrarSnackbar('Erro ao processar pagamento', 'error');
     }
   };
 
@@ -308,12 +608,20 @@ function ModernFinanceiro() {
         status: transacao.status || 'pendente',
         clienteId: transacao.clienteId || '',
         fornecedorId: transacao.fornecedorId || '',
+        profissionalId: transacao.profissionalId || '',
+        atendimentoId: transacao.atendimentoId || '',
+        percentual: transacao.percentual || '',
         observacoes: transacao.observacoes || '',
         parcelas: transacao.parcelas || 1,
         recorrente: transacao.recorrente || false,
         frequencia: transacao.frequencia || 'mensal',
         anexos: transacao.anexos || [],
         tags: transacao.tags || [],
+        itens: transacao.itens || [],
+        numeroPedido: transacao.numeroPedido || '',
+        prazoEntrega: transacao.prazoEntrega || '',
+        origem: transacao.origem || 'manual',
+        origemId: transacao.origemId || '',
       });
     } else {
       setTransacaoEditando(null);
@@ -328,12 +636,20 @@ function ModernFinanceiro() {
         status: 'pendente',
         clienteId: '',
         fornecedorId: '',
+        profissionalId: '',
+        atendimentoId: '',
+        percentual: '',
         observacoes: '',
         parcelas: 1,
         recorrente: false,
         frequencia: 'mensal',
         anexos: [],
         tags: [],
+        itens: [],
+        numeroPedido: '',
+        prazoEntrega: '',
+        origem: 'manual',
+        origemId: '',
       });
     }
     setOpenDialog(true);
@@ -392,11 +708,19 @@ function ModernFinanceiro() {
         status: String(formData.status),
         clienteId: formData.clienteId ? String(formData.clienteId) : null,
         fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        profissionalId: formData.profissionalId ? String(formData.profissionalId) : null,
+        atendimentoId: formData.atendimentoId ? String(formData.atendimentoId) : null,
+        percentual: formData.percentual ? Number(formData.percentual) : null,
         observacoes: formData.observacoes ? String(formData.observacoes) : null,
         parcelas: Number(formData.parcelas) || 1,
         recorrente: Boolean(formData.recorrente),
         frequencia: formData.frequencia || 'mensal',
         tags: Array.isArray(formData.tags) ? formData.tags : [],
+        origem: formData.origem || 'manual',
+        origemId: formData.origemId || null,
+        itens: formData.itens || [],
+        numeroPedido: formData.numeroPedido || null,
+        prazoEntrega: formData.prazoEntrega || null,
         updatedAt: new Date().toISOString(),
       };
 
@@ -413,15 +737,18 @@ function ModernFinanceiro() {
       });
 
       if (transacaoEditando) {
-        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        // Se for uma transação manual, atualizar
+        if (transacaoEditando.origem === 'manual') {
+          await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        } else {
+          // Se for de origem externa (comissão/compra), não permitir edição direta
+          mostrarSnackbar('Transações de comissão/compra não podem ser editadas diretamente', 'warning');
+          handleCloseDialog();
+          return;
+        }
         
-        // Atualizar estado local
-        const transacoesAtualizadas = transacoes.map(t => 
-          t.id === transacaoEditando.id ? { ...t, ...dadosParaSalvar, id: transacaoEditando.id } : t
-        );
-        setTransacoes(transacoesAtualizadas);
-        setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa'));
-        setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita'));
+        // Recarregar dados
+        await carregarDados();
         
         mostrarSnackbar('Transação atualizada com sucesso!');
       } else {
@@ -429,16 +756,8 @@ function ModernFinanceiro() {
         
         const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
         
-        const novaTransacao = { ...dadosParaSalvar, id: novoId };
-        const novasTransacoes = [...transacoes, novaTransacao];
-        setTransacoes(novasTransacoes);
-        setContasPagar(novasTransacoes.filter(t => t.tipo === 'despesa'));
-        setContasReceber(novasTransacoes.filter(t => t.tipo === 'receita'));
-        
-        // Atualizar categorias
-        if (formData.categoria && !categorias.includes(formData.categoria)) {
-          setCategorias([...categorias, formData.categoria]);
-        }
+        // Recarregar dados
+        await carregarDados();
         
         mostrarSnackbar('Transação criada com sucesso!');
       }
@@ -466,11 +785,30 @@ function ModernFinanceiro() {
           console.warn('Erro ao parsear usuário do localStorage:', e);
         }
 
+        // Calcular saldo inicial baseado nas transações do dia
+        const hoje = formatarDataBrasilia(new Date());
+        const transacoesHoje = transacoes.filter(t => 
+          t.data === hoje && t.status === 'pago'
+        );
+        
+        const saldoInicial = transacoesHoje.reduce((acc, t) => {
+          if (t.tipo === 'receita') return acc + t.valor;
+          if (t.tipo === 'despesa') return acc - t.valor;
+          return acc;
+        }, 0);
+
         const novoCaixa = {
           dataAbertura: new Date().toISOString(),
-          saldoInicial: 0,
-          saldoAtual: 0,
-          movimentacoes: [],
+          saldoInicial: saldoInicial,
+          saldoAtual: saldoInicial,
+          movimentacoes: transacoesHoje.map(t => ({
+            id: Date.now() + Math.random(),
+            tipo: t.tipo,
+            valor: t.valor,
+            descricao: t.descricao,
+            data: t.data,
+            transacaoId: t.id,
+          })),
           status: 'aberto',
           responsavelId: String(usuarioId),
           createdAt: new Date().toISOString(),
@@ -505,70 +843,6 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para marcar como pago
-  const handleMarcarComoPago = async (transacao) => {
-    try {
-      if (!transacao || !transacao.id) {
-        mostrarSnackbar('Transação inválida', 'error');
-        return;
-      }
-
-      // Atualizar transação
-      const dadosTransacao = {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      await firebaseService.update('transacoes', transacao.id, dadosTransacao);
-
-      // Atualizar estado local
-      const transacoesAtualizadas = transacoes.map(t => 
-        t.id === transacao.id ? { ...t, ...dadosTransacao } : t
-      );
-      setTransacoes(transacoesAtualizadas);
-      setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa'));
-      setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita'));
-
-      // Atualizar saldo do caixa se estiver aberto
-      if (caixa && caixa.status === 'aberto' && caixa.id) {
-        const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
-        const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
-        
-        const novaMovimentacao = {
-          id: Date.now().toString(),
-          tipo: transacao.tipo,
-          valor: Number(transacao.valor),
-          descricao: String(transacao.descricao || ''),
-          data: new Date().toISOString(),
-          transacaoId: String(transacao.id),
-        };
-        
-        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
-        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-        
-        const dadosCaixa = {
-          saldoAtual: Number(novoSaldo),
-          movimentacoes: novasMovimentacoes,
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await firebaseService.update('caixa', caixa.id, dadosCaixa);
-        
-        setCaixa({ 
-          ...caixa, 
-          saldoAtual: novoSaldo, 
-          movimentacoes: novasMovimentacoes 
-        });
-      }
-
-      mostrarSnackbar('✅ Transação marcada como paga!');
-    } catch (error) {
-      console.error('Erro ao marcar como pago:', error);
-      mostrarSnackbar('Erro ao processar pagamento', 'error');
-    }
-  };
-
   // Função para duplicar transação
   const handleDuplicar = (transacao) => {
     const { id, ...dados } = transacao;
@@ -576,12 +850,19 @@ function ModernFinanceiro() {
       ...dados,
       descricao: `${dados.descricao} (cópia)`,
       status: 'pendente',
+      origem: 'manual',
+      origemId: null,
     });
   };
 
   // Função para arquivar/desarquivar
   const handleArquivar = async (transacao) => {
     try {
+      if (transacao.origem !== 'manual') {
+        mostrarSnackbar('Transações de comissão/compra não podem ser arquivadas', 'warning');
+        return;
+      }
+
       const novoStatus = transacao.arquivado ? false : true;
       await firebaseService.update('transacoes', transacao.id, {
         arquivado: novoStatus,
@@ -631,9 +912,17 @@ function ModernFinanceiro() {
 
     const atrasados = transacoesPeriodo.filter(t => {
       if (t.status !== 'pendente') return false;
-      const vencimento = new Date(t.dataVencimento);
+      const vencimento = new Date(t.dataVencimento || t.data);
       return vencimento < new Date();
     }).length;
+
+    const comissoesPendentes = transacoesPeriodo
+      .filter(t => t.origem === 'comissao' && t.status === 'pendente')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+
+    const comprasPendentes = transacoesPeriodo
+      .filter(t => t.origem === 'compra' && t.status === 'pendente')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
     const ticketMedio = receitas > 0 
       ? receitas / transacoesPeriodo.filter(t => t.tipo === 'receita' && t.status === 'pago').length 
@@ -646,6 +935,8 @@ function ModernFinanceiro() {
       aReceber,
       aPagar,
       atrasados,
+      comissoesPendentes,
+      comprasPendentes,
       ticketMedio,
       totalTransacoes: transacoesPeriodo.length,
       transacoesPagas: transacoesPeriodo.filter(t => t.status === 'pago').length,
@@ -664,6 +955,8 @@ function ModernFinanceiro() {
         receitas: 0, 
         despesas: 0, 
         saldo: 0,
+        comissoes: 0,
+        compras: 0,
         dia: format(d, 'dd/MM')
       };
     }
@@ -678,6 +971,11 @@ function ModernFinanceiro() {
             dias[data].receitas += valor;
           } else {
             dias[data].despesas += valor;
+            if (t.origem === 'comissao') {
+              dias[data].comissoes += valor;
+            } else if (t.origem === 'compra') {
+              dias[data].compras += valor;
+            }
           }
           dias[data].saldo = dias[data].receitas - dias[data].despesas;
         }
@@ -691,7 +989,10 @@ function ModernFinanceiro() {
     transacoes
       .filter(t => t.status === 'pago' && !t.arquivado)
       .forEach(t => {
-        const cat = t.categoria || 'Outros';
+        let cat = t.categoria || 'Outros';
+        if (t.origem === 'comissao') cat = 'Comissões';
+        if (t.origem === 'compra') cat = 'Compras';
+        
         if (!categorias[cat]) {
           categorias[cat] = 0;
         }
@@ -718,6 +1019,8 @@ function ModernFinanceiro() {
         mes, 
         receitas: 0, 
         despesas: 0,
+        comissoes: 0,
+        compras: 0,
         lucro: 0,
         data: data.getTime()
       };
@@ -734,6 +1037,11 @@ function ModernFinanceiro() {
             meses[mes].receitas += valor;
           } else {
             meses[mes].despesas += valor;
+            if (t.origem === 'comissao') {
+              meses[mes].comissoes += valor;
+            } else if (t.origem === 'compra') {
+              meses[mes].compras += valor;
+            }
           }
           meses[mes].lucro = meses[mes].receitas - meses[mes].despesas;
         }
@@ -751,14 +1059,19 @@ function ModernFinanceiro() {
   const getTransacoesFiltradas = () => {
     let lista = [];
     if (tabValue === 0) lista = transacoes.filter(t => !t.arquivado);
-    else if (tabValue === 1) lista = contasReceber.filter(t => !t.arquivado);
-    else if (tabValue === 2) lista = contasPagar.filter(t => !t.arquivado);
-    else if (tabValue === 3) lista = transacoes.filter(t => t.arquivado); // Arquivados
+    else if (tabValue === 1) lista = transacoes.filter(t => t.tipo === 'receita' && !t.arquivado);
+    else if (tabValue === 2) lista = transacoes.filter(t => t.tipo === 'despesa' && !t.arquivado);
+    else if (tabValue === 3) lista = transacoes.filter(t => t.origem === 'comissao' && !t.arquivado); // Comissões
+    else if (tabValue === 4) lista = transacoes.filter(t => t.origem === 'compra' && !t.arquivado); // Compras
+    else if (tabValue === 5) lista = transacoes.filter(t => t.arquivado); // Arquivados
 
     return lista.filter(t => {
       const matchesTexto = filtro === '' || 
         t.descricao?.toLowerCase().includes(filtro.toLowerCase()) ||
         t.categoria?.toLowerCase().includes(filtro.toLowerCase()) ||
+        (t.profissionalNome?.toLowerCase().includes(filtro.toLowerCase())) ||
+        (t.servicoNome?.toLowerCase().includes(filtro.toLowerCase())) ||
+        (t.numeroPedido?.toLowerCase().includes(filtro.toLowerCase())) ||
         (t.clienteId && clientes.find(c => c.id === t.clienteId)?.nome?.toLowerCase().includes(filtro.toLowerCase()));
 
       const matchesStatus = filtroStatus === 'todos' || t.status === filtroStatus;
@@ -845,7 +1158,7 @@ function ModernFinanceiro() {
                 Financeiro
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                Gerencie receitas, despesas e fluxo de caixa
+                Gerencie receitas, despesas, comissões e compras
               </Typography>
             </Box>
             
@@ -1003,25 +1316,25 @@ function ModernFinanceiro() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card sx={{ bgcolor: stats.atrasados > 0 ? '#ffebee' : '#f5f5f5', height: '100%' }}>
+              <Card sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#f3e5f5' : '#f5f5f5', height: '100%' }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
                       <Typography color="textSecondary" gutterBottom variant="body2">
-                        Atrasados
+                        Comissões Pendentes
                       </Typography>
                       <Typography variant="h4" sx={{ 
                         fontWeight: 700, 
-                        color: stats.atrasados > 0 ? '#f44336' : '#9e9e9e' 
+                        color: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e' 
                       }}>
-                        {stats.atrasados}
+                        R$ {stats.comissoesPendentes.toFixed(2)}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        Ticket médio: R$ {stats.ticketMedio.toFixed(2)}
+                        Compras pendentes: R$ {stats.comprasPendentes.toFixed(2)}
                       </Typography>
                     </Box>
-                    <Avatar sx={{ bgcolor: stats.atrasados > 0 ? '#f44336' : '#9e9e9e', width: 56, height: 56 }}>
-                      <WarningIcon />
+                    <Avatar sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e', width: 56, height: 56 }}>
+                      <PercentIcon />
                     </Avatar>
                   </Box>
                 </CardContent>
@@ -1132,7 +1445,9 @@ function ModernFinanceiro() {
                         <Legend />
                         <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
                         <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
-                        <Line type="monotone" dataKey="saldo" stroke="#9c27b0" strokeWidth={2} />
+                        <Line type="monotone" dataKey="comissoes" stroke="#9c27b0" strokeWidth={2} name="Comissões" />
+                        <Line type="monotone" dataKey="compras" stroke="#ff9800" strokeWidth={2} name="Compras" />
+                        <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </Box>
@@ -1199,7 +1514,9 @@ function ModernFinanceiro() {
                   <Legend />
                   <Bar dataKey="receitas" fill="#4caf50" name="Receitas" />
                   <Bar dataKey="despesas" fill="#f44336" name="Despesas" />
-                  <Bar dataKey="lucro" fill="#9c27b0" name="Lucro" />
+                  <Bar dataKey="comissoes" fill="#9c27b0" name="Comissões" />
+                  <Bar dataKey="compras" fill="#ff9800" name="Compras" />
+                  <Bar dataKey="lucro" fill="#2196f3" name="Lucro" />
                 </BarChart>
               </ResponsiveContainer>
             </Box>
@@ -1209,10 +1526,12 @@ function ModernFinanceiro() {
         {/* Tabs e Tabela */}
         <Card>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs value={tabValue} onChange={handleTabChange}>
+            <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
               <Tab label="Todas" />
-              <Tab label="A Receber" />
-              <Tab label="A Pagar" />
+              <Tab label="Receitas" />
+              <Tab label="Despesas" />
+              <Tab label="Comissões" icon={<PercentIcon />} iconPosition="start" />
+              <Tab label="Compras" icon={<ShoppingCartIcon />} iconPosition="start" />
               <Tab label="Arquivados" />
             </Tabs>
           </Box>
@@ -1224,7 +1543,7 @@ function ModernFinanceiro() {
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Buscar por descrição, categoria ou cliente..."
+                  placeholder="Buscar por descrição, categoria, profissional, pedido..."
                   value={filtro}
                   onChange={(e) => setFiltro(e.target.value)}
                   InputProps={{
@@ -1286,7 +1605,9 @@ function ModernFinanceiro() {
                     onChange={(e) => setFiltroCategoria(e.target.value)}
                   >
                     <MenuItem value="todas">Todas</MenuItem>
-                    {categorias.map(cat => (
+                    <MenuItem value="Comissões">Comissões</MenuItem>
+                    <MenuItem value="Compras">Compras</MenuItem>
+                    {categorias.filter(c => c !== 'Comissões' && c !== 'Compras').map(cat => (
                       <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                     ))}
                   </Select>
@@ -1316,7 +1637,7 @@ function ModernFinanceiro() {
                   <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                     <TableCell><strong>Data</strong></TableCell>
                     <TableCell><strong>Descrição</strong></TableCell>
-                    <TableCell><strong>Categoria</strong></TableCell>
+                    <TableCell><strong>Tipo/Origem</strong></TableCell>
                     <TableCell><strong>Valor</strong></TableCell>
                     <TableCell><strong>Vencimento</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
@@ -1327,6 +1648,25 @@ function ModernFinanceiro() {
                   <AnimatePresence>
                     {paginatedTransacoes.map((transacao, index) => {
                       const cliente = clientes.find(c => c.id === transacao.clienteId);
+                      const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
+                      const profissional = profissionais.find(p => p.id === transacao.profissionalId);
+                      
+                      let iconeTipo = <ReceiptIcon />;
+                      let corTipo = '#757575';
+                      
+                      if (transacao.origem === 'comissao') {
+                        iconeTipo = <PercentIcon />;
+                        corTipo = '#9c27b0';
+                      } else if (transacao.origem === 'compra') {
+                        iconeTipo = <ShoppingCartIcon />;
+                        corTipo = '#ff9800';
+                      } else if (transacao.tipo === 'receita') {
+                        iconeTipo = <TrendingUpIcon />;
+                        corTipo = '#4caf50';
+                      } else if (transacao.tipo === 'despesa') {
+                        iconeTipo = <TrendingDownIcon />;
+                        corTipo = '#f44336';
+                      }
                       
                       return (
                         <motion.tr
@@ -1345,33 +1685,69 @@ function ModernFinanceiro() {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              {transacao.tipo === 'receita' ? (
-                                <TrendingUpIcon sx={{ color: '#4caf50', fontSize: 20 }} />
-                              ) : (
-                                <TrendingDownIcon sx={{ color: '#f44336', fontSize: 20 }} />
-                              )}
+                              <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>
+                                {iconeTipo}
+                              </Avatar>
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                   {transacao.descricao}
                                 </Typography>
+                                {profissional && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    Profissional: {profissional.nome || transacao.profissionalNome}
+                                  </Typography>
+                                )}
                                 {cliente && (
                                   <Typography variant="caption" color="textSecondary">
                                     Cliente: {cliente.nome}
                                   </Typography>
                                 )}
-                                {transacao.parcelas > 1 && (
+                                {fornecedor && (
                                   <Typography variant="caption" color="textSecondary">
-                                    {' '}({transacao.parcelas}x)
+                                    Fornecedor: {fornecedor.nome}
                                   </Typography>
+                                )}
+                                {transacao.servicoNome && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    {' '}• {transacao.servicoNome}
+                                  </Typography>
+                                )}
+                                {transacao.numeroPedido && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    {' '}• Pedido: {transacao.numeroPedido}
+                                  </Typography>
+                                )}
+                                {transacao.percentual && (
+                                  <Chip
+                                    label={`${transacao.percentual}%`}
+                                    size="small"
+                                    sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#f3e5f5' }}
+                                  />
+                                )}
+                                {transacao.parcelas > 1 && (
+                                  <Chip
+                                    label={`${transacao.parcelas}x`}
+                                    size="small"
+                                    sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
+                                  />
                                 )}
                               </Box>
                             </Box>
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={transacao.categoria || 'Sem categoria'}
+                              label={transacao.origem === 'comissao' ? 'Comissão' : 
+                                    transacao.origem === 'compra' ? 'Compra' : 
+                                    transacao.tipo === 'receita' ? 'Receita' : 'Despesa'}
                               size="small"
-                              variant="outlined"
+                              sx={{
+                                bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' :
+                                        transacao.origem === 'compra' ? '#fff3e0' :
+                                        transacao.tipo === 'receita' ? '#e8f5e9' : '#ffebee',
+                                color: transacao.origem === 'comissao' ? '#9c27b0' :
+                                       transacao.origem === 'compra' ? '#ff9800' :
+                                       transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
+                              }}
                             />
                           </TableCell>
                           <TableCell>
@@ -1441,7 +1817,7 @@ function ModernFinanceiro() {
                                 </Tooltip>
                               )}
 
-                              {!transacao.arquivado && (
+                              {transacao.origem === 'manual' && !transacao.arquivado && (
                                 <Tooltip title="Editar">
                                   <IconButton
                                     size="small"
@@ -1463,15 +1839,17 @@ function ModernFinanceiro() {
                                 </IconButton>
                               </Tooltip>
 
-                              <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleArquivar(transacao)}
-                                  sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}
-                                >
-                                  {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
-                                </IconButton>
-                              </Tooltip>
+                              {transacao.origem === 'manual' && (
+                                <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleArquivar(transacao)}
+                                    sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}
+                                  >
+                                    {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Box>
                           </TableCell>
                         </motion.tr>
@@ -1845,6 +2223,80 @@ function ModernFinanceiro() {
                   />
                 </ListItem>
 
+                {transacaoSelecionada.origem === 'comissao' && (
+                  <>
+                    <ListItem>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                          <PercentIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary="Profissional"
+                        secondary={transacaoSelecionada.profissionalNome || 'Não informado'}
+                      />
+                    </ListItem>
+                    {transacaoSelecionada.servicoNome && (
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: '#ff4081' }}>
+                            <ReceiptLongIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary="Serviço"
+                          secondary={`${transacaoSelecionada.servicoNome} (${transacaoSelecionada.percentual}% de R$ ${transacaoSelecionada.valorAtendimento})`}
+                        />
+                      </ListItem>
+                    )}
+                  </>
+                )}
+
+                {transacaoSelecionada.origem === 'compra' && (
+                  <>
+                    <ListItem>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: '#ff9800' }}>
+                          <StoreIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary="Fornecedor"
+                        secondary={fornecedores.find(f => f.id === transacaoSelecionada.fornecedorId)?.nome || 'Não informado'}
+                      />
+                    </ListItem>
+                    {transacaoSelecionada.numeroPedido && (
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: '#00bcd4' }}>
+                            <ReceiptIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary="Número do Pedido"
+                          secondary={transacaoSelecionada.numeroPedido}
+                        />
+                      </ListItem>
+                    )}
+                    {transacaoSelecionada.itens && transacaoSelecionada.itens.length > 0 && (
+                      <ListItem>
+                        <ListItemText
+                          primary="Itens da Compra"
+                          secondary={
+                            <Box component="ul" sx={{ pl: 2, mt: 1 }}>
+                              {transacaoSelecionada.itens.map((item, idx) => (
+                                <li key={idx}>
+                                  {item.produtoNome} - {item.quantidade}x R$ {item.valorUnitario} = R$ {item.total}
+                                </li>
+                              ))}
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                    )}
+                  </>
+                )}
+
                 <ListItem>
                   <ListItemAvatar>
                     <Avatar sx={{ bgcolor: '#9e9e9e' }}>
@@ -1947,6 +2399,28 @@ function ModernFinanceiro() {
                     <Typography variant="h6" gutterBottom>Contas a Pagar</Typography>
                     <Typography variant="body2" color="textSecondary">
                       Análise de contas a pagar por fornecedor e período
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Comissões</Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Relatório de comissões por profissional e período
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Compras</Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Análise de compras por fornecedor e período
                     </Typography>
                   </CardContent>
                 </Card>
