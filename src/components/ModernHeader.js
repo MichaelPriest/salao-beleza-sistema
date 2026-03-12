@@ -22,7 +22,6 @@ import {
   CircularProgress,
   InputAdornment,
   Fade,
-  Paper,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -168,16 +167,9 @@ function ModernHeader() {
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   
-  // 🔥 ESTADOS PARA BUSCA
+  // 🔥 ESTADOS PARA BUSCA LIVRE
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState({
-    clientes: [],
-    profissionais: [],
-    servicos: [],
-    produtos: [],
-    agendamentos: [],
-    atendimentos: [],
-  });
+  const [searchResults, setSearchResults] = useState([]); // 🔥 MUDEI PARA ARRAY SIMPLES
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchAnchorEl, setSearchAnchorEl] = useState(null);
   const [openSearch, setOpenSearch] = useState(false);
@@ -187,7 +179,6 @@ function ModernHeader() {
   const lastSearchTerm = useRef('');
   const abortControllerRef = useRef(null);
   const searchInputRef = useRef(null);
-  const popoverRef = useRef(null);
   
   const usuarioRef = useRef(usuario);
 
@@ -252,7 +243,6 @@ function ModernHeader() {
         console.log('Header - Notificações carregadas:', data);
         setNotifications(data);
         
-        // 🔥 CORREÇÃO: Contar apenas as não lidas
         const naoLidas = data.filter(n => !n.lida);
         console.log('Header - Não lidas:', naoLidas.length);
         setUnreadCount(naoLidas.length);
@@ -281,7 +271,7 @@ function ModernHeader() {
     }
   }, [usuario, carregarNotificacoes]);
 
-  // 🔥 FUNÇÃO DE BUSCA CORRIGIDA
+  // 🔥 FUNÇÃO DE BUSCA LIVRE - OTIMIZADA
   const realizarBusca = useCallback(async (termo) => {
     // Cancelar busca anterior se existir
     if (abortControllerRef.current) {
@@ -291,15 +281,9 @@ function ModernHeader() {
     // Criar novo AbortController
     abortControllerRef.current = new AbortController();
 
-    if (!termo || termo.length < 3) {
-      setSearchResults({
-        clientes: [],
-        profissionais: [],
-        servicos: [],
-        produtos: [],
-        agendamentos: [],
-        atendimentos: [],
-      });
+    // 🔥 AGORA PERMITE 1 CARACTERE
+    if (!termo || termo.length < 1) {
+      setSearchResults([]);
       setSearchLoading(false);
       return;
     }
@@ -343,83 +327,160 @@ function ModernHeader() {
         return;
       }
 
-      // Filtrar resultados
-      const resultados = {
-        clientes: (clientesData || [])
+      // 🔥 FILTRAR RESULTADOS COM LIMITE POR CATEGORIA
+      const resultados = [];
+
+      // Clientes
+      if (clientesData && clientesData.length > 0) {
+        const clientesFiltrados = clientesData
           .filter(c => 
             c.nome?.toLowerCase().includes(termoLower) ||
             c.email?.toLowerCase().includes(termoLower) ||
-            c.telefone?.includes(termo)
+            c.telefone?.includes(termo) ||
+            c.cpf?.includes(termo)
           )
           .slice(0, 5)
-          .map(c => ({ ...c, tipo: 'cliente' })),
+          .map(c => ({
+            id: c.id,
+            titulo: c.nome,
+            subtitulo: c.telefone || c.email || 'Cliente',
+            tipo: 'cliente',
+            icone: <PeopleIcon />,
+            cor: '#9c27b0',
+            dados: c
+          }));
+        resultados.push(...clientesFiltrados);
+      }
 
-        profissionais: (profissionaisData || [])
+      // Profissionais
+      if (profissionaisData && profissionaisData.length > 0) {
+        const profissionaisFiltrados = profissionaisData
           .filter(p => 
             p.nome?.toLowerCase().includes(termoLower) ||
             p.especialidade?.toLowerCase().includes(termoLower) ||
             p.email?.toLowerCase().includes(termoLower)
           )
           .slice(0, 5)
-          .map(p => ({ ...p, tipo: 'profissional' })),
+          .map(p => ({
+            id: p.id,
+            titulo: p.nome,
+            subtitulo: p.especialidade || 'Profissional',
+            tipo: 'profissional',
+            icone: <PersonIcon />,
+            cor: '#ff9800',
+            dados: p
+          }));
+        resultados.push(...profissionaisFiltrados);
+      }
 
-        servicos: (servicosData || [])
+      // Serviços
+      if (servicosData && servicosData.length > 0) {
+        const servicosFiltrados = servicosData
           .filter(s => 
             s.nome?.toLowerCase().includes(termoLower) ||
             s.descricao?.toLowerCase().includes(termoLower)
           )
           .slice(0, 5)
-          .map(s => ({ ...s, tipo: 'servico' })),
+          .map(s => ({
+            id: s.id,
+            titulo: s.nome,
+            subtitulo: `R$ ${s.preco?.toFixed(2)}`,
+            tipo: 'servico',
+            icone: <ContentCutIcon />,
+            cor: '#9c27b0',
+            dados: s
+          }));
+        resultados.push(...servicosFiltrados);
+      }
 
-        produtos: (produtosData || [])
+      // Produtos
+      if (produtosData && produtosData.length > 0) {
+        const produtosFiltrados = produtosData
           .filter(p => 
             p.nome?.toLowerCase().includes(termoLower) ||
             p.descricao?.toLowerCase().includes(termoLower) ||
-            p.codigoBarras?.includes(termo)
+            p.codigoBarras?.includes(termo) ||
+            p.codigo?.includes(termo)
           )
           .slice(0, 5)
-          .map(p => ({ ...p, tipo: 'produto' })),
+          .map(p => ({
+            id: p.id,
+            titulo: p.nome,
+            subtitulo: `Estoque: ${p.quantidadeEstoque} | R$ ${p.precoVenda?.toFixed(2)}`,
+            tipo: 'produto',
+            icone: <InventoryIcon />,
+            cor: '#f44336',
+            dados: p
+          }));
+        resultados.push(...produtosFiltrados);
+      }
 
-        agendamentos: (agendamentosData || [])
+      // Agendamentos
+      if (agendamentosData && agendamentosData.length > 0) {
+        const agendamentosFiltrados = agendamentosData
           .filter(a => 
             a.clienteNome?.toLowerCase().includes(termoLower) ||
             a.profissionalNome?.toLowerCase().includes(termoLower) ||
             a.servicoNome?.toLowerCase().includes(termoLower)
           )
           .slice(0, 5)
-          .map(a => ({ ...a, tipo: 'agendamento' })),
+          .map(a => ({
+            id: a.id,
+            titulo: a.clienteNome,
+            subtitulo: `${a.data} às ${a.horario} - ${a.servicoNome}`,
+            tipo: 'agendamento',
+            icone: <EventIcon />,
+            cor: '#2196f3',
+            dados: a
+          }));
+        resultados.push(...agendamentosFiltrados);
+      }
 
-        atendimentos: (atendimentosData || [])
+      // Atendimentos
+      if (atendimentosData && atendimentosData.length > 0) {
+        const atendimentosFiltrados = atendimentosData
           .filter(a => 
             a.clienteNome?.toLowerCase().includes(termoLower) ||
             a.profissionalNome?.toLowerCase().includes(termoLower) ||
             a.servicoNome?.toLowerCase().includes(termoLower)
           )
           .slice(0, 5)
-          .map(a => ({ ...a, tipo: 'atendimento' })),
-      };
+          .map(a => ({
+            id: a.id,
+            titulo: a.clienteNome,
+            subtitulo: `R$ ${a.valorTotal?.toFixed(2)} - ${a.status}`,
+            tipo: 'atendimento',
+            icone: <ReceiptIcon />,
+            cor: '#4caf50',
+            dados: a
+          }));
+        resultados.push(...atendimentosFiltrados);
+      }
 
-      setSearchResults(resultados);
+      // Ordenar resultados por relevância (começa com o termo)
+      resultados.sort((a, b) => {
+        const aTitulo = a.titulo?.toLowerCase() || '';
+        const bTitulo = b.titulo?.toLowerCase() || '';
+        
+        if (aTitulo.startsWith(termoLower) && !bTitulo.startsWith(termoLower)) return -1;
+        if (!aTitulo.startsWith(termoLower) && bTitulo.startsWith(termoLower)) return 1;
+        return 0;
+      });
+
+      setSearchResults(resultados.slice(0, 15)); // Limite total de 15 resultados
     } catch (error) {
       if (error.message === 'Timeout') {
         console.error('Busca excedeu o tempo limite');
       } else if (error.name !== 'AbortError') {
         console.error('Erro na busca:', error);
       }
-      setSearchResults({
-        clientes: [],
-        profissionais: [],
-        servicos: [],
-        produtos: [],
-        agendamentos: [],
-        atendimentos: [],
-      });
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
   }, []);
 
-  // 🔥 HANDLER DE MUDANÇA NA BUSCA CORRIGIDO
+  // 🔥 HANDLER DE MUDANÇA NA BUSCA - AGORA COM 1 CARACTERE
   const handleSearchChange = useCallback((e) => {
     const value = e.target.value;
     setSearchTerm(value);
@@ -429,36 +490,29 @@ function ModernHeader() {
       clearTimeout(searchTimeout.current);
     }
 
-    // Se o valor for menor que 3, limpar resultados e fechar popover
-    if (value.length < 3) {
-      setSearchResults({
-        clientes: [],
-        profissionais: [],
-        servicos: [],
-        produtos: [],
-        agendamentos: [],
-        atendimentos: [],
-      });
+    // 🔥 AGORA PERMITE 1 CARACTERE
+    if (value.length < 1) {
+      setSearchResults([]);
       setOpenSearch(false);
       setSearchAnchorEl(null);
       return;
     }
 
-    // Abrir popover se houver pelo menos 3 caracteres
-    if (value.length >= 3 && searchInputRef.current) {
+    // Abrir popover se houver pelo menos 1 caractere
+    if (value.length >= 1 && searchInputRef.current) {
       setSearchAnchorEl(searchInputRef.current);
       setOpenSearch(true);
     }
 
-    // Debounce de 500ms
+    // Debounce de 300ms para busca mais rápida
     searchTimeout.current = setTimeout(() => {
       realizarBusca(value);
-    }, 500);
+    }, 300);
   }, [realizarBusca]);
 
   // 🔥 HANDLER DE FOCO NA BUSCA
   const handleSearchFocus = (e) => {
-    if (searchTerm.length >= 3) {
+    if (searchTerm.length >= 1) {
       setSearchAnchorEl(e.currentTarget);
       setOpenSearch(true);
     }
@@ -466,7 +520,7 @@ function ModernHeader() {
 
   // 🔥 HANDLER DE CLIQUE NO INPUT
   const handleSearchClick = (e) => {
-    if (searchTerm.length >= 3) {
+    if (searchTerm.length >= 1) {
       setSearchAnchorEl(e.currentTarget);
       setOpenSearch(true);
     }
@@ -475,7 +529,6 @@ function ModernHeader() {
   // 🔥 FUNÇÃO PARA FECHAR A BUSCA
   const handleSearchClose = () => {
     setOpenSearch(false);
-    // Não limpar o anchorEl imediatamente para evitar flicker
     setTimeout(() => {
       setSearchAnchorEl(null);
     }, 200);
@@ -486,14 +539,7 @@ function ModernHeader() {
     setSearchTerm('');
     setOpenSearch(false);
     setSearchAnchorEl(null);
-    setSearchResults({
-      clientes: [],
-      profissionais: [],
-      servicos: [],
-      produtos: [],
-      agendamentos: [],
-      atendimentos: [],
-    });
+    setSearchResults([]);
     
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -509,7 +555,7 @@ function ModernHeader() {
   };
 
   // 🔥 FUNÇÃO PARA NAVEGAR PARA O RESULTADO
-  const handleResultClick = (tipo, id, item) => {
+  const handleResultClick = (item) => {
     const rotas = {
       cliente: `/clientes`,
       profissional: `/profissionais`,
@@ -519,21 +565,21 @@ function ModernHeader() {
       atendimento: `/atendimentos`,
     };
 
-    if (tipo === 'cliente') {
+    if (item.tipo === 'cliente') {
       navigate(`/clientes`);
-      toast.success(`${item.nome} encontrado! Verifique na lista.`);
-    } else if (tipo === 'profissional') {
+      toast.success(`${item.titulo} encontrado! Verifique na lista.`);
+    } else if (item.tipo === 'profissional') {
       navigate(`/profissionais`);
-      toast.success(`${item.nome} encontrado! Verifique na lista.`);
-    } else if (tipo === 'servico') {
+      toast.success(`${item.titulo} encontrado! Verifique na lista.`);
+    } else if (item.tipo === 'servico') {
       navigate(`/servicos`);
-      toast.success(`${item.nome} encontrado! Verifique na lista.`);
-    } else if (tipo === 'produto') {
+      toast.success(`${item.titulo} encontrado! Verifique na lista.`);
+    } else if (item.tipo === 'produto') {
       navigate(`/estoque`);
-      window.dispatchEvent(new CustomEvent('buscarProduto', { detail: item.nome }));
-      toast.success(`${item.nome} encontrado! Verifique na lista.`);
+      window.dispatchEvent(new CustomEvent('buscarProduto', { detail: item.titulo }));
+      toast.success(`${item.titulo} encontrado! Verifique na lista.`);
     } else {
-      navigate(rotas[tipo]);
+      navigate(rotas[item.tipo]);
     }
     
     handleClearSearch();
@@ -541,14 +587,12 @@ function ModernHeader() {
 
   // 🔥 RENDERIZAR RESULTADOS DA BUSCA
   const renderSearchResults = () => {
-    const totalResults = Object.values(searchResults).reduce((acc, arr) => acc + arr.length, 0);
-
-    if (searchTerm.length < 3) {
+    if (searchTerm.length < 1) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
           <Typography variant="body2" color="textSecondary">
-            Digite pelo menos 3 caracteres para buscar
+            Digite para começar a buscar
           </Typography>
         </Box>
       );
@@ -565,7 +609,7 @@ function ModernHeader() {
       );
     }
 
-    if (totalResults === 0) {
+    if (searchResults.length === 0) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
@@ -578,39 +622,42 @@ function ModernHeader() {
 
     return (
       <List sx={{ p: 0 }}>
-        {/* Clientes */}
-        {searchResults.clientes.length > 0 && (
-          <>
-            <ListItem sx={{ bgcolor: '#f3e5f5' }}>
-              <ListItemIcon>
-                <PeopleIcon sx={{ color: '#9c27b0' }} />
+        {searchResults.map((item, index) => (
+          <React.Fragment key={`${item.tipo}-${item.id}-${index}`}>
+            <ListItem
+              button
+              onClick={() => handleResultClick(item)}
+              sx={{
+                '&:hover': {
+                  bgcolor: `${item.cor}10`,
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: item.cor, minWidth: 40 }}>
+                {item.icone}
               </ListItemIcon>
-              <ListItemText 
+              <ListItemText
                 primary={
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Clientes ({searchResults.clientes.length})
+                    {item.titulo}
                   </Typography>
                 }
+                secondary={item.subtitulo}
+              />
+              <Chip 
+                label={item.tipo} 
+                size="small" 
+                sx={{ 
+                  bgcolor: `${item.cor}20`,
+                  color: item.cor,
+                  fontWeight: 600,
+                  textTransform: 'capitalize'
+                }} 
               />
             </ListItem>
-            {searchResults.clientes.map(cliente => (
-              <ListItem 
-                key={cliente.id} 
-                button 
-                onClick={() => handleResultClick('cliente', cliente.id, cliente)}
-                sx={{ pl: 4 }}
-              >
-                <ListItemText
-                  primary={cliente.nome}
-                  secondary={cliente.telefone || cliente.email}
-                />
-                <Chip label="Cliente" size="small" sx={{ bgcolor: '#f3e5f5', color: '#9c27b0' }} />
-              </ListItem>
-            ))}
-          </>
-        )}
-
-        {/* Outras categorias... (manter o mesmo código) */}
+            {index < searchResults.length - 1 && <Divider />}
+          </React.Fragment>
+        ))}
       </List>
     );
   };
@@ -764,14 +811,14 @@ function ModernHeader() {
           Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋
         </Typography>
 
-        {/* 🔥 CAMPO DE BUSCA */}
+        {/* 🔥 CAMPO DE BUSCA LIVRE */}
         <Search>
           <SearchIconWrapper>
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
             inputRef={searchInputRef}
-            placeholder="Buscar clientes, serviços, produtos... (mínimo 3 caracteres)"
+            placeholder="Buscar clientes, serviços, produtos... (busca livre)"
             value={searchTerm}
             onChange={handleSearchChange}
             onFocus={handleSearchFocus}
@@ -793,7 +840,7 @@ function ModernHeader() {
           />
         </Search>
 
-        {/* 🔥 POPOVER DE RESULTADOS DA BUSCA CORRIGIDO */}
+        {/* 🔥 POPOVER DE RESULTADOS DA BUSCA */}
         <Popover
           open={openSearch}
           anchorEl={searchAnchorEl}
@@ -807,7 +854,6 @@ function ModernHeader() {
             horizontal: 'left',
           }}
           PaperProps={{
-            ref: popoverRef,
             sx: {
               mt: 1,
               width: 500,
@@ -820,7 +866,7 @@ function ModernHeader() {
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Resultados da busca
+              Resultados da busca {searchResults.length > 0 && `(${searchResults.length})`}
             </Typography>
             <IconButton size="small" onClick={handleSearchClose}>
               <CloseIcon />
@@ -883,7 +929,7 @@ function ModernHeader() {
           </motion.div>
         </Box>
 
-        {/* Menu de Notificações CORRIGIDO */}
+        {/* Menu de Notificações */}
         <Menu
           anchorEl={notificationsAnchor}
           open={Boolean(notificationsAnchor)}
