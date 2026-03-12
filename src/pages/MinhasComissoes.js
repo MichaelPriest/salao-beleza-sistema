@@ -330,13 +330,15 @@ function MinhasComissoes() {
 
       // Carregar clientes primeiro
       const clientesData = await firebaseService.getAll('clientes');
-      setClientes(Array.isArray(clientesData) ? clientesData : []);
+      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
+      console.log('Clientes carregados:', clientesArray);
+      setClientes(clientesArray);
 
-      // Carregar dados
-      await Promise.all([
-        carregarComissoes(profissionalId),
-        carregarAtendimentos(profissionalId),
-      ]);
+      // Carregar comissões
+      await carregarComissoes(profissionalId);
+      
+      // Carregar atendimentos (agora com os clientes já carregados)
+      await carregarAtendimentos(profissionalId);
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -353,12 +355,14 @@ function MinhasComissoes() {
       // Garantir que é array
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       
+      console.log('Todas as comissões:', comissoesArray);
+      
       // Filtrar comissões do profissional
       let comissoesFiltradas = comissoesArray.filter(c => 
         c && c.profissionalId === profissionalId
       );
 
-      console.log('Comissões encontradas:', comissoesFiltradas); // Debug
+      console.log('Comissões filtradas pelo profissional:', comissoesFiltradas);
 
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
@@ -397,7 +401,7 @@ function MinhasComissoes() {
         status: c.status || 'pendente'
       }));
 
-      console.log('Comissões processadas:', comissoesFiltradas); // Debug
+      console.log('Comissões processadas:', comissoesFiltradas);
       setComissoes(comissoesFiltradas);
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
@@ -411,6 +415,8 @@ function MinhasComissoes() {
       
       // Garantir que é array
       const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
+      
+      console.log('Todos os atendimentos:', atendimentosArray);
       
       // Filtrar atendimentos do profissional e finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => {
@@ -426,6 +432,8 @@ function MinhasComissoes() {
         return temProfissional && a.status === 'finalizado';
       });
 
+      console.log('Atendimentos filtrados pelo profissional:', atendimentosFiltrados);
+
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
@@ -436,13 +444,17 @@ function MinhasComissoes() {
       }
 
       // Enriquecer atendimentos com dados do cliente e comissões
-      atendimentosFiltrados = atendimentosFiltrados.map(atendimento => {
+      const atendimentosProcessados = atendimentosFiltrados.map(atendimento => {
+        // Buscar cliente
         const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
+        console.log(`Cliente encontrado para atendimento ${atendimento.id}:`, cliente);
         
         // Buscar todas as comissões deste atendimento para o profissional
         const comissoesDoAtendimento = comissoes.filter(c => 
           c && c.atendimentoId === atendimento.id && c.profissionalId === profissionalId
         );
+        
+        console.log(`Comissões do atendimento ${atendimento.id}:`, comissoesDoAtendimento);
         
         // Calcular comissão total
         const comissaoTotal = comissoesDoAtendimento.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
@@ -462,10 +474,10 @@ function MinhasComissoes() {
       });
 
       // Ordenar por data (mais recentes primeiro)
-      atendimentosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
+      atendimentosProcessados.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-      console.log('Atendimentos processados:', atendimentosFiltrados); // Debug
-      setAtendimentos(atendimentosFiltrados);
+      console.log('Atendimentos processados:', atendimentosProcessados);
+      setAtendimentos(atendimentosProcessados);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
       setAtendimentos([]);
