@@ -29,7 +29,6 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   TablePagination,
   Tabs,
   Tab,
@@ -52,10 +51,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Warning as WarningIcon,
-  BarChart as BarChartIcon,
   FileCopy as FileCopyIcon,
-  Archive as ArchiveIcon,
-  Unarchive as UnarchiveIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -75,16 +71,12 @@ import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
   Line,
   ComposedChart,
 } from 'recharts';
 
-// Importar serviço de dados
-import { useDados } from '../hooks/useDados';
-import { firebaseService } from '../services/firebase';
-import { notificacoesService } from '../services/notificacoesService';
+import { useDadosContext } from '../contexts/DadosContext';
+import api from '../services/api';
 
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3'];
 
@@ -93,12 +85,6 @@ const statusColors = {
   pago: { color: '#4caf50', label: 'Pago', icon: <CheckCircleIcon /> },
   atrasado: { color: '#f44336', label: 'Atrasado', icon: <CancelIcon /> },
   cancelado: { color: '#9e9e9e', label: 'Cancelado', icon: <CancelIcon /> },
-  recebido: { color: '#4caf50', label: 'Recebido', icon: <CheckCircleIcon /> },
-};
-
-const tipoColors = {
-  receita: { color: '#4caf50', label: 'Receita', icon: <TrendingUpIcon /> },
-  despesa: { color: '#f44336', label: 'Despesa', icon: <TrendingDownIcon /> },
 };
 
 const formasPagamento = [
@@ -111,7 +97,15 @@ const formasPagamento = [
 ];
 
 function ModernFinanceiro() {
-  const { dados, carregando, recarregar, transacoes, clientes, caixaAtual } = useDados();
+  const { 
+    transacoes, 
+    clientes, 
+    caixaAtual,
+    carregando,
+    recarregar,
+    transacoesCrud,
+    usuario 
+  } = useDadosContext();
   
   const [tabValue, setTabValue] = useState(0);
   const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
@@ -131,7 +125,6 @@ function ModernFinanceiro() {
   const [transacaoSelecionada, setTransacaoSelecionada] = useState(null);
   
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [usuario, setUsuario] = useState(null);
 
   const [formData, setFormData] = useState({
     tipo: 'receita',
@@ -146,18 +139,6 @@ function ModernFinanceiro() {
     observacoes: '',
     parcelas: 1,
   });
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('usuario');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setUsuario(user);
-      } catch (error) {
-        console.error('Erro ao carregar usuário:', error);
-      }
-    }
-  }, []);
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -295,15 +276,16 @@ function ModernFinanceiro() {
       }
 
       if (transacaoEditando) {
-        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        await api.patch(`/transacoes/${transacaoEditando.id}`, dadosParaSalvar);
+        await transacoesCrud.carregar();
         mostrarSnackbar('Transação atualizada com sucesso!');
       } else {
         dadosParaSalvar.createdAt = new Date().toISOString();
-        await firebaseService.add('transacoes', dadosParaSalvar);
+        await api.post('/transacoes', dadosParaSalvar);
+        await transacoesCrud.carregar();
         mostrarSnackbar('Transação criada com sucesso!');
       }
 
-      await recarregar();
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
@@ -313,7 +295,7 @@ function ModernFinanceiro() {
 
   const handleAbrirFecharCaixa = async () => {
     try {
-      const userId = usuario?.uid || usuario?.id;
+      const userId = usuario?.id || usuario?.uid;
       if (!userId) {
         mostrarSnackbar('Usuário não identificado', 'error');
         return;
@@ -332,7 +314,7 @@ function ModernFinanceiro() {
           updatedAt: new Date().toISOString(),
         };
         
-        await firebaseService.add('caixa', novoCaixa);
+        await api.post('/caixa', novoCaixa);
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
         // Fechar caixa
@@ -343,11 +325,11 @@ function ModernFinanceiro() {
           updatedAt: new Date().toISOString(),
         };
         
-        await firebaseService.update('caixa', caixaAtual.id, dadosAtualizacao);
+        await api.patch(`/caixa/${caixaAtual.id}`, dadosAtualizacao);
         mostrarSnackbar('✅ Caixa fechado com sucesso!');
       }
 
-      await recarregar();
+      await recarregar('caixa');
       handleCloseCaixaDialog();
     } catch (error) {
       console.error('Erro ao abrir/fechar caixa:', error);
@@ -363,7 +345,7 @@ function ModernFinanceiro() {
         updatedAt: new Date().toISOString(),
       };
       
-      await firebaseService.update('transacoes', transacao.id, dadosTransacao);
+      await api.patch(`/transacoes/${transacao.id}`, dadosTransacao);
 
       // Atualizar caixa se estiver aberto
       if (caixaAtual) {
@@ -382,14 +364,14 @@ function ModernFinanceiro() {
         const movimentacoesAtuais = Array.isArray(caixaAtual.movimentacoes) ? caixaAtual.movimentacoes : [];
         const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
         
-        await firebaseService.update('caixa', caixaAtual.id, {
+        await api.patch(`/caixa/${caixaAtual.id}`, {
           saldoAtual: novoSaldo,
           movimentacoes: novasMovimentacoes,
           updatedAt: new Date().toISOString(),
         });
       }
 
-      await recarregar();
+      await transacoesCrud.carregar();
       mostrarSnackbar('✅ Transação marcada como paga!');
     } catch (error) {
       console.error('Erro ao marcar como pago:', error);
@@ -552,7 +534,7 @@ function ModernFinanceiro() {
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={recarregar}
+                onClick={() => recarregar(['transacoes', 'caixa'])}
               >
                 Atualizar
               </Button>
@@ -1082,19 +1064,322 @@ function ModernFinanceiro() {
         </Card>
       </Box>
 
-      {/* Dialogs - manter os mesmos dialogs do código original */}
+      {/* Dialog de Transação */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        {/* ... conteúdo do dialog ... */}
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          {transacaoEditando ? 'Editar Transação' : 'Nova Transação'}
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Tipo</InputLabel>
+                <Select
+                  name="tipo"
+                  value={formData.tipo}
+                  label="Tipo *"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="receita">💰 Receita</MenuItem>
+                  <MenuItem value="despesa">💸 Despesa</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                name="descricao"
+                value={formData.descricao}
+                onChange={handleInputChange}
+                required
+                size="small"
+                placeholder="Ex: Venda de serviços, Salário, etc"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Valor"
+                name="valor"
+                value={formData.valor}
+                onChange={handleInputChange}
+                required
+                size="small"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <DatePicker
+                label="Data"
+                value={formData.data ? new Date(formData.data) : null}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setFormData({ ...formData, data: format(newValue, 'yyyy-MM-dd') });
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} fullWidth size="small" required />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <DatePicker
+                label="Data de Vencimento"
+                value={formData.dataVencimento ? new Date(formData.dataVencimento) : null}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setFormData({ ...formData, dataVencimento: format(newValue, 'yyyy-MM-dd') });
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} fullWidth size="small" />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Categoria"
+                name="categoria"
+                value={formData.categoria}
+                onChange={handleInputChange}
+                size="small"
+                placeholder="Ex: Vendas, Salários, etc"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Forma de Pagamento</InputLabel>
+                <Select
+                  name="formaPagamento"
+                  value={formData.formaPagamento}
+                  label="Forma de Pagamento"
+                  onChange={handleInputChange}
+                >
+                  {formasPagamento.map(fp => (
+                    <MenuItem key={fp.value} value={fp.value}>
+                      {fp.icon} {fp.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  name="status"
+                  value={formData.status}
+                  label="Status"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="pendente">⏳ Pendente</MenuItem>
+                  <MenuItem value="pago">✅ Pago</MenuItem>
+                  <MenuItem value="atrasado">⚠️ Atrasado</MenuItem>
+                  <MenuItem value="cancelado">❌ Cancelado</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Cliente (opcional)</InputLabel>
+                <Select
+                  name="clienteId"
+                  value={formData.clienteId}
+                  label="Cliente (opcional)"
+                  onChange={handleInputChange}
+                >
+                  <MenuItem value="">Nenhum</MenuItem>
+                  {clientes.map(cliente => (
+                    <MenuItem key={cliente.id} value={cliente.id}>{cliente.nome}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Observações"
+                name="observacoes"
+                value={formData.observacoes}
+                onChange={handleInputChange}
+                multiline
+                rows={3}
+                size="small"
+                placeholder="Observações adicionais..."
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button
+            onClick={handleSalvar}
+            variant="contained"
+            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+          >
+            {transacaoEditando ? 'Atualizar' : 'Salvar'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
+      {/* Dialog de Caixa */}
       <Dialog open={openCaixaDialog} onClose={handleCloseCaixaDialog} maxWidth="sm" fullWidth>
-        {/* ... conteúdo do dialog ... */}
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          {caixaAtual ? '🔒 Fechar Caixa' : '🔓 Abrir Caixa'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            {caixaAtual ? (
+              <Box>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Resumo do Caixa
+                </Alert>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="textSecondary">Saldo Atual</Typography>
+                    <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                      R$ {(caixaAtual.saldoAtual || 0).toFixed(2)}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="textSecondary">Movimentações</Typography>
+                    <Typography variant="h6">
+                      {caixaAtual.movimentacoes?.length || 0}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="textSecondary">Aberto em</Typography>
+                    <Typography variant="body1">
+                      {new Date(caixaAtual.dataAbertura).toLocaleString('pt-BR')}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+            ) : (
+              <Typography variant="body1">
+                Deseja abrir o caixa para iniciar as operações do dia?
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseCaixaDialog}>Cancelar</Button>
+          <Button
+            onClick={handleAbrirFecharCaixa}
+            variant="contained"
+            color={caixaAtual ? 'error' : 'success'}
+          >
+            {caixaAtual ? 'Fechar Caixa' : 'Abrir Caixa'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
+      {/* Dialog de Detalhes */}
       <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
-        {/* ... conteúdo do dialog ... */}
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          📋 Detalhes da Transação
+        </DialogTitle>
+        <DialogContent>
+          {transacaoSelecionada && (
+            <Box sx={{ mt: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="textSecondary">Descrição</Typography>
+                  <Typography variant="body1">{transacaoSelecionada.descricao}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="textSecondary">Valor</Typography>
+                  <Typography variant="h6" sx={{ 
+                    color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' 
+                  }}>
+                    {transacaoSelecionada.tipo === 'receita' ? '+' : '-'} R$ {Number(transacaoSelecionada.valor).toFixed(2)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="textSecondary">Data</Typography>
+                  <Typography variant="body1">
+                    {new Date(transacaoSelecionada.data).toLocaleDateString('pt-BR')}
+                  </Typography>
+                </Grid>
+                {transacaoSelecionada.dataVencimento && (
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="textSecondary">Vencimento</Typography>
+                    <Typography variant="body1">
+                      {new Date(transacaoSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
+                    </Typography>
+                  </Grid>
+                )}
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="textSecondary">Forma de Pagamento</Typography>
+                  <Typography variant="body1">
+                    {formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="textSecondary">Categoria</Typography>
+                  <Typography variant="body1">{transacaoSelecionada.categoria || 'Sem categoria'}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle2" color="textSecondary">Status</Typography>
+                  <Chip
+                    label={statusColors[transacaoSelecionada.status]?.label}
+                    size="small"
+                    sx={{
+                      bgcolor: `${statusColors[transacaoSelecionada.status]?.color}20`,
+                      color: statusColors[transacaoSelecionada.status]?.color,
+                    }}
+                  />
+                </Grid>
+                {transacaoSelecionada.clienteId && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
+                    <Typography variant="body1">
+                      {clientes.find(c => c.id === transacaoSelecionada.clienteId)?.nome}
+                    </Typography>
+                  </Grid>
+                )}
+                {transacaoSelecionada.observacoes && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
+                    <Typography variant="body2">{transacaoSelecionada.observacoes}</Typography>
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseDetalhes}>Fechar</Button>
+          {transacaoSelecionada?.status === 'pendente' && (
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => {
+                handleCloseDetalhes();
+                handleMarcarComoPago(transacaoSelecionada);
+              }}
+            >
+              Marcar como Pago
+            </Button>
+          )}
+        </DialogActions>
       </Dialog>
 
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
