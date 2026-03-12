@@ -31,6 +31,12 @@ import {
   InputAdornment,
   LinearProgress,
   TablePagination,
+  Avatar,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,45 +48,105 @@ import {
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
   Receipt as ReceiptIcon,
+  Percent as PercentIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Store as StoreIcon,
+  Person as PersonIcon,
+  ReceiptLong as ReceiptLongIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const statusColors = {
-  pendente: { color: '#ff9800', label: 'Pendente' },
-  pago: { color: '#4caf50', label: 'Pago' },
-  atrasado: { color: '#f44336', label: 'Atrasado' },
-  cancelado: { color: '#9e9e9e', label: 'Cancelado' },
+  pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
+  pago: { color: '#4caf50', label: 'Pago', icon: <CheckCircleIcon /> },
+  atrasado: { color: '#f44336', label: 'Atrasado', icon: <WarningIcon /> },
+  cancelado: { color: '#9e9e9e', label: 'Cancelado', icon: <CancelIcon /> },
+  concluida: { color: '#4caf50', label: 'Concluída', icon: <CheckCircleIcon /> },
+  cancelada: { color: '#f44336', label: 'Cancelada', icon: <CancelIcon /> },
+};
+
+const origemColors = {
+  manual: { color: '#757575', label: 'Manual', icon: <ReceiptIcon /> },
+  comissao: { color: '#9c27b0', label: 'Comissão', icon: <PercentIcon /> },
+  compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
+};
+
+const formasPagamento = [
+  { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
+  { value: 'cartao_debito', label: 'Cartão de Débito', icon: '💳' },
+  { value: 'pix', label: 'PIX', icon: '⚡' },
+  { value: 'boleto', label: 'Boleto', icon: '📄' },
+  { value: 'transferencia', label: 'Transferência', icon: '🔄' },
+  { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
+];
+
+// Função para formatar data
+const formatarData = (data) => {
+  if (!data) return '';
+  return new Date(data).toLocaleDateString('pt-BR');
+};
+
+const formatarDataISO = (data) => {
+  if (!data) return '';
+  const d = new Date(data);
+  return d.toISOString().split('T')[0];
 };
 
 function ContasPagar() {
   const [loading, setLoading] = useState(true);
   const [contas, setContas] = useState([]);
+  const [contasManuais, setContasManuais] = useState([]);
+  const [comissoes, setComissoes] = useState([]);
+  const [compras, setCompras] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
   const [caixa, setCaixa] = useState(null);
+  
+  // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroOrigem, setFiltroOrigem] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
+  
+  // Paginação
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  // Dialogs
   const [openDialog, setOpenDialog] = useState(false);
   const [openPagamentoDialog, setOpenPagamentoDialog] = useState(false);
+  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [contaEditando, setContaEditando] = useState(null);
   const [contaSelecionada, setContaSelecionada] = useState(null);
+  
+  // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Formulário
   const [formData, setFormData] = useState({
     descricao: '',
     valor: '',
-    dataVencimento: new Date().toISOString().split('T')[0],
+    dataVencimento: formatarDataISO(new Date()),
     categoria: 'Fornecedor',
     fornecedorId: '',
+    profissionalId: '',
+    atendimentoId: '',
+    percentual: '',
     formaPagamento: 'boleto',
     observacoes: '',
     status: 'pendente',
     recorrente: false,
     parcelas: 1,
+    origem: 'manual',
+    origemId: '',
+    itens: [],
+    numeroPedido: '',
   });
 
   useEffect(() => {
@@ -91,14 +157,95 @@ function ContasPagar() {
     try {
       setLoading(true);
       
-      const [contasData, fornecedoresData, caixaData] = await Promise.all([
+      const [
+        contasData,
+        comissoesData,
+        comprasData,
+        fornecedoresData,
+        profissionaisData,
+        caixaData
+      ] = await Promise.all([
         firebaseService.getAll('contas_pagar').catch(() => []),
+        firebaseService.getAll('comissoes').catch(() => []),
+        firebaseService.getAll('compras').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
       ]);
       
-      setContas(contasData || []);
-      setFornecedores(fornecedoresData || []);
+      // Garantir que todos os dados são arrays
+      const contasArray = Array.isArray(contasData) ? contasData : [];
+      const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
+      const comprasArray = Array.isArray(comprasData) ? comprasData : [];
+      const fornecedoresArray = Array.isArray(fornecedoresData) ? fornecedoresData : [];
+      const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      
+      setContasManuais(contasArray);
+      setComissoes(comissoesArray);
+      setCompras(comprasArray);
+      setFornecedores(fornecedoresArray);
+      setProfissionais(profissionaisArray);
+      
+      // Converter comissões para contas a pagar
+      const contasComissoes = comissoesArray
+        .filter(c => c.status !== 'pago' && c.status !== 'cancelado')
+        .map(comissao => ({
+          id: `comissao_${comissao.id}`,
+          origem: 'comissao',
+          origemId: comissao.id,
+          descricao: `Comissão - ${comissao.servicoNome || 'Serviço'}`,
+          valor: comissao.valor || 0,
+          dataVencimento: comissao.data || comissao.dataRegistro?.split('T')[0],
+          categoria: 'Comissões',
+          formaPagamento: 'credito_loja',
+          status: comissao.status === 'atrasado' ? 'atrasado' : 'pendente',
+          profissionalId: comissao.profissionalId,
+          profissionalNome: comissao.profissionalNome,
+          atendimentoId: comissao.atendimentoId,
+          servicoId: comissao.servicoId,
+          servicoNome: comissao.servicoNome,
+          percentual: comissao.percentual,
+          valorAtendimento: comissao.valorAtendimento,
+          observacoes: `Comissão de ${comissao.percentual}% sobre atendimento de R$ ${comissao.valorAtendimento}`,
+          dataCriacao: comissao.createdAt,
+        }));
+
+      // Converter compras para contas a pagar
+      const contasCompras = comprasArray
+        .filter(c => c.status !== 'pago' && c.status !== 'cancelada')
+        .map(compra => ({
+          id: `compra_${compra.id}`,
+          origem: 'compra',
+          origemId: compra.id,
+          descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
+          valor: compra.valorTotal || 0,
+          dataVencimento: compra.dataCompra,
+          categoria: 'Compras',
+          formaPagamento: compra.formaPagamento || 'pix',
+          status: compra.status === 'atrasado' ? 'atrasado' : 'pendente',
+          fornecedorId: compra.fornecedorId,
+          numeroPedido: compra.numeroPedido,
+          prazoEntrega: compra.prazoEntrega,
+          itens: compra.itens || [],
+          observacoes: compra.observacoes,
+          dataCriacao: compra.createdAt,
+        }));
+
+      // Combinar todas as contas
+      const todasContas = [
+        ...contasArray.map(c => ({ ...c, origem: 'manual' })),
+        ...contasComissoes,
+        ...contasCompras
+      ];
+
+      // Ordenar por data de vencimento (mais próximas primeiro)
+      todasContas.sort((a, b) => {
+        const dataA = new Date(a.dataVencimento || a.dataCriacao);
+        const dataB = new Date(b.dataVencimento || b.dataCriacao);
+        return dataA - dataB;
+      });
+
+      setContas(todasContas);
       
       // Pega o caixa atual (último caixa aberto)
       const caixaAtual = caixaData?.length > 0 
@@ -125,33 +272,49 @@ function ContasPagar() {
   };
 
   const handleOpenDialog = (conta = null) => {
-    if (conta) {
+    if (conta && conta.origem === 'manual') {
       setContaEditando(conta);
       setFormData({
         descricao: conta.descricao || '',
         valor: conta.valor || '',
-        dataVencimento: conta.dataVencimento || new Date().toISOString().split('T')[0],
+        dataVencimento: conta.dataVencimento || formatarDataISO(new Date()),
         categoria: conta.categoria || 'Fornecedor',
         fornecedorId: conta.fornecedorId || '',
+        profissionalId: conta.profissionalId || '',
+        percentual: conta.percentual || '',
         formaPagamento: conta.formaPagamento || 'boleto',
         observacoes: conta.observacoes || '',
         status: conta.status || 'pendente',
         recorrente: conta.recorrente || false,
         parcelas: conta.parcelas || 1,
+        origem: 'manual',
+        origemId: '',
+        itens: [],
+        numeroPedido: '',
       });
+    } else if (conta) {
+      // Não permitir edição de comissões/compras diretamente
+      mostrarSnackbar('Esta conta não pode ser editada diretamente', 'warning');
+      return;
     } else {
       setContaEditando(null);
       setFormData({
         descricao: '',
         valor: '',
-        dataVencimento: new Date().toISOString().split('T')[0],
+        dataVencimento: formatarDataISO(new Date()),
         categoria: 'Fornecedor',
         fornecedorId: '',
+        profissionalId: '',
+        percentual: '',
         formaPagamento: 'boleto',
         observacoes: '',
         status: 'pendente',
         recorrente: false,
         parcelas: 1,
+        origem: 'manual',
+        origemId: '',
+        itens: [],
+        numeroPedido: '',
       });
     }
     setOpenDialog(true);
@@ -172,9 +335,115 @@ function ContasPagar() {
     setContaSelecionada(null);
   };
 
+  const handleOpenDetalhes = (conta) => {
+    setContaSelecionada(conta);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setContaSelecionada(null);
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Função para pagar comissão
+  const handlePagarComissao = async (comissaoId) => {
+    try {
+      await firebaseService.update('comissoes', comissaoId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      mostrarSnackbar('✅ Comissão paga com sucesso!');
+      await carregarDados(); // Recarregar dados
+    } catch (error) {
+      console.error('Erro ao pagar comissão:', error);
+      mostrarSnackbar('Erro ao pagar comissão', 'error');
+    }
+  };
+
+  // Função para pagar compra
+  const handlePagarCompra = async (compraId) => {
+    try {
+      await firebaseService.update('compras', compraId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      mostrarSnackbar('✅ Compra paga com sucesso!');
+      await carregarDados(); // Recarregar dados
+    } catch (error) {
+      console.error('Erro ao pagar compra:', error);
+      mostrarSnackbar('Erro ao pagar compra', 'error');
+    }
+  };
+
+  const handleRegistrarPagamento = async () => {
+    try {
+      if (!contaSelecionada || !contaSelecionada.id) {
+        mostrarSnackbar('Conta inválida', 'error');
+        return;
+      }
+
+      // Pagamento específico por origem
+      if (contaSelecionada.origem === 'comissao' && contaSelecionada.origemId) {
+        await handlePagarComissao(contaSelecionada.origemId);
+        handleClosePagamento();
+        return;
+      }
+
+      if (contaSelecionada.origem === 'compra' && contaSelecionada.origemId) {
+        await handlePagarCompra(contaSelecionada.origemId);
+        handleClosePagamento();
+        return;
+      }
+
+      // Para contas manuais
+      const dadosConta = {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await firebaseService.update('contas_pagar', contaSelecionada.id, dadosConta);
+
+      // Atualizar caixa se estiver aberto
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const novoSaldo = (caixa.saldoAtual || 0) - Number(contaSelecionada.valor);
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: 'despesa',
+          valor: Number(contaSelecionada.valor),
+          descricao: `Pagamento: ${contaSelecionada.descricao}`,
+          data: new Date().toISOString(),
+          contaId: contaSelecionada.id,
+          origem: contaSelecionada.origem,
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        await firebaseService.update('caixa', caixa.id, {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      mostrarSnackbar('Pagamento registrado com sucesso!');
+      await carregarDados(); // Recarregar dados
+      handleClosePagamento();
+    } catch (error) {
+      console.error('Erro ao registrar pagamento:', error);
+      mostrarSnackbar('Erro ao registrar pagamento', 'error');
+    }
   };
 
   const handleSalvar = async () => {
@@ -202,6 +471,7 @@ function ContasPagar() {
         status: String(formData.status),
         recorrente: Boolean(formData.recorrente),
         parcelas: Number(formData.parcelas) || 1,
+        origem: 'manual',
         updatedAt: new Date().toISOString(),
       };
 
@@ -214,88 +484,18 @@ function ContasPagar() {
 
       if (contaEditando) {
         await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
-        
-        // Atualizar estado local
-        const contasAtualizadas = contas.map(c => 
-          c.id === contaEditando.id ? { ...c, ...dadosParaSalvar, id: contaEditando.id } : c
-        );
-        setContas(contasAtualizadas);
-        
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        
-        const novoId = await firebaseService.add('contas_pagar', dadosParaSalvar);
-        setContas([...contas, { ...dadosParaSalvar, id: novoId }]);
-        
+        await firebaseService.add('contas_pagar', dadosParaSalvar);
         mostrarSnackbar('Conta registrada com sucesso!');
       }
 
+      await carregarDados(); // Recarregar dados
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
-    }
-  };
-
-  const handleRegistrarPagamento = async () => {
-    try {
-      if (!contaSelecionada || !contaSelecionada.id) {
-        mostrarSnackbar('Conta inválida', 'error');
-        return;
-      }
-
-      // Atualizar status da conta
-      const dadosConta = {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await firebaseService.update('contas_pagar', contaSelecionada.id, dadosConta);
-
-      // Atualizar estado local das contas
-      const contasAtualizadas = contas.map(c => 
-        c.id === contaSelecionada.id ? { ...c, ...dadosConta } : c
-      );
-      setContas(contasAtualizadas);
-
-      // Atualizar caixa se estiver aberto
-      if (caixa && caixa.status === 'aberto' && caixa.id) {
-        const novoSaldo = (caixa.saldoAtual || 0) - Number(contaSelecionada.valor);
-        
-        const novaMovimentacao = {
-          id: Date.now().toString(),
-          tipo: 'despesa',
-          valor: Number(contaSelecionada.valor),
-          descricao: `Pagamento: ${contaSelecionada.descricao}`,
-          data: new Date().toISOString(),
-          contaId: contaSelecionada.id,
-        };
-        
-        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
-        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-        
-        const dadosCaixa = {
-          saldoAtual: Number(novoSaldo),
-          movimentacoes: novasMovimentacoes,
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await firebaseService.update('caixa', caixa.id, dadosCaixa);
-        
-        setCaixa({ 
-          ...caixa, 
-          saldoAtual: novoSaldo, 
-          movimentacoes: novasMovimentacoes 
-        });
-      }
-
-      mostrarSnackbar('Pagamento registrado com sucesso!');
-      handleClosePagamento();
-    } catch (error) {
-      console.error('Erro ao registrar pagamento:', error);
-      mostrarSnackbar('Erro ao registrar pagamento', 'error');
     }
   };
 
@@ -306,56 +506,73 @@ function ContasPagar() {
       hoje.setHours(0, 0, 0, 0);
       
       for (const conta of contas) {
-        if (conta.status === 'pendente') {
+        if (conta.status === 'pendente' && conta.dataVencimento) {
           const vencimento = new Date(conta.dataVencimento);
           vencimento.setHours(0, 0, 0, 0);
           
           if (vencimento < hoje) {
             try {
-              await firebaseService.update('contas_pagar', conta.id, {
-                status: 'atrasado',
-                updatedAt: new Date().toISOString(),
-              });
-              
-              // Atualizar estado local
-              setContas(prev => prev.map(c => 
-                c.id === conta.id ? { ...c, status: 'atrasado' } : c
-              ));
+              if (conta.origem === 'comissao' && conta.origemId) {
+                await firebaseService.update('comissoes', conta.origemId, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              } else if (conta.origem === 'compra' && conta.origemId) {
+                await firebaseService.update('compras', conta.origemId, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              } else if (conta.origem === 'manual') {
+                await firebaseService.update('contas_pagar', conta.id, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             } catch (error) {
               console.error('Erro ao atualizar conta atrasada:', error);
             }
           }
         }
       }
+      
+      // Recarregar após verificação
+      if (contas.length > 0) {
+        await carregarDados();
+      }
     };
 
-    if (contas.length > 0) {
-      verificarEAtualizarAtrasadas();
-    }
-  }, [contas]);
+    verificarEAtualizarAtrasadas();
+    // Verificar a cada hora
+    const interval = setInterval(verificarEAtualizarAtrasadas, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [contas.length]);
 
   // Filtrar contas
   const contasFiltradas = contas.filter(conta => {
     const matchesTexto = filtro === '' || 
-      conta.descricao?.toLowerCase().includes(filtro.toLowerCase());
+      conta.descricao?.toLowerCase().includes(filtro.toLowerCase()) ||
+      conta.profissionalNome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      conta.servicoNome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      conta.numeroPedido?.toLowerCase().includes(filtro.toLowerCase());
 
     const matchesStatus = filtroStatus === 'todos' || conta.status === filtroStatus;
+    const matchesOrigem = filtroOrigem === 'todas' || conta.origem === filtroOrigem;
 
     let matchesPeriodo = true;
-    if (filtroPeriodo === 'hoje') {
-      const hoje = new Date().toISOString().split('T')[0];
+    if (filtroPeriodo === 'hoje' && conta.dataVencimento) {
+      const hoje = formatarDataISO(new Date());
       matchesPeriodo = conta.dataVencimento === hoje;
-    } else if (filtroPeriodo === 'semana') {
+    } else if (filtroPeriodo === 'semana' && conta.dataVencimento) {
       const dataVenc = new Date(conta.dataVencimento);
       const umaSemana = new Date();
       umaSemana.setDate(umaSemana.getDate() + 7);
       matchesPeriodo = dataVenc <= umaSemana && dataVenc >= new Date();
-    } else if (filtroPeriodo === 'vencidas') {
+    } else if (filtroPeriodo === 'vencidas' && conta.dataVencimento) {
       const dataVenc = new Date(conta.dataVencimento);
       matchesPeriodo = dataVenc < new Date() && conta.status === 'pendente';
     }
 
-    return matchesTexto && matchesStatus && matchesPeriodo;
+    return matchesTexto && matchesStatus && matchesOrigem && matchesPeriodo;
   });
 
   // Paginação
@@ -375,12 +592,18 @@ function ContasPagar() {
 
   // Estatísticas
   const stats = {
-    total: contas.length,
+    total: contas.filter(c => c.status !== 'pago').length,
+    valorTotal: contas
+      .filter(c => c.status !== 'pago')
+      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
     pendentes: contas.filter(c => c.status === 'pendente').length,
     atrasadas: contas.filter(c => c.status === 'atrasado').length,
     pagas: contas.filter(c => c.status === 'pago').length,
-    valorTotal: contas
-      .filter(c => c.status !== 'pago')
+    comissoesPendentes: contas
+      .filter(c => c.origem === 'comissao' && c.status !== 'pago')
+      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
+    comprasPendentes: contas
+      .filter(c => c.origem === 'compra' && c.status !== 'pago')
       .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
   };
 
@@ -401,7 +624,7 @@ function ContasPagar() {
             Contas a Pagar
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Gerencie todas as contas e despesas do salão
+            Gerencie todas as contas, despesas, comissões e compras do salão
           </Typography>
         </Box>
         <Button
@@ -410,7 +633,7 @@ function ContasPagar() {
           onClick={() => handleOpenDialog()}
           sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
         >
-          Nova Conta
+          Nova Conta Manual
         </Button>
       </Box>
 
@@ -422,7 +645,7 @@ function ContasPagar() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card>
+            <Card sx={{ bgcolor: stats.valorTotal > 0 ? '#ffebee' : '#f5f5f5' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Total a Pagar
@@ -430,10 +653,14 @@ function ContasPagar() {
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
                   R$ {stats.valorTotal.toFixed(2)}
                 </Typography>
+                <Typography variant="caption" color="textSecondary">
+                  {stats.total} contas pendentes
+                </Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
+        
         <Grid item xs={12} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -452,6 +679,7 @@ function ContasPagar() {
             </Card>
           </motion.div>
         </Grid>
+        
         <Grid item xs={12} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -470,6 +698,7 @@ function ContasPagar() {
             </Card>
           </motion.div>
         </Grid>
+        
         <Grid item xs={12} sm={6} md={3}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -490,6 +719,49 @@ function ContasPagar() {
         </Grid>
       </Grid>
 
+      {/* Cards de Resumo por Origem */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ bgcolor: '#f3e5f5' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
+                  <PercentIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Comissões a Pagar
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                    R$ {stats.comissoesPendentes.toFixed(2)}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} md={6}>
+          <Card sx={{ bgcolor: '#fff3e0' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
+                  <ShoppingCartIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Compras a Pagar
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                    R$ {stats.comprasPendentes.toFixed(2)}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
       {/* Filtros */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
@@ -498,7 +770,7 @@ function ContasPagar() {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Buscar contas..."
+                placeholder="Buscar por descrição, profissional, pedido..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
                 InputProps={{
@@ -517,7 +789,8 @@ function ContasPagar() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            
+            <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -534,7 +807,24 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Origem</InputLabel>
+                <Select
+                  value={filtroOrigem}
+                  onChange={(e) => setFiltroOrigem(e.target.value)}
+                  label="Origem"
+                >
+                  <MenuItem value="todas">Todas</MenuItem>
+                  <MenuItem value="manual">Manual</MenuItem>
+                  <MenuItem value="comissao">Comissão</MenuItem>
+                  <MenuItem value="compra">Compra</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Período</InputLabel>
                 <Select
@@ -549,6 +839,7 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12} md={2}>
               <Button
                 fullWidth
@@ -570,7 +861,7 @@ function ContasPagar() {
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                 <TableCell><strong>Descrição</strong></TableCell>
-                <TableCell><strong>Fornecedor</strong></TableCell>
+                <TableCell><strong>Origem</strong></TableCell>
                 <TableCell><strong>Vencimento</strong></TableCell>
                 <TableCell align="right"><strong>Valor</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
@@ -581,11 +872,19 @@ function ContasPagar() {
               <AnimatePresence>
                 {paginatedContas.map((conta, index) => {
                   const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
+                  const profissional = profissionais.find(p => p.id === conta.profissionalId) || 
+                                     { nome: conta.profissionalNome };
+                  
                   const hoje = new Date();
                   hoje.setHours(0, 0, 0, 0);
-                  const vencimento = new Date(conta.dataVencimento);
-                  vencimento.setHours(0, 0, 0, 0);
-                  const isVencida = vencimento < hoje && conta.status === 'pendente';
+                  
+                  let vencimento = null;
+                  if (conta.dataVencimento) {
+                    vencimento = new Date(conta.dataVencimento);
+                    vencimento.setHours(0, 0, 0, 0);
+                  }
+                  
+                  const isVencida = vencimento && vencimento < hoje && conta.status === 'pendente';
                   
                   return (
                     <motion.tr
@@ -594,25 +893,77 @@ function ContasPagar() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: index * 0.05 }}
+                      style={{
+                        backgroundColor: isVencida ? '#ffebee20' : 'white',
+                      }}
                     >
-                      <TableCell>{conta.descricao}</TableCell>
-                      <TableCell>{fornecedor?.nome || '—'}</TableCell>
                       <TableCell>
-                        {new Date(conta.dataVencimento).toLocaleDateString('pt-BR')}
-                        {isVencida && (
-                          <Chip
-                            size="small"
-                            label="Vencida"
-                            color="error"
-                            sx={{ ml: 1, height: 20 }}
-                          />
-                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ 
+                            bgcolor: origemColors[conta.origem]?.color || '#757575',
+                            width: 32,
+                            height: 32
+                          }}>
+                            {origemColors[conta.origem]?.icon}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {conta.descricao}
+                            </Typography>
+                            {conta.origem === 'comissao' && profissional && (
+                              <Typography variant="caption" color="textSecondary">
+                                {profissional.nome} • {conta.servicoNome} ({conta.percentual}%)
+                              </Typography>
+                            )}
+                            {conta.origem === 'compra' && fornecedor && (
+                              <Typography variant="caption" color="textSecondary">
+                                {fornecedor.nome} • Pedido: {conta.numeroPedido}
+                              </Typography>
+                            )}
+                            {conta.origem === 'manual' && fornecedor && (
+                              <Typography variant="caption" color="textSecondary">
+                                {fornecedor.nome}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
                       </TableCell>
+                      
+                      <TableCell>
+                        <Chip
+                          icon={origemColors[conta.origem]?.icon}
+                          label={origemColors[conta.origem]?.label}
+                          size="small"
+                          sx={{
+                            bgcolor: `${origemColors[conta.origem]?.color}20`,
+                            color: origemColors[conta.origem]?.color,
+                            fontWeight: 500,
+                          }}
+                        />
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2">
+                            {conta.dataVencimento ? formatarData(conta.dataVencimento) : '—'}
+                          </Typography>
+                          {isVencida && (
+                            <Chip
+                              size="small"
+                              label="Vencida"
+                              color="error"
+                              sx={{ height: 20, fontSize: '0.7rem', mt: 0.5 }}
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      
                       <TableCell align="right">
                         <Typography fontWeight={600} color="#f44336">
                           R$ {Number(conta.valor).toFixed(2)}
                         </Typography>
                       </TableCell>
+                      
                       <TableCell>
                         <Chip
                           label={statusColors[conta.status]?.label}
@@ -624,28 +975,42 @@ function ContasPagar() {
                           }}
                         />
                       </TableCell>
+                      
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          {conta.status !== 'pago' && (
+                          <Tooltip title="Ver Detalhes">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenDetalhes(conta)}
+                              sx={{ color: '#9c27b0' }}
+                            >
+                              <InfoIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          {conta.status !== 'pago' && conta.status !== 'cancelado' && (
                             <Tooltip title="Registrar Pagamento">
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenPagamento(conta)}
                                 sx={{ color: '#4caf50' }}
                               >
-                                <PaymentIcon />
+                                <PaymentIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}
-                          <Tooltip title="Editar">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDialog(conta)}
-                              sx={{ color: '#2196f3' }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
+                          
+                          {conta.origem === 'manual' && (
+                            <Tooltip title="Editar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDialog(conta)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Box>
                       </TableCell>
                     </motion.tr>
@@ -666,8 +1031,9 @@ function ContasPagar() {
             </TableBody>
           </Table>
         </TableContainer>
+        
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
+          rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
           count={contasFiltradas.length}
           rowsPerPage={rowsPerPage}
@@ -679,10 +1045,10 @@ function ContasPagar() {
         />
       </Card>
 
-      {/* Dialog de Nova Conta */}
+      {/* Dialog de Nova Conta Manual */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          {contaEditando ? 'Editar Conta' : 'Nova Conta a Pagar'}
+          {contaEditando ? 'Editar Conta Manual' : 'Nova Conta a Pagar'}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -697,6 +1063,7 @@ function ContasPagar() {
                 required
               />
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -712,6 +1079,7 @@ function ContasPagar() {
                 }}
               />
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -724,6 +1092,7 @@ function ContasPagar() {
                 size="small"
               />
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Categoria</InputLabel>
@@ -744,6 +1113,7 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Fornecedor</InputLabel>
@@ -760,6 +1130,7 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12}>
               <FormControl fullWidth size="small">
                 <InputLabel>Forma de Pagamento</InputLabel>
@@ -769,15 +1140,15 @@ function ContasPagar() {
                   onChange={handleInputChange}
                   label="Forma de Pagamento"
                 >
-                  <MenuItem value="boleto">Boleto</MenuItem>
-                  <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                  <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
-                  <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
-                  <MenuItem value="pix">PIX</MenuItem>
-                  <MenuItem value="transferencia">Transferência</MenuItem>
+                  {formasPagamento.map(fp => (
+                    <MenuItem key={fp.value} value={fp.value}>
+                      {fp.icon} {fp.label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -815,12 +1186,35 @@ function ContasPagar() {
               Deseja registrar o pagamento de:
             </Alert>
             <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-              <Typography variant="subtitle2">{contaSelecionada?.descricao}</Typography>
-              <Typography variant="h5" color="primary" sx={{ mt: 1, fontWeight: 600 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Avatar sx={{ 
+                  bgcolor: origemColors[contaSelecionada?.origem]?.color || '#757575',
+                  width: 32,
+                  height: 32
+                }}>
+                  {origemColors[contaSelecionada?.origem]?.icon}
+                </Avatar>
+                <Typography variant="subtitle2">{contaSelecionada?.descricao}</Typography>
+              </Box>
+              
+              <Typography variant="h5" color="primary" sx={{ mt: 2, fontWeight: 600 }}>
                 R$ {Number(contaSelecionada?.valor).toFixed(2)}
               </Typography>
+              
+              {contaSelecionada?.origem === 'comissao' && (
+                <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+                  Profissional: {contaSelecionada?.profissionalNome}
+                </Typography>
+              )}
+              
+              {contaSelecionada?.origem === 'compra' && (
+                <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+                  Pedido: {contaSelecionada?.numeroPedido}
+                </Typography>
+              )}
+              
               <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-                Vencimento: {contaSelecionada && new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
+                Vencimento: {contaSelecionada?.dataVencimento && formatarData(contaSelecionada.dataVencimento)}
               </Typography>
             </Box>
           </Box>
@@ -835,6 +1229,214 @@ function ContasPagar() {
           >
             Confirmar Pagamento
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Detalhes */}
+      <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Detalhes da Conta
+        </DialogTitle>
+        <DialogContent>
+          {contaSelecionada && (
+            <Box sx={{ mt: 2 }}>
+              <List>
+                <ListItem>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: origemColors[contaSelecionada.origem]?.color || '#757575' }}>
+                      {origemColors[contaSelecionada.origem]?.icon}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary="Descrição"
+                    secondary={contaSelecionada.descricao}
+                  />
+                </ListItem>
+
+                <ListItem>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#f44336' }}>
+                      <ReceiptIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary="Valor"
+                    secondary={`R$ ${Number(contaSelecionada.valor).toFixed(2)}`}
+                  />
+                </ListItem>
+
+                {contaSelecionada.dataVencimento && (
+                  <ListItem>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: '#ff9800' }}>
+                        <WarningIcon />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary="Vencimento"
+                      secondary={formatarData(contaSelecionada.dataVencimento)}
+                    />
+                  </ListItem>
+                )}
+
+                {contaSelecionada.origem === 'comissao' && (
+                  <>
+                    <ListItem>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                          <PersonIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary="Profissional"
+                        secondary={contaSelecionada.profissionalNome}
+                      />
+                    </ListItem>
+                    
+                    {contaSelecionada.servicoNome && (
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: '#ff4081' }}>
+                            <ReceiptLongIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary="Serviço"
+                          secondary={`${contaSelecionada.servicoNome} (${contaSelecionada.percentual}% de R$ ${contaSelecionada.valorAtendimento})`}
+                        />
+                      </ListItem>
+                    )}
+                  </>
+                )}
+
+                {contaSelecionada.origem === 'compra' && (
+                  <>
+                    <ListItem>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: '#ff9800' }}>
+                          <StoreIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary="Fornecedor"
+                        secondary={fornecedores.find(f => f.id === contaSelecionada.fornecedorId)?.nome || 'Não informado'}
+                      />
+                    </ListItem>
+                    
+                    {contaSelecionada.numeroPedido && (
+                      <ListItem>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: '#00bcd4' }}>
+                            <ReceiptIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary="Número do Pedido"
+                          secondary={contaSelecionada.numeroPedido}
+                        />
+                      </ListItem>
+                    )}
+                    
+                    {contaSelecionada.itens && contaSelecionada.itens.length > 0 && (
+                      <ListItem>
+                        <ListItemText
+                          primary="Itens da Compra"
+                          secondary={
+                            <Box component="ul" sx={{ pl: 2, mt: 1 }}>
+                              {contaSelecionada.itens.map((item, idx) => (
+                                <li key={idx}>
+                                  {item.produtoNome} - {item.quantidade}x R$ {item.valorUnitario} = R$ {item.total}
+                                </li>
+                              ))}
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                    )}
+                  </>
+                )}
+
+                {contaSelecionada.origem === 'manual' && contaSelecionada.fornecedorId && (
+                  <ListItem>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: '#2196f3' }}>
+                        <StoreIcon />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary="Fornecedor"
+                      secondary={fornecedores.find(f => f.id === contaSelecionada.fornecedorId)?.nome}
+                    />
+                  </ListItem>
+                )}
+
+                <ListItem>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#9e9e9e' }}>
+                      <InfoIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary="Categoria"
+                    secondary={contaSelecionada.categoria || 'Não categorizado'}
+                  />
+                </ListItem>
+
+                <ListItem>
+                  <ListItemAvatar>
+                    <Avatar sx={{ 
+                      bgcolor: statusColors[contaSelecionada.status]?.color || '#9e9e9e'
+                    }}>
+                      {statusColors[contaSelecionada.status]?.icon}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary="Status"
+                    secondary={statusColors[contaSelecionada.status]?.label}
+                  />
+                </ListItem>
+
+                {contaSelecionada.dataPagamento && (
+                  <ListItem>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: '#4caf50' }}>
+                        <CheckCircleIcon />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary="Data do Pagamento"
+                      secondary={formatarData(contaSelecionada.dataPagamento)}
+                    />
+                  </ListItem>
+                )}
+
+                {contaSelecionada.observacoes && (
+                  <ListItem>
+                    <ListItemText
+                      primary="Observações"
+                      secondary={contaSelecionada.observacoes}
+                    />
+                  </ListItem>
+                )}
+              </List>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetalhes}>Fechar</Button>
+          {contaSelecionada?.status !== 'pago' && contaSelecionada?.status !== 'cancelado' && (
+            <Button
+              onClick={() => {
+                handleCloseDetalhes();
+                handleOpenPagamento(contaSelecionada);
+              }}
+              variant="contained"
+              color="success"
+              startIcon={<PaymentIcon />}
+            >
+              Pagar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
