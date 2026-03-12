@@ -45,7 +45,7 @@ import { firebaseService } from '../services/firebase';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useReactToPrint } from 'react-to-print';
 
-// Ícones - apenas os necessários, sem CancelIcon
+// Ícones
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -233,6 +233,7 @@ function MinhasComissoes() {
   const [loading, setLoading] = useState(true);
   const [comissoes, setComissoes] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [resumo, setResumo] = useState(null);
   const [estatisticas, setEstatisticas] = useState(null);
   const [profissional, setProfissional] = useState(null);
@@ -327,6 +328,10 @@ function MinhasComissoes() {
         nome: profissionalNome
       });
 
+      // Carregar clientes primeiro
+      const clientesData = await firebaseService.getAll('clientes');
+      setClientes(Array.isArray(clientesData) ? clientesData : []);
+
       // Carregar dados
       await Promise.all([
         carregarComissoes(profissionalId),
@@ -353,11 +358,16 @@ function MinhasComissoes() {
         c && c.profissionalId === profissionalId
       );
 
+      console.log('Comissões encontradas:', comissoesFiltradas); // Debug
+
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         comissoesFiltradas = comissoesFiltradas.filter(c => {
           if (!c) return false;
-          const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
+          // Usar a data da comissão (pode ser dataRegistro, createdAt ou data)
+          const dataStr = c.dataRegistro || c.createdAt || c.data;
+          if (!dataStr) return false;
+          const data = new Date(dataStr);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
       }
@@ -377,12 +387,17 @@ function MinhasComissoes() {
       // Formatar dados
       comissoesFiltradas = comissoesFiltradas.map(c => ({
         ...c,
-        dataFormatada: formatarData(c?.dataRegistro || c?.createdAt || c?.data),
-        valor: Number(c?.valor) || 0,
-        valorAtendimento: Number(c?.valorAtendimento) || 0,
-        percentual: Number(c?.percentual) || 0
+        id: c.id,
+        data: c.dataRegistro || c.createdAt || c.data,
+        dataFormatada: formatarData(c.dataRegistro || c.createdAt || c.data),
+        valor: Number(c.valor) || 0,
+        valorAtendimento: Number(c.valorAtendimento) || 0,
+        percentual: Number(c.percentual) || 0,
+        servicoNome: c.servicoNome || 'Serviço',
+        status: c.status || 'pendente'
       }));
 
+      console.log('Comissões processadas:', comissoesFiltradas); // Debug
       setComissoes(comissoesFiltradas);
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
@@ -393,16 +408,15 @@ function MinhasComissoes() {
   const carregarAtendimentos = async (profissionalId) => {
     try {
       const atendimentosData = await firebaseService.getAll('atendimentos');
-      const clientesData = await firebaseService.getAll('clientes');
       
-      // Garantir que são arrays
+      // Garantir que é array
       const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
-      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       
       // Filtrar atendimentos do profissional e finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => {
         if (!a) return false;
         
+        // Verificar se o profissional participou do atendimento
         const temProfissional = a.itensServico?.some(
           item => item && item.profissionalId === profissionalId
         ) || a.servicos?.some(
@@ -421,75 +435,41 @@ function MinhasComissoes() {
         });
       }
 
-      // Enriquecer atendimentos com dados do cliente
+      // Enriquecer atendimentos com dados do cliente e comissões
       atendimentosFiltrados = atendimentosFiltrados.map(atendimento => {
-        const cliente = clientesArray.find(c => c && c.id === atendimento.clienteId);
+        const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
+        
+        // Buscar todas as comissões deste atendimento para o profissional
+        const comissoesDoAtendimento = comissoes.filter(c => 
+          c && c.atendimentoId === atendimento.id && c.profissionalId === profissionalId
+        );
+        
+        // Calcular comissão total
+        const comissaoTotal = comissoesDoAtendimento.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+        
+        // Verificar se todas as comissões estão pagas
+        const todasPagas = comissoesDoAtendimento.length > 0 && 
+                          comissoesDoAtendimento.every(c => c.status === 'pago');
+        
         return {
           ...atendimento,
           cliente: cliente || { nome: 'Cliente não encontrado' },
           valorTotal: Number(atendimento.valorTotal) || 0,
-          comissaoTotal: calcularComissaoProfissional(atendimento, profissionalId)
+          comissaoTotal: comissaoTotal,
+          comissaoPaga: todasPagas,
+          comissoes: comissoesDoAtendimento
         };
       });
 
       // Ordenar por data (mais recentes primeiro)
-      atendimentosFiltrados.sort((a, b) => {
-        const dataA = new Date(a?.data || 0);
-        const dataB = new Date(b?.data || 0);
-        return dataB - dataA;
-      });
+      atendimentosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
 
+      console.log('Atendimentos processados:', atendimentosFiltrados); // Debug
       setAtendimentos(atendimentosFiltrados);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
       setAtendimentos([]);
     }
-  };
-
-  const calcularComissaoProfissional = (atendimento, profissionalId) => {
-    if (!atendimento) return 0;
-    
-    let total = 0;
-    
-    try {
-      // Verificar itensServico
-      if (atendimento.itensServico && Array.isArray(atendimento.itensServico)) {
-        atendimento.itensServico.forEach(item => {
-          if (item && item.profissionalId === profissionalId) {
-            const comissao = comissoes.find(c => 
-              c && c.atendimentoId === atendimento.id && 
-              c.servicoId === item.servicoId
-            );
-            if (comissao) {
-              total += Number(comissao.valor) || 0;
-            } else {
-              total += (Number(item.preco) * (Number(item.comissao) || 0)) / 100;
-            }
-          }
-        });
-      }
-      
-      // Verificar servicos (formato antigo)
-      if (atendimento.servicos && Array.isArray(atendimento.servicos)) {
-        atendimento.servicos.forEach(servico => {
-          if (servico && servico.profissionalId === profissionalId) {
-            const comissao = comissoes.find(c => 
-              c && c.atendimentoId === atendimento.id && 
-              c.servicoId === servico.id
-            );
-            if (comissao) {
-              total += Number(comissao.valor) || 0;
-            } else {
-              total += (Number(servico.preco) * (Number(servico.comissao) || 0)) / 100;
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao calcular comissão:', error);
-    }
-    
-    return total;
   };
 
   const calcularResumo = () => {
@@ -515,7 +495,7 @@ function MinhasComissoes() {
       const porServico = {};
       comissoes.forEach(c => {
         if (c && c.status !== 'cancelado' && c.servicoNome) {
-          const nome = c.servicoNome || 'Outros';
+          const nome = c.servicoNome;
           if (!porServico[nome]) {
             porServico[nome] = {
               nome,
@@ -541,6 +521,13 @@ function MinhasComissoes() {
         quantidadePendente: comissoes.filter(c => c && c.status === 'pendente').length,
         quantidadePaga: comissoes.filter(c => c && c.status === 'pago').length,
         quantidadeCancelada: comissoes.filter(c => c && c.status === 'cancelado').length,
+      });
+
+      console.log('Resumo calculado:', {
+        totalPeriodo,
+        aReceber,
+        recebido,
+        quantidade: comissoes.length
       });
     } catch (error) {
       console.error('Erro ao calcular resumo:', error);
@@ -595,7 +582,7 @@ function MinhasComissoes() {
     }
   };
 
-  // Função para renderizar chip de status sem usar CancelIcon
+  // Função para renderizar chip de status
   const renderStatusChip = (status) => {
     switch(status) {
       case 'pago':
@@ -838,7 +825,7 @@ function MinhasComissoes() {
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
-                        Média por Atend.
+                        Média por Comissão
                       </Typography>
                       <Typography variant="h5" sx={{ fontWeight: 700, color: '#2196f3' }}>
                         {formatarMoeda(estatisticas?.mediaPorAtendimento || 0)}
@@ -1011,60 +998,60 @@ function MinhasComissoes() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {comissoesFiltradas.map((comissao) => (
-                    <TableRow key={comissao.id} hover>
-                      <TableCell>
-                        {formatarData(comissao.dataRegistro || comissao.createdAt || comissao.data)}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
-                          {comissao.servicoNome}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Chip
-                          label={`${comissao.percentual}%`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ bgcolor: '#f3e5f5' }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatarMoeda(comissao.valorAtendimento)}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight={600} color="#4caf50">
-                          {formatarMoeda(comissao.valor)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {renderStatusChip(comissao.status)}
-                      </TableCell>
-                      <TableCell>
-                        {comissao.dataPagamento ? (
-                          <Tooltip title={`Pago em ${formatarData(comissao.dataPagamento)}`}>
-                            <Chip
-                              icon={<CheckCircleIcon />}
-                              label="Pago"
-                              size="small"
-                              color="success"
-                              variant="outlined"
-                            />
-                          </Tooltip>
-                        ) : (
+                  {comissoesFiltradas.length > 0 ? (
+                    comissoesFiltradas.map((comissao) => (
+                      <TableRow key={comissao.id} hover>
+                        <TableCell>
+                          {formatarData(comissao.dataRegistro || comissao.createdAt || comissao.data)}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
+                            {comissao.servicoNome}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right">
                           <Chip
-                            icon={<PendingIcon />}
-                            label="Aguardando"
+                            label={`${comissao.percentual}%`}
                             size="small"
                             variant="outlined"
+                            sx={{ bgcolor: '#f3e5f5' }}
                           />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {comissoesFiltradas.length === 0 && (
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatarMoeda(comissao.valorAtendimento)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight={600} color="#4caf50">
+                            {formatarMoeda(comissao.valor)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {renderStatusChip(comissao.status)}
+                        </TableCell>
+                        <TableCell>
+                          {comissao.dataPagamento ? (
+                            <Tooltip title={`Pago em ${formatarData(comissao.dataPagamento)}`}>
+                              <Chip
+                                icon={<CheckCircleIcon />}
+                                label="Pago"
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Chip
+                              icon={<PendingIcon />}
+                              label="Aguardando"
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                         <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
@@ -1103,45 +1090,45 @@ function MinhasComissoes() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {atendimentosFiltrados.map((atendimento) => (
-                    <TableRow key={atendimento.id} hover>
-                      <TableCell>{formatarData(atendimento.data)}</TableCell>
-                      <TableCell>
-                        {atendimento.horaInicio || '--:--'}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
-                          {atendimento.cliente?.nome || '—'}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {atendimento.servicos?.map(s => s.nome).join(', ') || 
-                         atendimento.itensServico?.map(i => i.nome).join(', ')}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatarMoeda(atendimento.valorTotal)}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight={600} color="#4caf50">
-                          {formatarMoeda(atendimento.comissaoTotal)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title="Ver detalhes">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDetalhes(atendimento)}
-                            sx={{ color: '#9c27b0' }}
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {atendimentosFiltrados.length === 0 && (
+                  {atendimentosFiltrados.length > 0 ? (
+                    atendimentosFiltrados.map((atendimento) => (
+                      <TableRow key={atendimento.id} hover>
+                        <TableCell>{formatarData(atendimento.data)}</TableCell>
+                        <TableCell>
+                          {atendimento.horaInicio || '--:--'}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
+                            {atendimento.cliente?.nome || '—'}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {atendimento.servicos?.map(s => s.nome).join(', ') || 
+                           atendimento.itensServico?.map(i => i.nome).join(', ')}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatarMoeda(atendimento.valorTotal)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight={600} color="#4caf50">
+                            {formatarMoeda(atendimento.comissaoTotal)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title="Ver detalhes">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenDetalhes(atendimento)}
+                              sx={{ color: '#9c27b0' }}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                         <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
@@ -1215,8 +1202,8 @@ function MinhasComissoes() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Período</TableCell>
-                    <TableCell align="right">Atendimentos</TableCell>
                     <TableCell align="right">Comissões</TableCell>
+                    <TableCell align="right">Total</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1281,12 +1268,13 @@ function MinhasComissoes() {
                           <TableCell align="right">Valor</TableCell>
                           <TableCell align="right">Comissão %</TableCell>
                           <TableCell align="right">Sua Comissão</TableCell>
+                          <TableCell>Status</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {(atendimentoSelecionado.servicos || atendimentoSelecionado.itensServico || []).map((servico, idx) => {
-                          const comissaoServico = comissoes.find(c => 
-                            c && c.atendimentoId === atendimentoSelecionado.id && 
+                          // Buscar a comissão específica para este serviço
+                          const comissaoServico = atendimentoSelecionado.comissoes?.find(c => 
                             c.servicoId === (servico.servicoId || servico.id)
                           );
                           
@@ -1303,6 +1291,15 @@ function MinhasComissoes() {
                                 <Typography color="#4caf50" fontWeight={600}>
                                   R$ {(comissaoServico?.valor || 0).toFixed(2)}
                                 </Typography>
+                              </TableCell>
+                              <TableCell>
+                                {comissaoServico && (
+                                  <Chip
+                                    size="small"
+                                    label={comissaoServico.status}
+                                    color={comissaoServico.status === 'pago' ? 'success' : 'warning'}
+                                  />
+                                )}
                               </TableCell>
                             </TableRow>
                           );
@@ -1338,17 +1335,20 @@ function MinhasComissoes() {
                         <Typography variant="body2" color="textSecondary">
                           Status das Comissões
                         </Typography>
-                        {comissoes
-                          .filter(c => c && c.atendimentoId === atendimentoSelecionado.id)
-                          .map((c, idx) => (
-                            <Chip
-                              key={idx}
-                              size="small"
-                              label={c.status}
-                              color={c.status === 'pago' ? 'success' : c.status === 'cancelado' ? 'error' : 'warning'}
-                              sx={{ mr: 0.5, mb: 0.5 }}
-                            />
-                          ))}
+                        {atendimentoSelecionado.comissoes?.map((c, idx) => (
+                          <Chip
+                            key={idx}
+                            size="small"
+                            label={c.status}
+                            color={c.status === 'pago' ? 'success' : 'warning'}
+                            sx={{ mr: 0.5, mb: 0.5 }}
+                          />
+                        ))}
+                        {(!atendimentoSelecionado.comissoes || atendimentoSelecionado.comissoes.length === 0) && (
+                          <Typography variant="body2" color="textSecondary">
+                            Nenhuma comissão registrada
+                          </Typography>
+                        )}
                       </Grid>
                     </Grid>
                   </Box>
