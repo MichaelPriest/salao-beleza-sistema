@@ -1,5 +1,5 @@
 // src/pages/ContasPagar.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -45,7 +45,6 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useDados } from '../hooks/useDados';
 import { firebaseService } from '../services/firebase';
 
 const statusColors = {
@@ -56,10 +55,13 @@ const statusColors = {
 };
 
 function ContasPagar() {
-  const { dados, carregando, recarregar, caixaAtual } = useDados();
-  
+  const [loading, setLoading] = useState(true);
+  const [contas, setContas] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
+  const [caixa, setCaixa] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openDialog, setOpenDialog] = useState(false);
@@ -77,44 +79,42 @@ function ContasPagar() {
     formaPagamento: 'boleto',
     observacoes: '',
     status: 'pendente',
+    recorrente: false,
+    parcelas: 1,
   });
 
-  // Filtrar apenas contas a pagar (transações do tipo despesa)
-  const contas = useMemo(() => {
-    return dados.transacoes.filter(t => t.tipo === 'despesa');
-  }, [dados.transacoes]);
-
-  const fornecedores = dados.fornecedores || [];
-
   useEffect(() => {
-    const verificarAtrasadas = async () => {
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      
-      for (const conta of contas) {
-        if (conta.status === 'pendente') {
-          const vencimento = new Date(conta.dataVencimento);
-          vencimento.setHours(0, 0, 0, 0);
-          
-          if (vencimento < hoje) {
-            try {
-              await firebaseService.update('transacoes', conta.id, {
-                status: 'atrasado',
-                updatedAt: new Date().toISOString(),
-              });
-              await recarregar();
-            } catch (error) {
-              console.error('Erro ao atualizar conta atrasada:', error);
-            }
-          }
-        }
-      }
-    };
+    carregarDados();
+  }, []);
 
-    if (contas.length > 0) {
-      verificarAtrasadas();
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      
+      const [contasData, fornecedoresData, caixaData] = await Promise.all([
+        firebaseService.getAll('contas_pagar').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('caixa').catch(() => []),
+      ]);
+      
+      setContas(contasData || []);
+      setFornecedores(fornecedoresData || []);
+      
+      // Pega o caixa atual (último caixa aberto)
+      const caixaAtual = caixaData?.length > 0 
+        ? caixaData.filter(c => c && c.status === 'aberto')
+            .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0]
+        : null;
+      setCaixa(caixaAtual);
+      
+      toast.success('Dados carregados!');
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
     }
-  }, [contas]);
+  };
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -136,6 +136,8 @@ function ContasPagar() {
         formaPagamento: conta.formaPagamento || 'boleto',
         observacoes: conta.observacoes || '',
         status: conta.status || 'pendente',
+        recorrente: conta.recorrente || false,
+        parcelas: conta.parcelas || 1,
       });
     } else {
       setContaEditando(null);
@@ -148,6 +150,8 @@ function ContasPagar() {
         formaPagamento: 'boleto',
         observacoes: '',
         status: 'pendente',
+        recorrente: false,
+        parcelas: 1,
       });
     }
     setOpenDialog(true);
@@ -186,30 +190,47 @@ function ContasPagar() {
         return;
       }
 
+      // Preparar dados para salvar
       const dadosParaSalvar = {
-        tipo: 'despesa',
-        descricao: formData.descricao.trim(),
-        valor: valorNumerico,
-        dataVencimento: formData.dataVencimento,
-        data: formData.dataVencimento, // Para facilitar a busca
-        categoria: formData.categoria,
-        fornecedorId: formData.fornecedorId || null,
-        formaPagamento: formData.formaPagamento,
-        observacoes: formData.observacoes || null,
-        status: formData.status,
+        descricao: String(formData.descricao).trim(),
+        valor: Number(valorNumerico),
+        dataVencimento: String(formData.dataVencimento),
+        categoria: String(formData.categoria),
+        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        formaPagamento: String(formData.formaPagamento),
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        status: String(formData.status),
+        recorrente: Boolean(formData.recorrente),
+        parcelas: Number(formData.parcelas) || 1,
         updatedAt: new Date().toISOString(),
       };
 
+      // Remover campos undefined
+      Object.keys(dadosParaSalvar).forEach(key => {
+        if (dadosParaSalvar[key] === undefined) {
+          delete dadosParaSalvar[key];
+        }
+      });
+
       if (contaEditando) {
-        await firebaseService.update('transacoes', contaEditando.id, dadosParaSalvar);
+        await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
+        
+        // Atualizar estado local
+        const contasAtualizadas = contas.map(c => 
+          c.id === contaEditando.id ? { ...c, ...dadosParaSalvar, id: contaEditando.id } : c
+        );
+        setContas(contasAtualizadas);
+        
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
-        dadosParaSalvar.createdAt = new Date().toISOString();
-        await firebaseService.add('transacoes', dadosParaSalvar);
+        dadosParaSalvar.dataCriacao = new Date().toISOString();
+        
+        const novoId = await firebaseService.add('contas_pagar', dadosParaSalvar);
+        setContas([...contas, { ...dadosParaSalvar, id: novoId }]);
+        
         mostrarSnackbar('Conta registrada com sucesso!');
       }
 
-      await recarregar();
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
@@ -219,19 +240,29 @@ function ContasPagar() {
 
   const handleRegistrarPagamento = async () => {
     try {
-      if (!contaSelecionada) return;
+      if (!contaSelecionada || !contaSelecionada.id) {
+        mostrarSnackbar('Conta inválida', 'error');
+        return;
+      }
 
+      // Atualizar status da conta
       const dadosConta = {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      await firebaseService.update('transacoes', contaSelecionada.id, dadosConta);
+      await firebaseService.update('contas_pagar', contaSelecionada.id, dadosConta);
+
+      // Atualizar estado local das contas
+      const contasAtualizadas = contas.map(c => 
+        c.id === contaSelecionada.id ? { ...c, ...dadosConta } : c
+      );
+      setContas(contasAtualizadas);
 
       // Atualizar caixa se estiver aberto
-      if (caixaAtual) {
-        const novoSaldo = (caixaAtual.saldoAtual || 0) - Number(contaSelecionada.valor);
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const novoSaldo = (caixa.saldoAtual || 0) - Number(contaSelecionada.valor);
         
         const novaMovimentacao = {
           id: Date.now().toString(),
@@ -239,20 +270,27 @@ function ContasPagar() {
           valor: Number(contaSelecionada.valor),
           descricao: `Pagamento: ${contaSelecionada.descricao}`,
           data: new Date().toISOString(),
-          transacaoId: contaSelecionada.id,
+          contaId: contaSelecionada.id,
         };
         
-        const movimentacoesAtuais = Array.isArray(caixaAtual.movimentacoes) ? caixaAtual.movimentacoes : [];
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
         const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
         
-        await firebaseService.update('caixa', caixaAtual.id, {
-          saldoAtual: novoSaldo,
+        const dadosCaixa = {
+          saldoAtual: Number(novoSaldo),
           movimentacoes: novasMovimentacoes,
           updatedAt: new Date().toISOString(),
+        };
+        
+        await firebaseService.update('caixa', caixa.id, dadosCaixa);
+        
+        setCaixa({ 
+          ...caixa, 
+          saldoAtual: novoSaldo, 
+          movimentacoes: novasMovimentacoes 
         });
       }
 
-      await recarregar();
       mostrarSnackbar('Pagamento registrado com sucesso!');
       handleClosePagamento();
     } catch (error) {
@@ -261,27 +299,92 @@ function ContasPagar() {
     }
   };
 
+  // Verificar contas atrasadas
+  useEffect(() => {
+    const verificarEAtualizarAtrasadas = async () => {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      
+      for (const conta of contas) {
+        if (conta.status === 'pendente') {
+          const vencimento = new Date(conta.dataVencimento);
+          vencimento.setHours(0, 0, 0, 0);
+          
+          if (vencimento < hoje) {
+            try {
+              await firebaseService.update('contas_pagar', conta.id, {
+                status: 'atrasado',
+                updatedAt: new Date().toISOString(),
+              });
+              
+              // Atualizar estado local
+              setContas(prev => prev.map(c => 
+                c.id === conta.id ? { ...c, status: 'atrasado' } : c
+              ));
+            } catch (error) {
+              console.error('Erro ao atualizar conta atrasada:', error);
+            }
+          }
+        }
+      }
+    };
+
+    if (contas.length > 0) {
+      verificarEAtualizarAtrasadas();
+    }
+  }, [contas]);
+
+  // Filtrar contas
   const contasFiltradas = contas.filter(conta => {
-    const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
     const matchesTexto = filtro === '' || 
-      conta.descricao?.toLowerCase().includes(filtro.toLowerCase()) ||
-      fornecedor?.nome?.toLowerCase().includes(filtro.toLowerCase());
+      conta.descricao?.toLowerCase().includes(filtro.toLowerCase());
 
     const matchesStatus = filtroStatus === 'todos' || conta.status === filtroStatus;
 
-    return matchesTexto && matchesStatus;
+    let matchesPeriodo = true;
+    if (filtroPeriodo === 'hoje') {
+      const hoje = new Date().toISOString().split('T')[0];
+      matchesPeriodo = conta.dataVencimento === hoje;
+    } else if (filtroPeriodo === 'semana') {
+      const dataVenc = new Date(conta.dataVencimento);
+      const umaSemana = new Date();
+      umaSemana.setDate(umaSemana.getDate() + 7);
+      matchesPeriodo = dataVenc <= umaSemana && dataVenc >= new Date();
+    } else if (filtroPeriodo === 'vencidas') {
+      const dataVenc = new Date(conta.dataVencimento);
+      matchesPeriodo = dataVenc < new Date() && conta.status === 'pendente';
+    }
+
+    return matchesTexto && matchesStatus && matchesPeriodo;
   });
 
+  // Paginação
+  const paginatedContas = contasFiltradas.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Estatísticas
   const stats = {
+    total: contas.length,
     pendentes: contas.filter(c => c.status === 'pendente').length,
     atrasadas: contas.filter(c => c.status === 'atrasado').length,
     pagas: contas.filter(c => c.status === 'pago').length,
-    valorPendente: contas
-      .filter(c => c.status === 'pendente' || c.status === 'atrasado')
+    valorTotal: contas
+      .filter(c => c.status !== 'pago')
       .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
   };
 
-  if (carregando) {
+  if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
         <LinearProgress />
@@ -314,22 +417,34 @@ function ContasPagar() {
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
             <Card>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>Valor Pendente</Typography>
+                <Typography color="textSecondary" gutterBottom>
+                  Total a Pagar
+                </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                  R$ {stats.valorPendente.toFixed(2)}
+                  R$ {stats.valorTotal.toFixed(2)}
                 </Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
             <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>Pendentes</Typography>
+                <Typography color="textSecondary" gutterBottom>
+                  Pendentes
+                </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
                   {stats.pendentes}
                 </Typography>
@@ -338,10 +453,16 @@ function ContasPagar() {
           </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
             <Card sx={{ bgcolor: '#ffebee' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>Atrasadas</Typography>
+                <Typography color="textSecondary" gutterBottom>
+                  Atrasadas
+                </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
                   {stats.atrasadas}
                 </Typography>
@@ -350,10 +471,16 @@ function ContasPagar() {
           </motion.div>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
             <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>Pagas</Typography>
+                <Typography color="textSecondary" gutterBottom>
+                  Pagas
+                </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
                   {stats.pagas}
                 </Typography>
@@ -367,15 +494,19 @@ function ContasPagar() {
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={8}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Buscar por descrição ou fornecedor..."
+                placeholder="Buscar contas..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
                 InputProps={{
-                  startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
                   endAdornment: filtro && (
                     <InputAdornment position="end">
                       <IconButton size="small" onClick={() => setFiltro('')}>
@@ -386,7 +517,7 @@ function ContasPagar() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={3}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -403,12 +534,27 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Período</InputLabel>
+                <Select
+                  value={filtroPeriodo}
+                  onChange={(e) => setFiltroPeriodo(e.target.value)}
+                  label="Período"
+                >
+                  <MenuItem value="todos">Todos</MenuItem>
+                  <MenuItem value="hoje">Vencem Hoje</MenuItem>
+                  <MenuItem value="semana">Próximos 7 dias</MenuItem>
+                  <MenuItem value="vencidas">Vencidas</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={12} md={2}>
               <Button
                 fullWidth
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={recarregar}
+                onClick={carregarDados}
               >
                 Atualizar
               </Button>
@@ -433,7 +579,7 @@ function ContasPagar() {
             </TableHead>
             <TableBody>
               <AnimatePresence>
-                {contasFiltradas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((conta, index) => {
+                {paginatedContas.map((conta, index) => {
                   const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
                   const hoje = new Date();
                   hoje.setHours(0, 0, 0, 0);
@@ -507,7 +653,7 @@ function ContasPagar() {
                 })}
               </AnimatePresence>
 
-              {contasFiltradas.length === 0 && (
+              {paginatedContas.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                     <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
@@ -526,11 +672,8 @@ function ContasPagar() {
           count={contasFiltradas.length}
           rowsPerPage={rowsPerPage}
           page={page}
-          onPageChange={(e, newPage) => setPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
           labelRowsPerPage="Itens por página"
           labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
         />
@@ -695,13 +838,15 @@ function ContasPagar() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
       </Snackbar>
     </Box>
   );
