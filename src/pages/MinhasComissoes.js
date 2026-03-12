@@ -45,13 +45,12 @@ import { firebaseService } from '../services/firebase';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useReactToPrint } from 'react-to-print';
 
-// Ícones - importação direta para evitar problemas
+// Ícones - apenas os necessários, sem CancelIcon
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
-import CancelIcon from '@mui/icons-material/Cancel';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -65,33 +64,9 @@ import EventIcon from '@mui/icons-material/Event';
 import PersonIcon from '@mui/icons-material/Person';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PercentIcon from '@mui/icons-material/Percent';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import PieChartIcon from '@mui/icons-material/PieChart';
-
-// Fallbacks seguros para ícones (caso algum não seja encontrado)
-const SafeMoneyIcon = AttachMoneyIcon || (() => <span>💰</span>);
-const SafeTrendingUpIcon = TrendingUpIcon || (() => <span>📈</span>);
-const SafeCalendarIcon = CalendarTodayIcon || (() => <span>📅</span>);
-const SafeCheckCircleIcon = CheckCircleIcon || (() => <span>✅</span>);
-const SafePendingIcon = PendingIcon || (() => <span>⏳</span>);
-const SafeCancelIcon = CancelIcon || (() => <span>❌</span>);
-const SafeReceiptIcon = ReceiptIcon || (() => <span>📄</span>);
-const SafeBarChartIcon = BarChartIcon || (() => <span>📊</span>);
-const SafeDownloadIcon = DownloadIcon || (() => <span>⬇️</span>);
-const SafePrintIcon = PrintIcon || (() => <span>🖨️</span>);
-const SafePdfIcon = PictureAsPdfIcon || (() => <span>📑</span>);
-const SafeSearchIcon = SearchIcon || (() => <span>🔍</span>);
-const SafeClearIcon = ClearIcon || (() => <span>✖️</span>);
-const SafeRefreshIcon = RefreshIcon || (() => <span>🔄</span>);
-const SafeVisibilityIcon = VisibilityIcon || (() => <span>👁️</span>);
-const SafeEventIcon = EventIcon || (() => <span>📆</span>);
-const SafePersonIcon = PersonIcon || (() => <span>👤</span>);
-const SafeReceiptLongIcon = ReceiptLongIcon || (() => <span>📋</span>);
-const SafePercentIcon = PercentIcon || (() => <span>%</span>);
-const SafeFilterIcon = FilterListIcon || (() => <span>🔍</span>);
-const SafeTimelineIcon = TimelineIcon || (() => <span>📊</span>);
-const SafePieChartIcon = PieChartIcon || (() => <span>🥧</span>);
+import WarningIcon from '@mui/icons-material/Warning';
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, ref) => {
@@ -229,7 +204,7 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, r
                     <Chip
                       label={comissao.status}
                       size="small"
-                      color={comissao.status === 'pago' ? 'success' : 'warning'}
+                      color={comissao.status === 'pago' ? 'success' : comissao.status === 'cancelado' ? 'error' : 'warning'}
                     />
                   </TableCell>
                   <TableCell>
@@ -620,24 +595,17 @@ function MinhasComissoes() {
     }
   };
 
-  const getStatusChip = (status) => {
-    const config = {
-      pendente: { color: 'warning', icon: <SafePendingIcon />, label: 'Pendente' },
-      pago: { color: 'success', icon: <SafeCheckCircleIcon />, label: 'Pago' },
-      cancelado: { color: 'error', icon: <SafeCancelIcon />, label: 'Cancelado' }
-    };
-    
-    const { color, icon, label } = config[status] || config.pendente;
-    
-    return (
-      <Chip
-        icon={icon}
-        label={label}
-        size="small"
-        color={color}
-        variant="outlined"
-      />
-    );
+  // Função para renderizar chip de status sem usar CancelIcon
+  const renderStatusChip = (status) => {
+    switch(status) {
+      case 'pago':
+        return <Chip icon={<CheckCircleIcon />} label="Pago" size="small" color="success" variant="outlined" />;
+      case 'cancelado':
+        return <Chip icon={<WarningIcon />} label="Cancelado" size="small" color="error" variant="outlined" />;
+      case 'pendente':
+      default:
+        return <Chip icon={<PendingIcon />} label="Pendente" size="small" color="warning" variant="outlined" />;
+    }
   };
 
   const formatarMoeda = (valor) => {
@@ -749,7 +717,7 @@ function MinhasComissoes() {
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="outlined"
-            startIcon={<SafePrintIcon />}
+            startIcon={<PrintIcon />}
             onClick={handlePrint}
           >
             Imprimir Relatório
@@ -757,7 +725,7 @@ function MinhasComissoes() {
           
           <Button
             variant="contained"
-            startIcon={<SafeDownloadIcon />}
+            startIcon={<DownloadIcon />}
             onClick={handleOpenRelatorio}
             sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
           >
@@ -779,7 +747,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
-                      <SafeMoneyIcon />
+                      <AttachMoneyIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -808,7 +776,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}>
-                      <SafePendingIcon />
+                      <PendingIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -837,7 +805,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                      <SafeCheckCircleIcon />
+                      <CheckCircleIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -866,7 +834,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#2196f3', width: 56, height: 56 }}>
-                      <SafeTimelineIcon />
+                      <TimelineIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -901,13 +869,13 @@ function MinhasComissoes() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SafeSearchIcon />
+                      <SearchIcon />
                     </InputAdornment>
                   ),
                   endAdornment: filtroBusca && (
                     <InputAdornment position="end">
                       <IconButton size="small" onClick={() => setFiltroBusca('')}>
-                        <SafeClearIcon />
+                        <ClearIcon />
                       </IconButton>
                     </InputAdornment>
                   ),
@@ -969,7 +937,7 @@ function MinhasComissoes() {
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button
                   variant="outlined"
-                  startIcon={<SafeRefreshIcon />}
+                  startIcon={<RefreshIcon />}
                   onClick={() => {
                     setFiltroBusca('');
                     setFiltroMes(new Date().getMonth() + 1);
@@ -983,7 +951,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<SafePdfIcon />}
+                  startIcon={<PictureAsPdfIcon />}
                   onClick={handleExportPDF}
                   color="error"
                 >
@@ -992,7 +960,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<SafeDownloadIcon />}
+                  startIcon={<DownloadIcon />}
                   onClick={handleExportExcel}
                   color="success"
                 >
@@ -1007,17 +975,17 @@ function MinhasComissoes() {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab label="Comissões" icon={<SafePercentIcon />} iconPosition="start" />
+          <Tab label="Comissões" icon={<PercentIcon />} iconPosition="start" />
           <Tab 
             label={
               <Badge badgeContent={atendimentos.length} color="primary">
                 Atendimentos
               </Badge>
             } 
-            icon={<SafeEventIcon />} 
+            icon={<EventIcon />} 
             iconPosition="start" 
           />
-          <Tab label="Resumo por Serviço" icon={<SafePieChartIcon />} iconPosition="start" />
+          <Tab label="Resumo por Serviço" icon={<PieChartIcon />} iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -1050,7 +1018,7 @@ function MinhasComissoes() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <SafeReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
+                          <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
                           {comissao.servicoNome}
                         </Box>
                       </TableCell>
@@ -1071,13 +1039,13 @@ function MinhasComissoes() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {getStatusChip(comissao.status)}
+                        {renderStatusChip(comissao.status)}
                       </TableCell>
                       <TableCell>
                         {comissao.dataPagamento ? (
                           <Tooltip title={`Pago em ${formatarData(comissao.dataPagamento)}`}>
                             <Chip
-                              icon={<SafeCheckCircleIcon />}
+                              icon={<CheckCircleIcon />}
                               label="Pago"
                               size="small"
                               color="success"
@@ -1086,7 +1054,7 @@ function MinhasComissoes() {
                           </Tooltip>
                         ) : (
                           <Chip
-                            icon={<SafePendingIcon />}
+                            icon={<PendingIcon />}
                             label="Aguardando"
                             size="small"
                             variant="outlined"
@@ -1099,7 +1067,7 @@ function MinhasComissoes() {
                   {comissoesFiltradas.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <SafeReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhuma comissão encontrada para o período
                         </Typography>
@@ -1143,7 +1111,7 @@ function MinhasComissoes() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <SafePersonIcon sx={{ color: '#757575', fontSize: 20 }} />
+                          <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
                           {atendimento.cliente?.nome || '—'}
                         </Box>
                       </TableCell>
@@ -1166,7 +1134,7 @@ function MinhasComissoes() {
                             onClick={() => handleOpenDetalhes(atendimento)}
                             sx={{ color: '#9c27b0' }}
                           >
-                            <SafeVisibilityIcon />
+                            <VisibilityIcon />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -1176,7 +1144,7 @@ function MinhasComissoes() {
                   {atendimentosFiltrados.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <SafeEventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhum atendimento encontrado para o período
                         </Typography>
@@ -1377,7 +1345,7 @@ function MinhasComissoes() {
                               key={idx}
                               size="small"
                               label={c.status}
-                              color={c.status === 'pago' ? 'success' : 'warning'}
+                              color={c.status === 'pago' ? 'success' : c.status === 'cancelado' ? 'error' : 'warning'}
                               sx={{ mr: 0.5, mb: 0.5 }}
                             />
                           ))}
@@ -1410,7 +1378,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<SafePrintIcon />}
+                  startIcon={<PrintIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handlePrint();
@@ -1430,7 +1398,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<SafePdfIcon />}
+                  startIcon={<PictureAsPdfIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportPDF();
@@ -1451,7 +1419,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<SafeDownloadIcon />}
+                  startIcon={<DownloadIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportExcel();
