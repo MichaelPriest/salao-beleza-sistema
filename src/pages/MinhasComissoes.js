@@ -37,45 +37,64 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Badge,
 } from '@mui/material';
-import {
-  AttachMoney as MoneyIcon,
-  TrendingUp as TrendingUpIcon,
-  CalendarToday as CalendarIcon,
-  CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
-  Cancel as CancelIcon,
-  Receipt as ReceiptIcon,
-  BarChart as BarChartIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  PictureAsPdf as PdfIcon,
-  Search as SearchIcon,
-  Clear as ClearIcon,
-  Refresh as RefreshIcon,
-  Visibility as VisibilityIcon,
-  Event as EventIcon,
-  Person as PersonIcon,
-  ReceiptLong as ReceiptLongIcon,
-  Percent as PercentIcon,
-  FilterList as FilterIcon,
-  Timeline as TimelineIcon,
-  PieChart as PieChartIcon,
-} from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useFeedback } from '../contexts/FeedbackContext';
-import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { useReactToPrint } from 'react-to-print';
 
+// Ícones - importação direta para evitar problemas
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PendingIcon from '@mui/icons-material/Pending';
+import CancelIcon from '@mui/icons-material/Cancel';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import DownloadIcon from '@mui/icons-material/Download';
+import PrintIcon from '@mui/icons-material/Print';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import EventIcon from '@mui/icons-material/Event';
+import PersonIcon from '@mui/icons-material/Person';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import PercentIcon from '@mui/icons-material/Percent';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import PieChartIcon from '@mui/icons-material/PieChart';
+
+// Fallbacks seguros para ícones (caso algum não seja encontrado)
+const SafeMoneyIcon = AttachMoneyIcon || (() => <span>💰</span>);
+const SafeTrendingUpIcon = TrendingUpIcon || (() => <span>📈</span>);
+const SafeCalendarIcon = CalendarTodayIcon || (() => <span>📅</span>);
+const SafeCheckCircleIcon = CheckCircleIcon || (() => <span>✅</span>);
+const SafePendingIcon = PendingIcon || (() => <span>⏳</span>);
+const SafeCancelIcon = CancelIcon || (() => <span>❌</span>);
+const SafeReceiptIcon = ReceiptIcon || (() => <span>📄</span>);
+const SafeBarChartIcon = BarChartIcon || (() => <span>📊</span>);
+const SafeDownloadIcon = DownloadIcon || (() => <span>⬇️</span>);
+const SafePrintIcon = PrintIcon || (() => <span>🖨️</span>);
+const SafePdfIcon = PictureAsPdfIcon || (() => <span>📑</span>);
+const SafeSearchIcon = SearchIcon || (() => <span>🔍</span>);
+const SafeClearIcon = ClearIcon || (() => <span>✖️</span>);
+const SafeRefreshIcon = RefreshIcon || (() => <span>🔄</span>);
+const SafeVisibilityIcon = VisibilityIcon || (() => <span>👁️</span>);
+const SafeEventIcon = EventIcon || (() => <span>📆</span>);
+const SafePersonIcon = PersonIcon || (() => <span>👤</span>);
+const SafeReceiptLongIcon = ReceiptLongIcon || (() => <span>📋</span>);
+const SafePercentIcon = PercentIcon || (() => <span>%</span>);
+const SafeFilterIcon = FilterListIcon || (() => <span>🔍</span>);
+const SafeTimelineIcon = TimelineIcon || (() => <span>📊</span>);
+const SafePieChartIcon = PieChartIcon || (() => <span>🥧</span>);
+
 // Componente para impressão
-const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, filtros }, ref) => {
+const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, ref) => {
   const formatarMoeda = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -235,7 +254,7 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo, fil
 });
 
 function MinhasComissoes() {
-  const { showSnackbar, showLoading, hideLoading } = useFeedback();
+  const { showSnackbar } = useFeedback();
   const [loading, setLoading] = useState(true);
   const [comissoes, setComissoes] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
@@ -258,7 +277,6 @@ function MinhasComissoes() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
-  const [tipoRelatorio, setTipoRelatorio] = useState('completo');
 
   // Refs para impressão
   const relatorioRef = useRef();
@@ -323,10 +341,8 @@ function MinhasComissoes() {
         console.warn('Erro ao parsear usuário:', e);
       }
 
-      // Se não encontrar no localStorage, buscar do serviço de usuários
+      // Se não encontrar no localStorage, usar um ID de exemplo
       if (!profissionalId) {
-        // Aqui você pode implementar a lógica para buscar o profissional atual
-        // Por enquanto, vamos usar um ID de exemplo
         profissionalId = 'k3yNJZdaVnrz0hrmSegt'; // ID da Rosangela Santana
         profissionalNome = 'Rosangela Santana';
       }
@@ -354,38 +370,42 @@ function MinhasComissoes() {
     try {
       const comissoesData = await firebaseService.getAll('comissoes');
       
+      // Garantir que é array
+      const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
+      
       // Filtrar comissões do profissional
-      let comissoesFiltradas = comissoesData.filter(c => 
-        c.profissionalId === profissionalId
+      let comissoesFiltradas = comissoesArray.filter(c => 
+        c && c.profissionalId === profissionalId
       );
 
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         comissoesFiltradas = comissoesFiltradas.filter(c => {
-          const data = new Date(c.dataRegistro || c.createdAt || c.data);
+          if (!c) return false;
+          const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
       }
 
       // Filtrar por status
       if (filtroStatus !== 'todos') {
-        comissoesFiltradas = comissoesFiltradas.filter(c => c.status === filtroStatus);
+        comissoesFiltradas = comissoesFiltradas.filter(c => c && c.status === filtroStatus);
       }
 
       // Ordenar por data (mais recentes primeiro)
       comissoesFiltradas.sort((a, b) => {
-        const dataA = new Date(a.dataRegistro || a.createdAt || a.data || 0);
-        const dataB = new Date(b.dataRegistro || b.createdAt || b.data || 0);
+        const dataA = new Date(a?.dataRegistro || a?.createdAt || a?.data || 0);
+        const dataB = new Date(b?.dataRegistro || b?.createdAt || b?.data || 0);
         return dataB - dataA;
       });
 
-      // Formatar datas para exibição
+      // Formatar dados
       comissoesFiltradas = comissoesFiltradas.map(c => ({
         ...c,
-        dataFormatada: formatarData(c.dataRegistro || c.createdAt || c.data),
-        valor: Number(c.valor) || 0,
-        valorAtendimento: Number(c.valorAtendimento) || 0,
-        percentual: Number(c.percentual) || 0
+        dataFormatada: formatarData(c?.dataRegistro || c?.createdAt || c?.data),
+        valor: Number(c?.valor) || 0,
+        valorAtendimento: Number(c?.valorAtendimento) || 0,
+        percentual: Number(c?.percentual) || 0
       }));
 
       setComissoes(comissoesFiltradas);
@@ -398,14 +418,20 @@ function MinhasComissoes() {
   const carregarAtendimentos = async (profissionalId) => {
     try {
       const atendimentosData = await firebaseService.getAll('atendimentos');
+      const clientesData = await firebaseService.getAll('clientes');
+      
+      // Garantir que são arrays
+      const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
+      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       
       // Filtrar atendimentos do profissional e finalizados
-      let atendimentosFiltrados = atendimentosData.filter(a => {
-        // Verificar se o profissional participou do atendimento
+      let atendimentosFiltrados = atendimentosArray.filter(a => {
+        if (!a) return false;
+        
         const temProfissional = a.itensServico?.some(
-          item => item.profissionalId === profissionalId
+          item => item && item.profissionalId === profissionalId
         ) || a.servicos?.some(
-          s => s.profissionalId === profissionalId
+          s => s && s.profissionalId === profissionalId
         );
         
         return temProfissional && a.status === 'finalizado';
@@ -414,28 +440,29 @@ function MinhasComissoes() {
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
+          if (!a || !a.data) return false;
           const data = new Date(a.data);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
       }
 
-      // Buscar dados dos clientes
-      const clientes = await firebaseService.getAll('clientes');
-      
       // Enriquecer atendimentos com dados do cliente
       atendimentosFiltrados = atendimentosFiltrados.map(atendimento => {
-        const cliente = clientes.find(c => c.id === atendimento.clienteId);
+        const cliente = clientesArray.find(c => c && c.id === atendimento.clienteId);
         return {
           ...atendimento,
           cliente: cliente || { nome: 'Cliente não encontrado' },
           valorTotal: Number(atendimento.valorTotal) || 0,
-          // Calcular comissão total do atendimento para este profissional
           comissaoTotal: calcularComissaoProfissional(atendimento, profissionalId)
         };
       });
 
       // Ordenar por data (mais recentes primeiro)
-      atendimentosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
+      atendimentosFiltrados.sort((a, b) => {
+        const dataA = new Date(a?.data || 0);
+        const dataB = new Date(b?.data || 0);
+        return dataB - dataA;
+      });
 
       setAtendimentos(atendimentosFiltrados);
     } catch (error) {
@@ -445,145 +472,159 @@ function MinhasComissoes() {
   };
 
   const calcularComissaoProfissional = (atendimento, profissionalId) => {
+    if (!atendimento) return 0;
+    
     let total = 0;
     
-    // Verificar itensServico
-    if (atendimento.itensServico) {
-      atendimento.itensServico.forEach(item => {
-        if (item.profissionalId === profissionalId) {
-          // Encontrar a comissão correspondente
-          const comissao = comissoes.find(c => 
-            c.atendimentoId === atendimento.id && 
-            c.servicoId === item.servicoId
-          );
-          if (comissao) {
-            total += Number(comissao.valor) || 0;
-          } else {
-            // Calcular comissão estimada
-            total += (Number(item.preco) * (Number(item.comissao) || 0)) / 100;
+    try {
+      // Verificar itensServico
+      if (atendimento.itensServico && Array.isArray(atendimento.itensServico)) {
+        atendimento.itensServico.forEach(item => {
+          if (item && item.profissionalId === profissionalId) {
+            const comissao = comissoes.find(c => 
+              c && c.atendimentoId === atendimento.id && 
+              c.servicoId === item.servicoId
+            );
+            if (comissao) {
+              total += Number(comissao.valor) || 0;
+            } else {
+              total += (Number(item.preco) * (Number(item.comissao) || 0)) / 100;
+            }
           }
-        }
-      });
-    }
-    
-    // Verificar servicos (formato antigo)
-    if (atendimento.servicos) {
-      atendimento.servicos.forEach(servico => {
-        if (servico.profissionalId === profissionalId) {
-          const comissao = comissoes.find(c => 
-            c.atendimentoId === atendimento.id && 
-            c.servicoId === servico.id
-          );
-          if (comissao) {
-            total += Number(comissao.valor) || 0;
-          } else {
-            total += (Number(servico.preco) * (Number(servico.comissao) || 0)) / 100;
+        });
+      }
+      
+      // Verificar servicos (formato antigo)
+      if (atendimento.servicos && Array.isArray(atendimento.servicos)) {
+        atendimento.servicos.forEach(servico => {
+          if (servico && servico.profissionalId === profissionalId) {
+            const comissao = comissoes.find(c => 
+              c && c.atendimentoId === atendimento.id && 
+              c.servicoId === servico.id
+            );
+            if (comissao) {
+              total += Number(comissao.valor) || 0;
+            } else {
+              total += (Number(servico.preco) * (Number(servico.comissao) || 0)) / 100;
+            }
           }
-        }
-      });
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao calcular comissão:', error);
     }
     
     return total;
   };
 
   const calcularResumo = () => {
-    // Calcular totais do período
-    const totalPeriodo = comissoes
-      .filter(c => c.status !== 'cancelado')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-    
-    const aReceber = comissoes
-      .filter(c => c.status === 'pendente')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-    
-    const recebido = comissoes
-      .filter(c => c.status === 'pago')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-    
-    const cancelado = comissoes
-      .filter(c => c.status === 'cancelado')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+    try {
+      // Calcular totais do período
+      const totalPeriodo = comissoes
+        .filter(c => c && c.status !== 'cancelado')
+        .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+      
+      const aReceber = comissoes
+        .filter(c => c && c.status === 'pendente')
+        .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+      
+      const recebido = comissoes
+        .filter(c => c && c.status === 'pago')
+        .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+      
+      const cancelado = comissoes
+        .filter(c => c && c.status === 'cancelado')
+        .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
 
-    // Agrupar por serviço
-    const porServico = {};
-    comissoes.forEach(c => {
-      if (c.status !== 'cancelado') {
-        const nome = c.servicoNome || 'Outros';
-        if (!porServico[nome]) {
-          porServico[nome] = {
-            nome,
-            quantidade: 0,
-            valor: 0
-          };
+      // Agrupar por serviço
+      const porServico = {};
+      comissoes.forEach(c => {
+        if (c && c.status !== 'cancelado' && c.servicoNome) {
+          const nome = c.servicoNome || 'Outros';
+          if (!porServico[nome]) {
+            porServico[nome] = {
+              nome,
+              quantidade: 0,
+              valor: 0
+            };
+          }
+          porServico[nome].quantidade++;
+          porServico[nome].valor += Number(c.valor) || 0;
         }
-        porServico[nome].quantidade++;
-        porServico[nome].valor += Number(c.valor) || 0;
-      }
-    });
+      });
 
-    const porServicoArray = Object.values(porServico)
-      .sort((a, b) => b.valor - a.valor);
+      const porServicoArray = Object.values(porServico)
+        .sort((a, b) => b.valor - a.valor);
 
-    setResumo({
-      totalPeriodo,
-      aReceber,
-      recebido,
-      cancelado,
-      porServico: porServicoArray,
-      quantidade: comissoes.length,
-      quantidadePendente: comissoes.filter(c => c.status === 'pendente').length,
-      quantidadePaga: comissoes.filter(c => c.status === 'pago').length,
-      quantidadeCancelada: comissoes.filter(c => c.status === 'cancelado').length,
-    });
+      setResumo({
+        totalPeriodo,
+        aReceber,
+        recebido,
+        cancelado,
+        porServico: porServicoArray,
+        quantidade: comissoes.length,
+        quantidadePendente: comissoes.filter(c => c && c.status === 'pendente').length,
+        quantidadePaga: comissoes.filter(c => c && c.status === 'pago').length,
+        quantidadeCancelada: comissoes.filter(c => c && c.status === 'cancelado').length,
+      });
+    } catch (error) {
+      console.error('Erro ao calcular resumo:', error);
+    }
   };
 
   const calcularEstatisticas = () => {
-    // Calcular média por atendimento
-    const comissoesPagas = comissoes.filter(c => c.status === 'pago');
-    const mediaPorAtendimento = comissoesPagas.length > 0
-      ? comissoesPagas.reduce((acc, c) => acc + (Number(c.valor) || 0), 0) / comissoesPagas.length
-      : 0;
+    try {
+      // Calcular média por atendimento
+      const comissoesPagas = comissoes.filter(c => c && c.status === 'pago');
+      const mediaPorAtendimento = comissoesPagas.length > 0
+        ? comissoesPagas.reduce((acc, c) => acc + (Number(c.valor) || 0), 0) / comissoesPagas.length
+        : 0;
 
-    // Agrupar por mês
-    const porMes = [];
-    const mesesDados = {};
+      // Agrupar por mês
+      const porMes = [];
+      const mesesDados = {};
 
-    comissoes.forEach(c => {
-      const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
-      const mes = data.getMonth() + 1;
-      const ano = data.getFullYear();
-      const chave = `${ano}-${mes}`;
-      
-      if (!mesesDados[chave]) {
-        mesesDados[chave] = {
-          mes,
-          ano,
-          quantidade: 0,
-          total: 0
-        };
-      }
-      
-      if (c.status !== 'cancelado') {
-        mesesDados[chave].quantidade++;
-        mesesDados[chave].total += Number(c.valor) || 0;
-      }
-    });
+      comissoes.forEach(c => {
+        if (!c) return;
+        
+        const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
+        const mes = data.getMonth() + 1;
+        const ano = data.getFullYear();
+        const chave = `${ano}-${mes}`;
+        
+        if (!mesesDados[chave]) {
+          mesesDados[chave] = {
+            mes,
+            ano,
+            quantidade: 0,
+            total: 0
+          };
+        }
+        
+        if (c.status !== 'cancelado') {
+          mesesDados[chave].quantidade++;
+          mesesDados[chave].total += Number(c.valor) || 0;
+        }
+      });
 
-    Object.keys(mesesDados).sort().forEach(chave => {
-      porMes.push(mesesDados[chave]);
-    });
+      Object.keys(mesesDados).sort().forEach(chave => {
+        porMes.push(mesesDados[chave]);
+      });
 
-    setEstatisticas({
-      mediaPorAtendimento,
-      porMes: porMes.slice(-6) // Últimos 6 meses
-    });
+      setEstatisticas({
+        mediaPorAtendimento,
+        porMes: porMes.slice(-6)
+      });
+    } catch (error) {
+      console.error('Erro ao calcular estatísticas:', error);
+    }
   };
 
   const getStatusChip = (status) => {
     const config = {
-      pendente: { color: 'warning', icon: <PendingIcon />, label: 'Pendente' },
-      pago: { color: 'success', icon: <CheckCircleIcon />, label: 'Pago' },
-      cancelado: { color: 'error', icon: <CancelIcon />, label: 'Cancelado' }
+      pendente: { color: 'warning', icon: <SafePendingIcon />, label: 'Pendente' },
+      pago: { color: 'success', icon: <SafeCheckCircleIcon />, label: 'Pago' },
+      cancelado: { color: 'error', icon: <SafeCancelIcon />, label: 'Cancelado' }
     };
     
     const { color, icon, label } = config[status] || config.pendente;
@@ -600,15 +641,23 @@ function MinhasComissoes() {
   };
 
   const formatarMoeda = (valor) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor || 0);
+    try {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(valor || 0);
+    } catch {
+      return `R$ ${(valor || 0).toFixed(2)}`;
+    }
   };
 
   const formatarData = (data) => {
     if (!data) return '';
-    return new Date(data).toLocaleDateString('pt-BR');
+    try {
+      return new Date(data).toLocaleDateString('pt-BR');
+    } catch {
+      return String(data);
+    }
   };
 
   const handleTabChange = (event, newValue) => {
@@ -635,35 +684,33 @@ function MinhasComissoes() {
 
   const handleExportPDF = () => {
     toast.success('PDF gerado com sucesso!');
-    // Implementar geração de PDF
   };
 
   const handleExportExcel = () => {
     toast.success('Planilha exportada com sucesso!');
-    // Implementar exportação Excel
   };
 
   // Filtrar comissões por busca
   const comissoesFiltradas = comissoes.filter(c => {
-    if (!filtroBusca) return true;
+    if (!filtroBusca || !c) return true;
     
     const termo = filtroBusca.toLowerCase();
     return (
-      c.servicoNome?.toLowerCase().includes(termo) ||
-      c.profissionalNome?.toLowerCase().includes(termo) ||
-      c.atendimentoId?.toLowerCase().includes(termo)
+      (c.servicoNome && c.servicoNome.toLowerCase().includes(termo)) ||
+      (c.profissionalNome && c.profissionalNome.toLowerCase().includes(termo)) ||
+      (c.atendimentoId && c.atendimentoId.toLowerCase().includes(termo))
     );
   });
 
   // Filtrar atendimentos por busca
   const atendimentosFiltrados = atendimentos.filter(a => {
-    if (!filtroBusca) return true;
+    if (!filtroBusca || !a) return true;
     
     const termo = filtroBusca.toLowerCase();
     return (
-      a.cliente?.nome?.toLowerCase().includes(termo) ||
-      a.id?.toLowerCase().includes(termo) ||
-      a.servicos?.some(s => s.nome?.toLowerCase().includes(termo))
+      (a.cliente?.nome && a.cliente.nome.toLowerCase().includes(termo)) ||
+      (a.id && a.id.toLowerCase().includes(termo)) ||
+      (a.servicos && a.servicos.some(s => s && s.nome && s.nome.toLowerCase().includes(termo)))
     );
   });
 
@@ -702,7 +749,7 @@ function MinhasComissoes() {
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="outlined"
-            startIcon={<PrintIcon />}
+            startIcon={<SafePrintIcon />}
             onClick={handlePrint}
           >
             Imprimir Relatório
@@ -710,7 +757,7 @@ function MinhasComissoes() {
           
           <Button
             variant="contained"
-            startIcon={<DownloadIcon />}
+            startIcon={<SafeDownloadIcon />}
             onClick={handleOpenRelatorio}
             sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
           >
@@ -732,7 +779,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
-                      <MoneyIcon />
+                      <SafeMoneyIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -761,7 +808,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}>
-                      <PendingIcon />
+                      <SafePendingIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -790,7 +837,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                      <CheckCircleIcon />
+                      <SafeCheckCircleIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -819,7 +866,7 @@ function MinhasComissoes() {
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Avatar sx={{ bgcolor: '#2196f3', width: 56, height: 56 }}>
-                      <TimelineIcon />
+                      <SafeTimelineIcon />
                     </Avatar>
                     <Box>
                       <Typography color="textSecondary" variant="caption">
@@ -854,13 +901,13 @@ function MinhasComissoes() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SafeSearchIcon />
                     </InputAdornment>
                   ),
                   endAdornment: filtroBusca && (
                     <InputAdornment position="end">
                       <IconButton size="small" onClick={() => setFiltroBusca('')}>
-                        <ClearIcon />
+                        <SafeClearIcon />
                       </IconButton>
                     </InputAdornment>
                   ),
@@ -922,7 +969,7 @@ function MinhasComissoes() {
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button
                   variant="outlined"
-                  startIcon={<RefreshIcon />}
+                  startIcon={<SafeRefreshIcon />}
                   onClick={() => {
                     setFiltroBusca('');
                     setFiltroMes(new Date().getMonth() + 1);
@@ -936,7 +983,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<PictureAsPdfIcon />}
+                  startIcon={<SafePdfIcon />}
                   onClick={handleExportPDF}
                   color="error"
                 >
@@ -945,7 +992,7 @@ function MinhasComissoes() {
                 
                 <Button
                   variant="contained"
-                  startIcon={<DownloadIcon />}
+                  startIcon={<SafeDownloadIcon />}
                   onClick={handleExportExcel}
                   color="success"
                 >
@@ -960,17 +1007,17 @@ function MinhasComissoes() {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab label="Comissões" icon={<PercentIcon />} iconPosition="start" />
+          <Tab label="Comissões" icon={<SafePercentIcon />} iconPosition="start" />
           <Tab 
             label={
               <Badge badgeContent={atendimentos.length} color="primary">
                 Atendimentos
               </Badge>
             } 
-            icon={<EventIcon />} 
+            icon={<SafeEventIcon />} 
             iconPosition="start" 
           />
-          <Tab label="Resumo por Serviço" icon={<PieChartIcon />} iconPosition="start" />
+          <Tab label="Resumo por Serviço" icon={<SafePieChartIcon />} iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -1003,7 +1050,7 @@ function MinhasComissoes() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
+                          <SafeReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
                           {comissao.servicoNome}
                         </Box>
                       </TableCell>
@@ -1030,7 +1077,7 @@ function MinhasComissoes() {
                         {comissao.dataPagamento ? (
                           <Tooltip title={`Pago em ${formatarData(comissao.dataPagamento)}`}>
                             <Chip
-                              icon={<CheckCircleIcon />}
+                              icon={<SafeCheckCircleIcon />}
                               label="Pago"
                               size="small"
                               color="success"
@@ -1039,7 +1086,7 @@ function MinhasComissoes() {
                           </Tooltip>
                         ) : (
                           <Chip
-                            icon={<PendingIcon />}
+                            icon={<SafePendingIcon />}
                             label="Aguardando"
                             size="small"
                             variant="outlined"
@@ -1052,7 +1099,7 @@ function MinhasComissoes() {
                   {comissoesFiltradas.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <SafeReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhuma comissão encontrada para o período
                         </Typography>
@@ -1096,7 +1143,7 @@ function MinhasComissoes() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
+                          <SafePersonIcon sx={{ color: '#757575', fontSize: 20 }} />
                           {atendimento.cliente?.nome || '—'}
                         </Box>
                       </TableCell>
@@ -1119,7 +1166,7 @@ function MinhasComissoes() {
                             onClick={() => handleOpenDetalhes(atendimento)}
                             sx={{ color: '#9c27b0' }}
                           >
-                            <VisibilityIcon />
+                            <SafeVisibilityIcon />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -1129,7 +1176,7 @@ function MinhasComissoes() {
                   {atendimentosFiltrados.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <SafeEventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhum atendimento encontrado para o período
                         </Typography>
@@ -1271,7 +1318,7 @@ function MinhasComissoes() {
                       <TableBody>
                         {(atendimentoSelecionado.servicos || atendimentoSelecionado.itensServico || []).map((servico, idx) => {
                           const comissaoServico = comissoes.find(c => 
-                            c.atendimentoId === atendimentoSelecionado.id && 
+                            c && c.atendimentoId === atendimentoSelecionado.id && 
                             c.servicoId === (servico.servicoId || servico.id)
                           );
                           
@@ -1324,7 +1371,7 @@ function MinhasComissoes() {
                           Status das Comissões
                         </Typography>
                         {comissoes
-                          .filter(c => c.atendimentoId === atendimentoSelecionado.id)
+                          .filter(c => c && c.atendimentoId === atendimentoSelecionado.id)
                           .map((c, idx) => (
                             <Chip
                               key={idx}
@@ -1363,7 +1410,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<PrintIcon />}
+                  startIcon={<SafePrintIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handlePrint();
@@ -1383,7 +1430,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<PictureAsPdfIcon />}
+                  startIcon={<SafePdfIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportPDF();
@@ -1404,7 +1451,7 @@ function MinhasComissoes() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<DownloadIcon />}
+                  startIcon={<SafeDownloadIcon />}
                   onClick={() => {
                     handleCloseRelatorio();
                     handleExportExcel();
@@ -1439,7 +1486,6 @@ function MinhasComissoes() {
           }}
           profissional={profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
-          filtros={{ mes: filtroMes, ano: filtroAno, status: filtroStatus }}
         />
       </Box>
     </Box>
