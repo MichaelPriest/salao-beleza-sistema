@@ -47,6 +47,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
+import { notificacoesService } from '../services/notificacoesService'; // 🔥 IMPORTAR O SERVICE DE NOTIFICAÇÕES
 
 // 🔥 FUNÇÃO PARA OBTER DATA E HORA NO HORÁRIO DE BRASÍLIA
 const getBrasiliaTime = () => {
@@ -217,7 +218,6 @@ function ModernHeader() {
 
   useEffect(() => {
     carregarUsuario();
-    carregarNotificacoes();
 
     const handleUsuarioAtualizado = () => {
       console.log('Header - Evento usuarioAtualizado recebido');
@@ -240,23 +240,42 @@ function ModernHeader() {
     };
   }, []);
 
-  const carregarNotificacoes = async () => {
+  // 🔥 CARREGAR NOTIFICAÇÕES CORRETAMENTE
+  const carregarNotificacoes = useCallback(async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
       if (user && user.uid) {
         console.log('Header - Buscando notificações para:', user.uid);
         
-        const data = await firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: user.uid }
-        ], 'data');
+        // 🔥 Usar o notificacoesService em vez de firebaseService diretamente
+        const data = await notificacoesService.listar(user.uid);
         
+        console.log('Header - Notificações carregadas:', data);
         setNotifications(data);
         setUnreadCount(data.filter(n => !n.lida).length);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
     }
-  };
+  }, []);
+
+  // 🔥 CARREGAR NOTIFICAÇÕES QUANDO USUÁRIO ESTIVER DISPONÍVEL
+  useEffect(() => {
+    if (usuario?.uid) {
+      carregarNotificacoes();
+      
+      // 🔥 Adicionar listener para atualizações de notificações
+      const handleNotificacoesAtualizadas = () => {
+        carregarNotificacoes();
+      };
+      
+      window.addEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
+      
+      return () => {
+        window.removeEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
+      };
+    }
+  }, [usuario, carregarNotificacoes]);
 
   // 🔥 FUNÇÃO DE BUSCA GLOBAL OTIMIZADA
   const realizarBusca = useCallback(async (termo) => {
@@ -268,7 +287,7 @@ function ModernHeader() {
     // Criar novo AbortController
     abortControllerRef.current = new AbortController();
 
-    if (!termo || termo.length < 2) {
+    if (!termo || termo.length < 3) { // 🔥 MUDADO DE 2 PARA 3 CARACTERES
       setSearchResults({
         clientes: [],
         profissionais: [],
@@ -407,8 +426,8 @@ function ModernHeader() {
       clearTimeout(searchTimeout.current);
     }
 
-    // Se o valor for menor que 2, limpar resultados e fechar popover
-    if (value.length < 2) {
+    // Se o valor for menor que 3, limpar resultados e fechar popover
+    if (value.length < 3) { // 🔥 MUDADO DE 2 PARA 3
       setSearchResults({
         clientes: [],
         profissionais: [],
@@ -421,8 +440,8 @@ function ModernHeader() {
       return;
     }
 
-    // Abrir popover se houver pelo menos 2 caracteres
-    if (value.length >= 2 && searchInputRef.current) {
+    // Abrir popover se houver pelo menos 3 caracteres
+    if (value.length >= 3 && searchInputRef.current) { // 🔥 MUDADO DE 2 PARA 3
       setSearchAnchorEl(searchInputRef.current);
     }
 
@@ -434,14 +453,14 @@ function ModernHeader() {
 
   // 🔥 HANDLER DE FOCO NA BUSCA
   const handleSearchFocus = (e) => {
-    if (searchTerm.length >= 2) {
+    if (searchTerm.length >= 3) { // 🔥 MUDADO DE 2 PARA 3
       setSearchAnchorEl(e.currentTarget);
     }
   };
 
   // 🔥 HANDLER DE CLIQUE NO INPUT
   const handleSearchClick = (e) => {
-    if (searchTerm.length >= 2) {
+    if (searchTerm.length >= 3) { // 🔥 MUDADO DE 2 PARA 3
       setSearchAnchorEl(e.currentTarget);
     }
   };
@@ -518,12 +537,12 @@ function ModernHeader() {
   const renderSearchResults = () => {
     const totalResults = Object.values(searchResults).reduce((acc, arr) => acc + arr.length, 0);
 
-    if (searchTerm.length < 2) {
+    if (searchTerm.length < 3) { // 🔥 MUDADO DE 2 PARA 3
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
           <Typography variant="body2" color="textSecondary">
-            Digite pelo menos 2 caracteres para buscar
+            Digite pelo menos 3 caracteres para buscar
           </Typography>
         </Box>
       );
@@ -786,10 +805,8 @@ function ModernHeader() {
   const handleNotificationClick = async (notification) => {
     try {
       if (!notification.lida) {
-        await firebaseService.update('notificacoes', notification.id, { 
-          lida: true,
-          updatedAt: new Date().toISOString()
-        });
+        // 🔥 Usar o notificacoesService
+        await notificacoesService.marcarComoLida(notification.id);
         await carregarNotificacoes();
       }
       
@@ -807,18 +824,15 @@ function ModernHeader() {
   const handleMarkAllAsRead = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      const naoLidas = notifications.filter(n => !n.lida);
+      // 🔥 Usar o notificacoesService
+      const success = await notificacoesService.marcarTodasComoLidas(user.uid);
       
-      const promises = naoLidas.map(n => 
-        firebaseService.update('notificacoes', n.id, { 
-          lida: true,
-          updatedAt: new Date().toISOString()
-        })
-      );
-      
-      await Promise.all(promises);
-      await carregarNotificacoes();
-      toast.success('Todas as notificações marcadas como lidas');
+      if (success) {
+        await carregarNotificacoes();
+        toast.success('Todas as notificações marcadas como lidas');
+      } else {
+        toast.error('Erro ao marcar notificações');
+      }
     } catch (error) {
       console.error('Erro ao marcar notificações:', error);
       toast.error('Erro ao marcar notificações');
@@ -827,11 +841,17 @@ function ModernHeader() {
 
   const handleClearAll = async () => {
     try {
-      const promises = notifications.map(n => firebaseService.delete('notificacoes', n.id));
-      await Promise.all(promises);
-      await carregarNotificacoes();
-      toast.success('Notificações removidas');
-      handleNotificationsClose();
+      const user = usuariosService.getUsuarioAtual();
+      // 🔥 Usar o notificacoesService
+      const success = await notificacoesService.excluirTodas(user.uid);
+      
+      if (success) {
+        await carregarNotificacoes();
+        toast.success('Notificações removidas');
+        handleNotificationsClose();
+      } else {
+        toast.error('Erro ao remover notificações');
+      }
     } catch (error) {
       console.error('Erro ao remover notificações:', error);
       toast.error('Erro ao remover notificações');
@@ -925,7 +945,7 @@ function ModernHeader() {
           </SearchIconWrapper>
           <StyledInputBase
             inputRef={searchInputRef}
-            placeholder="Buscar clientes, serviços, produtos..."
+            placeholder="Buscar clientes, serviços, produtos... (mínimo 3 caracteres)"
             value={searchTerm}
             onChange={handleSearchChange}
             onFocus={handleSearchFocus}
@@ -949,7 +969,7 @@ function ModernHeader() {
 
         {/* 🔥 POPOVER DE RESULTADOS DA BUSCA */}
         <Popover
-          open={Boolean(searchAnchorEl) && searchTerm.length >= 2}
+          open={Boolean(searchAnchorEl) && searchTerm.length >= 3}
           anchorEl={searchAnchorEl}
           onClose={handleSearchClose}
           anchorOrigin={{
@@ -992,8 +1012,16 @@ function ModernHeader() {
 
           {/* Notificações */}
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-            <IconButton color="inherit" onClick={handleNotificationsOpen}>
-              <Badge badgeContent={unreadCount} color="secondary">
+            <IconButton 
+              color="inherit" 
+              onClick={handleNotificationsOpen}
+              sx={{ position: 'relative' }}
+            >
+              <Badge 
+                badgeContent={unreadCount} 
+                color="secondary"
+                max={99}
+              >
                 <NotificationsIcon />
               </Badge>
             </IconButton>
@@ -1061,6 +1089,7 @@ function ModernHeader() {
           
           {notifications.length === 0 ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
+              <NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
               <Typography variant="body2" color="textSecondary">
                 Nenhuma notificação
               </Typography>
