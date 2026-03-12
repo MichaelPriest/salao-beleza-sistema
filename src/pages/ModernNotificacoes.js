@@ -1,4 +1,4 @@
-// src/pages/ModernNotificacoes.js
+// src/pages/ModernNotificacoes.js - CORRIGIDO
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -82,8 +82,8 @@ function ModernNotificacoes() {
     if (userStr) {
       const user = JSON.parse(userStr);
       setUsuario(user);
-      if (user?.id) {
-        carregarNotificacoes(user.id);
+      if (user?.uid) { // 🔥 CORRIGIDO: usar uid em vez de id
+        carregarNotificacoes(user.uid);
       }
     }
   }, []);
@@ -135,7 +135,7 @@ function ModernNotificacoes() {
   const handleMarkAsRead = async (id) => {
     const success = await notificacoesService.marcarComoLida(id);
     if (success) {
-      await carregarNotificacoes(usuario.id);
+      await carregarNotificacoes(usuario.uid); // 🔥 CORRIGIDO
       toast.success('Notificação marcada como lida');
     } else {
       toast.error('Erro ao marcar notificação');
@@ -143,9 +143,9 @@ function ModernNotificacoes() {
   };
 
   const handleMarkAllAsRead = async () => {
-    const success = await notificacoesService.marcarTodasComoLidas(usuario.id);
+    const success = await notificacoesService.marcarTodasComoLidas(usuario.uid); // 🔥 CORRIGIDO
     if (success) {
-      await carregarNotificacoes(usuario.id);
+      await carregarNotificacoes(usuario.uid);
       toast.success('Todas as notificações marcadas como lidas');
     } else {
       toast.error('Erro ao marcar notificações');
@@ -155,7 +155,7 @@ function ModernNotificacoes() {
   const handleDelete = async (id) => {
     const success = await notificacoesService.excluir(id);
     if (success) {
-      await carregarNotificacoes(usuario.id);
+      await carregarNotificacoes(usuario.uid); // 🔥 CORRIGIDO
       toast.success('Notificação removida');
     } else {
       toast.error('Erro ao remover notificação');
@@ -164,9 +164,9 @@ function ModernNotificacoes() {
   };
 
   const handleDeleteAll = async () => {
-    const success = await notificacoesService.excluirTodas(usuario.id);
+    const success = await notificacoesService.excluirTodas(usuario.uid); // 🔥 CORRIGIDO
     if (success) {
-      await carregarNotificacoes(usuario.id);
+      await carregarNotificacoes(usuario.uid);
       toast.success('Todas as notificações removidas');
     } else {
       toast.error('Erro ao remover notificações');
@@ -189,9 +189,36 @@ function ModernNotificacoes() {
     setOpenDetailsDialog(true);
   };
 
-  const handleNavigate = (link) => {
+  // 🔥 FUNÇÃO CORRIGIDA PARA NAVEGAR CORRETAMENTE
+  const handleNavigate = (link, tipo, detalhes) => {
     setOpenDetailsDialog(false);
-    navigate(link);
+    
+    console.log('Navegando para:', { link, tipo, detalhes });
+    
+    // 🔥 CORREÇÃO: Para agendamentos e lembretes, vai para a lista
+    if (tipo === 'agendamento' || tipo === 'lembrete') {
+      navigate('/agendamentos');
+    } 
+    // 🔥 Para clientes, vai para a lista de clientes
+    else if (tipo === 'cliente') {
+      navigate('/clientes');
+    }
+    // 🔥 Para estoque, vai para o estoque
+    else if (tipo === 'estoque') {
+      navigate('/estoque');
+    }
+    // 🔥 Para pagamento, vai para o financeiro
+    else if (tipo === 'pagamento') {
+      navigate('/financeiro/receber');
+    }
+    // 🔥 Para atendimento, vai para o atendimento específico
+    else if (tipo === 'atendimento' && detalhes?.id) {
+      navigate(`/atendimento/${detalhes.id}`);
+    }
+    // 🔥 Fallback para outros casos
+    else if (link) {
+      navigate(link);
+    }
   };
 
   const getNotificationIcon = (tipo) => {
@@ -827,7 +854,7 @@ function ModernNotificacoes() {
         </MenuItem>
       </Menu>
 
-      {/* Dialog de Detalhes */}
+      {/* Dialog de Detalhes - CORRIGIDO */}
       <Dialog open={openDetailsDialog} onClose={() => setOpenDetailsDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           Detalhes da Notificação
@@ -861,13 +888,70 @@ function ModernNotificacoes() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDetailsDialog(false)}>Fechar</Button>
-          {notificationDetails?.link && (
+          
+          {/* 🔥 BOTÃO CORRIGIDO PARA AGENDAMENTOS */}
+          {notificationDetails?.tipo === 'agendamento' && (
             <Button
               variant="contained"
-              onClick={() => handleNavigate(notificationDetails.link)}
+              onClick={() => handleNavigate('/agendamentos', 'agendamento', notificationDetails.detalhes)}
               sx={{ bgcolor: '#9c27b0' }}
             >
-              Ir para {notificationDetails.tipo}
+              Ver Agendamentos
+            </Button>
+          )}
+          
+          {/* 🔥 BOTÃO PARA LEMBRETES */}
+          {notificationDetails?.tipo === 'lembrete' && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate('/agendamentos', 'lembrete', notificationDetails.detalhes)}
+              sx={{ bgcolor: '#ff9800' }}
+            >
+              Ver Agenda
+            </Button>
+          )}
+          
+          {/* 🔥 BOTÃO PARA CLIENTES */}
+          {notificationDetails?.tipo === 'cliente' && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate('/clientes', 'cliente', notificationDetails.detalhes)}
+              sx={{ bgcolor: '#ff4081' }}
+            >
+              Ver Clientes
+            </Button>
+          )}
+          
+          {/* 🔥 BOTÃO PARA ESTOQUE */}
+          {notificationDetails?.tipo === 'estoque' && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate('/estoque', 'estoque', notificationDetails.detalhes)}
+              sx={{ bgcolor: '#f44336' }}
+            >
+              Ver Estoque
+            </Button>
+          )}
+          
+          {/* 🔥 BOTÃO PARA PAGAMENTO */}
+          {notificationDetails?.tipo === 'pagamento' && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate('/financeiro/receber', 'pagamento', notificationDetails.detalhes)}
+              sx={{ bgcolor: '#4caf50' }}
+            >
+              Ver Financeiro
+            </Button>
+          )}
+          
+          {/* 🔥 BOTÃO PARA ATENDIMENTO */}
+          {notificationDetails?.tipo === 'atendimento' && notificationDetails?.detalhes?.id && (
+            <Button
+              variant="contained"
+              onClick={() => handleNavigate(`/atendimento/${notificationDetails.detalhes.id}`, 'atendimento', notificationDetails.detalhes)}
+              sx={{ bgcolor: '#2196f3' }}
+            >
+              Ver Atendimento
             </Button>
           )}
         </DialogActions>
