@@ -50,10 +50,6 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useReactToPrint } from 'react-to-print';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 
 // Ícones
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -80,6 +76,11 @@ import WarningIcon from '@mui/icons-material/Warning';
 import PeopleIcon from '@mui/icons-material/People';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TableChartIcon from '@mui/icons-material/TableChart';
+
+// Importações para PDF e Excel
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ 
