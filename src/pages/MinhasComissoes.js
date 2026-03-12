@@ -67,6 +67,7 @@ import PercentIcon from '@mui/icons-material/Percent';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import WarningIcon from '@mui/icons-material/Warning';
+import PeopleIcon from '@mui/icons-material/People';
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, ref) => {
@@ -90,7 +91,7 @@ const RelatorioComissoes = React.forwardRef(({ dados, profissional, periodo }, r
           Relatório de Comissões
         </Typography>
         <Typography variant="h6" sx={{ mt: 1 }}>
-          {profissional?.nome}
+          {profissional?.nome || 'Todos os Profissionais'}
         </Typography>
         <Typography variant="subtitle1" color="textSecondary">
           Período: {periodo}
@@ -234,9 +235,11 @@ function MinhasComissoes() {
   const [comissoes, setComissoes] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
   const [resumo, setResumo] = useState(null);
   const [estatisticas, setEstatisticas] = useState(null);
   const [profissional, setProfissional] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   
   // Filtros
@@ -244,6 +247,7 @@ function MinhasComissoes() {
   const [filtroAno, setFiltroAno] = useState(new Date().getFullYear());
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroBusca, setFiltroBusca] = useState('');
+  const [filtroProfissional, setFiltroProfissional] = useState('todos');
   
   // Paginação
   const [page, setPage] = useState(0);
@@ -288,7 +292,7 @@ function MinhasComissoes() {
       carregarComissoes();
       carregarAtendimentos();
     }
-  }, [profissional, filtroMes, filtroAno, filtroStatus]);
+  }, [profissional, filtroMes, filtroAno, filtroStatus, filtroProfissional]);
 
   // Recalcular resumo quando comissões mudarem
   useEffect(() => {
@@ -305,6 +309,7 @@ function MinhasComissoes() {
       // Buscar profissional atual do localStorage
       let profissionalId = null;
       let profissionalNome = '';
+      let usuarioTipo = 'profissional';
       
       try {
         const usuarioStr = localStorage.getItem('usuario');
@@ -312,33 +317,46 @@ function MinhasComissoes() {
           const usuario = JSON.parse(usuarioStr);
           profissionalId = usuario?.profissionalId;
           profissionalNome = usuario?.nome;
+          usuarioTipo = usuario?.tipo || 'profissional';
         }
       } catch (e) {
         console.warn('Erro ao parsear usuário:', e);
       }
 
-      // Se não encontrar no localStorage, usar um ID de exemplo
-      if (!profissionalId) {
+      // Verificar se é admin
+      const isAdminUser = usuarioTipo === 'admin';
+      setIsAdmin(isAdminUser);
+
+      // Carregar todos os profissionais
+      const profissionaisData = await firebaseService.getAll('profissionais');
+      const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      setProfissionais(profissionaisArray);
+
+      // Se não for admin e não tiver profissionalId, usar ID de exemplo
+      if (!isAdminUser && !profissionalId) {
         profissionalId = 'k3yNJZdaVnrz0hrmSegt'; // ID da Rosangela Santana
         profissionalNome = 'Rosangela Santana';
       }
 
       setProfissional({
         id: profissionalId,
-        nome: profissionalNome
+        nome: profissionalNome,
+        tipo: usuarioTipo
       });
 
-      // Carregar clientes primeiro
+      // Carregar clientes
       const clientesData = await firebaseService.getAll('clientes');
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       console.log('Clientes carregados:', clientesArray);
       setClientes(clientesArray);
 
       // Carregar comissões
-      await carregarComissoes(profissionalId);
+      await carregarComissoes(isAdminUser ? null : profissionalId);
       
-      // Carregar atendimentos (agora com os clientes já carregados)
-      await carregarAtendimentos(profissionalId);
+      // Carregar atendimentos
+      await carregarAtendimentos(isAdminUser ? null : profissionalId);
+
+      console.log('✅ Dados carregados do Firebase');
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -357,12 +375,23 @@ function MinhasComissoes() {
       
       console.log('Todas as comissões:', comissoesArray);
       
-      // Filtrar comissões do profissional
-      let comissoesFiltradas = comissoesArray.filter(c => 
-        c && c.profissionalId === profissionalId
-      );
+      // Filtrar comissões
+      let comissoesFiltradas = comissoesArray;
+      
+      // Se não for admin, filtrar por profissional
+      if (profissionalId) {
+        comissoesFiltradas = comissoesArray.filter(c => 
+          c && c.profissionalId === profissionalId
+        );
+      } 
+      // Se for admin e tiver filtro de profissional
+      else if (isAdmin && filtroProfissional !== 'todos') {
+        comissoesFiltradas = comissoesArray.filter(c => 
+          c && c.profissionalId === filtroProfissional
+        );
+      }
 
-      console.log('Comissões filtradas pelo profissional:', comissoesFiltradas);
+      console.log('Comissões filtradas:', comissoesFiltradas);
 
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
@@ -418,21 +447,34 @@ function MinhasComissoes() {
       
       console.log('Todos os atendimentos:', atendimentosArray);
       
-      // Filtrar atendimentos do profissional e finalizados
-      let atendimentosFiltrados = atendimentosArray.filter(a => {
-        if (!a) return false;
-        
-        // Verificar se o profissional participou do atendimento
-        const temProfissional = a.itensServico?.some(
-          item => item && item.profissionalId === profissionalId
-        ) || a.servicos?.some(
-          s => s && s.profissionalId === profissionalId
-        );
-        
-        return temProfissional && a.status === 'finalizado';
-      });
+      // Filtrar atendimentos
+      let atendimentosFiltrados = atendimentosArray.filter(a => a && a.status === 'finalizado');
+      
+      // Se não for admin, filtrar por profissional
+      if (profissionalId) {
+        atendimentosFiltrados = atendimentosFiltrados.filter(a => {
+          // Verificar se o profissional participou do atendimento
+          const temProfissional = a.itensServico?.some(
+            item => item && item.profissionalId === profissionalId
+          ) || a.servicos?.some(
+            s => s && s.profissionalId === profissionalId
+          );
+          return temProfissional;
+        });
+      } 
+      // Se for admin e tiver filtro de profissional
+      else if (isAdmin && filtroProfissional !== 'todos') {
+        atendimentosFiltrados = atendimentosFiltrados.filter(a => {
+          const temProfissional = a.itensServico?.some(
+            item => item && item.profissionalId === filtroProfissional
+          ) || a.servicos?.some(
+            s => s && s.profissionalId === filtroProfissional
+          );
+          return temProfissional;
+        });
+      }
 
-      console.log('Atendimentos filtrados pelo profissional:', atendimentosFiltrados);
+      console.log('Atendimentos filtrados:', atendimentosFiltrados);
 
       // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
@@ -447,21 +489,23 @@ function MinhasComissoes() {
       const atendimentosProcessados = atendimentosFiltrados.map(atendimento => {
         // Buscar cliente
         const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
-        console.log(`Cliente encontrado para atendimento ${atendimento.id}:`, cliente);
         
-        // Buscar todas as comissões deste atendimento para o profissional
+        // Buscar todas as comissões deste atendimento
         const comissoesDoAtendimento = comissoes.filter(c => 
-          c && c.atendimentoId === atendimento.id && c.profissionalId === profissionalId
+          c && c.atendimentoId === atendimento.id
         );
         
-        console.log(`Comissões do atendimento ${atendimento.id}:`, comissoesDoAtendimento);
+        // Se for profissional específico, filtrar as comissões dele
+        const comissoesDoProfissional = profissionalId 
+          ? comissoesDoAtendimento.filter(c => c.profissionalId === profissionalId)
+          : comissoesDoAtendimento;
         
         // Calcular comissão total
-        const comissaoTotal = comissoesDoAtendimento.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+        const comissaoTotal = comissoesDoProfissional.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
         
         // Verificar se todas as comissões estão pagas
-        const todasPagas = comissoesDoAtendimento.length > 0 && 
-                          comissoesDoAtendimento.every(c => c.status === 'pago');
+        const todasPagas = comissoesDoProfissional.length > 0 && 
+                          comissoesDoProfissional.every(c => c.status === 'pago');
         
         return {
           ...atendimento,
@@ -469,7 +513,7 @@ function MinhasComissoes() {
           valorTotal: Number(atendimento.valorTotal) || 0,
           comissaoTotal: comissaoTotal,
           comissaoPaga: todasPagas,
-          comissoes: comissoesDoAtendimento
+          comissoes: comissoesDoProfissional
         };
       });
 
@@ -689,7 +733,7 @@ function MinhasComissoes() {
     );
   }
 
-  if (!profissional) {
+  if (!profissional && !isAdmin) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="warning">
@@ -706,10 +750,12 @@ function MinhasComissoes() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            Minhas Comissões
+            {isAdmin ? 'Gerenciar Comissões' : 'Minhas Comissões'}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Olá, {profissional.nome}! Acompanhe suas comissões e rendimentos
+            {isAdmin 
+              ? 'Visualize todas as comissões dos profissionais' 
+              : `Olá, ${profissional?.nome}! Acompanhe suas comissões e rendimentos`}
           </Typography>
         </Box>
         
@@ -882,7 +928,7 @@ function MinhasComissoes() {
               />
             </Grid>
 
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={isAdmin ? 2 : 2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Mês</InputLabel>
                 <Select
@@ -899,7 +945,7 @@ function MinhasComissoes() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={isAdmin ? 2 : 2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Ano</InputLabel>
                 <Select
@@ -916,7 +962,25 @@ function MinhasComissoes() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={2}>
+            {isAdmin && (
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Profissional</InputLabel>
+                  <Select
+                    value={filtroProfissional}
+                    label="Profissional"
+                    onChange={(e) => setFiltroProfissional(e.target.value)}
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    {profissionais.map(prof => (
+                      <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            <Grid item xs={12} md={isAdmin ? 2 : 2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -932,7 +996,7 @@ function MinhasComissoes() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={isAdmin ? 2 : 4}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button
                   variant="outlined"
@@ -942,6 +1006,7 @@ function MinhasComissoes() {
                     setFiltroMes(new Date().getMonth() + 1);
                     setFiltroAno(new Date().getFullYear());
                     setFiltroStatus('todos');
+                    if (isAdmin) setFiltroProfissional('todos');
                     carregarDados();
                   }}
                 >
@@ -1001,6 +1066,7 @@ function MinhasComissoes() {
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                     <TableCell><strong>Data</strong></TableCell>
+                    {isAdmin && <TableCell><strong>Profissional</strong></TableCell>}
                     <TableCell><strong>Serviço</strong></TableCell>
                     <TableCell align="right"><strong>%</strong></TableCell>
                     <TableCell align="right"><strong>Valor Base</strong></TableCell>
@@ -1016,6 +1082,11 @@ function MinhasComissoes() {
                         <TableCell>
                           {formatarData(comissao.dataRegistro || comissao.createdAt || comissao.data)}
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            {comissao.profissionalNome || '—'}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
@@ -1065,7 +1136,7 @@ function MinhasComissoes() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={isAdmin ? 8 : 7} align="center" sx={{ py: 4 }}>
                         <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhuma comissão encontrada para o período
@@ -1464,7 +1535,7 @@ function MinhasComissoes() {
             comissoes: comissoesFiltradas,
             atendimentos: atendimentosFiltrados
           }}
-          profissional={profissional}
+          profissional={isAdmin ? { nome: 'Todos os Profissionais' } : profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
         />
       </Box>
