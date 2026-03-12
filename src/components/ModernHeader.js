@@ -686,7 +686,30 @@ function ModernHeader() {
       }
       
       if (notification.link) {
-        navigate(notification.link);
+        // 🔥 Se for agendamento, vai para a lista de agendamentos
+        if (notification.tipo === 'agendamento' || notification.tipo === 'lembrete') {
+          navigate('/agendamentos');
+        } 
+        // 🔥 Se for cliente, vai para a lista de clientes
+        else if (notification.tipo === 'cliente') {
+          navigate('/clientes');
+        }
+        // 🔥 Se for estoque, vai para o estoque
+        else if (notification.tipo === 'estoque') {
+          navigate('/estoque');
+        }
+        // 🔥 Se for pagamento, vai para o financeiro
+        else if (notification.tipo === 'pagamento') {
+          navigate('/financeiro/receber');
+        }
+        // 🔥 Se for atendimento, vai para o atendimento específico
+        else if (notification.tipo === 'atendimento') {
+          navigate(notification.link); // Esse link tem o ID específico
+        }
+        // 🔥 Para outros tipos, usa o link genérico
+        else {
+          navigate(notification.link);
+        }
       }
       
       handleNotificationsClose();
