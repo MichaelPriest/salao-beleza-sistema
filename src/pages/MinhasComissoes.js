@@ -47,7 +47,6 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
-import { useReactToPrint } from 'react-to-print';
 
 // Importações para PDF e Excel
 import jsPDF from 'jspdf';
@@ -420,20 +419,70 @@ function MinhasComissoes() {
   // Refs para impressão
   const relatorioRef = useRef(null);
   
-  const handlePrint = useReactToPrint({
-    contentRef: relatorioRef,
-    documentTitle: `Relatorio_Comissoes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}`,
-    onBeforePrint: () => {
+  // Função manual de impressão
+  const handlePrint = () => {
+    try {
       mostrarSnackbar('Preparando impressão...', 'info');
-    },
-    onAfterPrint: () => {
-      mostrarSnackbar('Impressão concluída!', 'success');
-    },
-    onPrintError: (error) => {
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
+        return;
+      }
+      
+      const content = relatorioRef.current;
+      if (!content) {
+        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
+        return;
+      }
+      
+      // Clonar o conteúdo para não afetar o original
+      const contentClone = content.cloneNode(true);
+      
+      // Criar o HTML para impressão
+      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+      let stylesHTML = '';
+      styles.forEach(style => {
+        if (style.tagName === 'STYLE') {
+          stylesHTML += style.outerHTML;
+        } else if (style.tagName === 'LINK') {
+          stylesHTML += style.outerHTML;
+        }
+      });
+      
+      const printHTML = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Relatório de Comissões</title>
+            ${stylesHTML}
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              @media print {
+                body { margin: 0; padding: 20px; }
+              }
+            </style>
+          </head>
+          <body>
+            ${contentClone.outerHTML}
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+      
+      // Aguardar carregamento e imprimir
+      setTimeout(() => {
+        printWindow.print();
+        mostrarSnackbar('Impressão concluída!', 'success');
+      }, 500);
+      
+    } catch (error) {
       console.error('Erro na impressão:', error);
       mostrarSnackbar('Erro ao imprimir', 'error');
-    },
-  });
+    }
+  };
 
   const meses = [
     { value: 1, label: 'Janeiro' },
@@ -1270,7 +1319,7 @@ function MinhasComissoes() {
           <Button
             variant="outlined"
             startIcon={<PrintIcon />}
-            onClick={() => handlePrint()}
+            onClick={handlePrint}
           >
             Imprimir Relatório
           </Button>
