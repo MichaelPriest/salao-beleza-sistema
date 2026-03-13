@@ -147,78 +147,223 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 
-// Estrutura do menu com ícones únicos
+// Estrutura do menu com ícones e permissões por cargo
 const menuGroups = [
   {
     title: 'PRINCIPAL',
     icon: <DashboardCustomizeIcon />,
     items: [
-      { text: 'Dashboard', icon: <DashboardIcon />, path: '/', permission: 'visualizar_dashboard' },
-      { text: 'Notificações', icon: <NotificationsActiveIcon />, path: '/notificacoes', permission: 'visualizar_notificacoes', badge: 'unread' },
+      { 
+        text: 'Dashboard', 
+        icon: <DashboardIcon />, 
+        path: '/', 
+        permission: 'visualizar_dashboard',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos podem ver
+      },
+      { 
+        text: 'Notificações', 
+        icon: <NotificationsActiveIcon />, 
+        path: '/notificacoes', 
+        permission: 'visualizar_notificacoes',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'], // Todos podem ver
+        badge: 'unread' 
+      },
     ],
   },
   {
     title: 'AGENDAMENTOS',
     icon: <EventAvailableIcon />,
     items: [
-      { text: 'Agenda', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
-      { text: 'Atendimentos', icon: <AssignmentTurnedInIcon />, path: '/atendimentos', permission: 'gerenciar_atendimentos' },
+      { 
+        text: 'Agenda', 
+        icon: <DateRangeIcon />, 
+        path: '/agendamentos', 
+        permission: 'gerenciar_agendamentos',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos veem mas com visões diferentes
+      },
+      { 
+        text: 'Atendimentos', 
+        icon: <AssignmentTurnedInIcon />, 
+        path: '/atendimentos', 
+        permission: 'gerenciar_atendimentos',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional'] // Cliente não vê
+      },
     ],
   },
   {
     title: 'CLIENTES',
     icon: <PersonSearchIcon />,
     items: [
-      { text: 'Clientes', icon: <GroupIcon />, path: '/clientes', permission: 'gerenciar_clientes' },
-      { text: 'Histórico', icon: <RestoreIcon />, path: '/historico', permission: 'visualizar_relatorios' },
+      { 
+        text: 'Clientes', 
+        icon: <GroupIcon />, 
+        path: '/clientes', 
+        permission: 'gerenciar_clientes',
+        cargos: ['admin', 'gerente', 'atendente'] // Profissional e cliente não veem
+      },
+      { 
+        text: 'Histórico', 
+        icon: <RestoreIcon />, 
+        path: '/historico', 
+        permission: 'visualizar_relatorios',
+        cargos: ['admin', 'gerente'] // Apenas admin e gerente
+      },
     ],
   },
   {
     title: 'FIDELIDADE',
     icon: <EmojiEventsIcon />,
     items: [
-      { text: 'Recompensas', icon: <CardGiftcardIcon />, path: '/fidelidade/recompensas', permission: 'visualizar_fidelidade' },
-      { text: 'Meus Pontos', icon: <StarsIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
-      { text: 'Gerenciar', icon: <EmojiEventsIcon />, path: '/fidelidade/gerenciar', permission: 'gerenciar_fidelidade' },
+      { 
+        text: 'Recompensas', 
+        icon: <CardGiftcardIcon />, 
+        path: '/fidelidade/recompensas', 
+        permission: 'visualizar_fidelidade',
+        cargos: ['admin', 'gerente', 'atendente', 'cliente'] // Profissional não precisa
+      },
+      { 
+        text: 'Meus Pontos', 
+        icon: <StarsIcon />, 
+        path: '/meus-pontos', 
+        permission: 'visualizar_fidelidade',
+        cargos: ['cliente'] // Apenas clientes
+      },
+      { 
+        text: 'Gerenciar Fidelidade', 
+        icon: <EmojiEventsIcon />, 
+        path: '/fidelidade/gerenciar', 
+        permission: 'gerenciar_fidelidade',
+        cargos: ['admin', 'gerente'] // Apenas admin e gerente
+      },
     ],
   },
   {
     title: 'PROFISSIONAIS',
     icon: <GroupsIcon />,
     items: [
-      { text: 'Profissionais', icon: <BadgeIcon />, path: '/profissionais', permission: 'gerenciar_profissionais' },
-      { text: 'Serviços', icon: <HandymanIcon />, path: '/servicos', permission: 'gerenciar_servicos' },
-      { text: 'Minhas Comissões', icon: <MoneyIcon />, path: '/minhas-comissoes', permission: 'visualizar_comissoes' },
+      { 
+        text: 'Profissionais', 
+        icon: <BadgeIcon />, 
+        path: '/profissionais', 
+        permission: 'gerenciar_profissionais',
+        cargos: ['admin', 'gerente', 'atendente'] // Profissional não gerencia outros
+      },
+      { 
+        text: 'Serviços', 
+        icon: <HandymanIcon />, 
+        path: '/servicos', 
+        permission: 'gerenciar_servicos',
+        cargos: ['admin', 'gerente', 'atendente'] // Profissional só vê na agenda
+      },
+      { 
+        text: 'Minhas Comissões', 
+        icon: <MoneyIcon />, 
+        path: '/minhas-comissoes', 
+        permission: 'visualizar_comissoes',
+        cargos: ['profissional'] // Apenas profissionais
+      },
     ],
   },
   {
     title: 'FINANCEIRO',
     icon: <AccountBalanceWalletIcon />,
     items: [
-      { text: 'Dashboard', icon: <BarChartIcon />, path: '/financeiro', permission: 'financeiro' },
-      { text: 'Contas a Receber', icon: <TrendingUpIcon />, path: '/financeiro/receber', permission: 'financeiro' },
-      { text: 'Contas a Pagar', icon: <TrendingDownIcon />, path: '/financeiro/pagar', permission: 'financeiro' },
-      { text: 'Fluxo de Caixa', icon: <TimelineIcon />, path: '/financeiro/fluxo', permission: 'financeiro' },
-      { text: 'Compras', icon: <AddShoppingCartIcon />, path: '/compras', permission: 'gerenciar_compras' },
-      { text: 'Relatórios', icon: <SummarizeIcon />, path: '/relatorios', permission: 'visualizar_relatorios' },
+      { 
+        text: 'Dashboard', 
+        icon: <BarChartIcon />, 
+        path: '/financeiro', 
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente'] // Apenas admin e gerente
+      },
+      { 
+        text: 'Contas a Receber', 
+        icon: <TrendingUpIcon />, 
+        path: '/financeiro/receber', 
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Contas a Pagar', 
+        icon: <TrendingDownIcon />, 
+        path: '/financeiro/pagar', 
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Fluxo de Caixa', 
+        icon: <TimelineIcon />, 
+        path: '/financeiro/fluxo', 
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Compras', 
+        icon: <AddShoppingCartIcon />, 
+        path: '/compras', 
+        permission: 'gerenciar_compras',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Relatórios', 
+        icon: <SummarizeIcon />, 
+        path: '/relatorios', 
+        permission: 'visualizar_relatorios',
+        cargos: ['admin', 'gerente']
+      },
     ],
   },
   {
     title: 'ESTOQUE',
     icon: <Inventory2Icon />,
     items: [
-      { text: 'Produtos', icon: <StorageIcon />, path: '/estoque', permission: 'gerenciar_estoque' },
-      { text: 'Entradas', icon: <MoveToInboxIcon />, path: '/entradas', permission: 'gerenciar_estoque' },
-      { text: 'Fornecedores', icon: <FactoryIcon />, path: '/fornecedores', permission: 'gerenciar_compras' },
+      { 
+        text: 'Produtos', 
+        icon: <StorageIcon />, 
+        path: '/estoque', 
+        permission: 'gerenciar_estoque',
+        cargos: ['admin', 'gerente', 'atendente'] // Atendente pode ver estoque
+      },
+      { 
+        text: 'Entradas', 
+        icon: <MoveToInboxIcon />, 
+        path: '/entradas', 
+        permission: 'gerenciar_estoque',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Fornecedores', 
+        icon: <FactoryIcon />, 
+        path: '/fornecedores', 
+        permission: 'gerenciar_compras',
+        cargos: ['admin', 'gerente']
+      },
     ],
   },
   {
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
-      { text: 'Usuários', icon: <AdminIcon />, path: '/usuarios', permission: 'gerenciar_usuarios' },
-      { text: 'Configurações', icon: <TuneIcon />, path: '/configuracoes', permission: 'configurar_sistema' },
-      { text: 'Auditoria', icon: <SecurityIcon />, path: '/auditoria', permission: 'visualizar_relatorios' },
+      { 
+        text: 'Usuários', 
+        icon: <AdminIcon />, 
+        path: '/usuarios', 
+        permission: 'gerenciar_usuarios',
+        cargos: ['admin'] // Apenas admin
+      },
+      { 
+        text: 'Configurações', 
+        icon: <TuneIcon />, 
+        path: '/configuracoes', 
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente'] // Gerente pode ver configurações básicas
+      },
+      { 
+        text: 'Auditoria', 
+        icon: <SecurityIcon />, 
+        path: '/auditoria', 
+        permission: 'visualizar_relatorios',
+        cargos: ['admin'] // Apenas admin
+      },
     ],
   },
 ];
@@ -893,12 +1038,23 @@ function ModernSidebar() {
     }
   };
 
+  // NOVA FUNÇÃO: Verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
-    if (usuario.cargo === 'admin' || usuario.permissoes?.includes('admin')) return true;
+    
+    // Admin tem acesso a tudo
+    if (usuario.cargo === 'admin') return true;
+    
+    // Verificar se o cargo do usuário está na lista de cargos permitidos para o item
+    if (item.cargos && Array.isArray(item.cargos)) {
+      return item.cargos.includes(usuario.cargo);
+    }
+    
+    // Fallback para o sistema antigo de permissões
     if (item.permission) {
       return usuario.permissoes?.includes(item.permission) || false;
     }
+    
     return true;
   };
 
@@ -946,7 +1102,7 @@ function ModernSidebar() {
     }
   }, [location.pathname]);
 
-  // Filtrar grupos baseado nas permissões
+  // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups
     .map(group => ({
       ...group,
