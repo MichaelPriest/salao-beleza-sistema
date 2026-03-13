@@ -62,6 +62,12 @@ import {
   Assessment,
   PieChart as PieChartIcon,
   ShowChart,
+  EmojiEvents as TrophyIcon,
+  CardGiftcard as GiftIcon,
+  History as HistoryIcon,
+  Spa as SpaIcon,
+  Notifications as NotificationsIcon,
+  ArrowForward as ArrowIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -89,6 +95,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { usuariosService } from '../services/usuariosService';
 
 const COLORS = [
   '#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', 
@@ -106,6 +113,7 @@ const statusColors = {
   em_andamento: { color: '#9c27b0', label: 'Em Andamento', icon: <Timer /> },
 };
 
+// Componente de Card para estatísticas (adaptado para diferentes cargos)
 const StatCard = ({ icon, title, value, trend, trendValue, color, loading, subtitle, onClick }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
@@ -140,7 +148,7 @@ const StatCard = ({ icon, title, value, trend, trendValue, color, loading, subti
                 {icon}
               </Avatar>
               {trend !== undefined && (
-                <Tooltip title={`${trend > 0 ? 'Aumento' : trend < 0 ? 'Queda' : 'Estável'} de ${Math.abs(trend).toFixed(1)}% em relação ao período anterior`}>
+                <Tooltip title={`${trend > 0 ? 'Aumento' : trend < 0 ? 'Queda' : 'Estável'} de ${Math.abs(trend).toFixed(1)}%`}>
                   <Chip
                     icon={
                       trend > 0 ? <ArrowUpward /> : 
@@ -173,7 +181,8 @@ const StatCard = ({ icon, title, value, trend, trendValue, color, loading, subti
   </motion.div>
 );
 
-const AppointmentCard = ({ appointment, client, service, professional }) => {
+// Card de agendamento para profissionais e atendentes
+const AppointmentCard = ({ appointment, client, service }) => {
   const statusInfo = statusColors[appointment.status] || { color: '#9e9e9e', label: appointment.status, icon: <Warning /> };
   
   return (
@@ -206,12 +215,6 @@ const AppointmentCard = ({ appointment, client, service, professional }) => {
                   variant="outlined"
                   sx={{ fontSize: '0.7rem' }}
                 />
-                <Chip
-                  label={professional?.nome || 'Profissional'}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: '0.7rem' }}
-                />
               </Box>
             </Box>
             <Chip
@@ -230,32 +233,171 @@ const AppointmentCard = ({ appointment, client, service, professional }) => {
   );
 };
 
+// Card de fidelidade para clientes
+const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
+  const niveis = {
+    bronze: { cor: '#cd7f32', nome: 'Bronze', proximo: 500 },
+    prata: { cor: '#c0c0c0', nome: 'Prata', proximo: 2000 },
+    ouro: { cor: '#ffd700', nome: 'Ouro', proximo: 5000 },
+    platina: { cor: '#e5e4e2', nome: 'Platina', proximo: null },
+  };
+
+  const progresso = niveis[nivel].proximo 
+    ? Math.min(100, (saldo / niveis[nivel].proximo) * 100)
+    : 100;
+
+  return (
+    <Card sx={{ bgcolor: '#faf5ff', border: `2px solid ${niveis[nivel].cor}` }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Avatar sx={{ bgcolor: niveis[nivel].cor, width: 60, height: 60 }}>
+            <TrophyIcon sx={{ fontSize: 30 }} />
+          </Avatar>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+              {saldo}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Pontos acumulados
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Nível {nivel.toUpperCase()}
+            </Typography>
+            {niveis[nivel].proximo && (
+              <Typography variant="body2" color="textSecondary">
+                {pontosFaltantes} pts para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina'].nome}
+              </Typography>
+            )}
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progresso}
+            sx={{
+              height: 8,
+              borderRadius: 4,
+              bgcolor: '#e0e0e0',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: niveis[nivel].cor,
+              },
+            }}
+          />
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Últimos pontos
+        </Typography>
+        <List dense>
+          {ultimosPontos.slice(0, 3).map((ponto, index) => (
+            <ListItem key={index} sx={{ px: 0 }}>
+              <ListItemAvatar>
+                <Avatar sx={{ bgcolor: ponto.tipo === 'credito' ? '#4caf50' : '#f44336', width: 24, height: 24 }}>
+                  {ponto.tipo === 'credito' ? '+' : '-'}
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText
+                primary={ponto.motivo}
+                secondary={format(new Date(ponto.data), 'dd/MM/yyyy')}
+                primaryTypographyProps={{ variant: 'body2' }}
+              />
+              <Typography variant="body2" sx={{ fontWeight: 600, color: ponto.tipo === 'credito' ? '#4caf50' : '#f44336' }}>
+                {ponto.tipo === 'credito' ? '+' : '-'}{ponto.quantidade}
+              </Typography>
+            </ListItem>
+          ))}
+        </List>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<GiftIcon />}
+          onClick={() => window.location.href = '/fidelidade/recompensas'}
+          sx={{ mt: 1, borderColor: niveis[nivel].cor, color: niveis[nivel].cor }}
+        >
+          Ver Recompensas
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Card de comissões para profissionais
+const ComissoesCard = ({ comissoes, totalPendente, totalPago }) => {
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+          Minhas Comissões
+        </Typography>
+        
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={6}>
+            <Paper sx={{ p: 2, bgcolor: '#fff3e0', textAlign: 'center' }}>
+              <Typography variant="subtitle2" color="textSecondary">
+                Pendente
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPendente)}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6}>
+            <Paper sx={{ p: 2, bgcolor: '#e8f5e8', textAlign: 'center' }}>
+              <Typography variant="subtitle2" color="textSecondary">
+                Recebido
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPago)}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Últimas comissões
+        </Typography>
+        <List dense>
+          {comissoes.slice(0, 5).map((comissao, index) => (
+            <ListItem key={index} divider={index < 4}>
+              <ListItemText
+                primary={comissao.descricao || 'Comissão de serviço'}
+                secondary={format(new Date(comissao.data), 'dd/MM/yyyy')}
+              />
+              <Chip
+                size="small"
+                label={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comissao.valor)}
+                color={comissao.status === 'pago' ? 'success' : 'warning'}
+                sx={{ fontWeight: 600 }}
+              />
+            </ListItem>
+          ))}
+        </List>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<HistoryIcon />}
+          onClick={() => window.location.href = '/minhas-comissoes'}
+          sx={{ mt: 1 }}
+        >
+          Ver Histórico Completo
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
 function ModernDashboard() {
-  const [stats, setStats] = useState({
-    faturamentoMensal: 0,
-    faturamentoHoje: 0,
-    totalClientes: 0,
-    clientesNovosMes: 0,
-    taxaOcupacao: 0,
-    agendamentosHoje: 0,
-    agendamentosConfirmados: 0,
-    agendamentosPendentes: 0,
-    agendamentosCancelados: 0,
-    ticketMedio: 0,
-    servicosRealizadosMes: 0,
-    produtosVendidosMes: 0,
-    comissoesPendentes: 0,
-    comissoesPagas: 0,
-  });
-
-  const [trends, setTrends] = useState({
-    faturamento: 0,
-    clientes: 0,
-    ocupacao: 0,
-    agendamentos: 0,
-    ticketMedio: 0,
-  });
-
+  const [usuario, setUsuario] = useState(null);
+  const [cargo, setCargo] = useState('');
+  const [stats, setStats] = useState({});
+  const [trends, setTrends] = useState({});
   const [revenueData, setRevenueData] = useState([]);
   const [servicesData, setServicesData] = useState([]);
   const [professionalsData, setProfessionalsData] = useState([]);
@@ -263,13 +405,28 @@ function ModernDashboard() {
   const [appointments, setAppointments] = useState([]);
   const [topClients, setTopClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('month'); // 'day', 'week', 'month', 'year', 'custom'
+  const [period, setPeriod] = useState('month');
   const [customDateRange, setCustomDateRange] = useState({
     start: subDays(new Date(), 30),
     end: new Date(),
   });
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState('revenue');
+
+  // Dados específicos por cargo
+  const [fidelidadeData, setFidelidadeData] = useState({
+    saldo: 0,
+    nivel: 'bronze',
+    pontosFaltantes: 0,
+    ultimosPontos: [],
+  });
+  
+  const [comissoesData, setComissoesData] = useState({
+    pendentes: [],
+    pagas: [],
+    totalPendente: 0,
+    totalPago: 0,
+  });
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos } = useFirebase('agendamentos');
@@ -280,16 +437,34 @@ function ModernDashboard() {
   const { data: pagamentos, loading: loadingPagamentos } = useFirebase('pagamentos');
   const { data: comissoes, loading: loadingComissoes } = useFirebase('comissoes');
   const { data: produtos, loading: loadingProdutos } = useFirebase('produtos');
+  const { data: pontuacoes, loading: loadingPontuacoes } = useFirebase('pontuacao');
+  const { data: recompensas, loading: loadingRecompensas } = useFirebase('recompensas');
 
   useEffect(() => {
-    if (!loadingAgendamentos && !loadingAtendimentos && !loadingClientes && 
-        !loadingProfissionais && !loadingServicos && !loadingPagamentos && 
-        !loadingComissoes && !loadingProdutos) {
-      calcularDados();
+    carregarUsuario();
+  }, []);
+
+  const carregarUsuario = () => {
+    const user = usuariosService.getUsuarioAtual();
+    setUsuario(user);
+    setCargo(user?.cargo || '');
+  };
+
+  useEffect(() => {
+    if (!usuario) return;
+
+    const allLoaded = !loadingAgendamentos && !loadingAtendimentos && !loadingClientes && 
+                      !loadingProfissionais && !loadingServicos && !loadingPagamentos && 
+                      !loadingComissoes && !loadingProdutos && !loadingPontuacoes && 
+                      !loadingRecompensas;
+
+    if (allLoaded) {
+      calcularDadosPorCargo();
       setLoading(false);
     }
-  }, [loadingAgendamentos, loadingAtendimentos, loadingClientes, loadingProfissionais, 
-      loadingServicos, loadingPagamentos, loadingComissoes, loadingProdutos, period, customDateRange]);
+  }, [usuario, loadingAgendamentos, loadingAtendimentos, loadingClientes, 
+      loadingProfissionais, loadingServicos, loadingPagamentos, loadingComissoes, 
+      loadingProdutos, loadingPontuacoes, loadingRecompensas, period, customDateRange]);
 
   const getDateRange = () => {
     const hoje = new Date();
@@ -324,18 +499,38 @@ function ModernDashboard() {
     return { start, end };
   };
 
-  const calcularDados = () => {
+  const calcularDadosPorCargo = () => {
     const { start, end } = getDateRange();
     const hoje = new Date();
-    
-    // Calcular período anterior (mesma duração)
-    const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    const periodoAnteriorStart = subDays(start, diffDays);
-    const periodoAnteriorEnd = subDays(end, diffDays);
 
     // ============================================
-    // FATURAMENTO
+    // DADOS PARA ADMIN E GERENTE
     // ============================================
+    if (cargo === 'admin' || cargo === 'gerente') {
+      calcularDadosAdmin(start, end, hoje);
+    }
+    // ============================================
+    // DADOS PARA ATENDENTE
+    // ============================================
+    else if (cargo === 'atendente') {
+      calcularDadosAtendente(start, end, hoje);
+    }
+    // ============================================
+    // DADOS PARA PROFISSIONAL
+    // ============================================
+    else if (cargo === 'profissional') {
+      calcularDadosProfissional(start, end, hoje);
+    }
+    // ============================================
+    // DADOS PARA CLIENTE
+    // ============================================
+    else if (cargo === 'cliente') {
+      calcularDadosCliente(start, end, hoje);
+    }
+  };
+
+  const calcularDadosAdmin = (start, end, hoje) => {
+    // Faturamento
     const pagamentosPeriodo = (pagamentos || []).filter(p => {
       const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
       return dataPagamento >= start && dataPagamento <= end;
@@ -343,95 +538,39 @@ function ModernDashboard() {
 
     const faturamento = pagamentosPeriodo.reduce((acc, p) => acc + (p.valor || 0), 0);
 
-    // Faturamento hoje
     const pagamentosHoje = (pagamentos || []).filter(p => {
       const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
       return dataPagamento.toDateString() === hoje.toDateString();
     });
     const faturamentoHoje = pagamentosHoje.reduce((acc, p) => acc + (p.valor || 0), 0);
 
-    // Faturamento período anterior
-    const pagamentosPeriodoAnterior = (pagamentos || []).filter(p => {
-      const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
-      return dataPagamento >= periodoAnteriorStart && dataPagamento <= periodoAnteriorEnd;
-    });
-
-    const faturamentoAnterior = pagamentosPeriodoAnterior.reduce((acc, p) => acc + (p.valor || 0), 0);
-
-    // ============================================
-    // CLIENTES
-    // ============================================
+    // Clientes
     const totalClientes = (clientes || []).length;
-
     const clientesNovosPeriodo = (clientes || []).filter(c => {
       const dataCadastro = c.dataCadastro ? new Date(c.dataCadastro) : (c.createdAt?.toDate ? c.createdAt.toDate() : null);
       return dataCadastro && dataCadastro >= start && dataCadastro <= end;
     }).length;
 
-    const clientesNovosPeriodoAnterior = (clientes || []).filter(c => {
-      const dataCadastro = c.dataCadastro ? new Date(c.dataCadastro) : (c.createdAt?.toDate ? c.createdAt.toDate() : null);
-      return dataCadastro && dataCadastro >= periodoAnteriorStart && dataCadastro <= periodoAnteriorEnd;
-    }).length;
-
-    // ============================================
-    // AGENDAMENTOS
-    // ============================================
-    const agendamentosPeriodo = (agendamentos || []).filter(a => {
-      return a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd');
-    });
-
-    const agendamentosPeriodoAnterior = (agendamentos || []).filter(a => {
-      return a.data >= format(periodoAnteriorStart, 'yyyy-MM-dd') && a.data <= format(periodoAnteriorEnd, 'yyyy-MM-dd');
-    });
-
+    // Agendamentos
     const agendamentosHoje = (agendamentos || []).filter(a => a.data === format(hoje, 'yyyy-MM-dd'));
-    
     const agendamentosConfirmados = agendamentosHoje.filter(a => a.status === 'confirmado').length;
     const agendamentosPendentes = agendamentosHoje.filter(a => a.status === 'pendente').length;
-    const agendamentosCancelados = agendamentosHoje.filter(a => a.status === 'cancelado').length;
 
     // Taxa de ocupação
-    const totalHorarios = 12; // 12 horários por dia (9h-20h)
+    const totalHorarios = 12;
     const agendamentosHojeNaoCancelados = agendamentosHoje.filter(a => a.status !== 'cancelado').length;
     const taxaOcupacao = Math.min(100, Math.round((agendamentosHojeNaoCancelados / totalHorarios) * 100));
 
-    // ============================================
-    // TICKET MÉDIO
-    // ============================================
+    // Ticket médio
     const atendimentosPeriodo = (atendimentos || []).filter(a => {
       return a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd');
     });
+    const ticketMedio = atendimentosPeriodo.length > 0 ? faturamento / atendimentosPeriodo.length : 0;
 
-    const ticketMedio = atendimentosPeriodo.length > 0 
-      ? faturamento / atendimentosPeriodo.length 
-      : 0;
+    // Serviços realizados
+    const servicosRealizadosMes = atendimentosPeriodo.length;
 
-    const atendimentosPeriodoAnterior = (atendimentos || []).filter(a => {
-      return a.data >= format(periodoAnteriorStart, 'yyyy-MM-dd') && a.data <= format(periodoAnteriorEnd, 'yyyy-MM-dd');
-    });
-
-    const ticketMedioAnterior = atendimentosPeriodoAnterior.length > 0 
-      ? faturamentoAnterior / atendimentosPeriodoAnterior.length 
-      : 0;
-
-    // ============================================
-    // SERVIÇOS E PRODUTOS
-    // ============================================
-    const servicosRealizadosMes = (atendimentos || []).filter(a => {
-      return a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd');
-    }).length;
-
-    // Produtos vendidos (itens de produto nos atendimentos)
-    const produtosVendidosMes = (atendimentos || []).reduce((acc, a) => {
-      if (a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd')) {
-        return acc + (a.itensProduto?.length || 0);
-      }
-      return acc;
-    }, 0);
-
-    // ============================================
-    // COMISSÕES
-    // ============================================
+    // Comissões
     const comissoesPeriodo = (comissoes || []).filter(c => {
       const dataComissao = c.dataRegistro ? new Date(c.dataRegistro) : (c.createdAt?.toDate ? c.createdAt.toDate() : null);
       return dataComissao && dataComissao >= start && dataComissao <= end;
@@ -445,25 +584,6 @@ function ModernDashboard() {
       .filter(c => c.status === 'pago')
       .reduce((acc, c) => acc + (c.valor || 0), 0);
 
-    // ============================================
-    // TRENDS
-    // ============================================
-    const trendFaturamento = faturamentoAnterior > 0 
-      ? ((faturamento - faturamentoAnterior) / faturamentoAnterior * 100) 
-      : 0;
-
-    const trendClientes = clientesNovosPeriodoAnterior > 0
-      ? ((clientesNovosPeriodo - clientesNovosPeriodoAnterior) / clientesNovosPeriodoAnterior * 100)
-      : clientesNovosPeriodo > 0 ? 100 : 0;
-
-    const trendAgendamentos = agendamentosPeriodoAnterior.length > 0
-      ? ((agendamentosPeriodo.length - agendamentosPeriodoAnterior.length) / agendamentosPeriodoAnterior.length * 100)
-      : 0;
-
-    const trendTicketMedio = ticketMedioAnterior > 0
-      ? ((ticketMedio - ticketMedioAnterior) / ticketMedioAnterior * 100)
-      : 0;
-
     setStats({
       faturamentoMensal: faturamento,
       faturamentoHoje,
@@ -473,32 +593,183 @@ function ModernDashboard() {
       agendamentosHoje: agendamentosHoje.length,
       agendamentosConfirmados,
       agendamentosPendentes,
-      agendamentosCancelados,
+      agendamentosCancelados: agendamentosHoje.filter(a => a.status === 'cancelado').length,
       ticketMedio,
       servicosRealizadosMes,
-      produtosVendidosMes,
+      produtosVendidosMes: 0, // Implementar se necessário
       comissoesPendentes,
       comissoesPagas,
     });
 
-    setTrends({
-      faturamento: trendFaturamento,
-      clientes: trendClientes,
-      ocupacao: 0, // Não temos dado anterior
-      agendamentos: trendAgendamentos,
-      ticketMedio: trendTicketMedio,
+    // Dados para gráficos
+    gerarDadosGraficos(start, end);
+  };
+
+  const calcularDadosAtendente = (start, end, hoje) => {
+    const agendamentosHoje = (agendamentos || []).filter(a => a.data === format(hoje, 'yyyy-MM-dd'));
+    
+    const agendamentosConfirmados = agendamentosHoje.filter(a => a.status === 'confirmado').length;
+    const agendamentosPendentes = agendamentosHoje.filter(a => a.status === 'pendente').length;
+    const agendamentosCancelados = agendamentosHoje.filter(a => a.status === 'cancelado').length;
+
+    // Total de clientes para referência
+    const totalClientes = (clientes || []).length;
+
+    // Clientes que chegam hoje (para atendente recepcionar)
+    const clientesHoje = agendamentosHoje
+      .filter(a => a.status !== 'cancelado')
+      .map(a => {
+        const cliente = clientes?.find(c => c.id === a.clienteId);
+        const servico = servicos?.find(s => s.id === a.servicoId);
+        return { ...a, cliente, servico };
+      })
+      .sort((a, b) => a.horario.localeCompare(b.horario));
+
+    setStats({
+      agendamentosHoje: agendamentosHoje.length,
+      agendamentosConfirmados,
+      agendamentosPendentes,
+      agendamentosCancelados,
+      totalClientes,
+      clientesHoje,
     });
 
-    // ============================================
-    // DADOS PARA GRÁFICOS
-    // ============================================
+    setAppointments(clientesHoje);
+  };
 
+  const calcularDadosProfissional = (start, end, hoje) => {
+    // Filtrar agendamentos do profissional logado
+    const profissionalId = usuario?.profissionalId;
+    
+    if (!profissionalId) return;
+
+    const agendamentosProfissional = (agendamentos || []).filter(a => 
+      a.profissionalId === profissionalId && a.data === format(hoje, 'yyyy-MM-dd')
+    );
+
+    const agendamentosConfirmados = agendamentosProfissional.filter(a => a.status === 'confirmado').length;
+    const agendamentosPendentes = agendamentosProfissional.filter(a => a.status === 'pendente').length;
+
+    // Próximos agendamentos
+    const proximosAgendamentos = agendamentosProfissional
+      .filter(a => a.status !== 'cancelado')
+      .map(a => {
+        const cliente = clientes?.find(c => c.id === a.clienteId);
+        const servico = servicos?.find(s => s.id === a.servicoId);
+        return { ...a, cliente, servico };
+      })
+      .sort((a, b) => a.horario.localeCompare(b.horario));
+
+    // Comissões do profissional
+    const minhasComissoes = (comissoes || []).filter(c => c.profissionalId === profissionalId);
+    
+    const comissoesPendentes = minhasComissoes
+      .filter(c => c.status === 'pendente')
+      .reduce((acc, c) => acc + (c.valor || 0), 0);
+
+    const comissoesPagas = minhasComissoes
+      .filter(c => c.status === 'pago')
+      .reduce((acc, c) => acc + (c.valor || 0), 0);
+
+    // Atendimentos realizados no período
+    const atendimentosRealizados = (atendimentos || []).filter(a => 
+      a.profissionalId === profissionalId && 
+      a.data >= format(start, 'yyyy-MM-dd') && 
+      a.data <= format(end, 'yyyy-MM-dd')
+    ).length;
+
+    setStats({
+      agendamentosHoje: agendamentosProfissional.length,
+      agendamentosConfirmados,
+      agendamentosPendentes,
+      proximosAgendamentos,
+      comissoesPendentes,
+      comissoesPagas,
+      atendimentosRealizados,
+    });
+
+    setAppointments(proximosAgendamentos);
+    
+    setComissoesData({
+      pendentes: minhasComissoes.filter(c => c.status === 'pendente'),
+      pagas: minhasComissoes.filter(c => c.status === 'pago'),
+      totalPendente: comissoesPendentes,
+      totalPago: comissoesPagas,
+    });
+  };
+
+  const calcularDadosCliente = (start, end, hoje) => {
+    const clienteId = usuario?.clienteId;
+    
+    if (!clienteId) return;
+
+    // Pontuação do cliente
+    const minhasPontuacoes = (pontuacoes || []).filter(p => p.clienteId === clienteId);
+    
+    const creditos = minhasPontuacoes
+      .filter(p => p.tipo === 'credito')
+      .reduce((acc, p) => acc + (p.quantidade || 0), 0);
+
+    const debitos = minhasPontuacoes
+      .filter(p => p.tipo === 'debito')
+      .reduce((acc, p) => acc + (p.quantidade || 0), 0);
+
+    const saldo = creditos - debitos;
+
+    // Determinar nível
+    let nivel = 'bronze';
+    if (saldo >= 5000) nivel = 'platina';
+    else if (saldo >= 2000) nivel = 'ouro';
+    else if (saldo >= 500) nivel = 'prata';
+
+    const pontosProximoNivel = nivel === 'bronze' ? 500 : nivel === 'prata' ? 2000 : nivel === 'ouro' ? 5000 : null;
+    const pontosFaltantes = pontosProximoNivel ? pontosProximoNivel - saldo : 0;
+
+    // Agendamentos do cliente
+    const meusAgendamentos = (agendamentos || []).filter(a => 
+      a.clienteId === clienteId && a.data >= format(start, 'yyyy-MM-dd')
+    );
+
+    const agendamentosFuturos = meusAgendamentos
+      .filter(a => a.data >= format(hoje, 'yyyy-MM-dd') && a.status !== 'cancelado')
+      .map(a => {
+        const servico = servicos?.find(s => s.id === a.servicoId);
+        const profissional = profissionais?.find(p => p.id === a.profissionalId);
+        return { ...a, servico, profissional };
+      })
+      .sort((a, b) => a.data.localeCompare(b.data) || a.horario.localeCompare(b.horario));
+
+    // Histórico de atendimentos
+    const historicoAtendimentos = (atendimentos || [])
+      .filter(a => a.clienteId === clienteId)
+      .sort((a, b) => new Date(b.data) - new Date(a.data))
+      .slice(0, 5);
+
+    setStats({
+      saldo,
+      nivel,
+      pontosFaltantes,
+      totalAgendamentos: meusAgendamentos.length,
+      agendamentosFuturos: agendamentosFuturos.length,
+      historicoAtendimentos,
+    });
+
+    setFidelidadeData({
+      saldo,
+      nivel,
+      pontosFaltantes,
+      ultimosPontos: minhasPontuacoes.sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, 5),
+    });
+
+    setAppointments(agendamentosFuturos);
+  };
+
+  const gerarDadosGraficos = (start, end) => {
     // Receita por período
     const revenueByPeriod = [];
     const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
     
     if (daysDiff <= 31) {
-      // Últimos 30 dias - mostrar por dia
       for (let i = 0; i <= daysDiff; i++) {
         const data = new Date(start);
         data.setDate(data.getDate() + i);
@@ -514,11 +785,9 @@ function ModernDashboard() {
         revenueByPeriod.push({
           name: format(data, 'dd/MM'),
           valor: total,
-          dia: data.getDate(),
         });
       }
     } else {
-      // Mais de 30 dias - agrupar por mês
       const mesesMap = {};
       for (let i = 0; i <= daysDiff; i++) {
         const data = new Date(start);
@@ -566,43 +835,6 @@ function ModernDashboard() {
     
     setServicesData(servicesDist);
 
-    // Performance por profissional
-    const profPerformance = {};
-    (atendimentos || []).forEach(a => {
-      if (a.profissionalId) {
-        if (!profPerformance[a.profissionalId]) {
-          profPerformance[a.profissionalId] = {
-            id: a.profissionalId,
-            nome: profissionais?.find(p => p.id === a.profissionalId)?.nome || 'Profissional',
-            atendimentos: 0,
-            valor: 0,
-          };
-        }
-        profPerformance[a.profissionalId].atendimentos++;
-        
-        // Buscar pagamentos relacionados a este atendimento
-        const pagamentosAtendimento = (pagamentos || []).filter(p => p.atendimentoId === a.id);
-        const total = pagamentosAtendimento.reduce((acc, p) => acc + (p.valor || 0), 0);
-        profPerformance[a.profissionalId].valor += total;
-      }
-    });
-    
-    setProfessionalsData(Object.values(profPerformance).sort((a, b) => b.valor - a.valor).slice(0, 5));
-
-    // Dados diários para gráfico de calor
-    const dailyMap = {};
-    for (let i = 0; i < 7; i++) {
-      const data = subDays(hoje, i);
-      const dataStr = format(data, 'yyyy-MM-dd');
-      const diaSemana = format(data, 'EEE', { locale: ptBR });
-      
-      const agendamentosDia = (agendamentos || []).filter(a => a.data === dataStr && a.status !== 'cancelado');
-      
-      dailyMap[diaSemana] = (dailyMap[diaSemana] || 0) + agendamentosDia.length;
-    }
-    
-    setDailyData(Object.entries(dailyMap).map(([name, value]) => ({ name, value })));
-
     // Top clientes
     const clientSpending = {};
     (pagamentos || []).forEach(p => {
@@ -621,18 +853,11 @@ function ModernDashboard() {
     });
     
     setTopClients(Object.values(clientSpending).sort((a, b) => b.total - a.total).slice(0, 5));
-
-    // Agenda de hoje
-    const hojeStr = format(hoje, 'yyyy-MM-dd');
-    const hojeAppointments = (agendamentos || [])
-      .filter(a => a.data === hojeStr)
-      .sort((a, b) => a.horario.localeCompare(b.horario));
-      
-    setAppointments(hojeAppointments);
   };
 
   const handlePeriodChange = (newPeriod) => {
     setPeriod(newPeriod);
+    handleMenuClose();
   };
 
   const handleMenuOpen = (event) => {
@@ -646,18 +871,9 @@ function ModernDashboard() {
   const handleRefresh = () => {
     setLoading(true);
     setTimeout(() => {
-      calcularDados();
+      calcularDadosPorCargo();
       setLoading(false);
     }, 500);
-  };
-
-  const handleExport = () => {
-    // Implementar exportação de relatório
-    alert('Exportando relatório...');
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const formatarMoeda = (valor) => {
@@ -679,268 +895,209 @@ function ModernDashboard() {
     );
   }
 
-  return (
-    <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            Dashboard
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Visão geral do seu negócio
-          </Typography>
+  // ============================================
+  // RENDERIZAÇÃO POR CARGO
+  // ============================================
+
+  // DASHBOARD ADMIN / GERENTE
+  if (cargo === 'admin' || cargo === 'gerente') {
+    return (
+      <Box>
+        {/* Cabeçalho */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              Dashboard {cargo === 'admin' ? 'Administrativo' : 'Gerencial'}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Visão completa do negócio
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Tooltip title="Período">
+              <Button
+                variant="outlined"
+                startIcon={<DateRange />}
+                onClick={handleMenuOpen}
+              >
+                {period === 'day' && 'Hoje'}
+                {period === 'week' && 'Últimos 7 dias'}
+                {period === 'month' && 'Este mês'}
+                {period === 'year' && 'Este ano'}
+                {period === 'custom' && 'Personalizado'}
+              </Button>
+            </Tooltip>
+            
+            <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+              <MenuItem onClick={() => handlePeriodChange('day')}><Today sx={{ mr: 1 }} /> Hoje</MenuItem>
+              <MenuItem onClick={() => handlePeriodChange('week')}><DateRange sx={{ mr: 1 }} /> Últimos 7 dias</MenuItem>
+              <MenuItem onClick={() => handlePeriodChange('month')}><Event sx={{ mr: 1 }} /> Este mês</MenuItem>
+              <MenuItem onClick={() => handlePeriodChange('year')}><CalendarToday sx={{ mr: 1 }} /> Este ano</MenuItem>
+              <Divider />
+              <MenuItem onClick={() => handlePeriodChange('custom')}>Personalizado</MenuItem>
+            </Menu>
+
+            {period === 'custom' && (
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <DatePicker
+                    label="De"
+                    value={customDateRange.start}
+                    onChange={(newValue) => setCustomDateRange({ ...customDateRange, start: newValue })}
+                    renderInput={(params) => <TextField {...params} size="small" />}
+                  />
+                  <DatePicker
+                    label="Até"
+                    value={customDateRange.end}
+                    onChange={(newValue) => setCustomDateRange({ ...customDateRange, end: newValue })}
+                    renderInput={(params) => <TextField {...params} size="small" />}
+                  />
+                </Box>
+              </LocalizationProvider>
+            )}
+
+            <Tooltip title="Atualizar">
+              <IconButton onClick={handleRefresh}>
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
-        
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Tooltip title="Período">
-            <Button
-              variant="outlined"
-              startIcon={<DateRange />}
-              onClick={handleMenuOpen}
-            >
-              {period === 'day' && 'Hoje'}
-              {period === 'week' && 'Últimos 7 dias'}
-              {period === 'month' && 'Este mês'}
-              {period === 'year' && 'Este ano'}
-              {period === 'custom' && 'Personalizado'}
-            </Button>
-          </Tooltip>
+
+        {/* Cards de Estatísticas */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              icon={<AttachMoney />}
+              title="Faturamento no Período"
+              value={formatarMoeda(stats.faturamentoMensal)}
+              trend={trends.faturamento}
+              color="#9c27b0"
+              subtitle={`Hoje: ${formatarMoeda(stats.faturamentoHoje)}`}
+            />
+          </Grid>
           
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-          >
-            <MenuItem onClick={() => { handlePeriodChange('day'); handleMenuClose(); }}>
-              <Today sx={{ mr: 1, fontSize: 20 }} /> Hoje
-            </MenuItem>
-            <MenuItem onClick={() => { handlePeriodChange('week'); handleMenuClose(); }}>
-              <DateRange sx={{ mr: 1, fontSize: 20 }} /> Últimos 7 dias
-            </MenuItem>
-            <MenuItem onClick={() => { handlePeriodChange('month'); handleMenuClose(); }}>
-              <Event sx={{ mr: 1, fontSize: 20 }} /> Este mês
-            </MenuItem>
-            <MenuItem onClick={() => { handlePeriodChange('year'); handleMenuClose(); }}>
-              <CalendarToday sx={{ mr: 1, fontSize: 20 }} /> Este ano
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={() => { handlePeriodChange('custom'); handleMenuClose(); }}>
-              Personalizado
-            </MenuItem>
-          </Menu>
-
-          {period === 'custom' && (
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <DatePicker
-                  label="De"
-                  value={customDateRange.start}
-                  onChange={(newValue) => setCustomDateRange({ ...customDateRange, start: newValue })}
-                  renderInput={(params) => <TextField {...params} size="small" />}
-                />
-                <DatePicker
-                  label="Até"
-                  value={customDateRange.end}
-                  onChange={(newValue) => setCustomDateRange({ ...customDateRange, end: newValue })}
-                  renderInput={(params) => <TextField {...params} size="small" />}
-                />
-              </Box>
-            </LocalizationProvider>
-          )}
-
-          <Tooltip title="Atualizar">
-            <IconButton onClick={handleRefresh}>
-              <Refresh />
-            </IconButton>
-          </Tooltip>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              icon={<People />}
+              title="Total de Clientes"
+              value={formatarNumero(stats.totalClientes)}
+              trend={trends.clientes}
+              color="#ff4081"
+              subtitle={`+${stats.clientesNovosMes} neste período`}
+            />
+          </Grid>
           
-          <Tooltip title="Imprimir">
-            <IconButton onClick={handlePrint}>
-              <Print />
-            </IconButton>
-          </Tooltip>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              icon={<TrendingUp />}
+              title="Taxa de Ocupação"
+              value={`${stats.taxaOcupacao}%`}
+              color="#7b1fa2"
+              subtitle={`${stats.agendamentosHoje} agendamentos hoje`}
+            />
+          </Grid>
           
-          <Tooltip title="Exportar">
-            <IconButton onClick={handleExport}>
-              <Download />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Box>
-
-      {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            icon={<AttachMoney />}
-            title="Faturamento no Período"
-            value={formatarMoeda(stats.faturamentoMensal)}
-            trend={trends.faturamento}
-            trendValue={Math.abs(trends.faturamento).toFixed(1)}
-            color="#9c27b0"
-            subtitle={`Hoje: ${formatarMoeda(stats.faturamentoHoje)}`}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            icon={<People />}
-            title="Total de Clientes"
-            value={formatarNumero(stats.totalClientes)}
-            trend={trends.clientes}
-            trendValue={Math.abs(trends.clientes).toFixed(1)}
-            color="#ff4081"
-            subtitle={`+${stats.clientesNovosMes} neste período`}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            icon={<TrendingUp />}
-            title="Taxa de Ocupação"
-            value={`${stats.taxaOcupacao}%`}
-            color="#7b1fa2"
-            subtitle={`${stats.agendamentosHoje} agendamentos hoje`}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            icon={<Receipt />}
-            title="Ticket Médio"
-            value={formatarMoeda(stats.ticketMedio)}
-            trend={trends.ticketMedio}
-            trendValue={Math.abs(trends.ticketMedio).toFixed(1)}
-            color="#ba68c8"
-          />
-        </Grid>
-      </Grid>
-
-      {/* Cards Secundários */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ bgcolor: '#f3e5f5' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Agendamentos Hoje
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                {stats.agendamentosHoje}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                <Chip size="small" label={`${stats.agendamentosConfirmados} confirmados`} color="success" sx={{ height: 20 }} />
-                <Chip size="small" label={`${stats.agendamentosPendentes} pendentes`} color="warning" sx={{ height: 20 }} />
-                <Chip size="small" label={`${stats.agendamentosCancelados} cancelados`} color="error" sx={{ height: 20 }} />
-              </Box>
-            </CardContent>
-          </Card>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              icon={<Receipt />}
+              title="Ticket Médio"
+              value={formatarMoeda(stats.ticketMedio)}
+              color="#ba68c8"
+            />
+          </Grid>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ bgcolor: '#e8f5e9' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Serviços Realizados
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                {formatarNumero(stats.servicosRealizadosMes)}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                no período
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ bgcolor: '#fff3e0' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Produtos Vendidos
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                {formatarNumero(stats.produtosVendidosMes)}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                itens no período
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ bgcolor: '#e1f5fe' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Comissões Pendentes
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                {formatarMoeda(stats.comissoesPendentes)}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Pagas: {formatarMoeda(stats.comissoesPagas)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ bgcolor: '#fce4ec' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Ticket Médio
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                {formatarMoeda(stats.ticketMedio)}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                por atendimento
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Gráficos */}
-      <Grid container spacing={3}>
-        {/* Gráfico de Receita */}
-        <Grid item xs={12} md={8}>
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card>
+        {/* Cards Secundários */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card sx={{ bgcolor: '#f3e5f5' }}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Agendamentos Hoje
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  {stats.agendamentosHoje}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                  <Chip size="small" label={`${stats.agendamentosConfirmados} confirmados`} color="success" />
+                  <Chip size="small" label={`${stats.agendamentosPendentes} pendentes`} color="warning" />
+                  <Chip size="small" label={`${stats.agendamentosCancelados} cancelados`} color="error" />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card sx={{ bgcolor: '#e8f5e9' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Serviços Realizados
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                  {formatarNumero(stats.servicosRealizadosMes)}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">no período</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card sx={{ bgcolor: '#e1f5fe' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Comissões Pendentes
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                  {formatarMoeda(stats.comissoesPendentes)}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                  Pagas: {formatarMoeda(stats.comissoesPagas)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card sx={{ bgcolor: '#fff3e0' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Ticket Médio
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {formatarMoeda(stats.ticketMedio)}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">por atendimento</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
+            <Card sx={{ bgcolor: '#fce4ec' }}>
+              <CardContent>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Novos Clientes
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
+                  {formatarNumero(stats.clientesNovosMes)}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">neste período</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Gráficos */}
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
                     Evolução da Receita
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title="Gráfico de Área">
-                      <IconButton 
-                        size="small" 
-                        color={selectedMetric === 'revenue' ? 'primary' : 'default'}
-                        onClick={() => setSelectedMetric('revenue')}
-                      >
-                        <ShowChart />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Gráfico de Barras">
-                      <IconButton 
-                        size="small"
-                        color={selectedMetric === 'bar' ? 'primary' : 'default'}
-                        onClick={() => setSelectedMetric('bar')}
-                      >
-                        <PieChartIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
-                
-                <ResponsiveContainer width="100%" height={300}>
-                  {selectedMetric === 'revenue' ? (
+                  <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={revenueData}>
                       <defs>
                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -952,255 +1109,480 @@ function ModernDashboard() {
                       <XAxis dataKey="name" />
                       <YAxis tickFormatter={(value) => formatarMoeda(value)} />
                       <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
-                      <Area 
-                        type="monotone" 
-                        dataKey="valor" 
-                        stroke="#9c27b0" 
-                        fillOpacity={1} 
-                        fill="url(#colorRevenue)" 
-                      />
+                      <Area type="monotone" dataKey="valor" stroke="#9c27b0" fillOpacity={1} fill="url(#colorRevenue)" />
                     </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+                    Serviços Mais Realizados
+                  </Typography>
+                  {servicesData.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={servicesData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {servicesData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <Box sx={{ mt: 2, maxHeight: 150, overflow: 'auto' }}>
+                        {servicesData.map((service, index) => (
+                          <Box key={service.name} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: COLORS[index % COLORS.length], mr: 1 }} />
+                            <Typography variant="body2" sx={{ flex: 1 }}>{service.name}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{service.value}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </>
                   ) : (
-                    <RechartsBarChart data={revenueData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis tickFormatter={(value) => formatarMoeda(value)} />
-                      <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
-                      <Bar dataKey="valor" fill="#9c27b0" />
-                    </RechartsBarChart>
+                    <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
+                      Nenhum dado disponível
+                    </Typography>
                   )}
-                </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+                    Top Clientes
+                  </Typography>
+                  <List>
+                    {topClients.map((client, index) => (
+                      <ListItem key={client.id} divider={index < topClients.length - 1}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: COLORS[index % COLORS.length] }}>
+                            {client.nome?.charAt(0)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={client.nome}
+                          secondary={`${client.visitas} visita${client.visitas !== 1 ? 's' : ''}`}
+                        />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                          {formatarMoeda(client.total)}
+                        </Typography>
+                      </ListItem>
+                    ))}
+                    {topClients.length === 0 && (
+                      <ListItem>
+                        <ListItemText primary="Nenhum dado disponível" align="center" />
+                      </ListItem>
+                    )}
+                  </List>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+                    Agenda de Hoje
+                  </Typography>
+                  {appointments.length > 0 ? (
+                    appointments.slice(0, 5).map((apt) => {
+                      const cliente = clientes?.find(c => c.id === apt.clienteId);
+                      const servico = servicos?.find(s => s.id === apt.servicoId);
+                      return (
+                        <AppointmentCard
+                          key={apt.id}
+                          appointment={apt}
+                          client={cliente}
+                          service={servico}
+                        />
+                      );
+                    })
+                  ) : (
+                    <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
+                      Nenhum agendamento para hoje
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  // DASHBOARD ATENDENTE
+  if (cargo === 'atendente') {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Painel do Atendente
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Gerencie os atendimentos do dia
+          </Typography>
+        </Box>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0' }}>
+                  Resumo do Dia
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography>Total de Agendamentos:</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{stats.agendamentosHoje || 0}</Typography>
+                </Box>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography>Confirmados:</Typography>
+                  <Chip label={stats.agendamentosConfirmados || 0} color="success" size="small" />
+                </Box>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography>Pendentes:</Typography>
+                  <Chip label={stats.agendamentosPendentes || 0} color="warning" size="small" />
+                </Box>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography>Cancelados:</Typography>
+                  <Chip label={stats.agendamentosCancelados || 0} color="error" size="small" />
+                </Box>
+
+                <Divider sx={{ my: 2 }} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography>Total de Clientes:</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{stats.totalClientes || 0}</Typography>
+                </Box>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
+          </Grid>
 
-        {/* Gráfico de Distribuição de Serviços */}
-        <Grid item xs={12} md={4}>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card sx={{ height: '100%' }}>
+          <Grid item xs={12} md={8}>
+            <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                  Serviços Mais Realizados
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                  Próximos Atendimentos
                 </Typography>
-                {servicesData.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={servicesData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {servicesData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <Box sx={{ mt: 2, maxHeight: 150, overflow: 'auto' }}>
-                      {servicesData.map((service, index) => (
-                        <Box key={service.name} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <Box
-                            sx={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              bgcolor: COLORS[index % COLORS.length],
-                              mr: 1,
-                            }}
-                          />
-                          <Typography variant="body2" sx={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {service.name}
+                {stats.clientesHoje && stats.clientesHoje.length > 0 ? (
+                  stats.clientesHoje.map((apt) => (
+                    <Card key={apt.id} variant="outlined" sx={{ mb: 1, p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                          <Person />
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {apt.cliente?.nome}
                           </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {service.value}
+                          <Typography variant="body2" color="textSecondary">
+                            {apt.servico?.nome} • {apt.horario}
                           </Typography>
                         </Box>
-                      ))}
-                    </Box>
-                  </>
+                        <Chip
+                          label={apt.status}
+                          color={apt.status === 'confirmado' ? 'success' : 'warning'}
+                          size="small"
+                        />
+                      </Box>
+                    </Card>
+                  ))
                 ) : (
                   <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
-                    Nenhum dado disponível
+                    Nenhum atendimento agendado para hoje
                   </Typography>
                 )}
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
+          </Grid>
 
-        {/* Gráfico de Performance por Profissional */}
-        <Grid item xs={12} md={6}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          <Grid item xs={12}>
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                  Performance por Profissional
-                </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell><strong>Profissional</strong></TableCell>
-                        <TableCell align="right"><strong>Atendimentos</strong></TableCell>
-                        <TableCell align="right"><strong>Faturamento</strong></TableCell>
-                        <TableCell align="right"><strong>%</strong></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {professionalsData.map((prof, index) => (
-                        <TableRow key={prof.id}>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar sx={{ bgcolor: COLORS[index % COLORS.length], width: 24, height: 24, fontSize: '0.75rem' }}>
-                                {prof.nome?.charAt(0)}
-                              </Avatar>
-                              {prof.nome}
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">{prof.atendimentos}</TableCell>
-                          <TableCell align="right">{formatarMoeda(prof.valor)}</TableCell>
-                          <TableCell align="right">
-                            {stats.faturamentoMensal > 0 
-                              ? `${((prof.valor / stats.faturamentoMensal) * 100).toFixed(1)}%`
-                              : '0%'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {professionalsData.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                            Nenhum dado disponível
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        {/* Top Clientes */}
-        <Grid item xs={12} md={6}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-                  Top Clientes
-                </Typography>
-                <List>
-                  {topClients.map((client, index) => (
-                    <ListItem key={client.id} divider={index < topClients.length - 1}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: COLORS[index % COLORS.length] }}>
-                          {client.nome?.charAt(0)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={client.nome}
-                        secondary={`${client.visitas} visita${client.visitas !== 1 ? 's' : ''}`}
-                      />
-                      <ListItemSecondaryAction>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                          {formatarMoeda(client.total)}
-                        </Typography>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                  {topClients.length === 0 && (
-                    <ListItem>
-                      <ListItemText
-                        primary="Nenhum dado disponível"
-                        align="center"
-                      />
-                    </ListItem>
-                  )}
-                </List>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        {/* Agenda do Dia */}
-        <Grid item xs={12}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-          >
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Agenda de Hoje
+                    Ações Rápidas
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => window.location.href = '/agenda'}
-                  >
-                    Ver todos
-                  </Button>
                 </Box>
-                
-                {appointments.length > 0 ? (
-                  <Grid container spacing={2}>
-                    {appointments.slice(0, 4).map((apt) => {
-                      const cliente = clientes?.find(c => c.id === apt.clienteId);
-                      const servico = servicos?.find(s => s.id === apt.servicoId);
-                      const profissional = profissionais?.find(p => p.id === apt.profissionalId);
-                      
-                      return (
-                        <Grid item xs={12} sm={6} md={3} key={apt.id}>
-                          <AppointmentCard
-                            appointment={apt}
-                            client={cliente}
-                            service={servico}
-                            professional={profissional}
-                          />
-                        </Grid>
-                      );
-                    })}
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={4}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<Event />}
+                      onClick={() => window.location.href = '/agendamentos'}
+                      sx={{ bgcolor: '#9c27b0' }}
+                    >
+                      Novo Agendamento
+                    </Button>
                   </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<Person />}
+                      onClick={() => window.location.href = '/clientes'}
+                      sx={{ bgcolor: '#ff4081' }}
+                    >
+                      Cadastrar Cliente
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<Receipt />}
+                      onClick={() => window.location.href = '/atendimentos'}
+                      sx={{ bgcolor: '#ff9800' }}
+                    >
+                      Iniciar Atendimento
+                    </Button>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  // DASHBOARD PROFISSIONAL
+  if (cargo === 'profissional') {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Olá, {usuario?.nome?.split(' ')[0]}!
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Aqui está sua agenda e comissões
+          </Typography>
+        </Box>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                  Minha Agenda de Hoje
+                </Typography>
+                {appointments.length > 0 ? (
+                  appointments.map((apt) => (
+                    <AppointmentCard
+                      key={apt.id}
+                      appointment={apt}
+                      client={apt.cliente}
+                      service={apt.servico}
+                    />
+                  ))
                 ) : (
                   <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
                     Nenhum agendamento para hoje
                   </Typography>
                 )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <ComissoesCard
+              comissoes={comissoesData.pendentes}
+              totalPendente={comissoesData.totalPendente}
+              totalPago={comissoesData.totalPago}
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                  Estatísticas do Período
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={4}>
+                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f3e5f5' }}>
+                      <Typography variant="subtitle2" color="textSecondary">Atendimentos Realizados</Typography>
+                      <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700 }}>
+                        {stats.atendimentosRealizados || 0}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#fff3e0' }}>
+                      <Typography variant="subtitle2" color="textSecondary">Agendamentos Hoje</Typography>
+                      <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 700 }}>
+                        {stats.agendamentosHoje || 0}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e8f5e9' }}>
+                      <Typography variant="subtitle2" color="textSecondary">Confirmados</Typography>
+                      <Typography variant="h4" sx={{ color: '#4caf50', fontWeight: 700 }}>
+                        {stats.agendamentosConfirmados || 0}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  // DASHBOARD CLIENTE
+  if (cargo === 'cliente') {
+    return (
+      <Box>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Olá, {usuario?.nome?.split(' ')[0]}!
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Acompanhe seus pontos e agendamentos
+          </Typography>
+        </Box>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={5}>
+            <FidelidadeCard
+              saldo={fidelidadeData.saldo}
+              nivel={fidelidadeData.nivel}
+              pontosFaltantes={fidelidadeData.pontosFaltantes}
+              ultimosPontos={fidelidadeData.ultimosPontos}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={7}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                  Próximos Agendamentos
+                </Typography>
+                {appointments.length > 0 ? (
+                  appointments.map((apt) => (
+                    <Card key={apt.id} variant="outlined" sx={{ mb: 1, p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: '#ff9800' }}>
+                          <Event />
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {apt.servico?.nome}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            {format(new Date(apt.data), "dd 'de' MMMM")} às {apt.horario}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            Profissional: {apt.profissional?.nome}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          label={apt.status}
+                          color={apt.status === 'confirmado' ? 'success' : 'warning'}
+                          size="small"
+                        />
+                      </Box>
+                    </Card>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
+                    Você não tem agendamentos futuros
+                  </Typography>
+                )}
                 
-                {appointments.length > 4 && (
-                  <Box sx={{ mt: 2, textAlign: 'center' }}>
-                    <Typography variant="caption" color="textSecondary">
-                      +{appointments.length - 4} agendamentos não listados
-                    </Typography>
-                  </Box>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<CalendarToday />}
+                  onClick={() => window.location.href = '/agendamentos'}
+                  sx={{ mt: 2 }}
+                >
+                  Agendar Novo Serviço
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                  Histórico de Atendimentos
+                </Typography>
+                {stats.historicoAtendimentos && stats.historicoAtendimentos.length > 0 ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Data</TableCell>
+                          <TableCell>Serviço</TableCell>
+                          <TableCell>Profissional</TableCell>
+                          <TableCell>Valor</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {stats.historicoAtendimentos.map((atend, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{format(new Date(atend.data), 'dd/MM/yyyy')}</TableCell>
+                            <TableCell>{atend.servico?.nome || '-'}</TableCell>
+                            <TableCell>{atend.profissional?.nome || '-'}</TableCell>
+                            <TableCell>{formatarMoeda(atend.valor)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
+                    Nenhum histórico de atendimentos
+                  </Typography>
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
+    );
+  }
+
+  // Fallback
+  return (
+    <Box sx={{ p: 3 }}>
+      <Alert severity="info">
+        Bem-vindo ao sistema! Selecione uma opção no menu para começar.
+      </Alert>
     </Box>
   );
 }
