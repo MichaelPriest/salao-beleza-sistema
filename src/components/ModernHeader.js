@@ -29,7 +29,7 @@ import {
   Zoom,
   SwipeableDrawer,
   TextField,
-  Tooltip, // 🔥 IMPORTANTE: ADICIONAR ESTE IMPORT
+  Tooltip,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -51,12 +51,6 @@ import {
   CalendarToday as CalendarIcon,
   Menu as MenuIcon,
   ArrowBack as ArrowBackIcon,
-  Home as HomeIcon,
-  Today as TodayIcon,
-  AttachMoney as MoneyIcon,
-  EmojiEvents as TrophyIcon,
-  CardGiftcard as GiftIcon,
-  Star as StarIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -104,7 +98,7 @@ const Search = styled('div')(({ theme, isMobile }) => ({
     backgroundColor: alpha(theme.palette.common.white, 0.25),
   },
   marginRight: theme.spacing(2),
-  marginLeft: isMobile ? theme.spacing(1) : 0,
+  marginLeft: isMobile ? theme.spacing(1) : theme.spacing(3),
   width: isMobile ? '100%' : 'auto',
   flex: isMobile ? 1 : '0 1 auto',
 }));
@@ -156,7 +150,6 @@ const RelogioDigital = ({ isMobile }) => {
             borderRadius: 3,
             px: 1,
             py: 0.5,
-            mr: 1,
           }}
         >
           <AccessTimeIcon sx={{ fontSize: 16, color: '#ff4081', mr: 0.5 }} />
@@ -177,7 +170,6 @@ const RelogioDigital = ({ isMobile }) => {
         borderRadius: 3,
         px: 2,
         py: 0.5,
-        mr: 2,
       }}
     >
       <CalendarIcon sx={{ fontSize: 18, color: '#9c27b0', mr: 1 }} />
@@ -192,7 +184,7 @@ const RelogioDigital = ({ isMobile }) => {
   );
 };
 
-// Componente de Menu Mobile
+// Componente de Menu Mobile (simplificado - apenas perfil, configurações e logout)
 const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigate }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -210,31 +202,6 @@ const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigat
   const temFotoValida = () => {
     return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
-
-  const menuItems = [
-    { text: 'Dashboard', icon: <HomeIcon />, path: '/' },
-    { text: 'Agenda', icon: <TodayIcon />, path: '/agendamentos' },
-    { text: 'Clientes', icon: <PeopleIcon />, path: '/clientes' },
-    { text: 'Profissionais', icon: <PersonIcon />, path: '/profissionais' },
-    { text: 'Serviços', icon: <CutIcon />, path: '/servicos' },
-    { text: 'Financeiro', icon: <MoneyIcon />, path: '/financeiro' },
-    { text: 'Estoque', icon: <InventoryIcon />, path: '/estoque' },
-    { text: 'Fidelidade', icon: <TrophyIcon />, path: '/fidelidade/recompensas' },
-    { text: 'Meus Pontos', icon: <StarIcon />, path: '/meus-pontos' },
-    { text: 'Perfil', icon: <PersonIcon />, path: '/perfil' },
-    { text: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes' },
-  ];
-
-  // Filtrar menu baseado no cargo
-  const filteredMenu = menuItems.filter(item => {
-    if (usuario?.cargo === 'cliente') {
-      return ['Dashboard', 'Meus Pontos', 'Perfil'].includes(item.text);
-    }
-    if (usuario?.cargo === 'profissional') {
-      return !['Financeiro', 'Estoque', 'Clientes'].includes(item.text);
-    }
-    return true;
-  });
 
   return (
     <SwipeableDrawer
@@ -281,40 +248,41 @@ const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigat
         </Box>
       </Box>
 
-      {/* Itens do Menu */}
+      {/* Itens do Menu - Apenas Perfil e Configurações */}
       <List sx={{ pt: 2 }}>
-        {filteredMenu.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <ListItem
-              key={item.text}
-              button
-              onClick={() => {
-                onNavigate(item.path);
-                onClose();
-              }}
-              sx={{
-                py: 1.5,
-                bgcolor: isActive ? '#f3e5f5' : 'transparent',
-                '&:hover': {
-                  bgcolor: '#f3e5f5',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: isActive ? '#9c27b0' : '#666', minWidth: 40 }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={item.text}
-                primaryTypographyProps={{
-                  fontSize: '0.95rem',
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? '#9c27b0' : 'inherit',
-                }}
-              />
-            </ListItem>
-          );
-        })}
+        <ListItem
+          button
+          onClick={() => {
+            onNavigate('/perfil');
+            onClose();
+          }}
+          sx={{
+            py: 1.5,
+            '&:hover': { bgcolor: '#f3e5f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}>
+            <PersonIcon />
+          </ListItemIcon>
+          <ListItemText primary="Perfil" />
+        </ListItem>
+
+        <ListItem
+          button
+          onClick={() => {
+            onNavigate('/configuracoes');
+            onClose();
+          }}
+          sx={{
+            py: 1.5,
+            '&:hover': { bgcolor: '#f3e5f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}>
+            <SettingsIcon />
+          </ListItemIcon>
+          <ListItemText primary="Configurações" />
+        </ListItem>
       </List>
 
       <Divider />
@@ -342,7 +310,6 @@ function ModernHeader() {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationsAnchor, setNotificationsAnchor] = useState(null);
@@ -962,7 +929,7 @@ function ModernHeader() {
               <MenuIcon />
             </IconButton>
 
-            {/* Logo ou Título da Página */}
+            {/* Saudação - Apenas o nome do usuário */}
             <Typography
               variant="subtitle1"
               noWrap
@@ -973,16 +940,7 @@ function ModernHeader() {
                 flex: 1,
               }}
             >
-              {location.pathname === '/' && 'Dashboard'}
-              {location.pathname.includes('agendamentos') && 'Agenda'}
-              {location.pathname.includes('clientes') && 'Clientes'}
-              {location.pathname.includes('profissionais') && 'Profissionais'}
-              {location.pathname.includes('servicos') && 'Serviços'}
-              {location.pathname.includes('financeiro') && 'Financeiro'}
-              {location.pathname.includes('estoque') && 'Estoque'}
-              {location.pathname.includes('fidelidade') && 'Fidelidade'}
-              {location.pathname.includes('meus-pontos') && 'Meus Pontos'}
-              {location.pathname.includes('perfil') && 'Perfil'}
+              Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'}
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
@@ -990,9 +948,6 @@ function ModernHeader() {
               <IconButton color="inherit" onClick={handleOpenSearchMobile}>
                 <SearchIcon />
               </IconButton>
-
-              {/* Relógio (simplificado) */}
-              <RelogioDigital isMobile={true} />
 
               {/* Notificações */}
               <IconButton color="inherit" onClick={handleNotificationsOpen}>
@@ -1004,7 +959,7 @@ function ModernHeader() {
           </Toolbar>
         </AppBar>
 
-        {/* Menu Mobile Drawer */}
+        {/* Menu Mobile Drawer (apenas perfil/configurações/logout) */}
         <MobileMenuDrawer
           open={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
@@ -1171,6 +1126,7 @@ function ModernHeader() {
       }}
     >
       <Toolbar>
+        {/* Apenas saudação, sem atalhos */}
         <Typography
           variant="h6"
           noWrap
