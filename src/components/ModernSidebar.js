@@ -154,7 +154,7 @@ const menuGroups = [
     title: 'AGENDAMENTOS',
     icon: <EventAvailableIcon />,
     items: [
-      { text: 'Calendário', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
+      { text: 'Agenda/Agendamentos', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
       { text: 'Atendimentos', icon: <AssignmentTurnedInIcon />, path: '/atendimentos', permission: 'gerenciar_atendimentos' },
     ],
   },
