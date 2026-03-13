@@ -364,9 +364,21 @@ function MinhasComissoes() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // Refs para impressão
-  const relatorioRef = useRef();
+  const relatorioRef = useRef(null);
+  
   const handlePrint = useReactToPrint({
-    content: () => relatorioRef.current,
+    contentRef: relatorioRef,
+    documentTitle: `Relatorio_Comissoes_${new Date().toLocaleDateString('pt-BR')}`,
+    onBeforePrint: () => {
+      mostrarSnackbar('Preparando impressão...', 'info');
+    },
+    onAfterPrint: () => {
+      mostrarSnackbar('Impressão concluída!', 'success');
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      mostrarSnackbar('Erro ao imprimir', 'error');
+    },
   });
 
   const meses = [
@@ -1206,7 +1218,7 @@ function MinhasComissoes() {
           <Button
             variant="outlined"
             startIcon={<PrintIcon />}
-            onClick={handlePrint}
+            onClick={() => handlePrint()}
           >
             Imprimir Relatório
           </Button>
