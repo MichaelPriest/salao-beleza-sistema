@@ -30,6 +30,7 @@ import {
   ListItemText,
   ListItemAvatar,
   ListItemSecondaryAction,
+  TextField,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -59,7 +60,6 @@ import {
   Today,
   DateRange,
   Assessment,
-  BarChart,
   PieChart as PieChartIcon,
   ShowChart,
 } from '@mui/icons-material';
@@ -75,7 +75,7 @@ import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
+  BarChart as RechartsBarChart,
   Bar,
   LineChart,
   Line,
@@ -139,16 +139,16 @@ const StatCard = ({ icon, title, value, trend, trendValue, color, loading, subti
               <Avatar sx={{ bgcolor: color, width: 56, height: 56 }}>
                 {icon}
               </Avatar>
-              {trend && (
-                <Tooltip title={`${trendValue > 0 ? 'Aumento' : trendValue < 0 ? 'Queda' : 'Estável'} de ${Math.abs(trendValue)}% em relação ao período anterior`}>
+              {trend !== undefined && (
+                <Tooltip title={`${trend > 0 ? 'Aumento' : trend < 0 ? 'Queda' : 'Estável'} de ${Math.abs(trend).toFixed(1)}% em relação ao período anterior`}>
                   <Chip
                     icon={
-                      trendValue > 0 ? <ArrowUpward /> : 
-                      trendValue < 0 ? <ArrowDownward /> : 
+                      trend > 0 ? <ArrowUpward /> : 
+                      trend < 0 ? <ArrowDownward /> : 
                       <TrendingFlat />
                     }
-                    label={`${Math.abs(trendValue)}%`}
-                    color={trendValue > 0 ? 'success' : trendValue < 0 ? 'error' : 'default'}
+                    label={`${Math.abs(trend).toFixed(1)}%`}
+                    color={trend > 0 ? 'success' : trend < 0 ? 'error' : 'default'}
                     size="small"
                     sx={{ fontWeight: 600 }}
                   />
@@ -348,8 +348,8 @@ function ModernDashboard() {
     const faturamentoHoje = pagamentosHoje.reduce((acc, p) => acc + (p.valor || 0), 0);
 
     // Faturamento período anterior
-    const periodoAnteriorStart = subDays(start, (end - start) / (1000 * 60 * 60 * 24));
-    const periodoAnteriorEnd = subDays(end, (end - start) / (1000 * 60 * 60 * 24));
+    const periodoAnteriorStart = subDays(start, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+    const periodoAnteriorEnd = subDays(end, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
 
     const pagamentosPeriodoAnterior = (pagamentos || []).filter(p => {
       const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
@@ -387,7 +387,7 @@ function ModernDashboard() {
     const agendamentosCancelados = agendamentosHoje.filter(a => a.status === 'cancelado').length;
 
     // Taxa de ocupação
-    const totalHorarios = 12; // 12 horários por dia
+    const totalHorarios = 12; // 12 horários por dia (9h-20h)
     const agendamentosHojeNaoCancelados = agendamentosHoje.filter(a => a.status !== 'cancelado').length;
     const taxaOcupacao = Math.min(100, Math.round((agendamentosHojeNaoCancelados / totalHorarios) * 100));
 
@@ -824,7 +824,7 @@ function ModernDashboard() {
               <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
                 {stats.agendamentosHoje}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                 <Chip size="small" label={`${stats.agendamentosConfirmados} confirmados`} color="success" sx={{ height: 20 }} />
                 <Chip size="small" label={`${stats.agendamentosPendentes} pendentes`} color="warning" sx={{ height: 20 }} />
                 <Chip size="small" label={`${stats.agendamentosCancelados} cancelados`} color="error" sx={{ height: 20 }} />
@@ -929,7 +929,7 @@ function ModernDashboard() {
                         color={selectedMetric === 'bar' ? 'primary' : 'default'}
                         onClick={() => setSelectedMetric('bar')}
                       >
-                        <BarChart />
+                        <BarChartIcon />
                       </IconButton>
                     </Tooltip>
                   </Box>
@@ -957,13 +957,13 @@ function ModernDashboard() {
                       />
                     </AreaChart>
                   ) : (
-                    <BarChart data={revenueData}>
+                    <RechartsBarChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis tickFormatter={(value) => formatarMoeda(value)} />
                       <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
                       <Bar dataKey="valor" fill="#9c27b0" />
-                    </BarChart>
+                    </RechartsBarChart>
                   )}
                 </ResponsiveContainer>
               </CardContent>
@@ -1012,11 +1012,11 @@ function ModernDashboard() {
                               width: 12,
                               height: 12,
                               borderRadius: '50%',
-                              bgcolor: COLORS[index],
+                              bgcolor: COLORS[index % COLORS.length],
                               mr: 1,
                             }}
                           />
-                          <Typography variant="body2" sx={{ flex: 1, noWrap: true }}>
+                          <Typography variant="body2" sx={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {service.name}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1063,7 +1063,7 @@ function ModernDashboard() {
                         <TableRow key={prof.id}>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar sx={{ bgcolor: COLORS[index], width: 24, height: 24 }}>
+                              <Avatar sx={{ bgcolor: COLORS[index % COLORS.length], width: 24, height: 24, fontSize: '0.75rem' }}>
                                 {prof.nome?.charAt(0)}
                               </Avatar>
                               {prof.nome}
@@ -1109,7 +1109,7 @@ function ModernDashboard() {
                   {topClients.map((client, index) => (
                     <ListItem key={client.id} divider={index < topClients.length - 1}>
                       <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: COLORS[index] }}>
+                        <Avatar sx={{ bgcolor: COLORS[index % COLORS.length] }}>
                           {client.nome?.charAt(0)}
                         </Avatar>
                       </ListItemAvatar>
