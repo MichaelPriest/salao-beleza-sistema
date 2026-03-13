@@ -50,10 +50,10 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useReactToPrint } from 'react-to-print';
 
-// Importações para PDF e Excel - usando require para evitar problemas de build
-const jsPDF = typeof window !== 'undefined' ? require('jspdf') : null;
-const autoTable = typeof window !== 'undefined' ? require('jspdf-autotable') : null;
-const XLSX = typeof window !== 'undefined' ? require('xlsx') : null;
+// Importações para PDF e Excel
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // Ícones
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -80,6 +80,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import PeopleIcon from '@mui/icons-material/People';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TableChartIcon from '@mui/icons-material/TableChart';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ 
@@ -87,6 +88,7 @@ const RelatorioComissoes = React.forwardRef(({
   profissional, 
   periodo, 
   filtros,
+  configuracoes,
   tipo = 'completo' 
 }, ref) => {
   const formatarMoeda = (valor) => {
@@ -103,24 +105,70 @@ const RelatorioComissoes = React.forwardRef(({
 
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Cabeçalho */}
+      {/* Cabeçalho com Logo */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0', mb: 1 }}>
-          Salão de Beleza
-        </Typography>
+        {configuracoes?.salao?.logo ? (
+          <Box sx={{ mb: 2 }}>
+            <img 
+              src={configuracoes.salao.logo} 
+              alt={configuracoes.salao.nomeFantasia || 'Logo do Salão'}
+              style={{ maxHeight: '80px', maxWidth: '200px', objectFit: 'contain' }}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
+            <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+            <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+              {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
+            </Typography>
+          </Box>
+        )}
+        
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
           Relatório de Comissões
         </Typography>
+        
         <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>
           {profissional?.nome || 'Todos os Profissionais'}
         </Typography>
+        
         <Typography variant="subtitle1" color="textSecondary" sx={{ mt: 1 }}>
           Período: {periodo}
         </Typography>
+        
         <Typography variant="subtitle2" color="textSecondary">
           Emitido em: {new Date().toLocaleString('pt-BR')}
         </Typography>
+        
+        {configuracoes?.salao?.cnpj && (
+          <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+            CNPJ: {configuracoes.salao.cnpj}
+          </Typography>
+        )}
       </Box>
+
+      {/* Informações do Profissional (quando selecionado) */}
+      {profissional?.id && profissional.id !== 'todos' && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Informações do Profissional
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                <Typography variant="body2" color="textSecondary">Nome</Typography>
+                <Typography variant="body1">{profissional.nome}</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={6}>
+              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                <Typography variant="body2" color="textSecondary">Período</Typography>
+                <Typography variant="body1">{periodo}</Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+      )}
 
       {/* Resumo */}
       <Box sx={{ mb: 4 }}>
@@ -322,6 +370,12 @@ const RelatorioComissoes = React.forwardRef(({
           Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
           Período: {periodo}
         </Typography>
+        {configuracoes?.salao?.contato && (
+          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+            {configuracoes.salao.contato.telefone && `Tel: ${configuracoes.salao.contato.telefone} • `}
+            {configuracoes.salao.contato.email && `Email: ${configuracoes.salao.contato.email}`}
+          </Typography>
+        )}
       </Box>
     </Box>
   );
@@ -333,6 +387,7 @@ function MinhasComissoes() {
   const [atendimentos, setAtendimentos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
+  const [configuracoes, setConfiguracoes] = useState(null);
   const [resumo, setResumo] = useState(null);
   const [estatisticas, setEstatisticas] = useState(null);
   const [profissional, setProfissional] = useState(null);
@@ -368,7 +423,7 @@ function MinhasComissoes() {
   
   const handlePrint = useReactToPrint({
     contentRef: relatorioRef,
-    documentTitle: `Relatorio_Comissoes_${new Date().toLocaleDateString('pt-BR')}`,
+    documentTitle: `Relatorio_Comissoes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}`,
     onBeforePrint: () => {
       mostrarSnackbar('Preparando impressão...', 'info');
     },
@@ -420,6 +475,14 @@ function MinhasComissoes() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // Buscar configurações do salão
+      const configuracoesData = await firebaseService.getAll('configuracoes');
+      const configuracoesArray = Array.isArray(configuracoesData) ? configuracoesData : [];
+      if (configuracoesArray.length > 0) {
+        setConfiguracoes(configuracoesArray[0]);
+        console.log('Configurações carregadas:', configuracoesArray[0]);
+      }
       
       // Buscar dados do usuário atual do localStorage
       let usuarioLogado = null;
@@ -840,6 +903,7 @@ function MinhasComissoes() {
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
+    toast[severity](message);
   };
 
   // Função para exportar PDF
@@ -847,38 +911,35 @@ function MinhasComissoes() {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
       
-      // Verificar se as bibliotecas estão disponíveis
-      if (!jsPDF || !autoTable) {
-        throw new Error('Bibliotecas de PDF não disponíveis');
-      }
-
-      const { default: JsPDF } = jsPDF;
-      const { default: AutoTable } = autoTable;
-      
-      const doc = new JsPDF();
+      const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
-      // Título
-      doc.setFontSize(18);
+      // Título com logo (simulado)
+      doc.setFontSize(20);
       doc.setTextColor(156, 39, 176); // Roxo
-      doc.text('Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
+      doc.text(configuracoes?.salao?.nomeFantasia || 'Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
       
       // Subtítulo
-      doc.setFontSize(12);
+      doc.setFontSize(16);
       doc.setTextColor(0, 0, 0);
-      doc.text(profissional?.nome || 'Todos os Profissionais', pageWidth / 2, 30, { align: 'center' });
+      doc.text('Relatório de Comissões', pageWidth / 2, 30, { align: 'center' });
+      
+      // Informações do profissional
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      const profissionalNome = profissional?.nome || 'Todos os Profissionais';
+      doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 40, { align: 'center' });
       
       // Período
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`;
-      doc.text(`Período: ${periodo}`, pageWidth / 2, 38, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Período: ${periodo}`, pageWidth / 2, 48, { align: 'center' });
       
       // Data de emissão
-      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 46, { align: 'center' });
+      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 56, { align: 'center' });
       
-      let yPos = 55;
+      let yPos = 65;
       
       // Resumo
       if (exportOptions.incluirResumo && resumo) {
@@ -896,7 +957,7 @@ function MinhasComissoes() {
           ['Comissões Pendentes', resumo.quantidadePendente.toString()],
         ];
         
-        AutoTable(doc, {
+        autoTable(doc, {
           startY: yPos,
           head: [['Descrição', 'Valor']],
           body: resumoData,
@@ -930,7 +991,7 @@ function MinhasComissoes() {
           a.comissaoPaga ? 'Pago' : 'Pendente'
         ]);
         
-        AutoTable(doc, {
+        autoTable(doc, {
           startY: yPos,
           head: [['Data', 'Cliente', 'Serviços', 'Valor', 'Comissão', 'Status']],
           body: atendimentosData,
@@ -974,7 +1035,7 @@ function MinhasComissoes() {
           c.dataPagamento ? formatarData(c.dataPagamento) : '—'
         ]);
         
-        AutoTable(doc, {
+        autoTable(doc, {
           startY: yPos,
           head: [['Data', 'Serviço', '%', 'Valor Base', 'Comissão', 'Status', 'Pagamento']],
           body: comissoesData,
@@ -1016,7 +1077,7 @@ function MinhasComissoes() {
           `${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`
         ]);
         
-        AutoTable(doc, {
+        autoTable(doc, {
           startY: yPos,
           head: [['Serviço', 'Qtd', 'Total', '%']],
           body: servicosData,
@@ -1043,15 +1104,8 @@ function MinhasComissoes() {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
       
-      // Verificar se a biblioteca está disponível
-      if (!XLSX) {
-        throw new Error('Biblioteca Excel não disponível');
-      }
-
-      const { utils, writeFile } = XLSX;
-      
       // Criar workbook
-      const wb = utils.book_new();
+      const wb = XLSX.utils.book_new();
       
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
       
@@ -1073,8 +1127,8 @@ function MinhasComissoes() {
           ['Total de Atendimentos', atendimentosFiltrados.length],
         ];
         
-        const wsResumo = utils.aoa_to_sheet(resumoData);
-        utils.book_append_sheet(wb, wsResumo, 'Resumo');
+        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
       }
       
       // Aba de Atendimentos
@@ -1092,8 +1146,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsAtendimentos = utils.aoa_to_sheet(atendimentosData);
-        utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
+        const wsAtendimentos = XLSX.utils.aoa_to_sheet(atendimentosData);
+        XLSX.utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
       }
       
       // Aba de Comissões
@@ -1111,8 +1165,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsComissoes = utils.aoa_to_sheet(comissoesData);
-        utils.book_append_sheet(wb, wsComissoes, 'Comissões');
+        const wsComissoes = XLSX.utils.aoa_to_sheet(comissoesData);
+        XLSX.utils.book_append_sheet(wb, wsComissoes, 'Comissões');
       }
       
       // Aba de Resumo por Serviço
@@ -1127,8 +1181,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsServicos = utils.aoa_to_sheet(servicosData);
-        utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
+        const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
+        XLSX.utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
       }
       
       // Informações do relatório
@@ -1141,12 +1195,12 @@ function MinhasComissoes() {
         ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
       ];
       
-      const wsInfo = utils.aoa_to_sheet(infoData);
-      utils.book_append_sheet(wb, wsInfo, 'Informações');
+      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
       
       // Salvar arquivo
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.xlsx`;
-      writeFile(wb, fileName);
+      XLSX.writeFile(wb, fileName);
       
       mostrarSnackbar('Planilha gerada com sucesso!', 'success');
       handleCloseRelatorio();
@@ -2088,9 +2142,10 @@ function MinhasComissoes() {
             comissoes: comissoesFiltradas,
             atendimentos: atendimentosFiltrados
           }}
-          profissional={isAdmin ? { nome: 'Todos os Profissionais' } : profissional}
+          profissional={isAdmin ? { nome: 'Todos os Profissionais', id: 'todos' } : profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
           filtros={{ mes: filtroMes, ano: filtroAno, status: filtroStatus }}
+          configuracoes={configuracoes}
           tipo="completo"
         />
       </Box>
