@@ -78,6 +78,10 @@ import {
   Download as DownloadIcon,
   PictureAsPdf as PdfIcon,
   TableChart as ExcelIcon,
+  Visibility as VisibilityIcon,
+  History as HistoryIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -89,6 +93,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
+import { usuariosService } from '../services/usuariosService';
 import { Timestamp } from 'firebase/firestore';
 
 // Importações para PDF e Excel
@@ -154,7 +159,8 @@ const RelatorioAgenda = React.forwardRef(({
   profissionais,
   viewMode,
   dataInicio,
-  dataFim
+  dataFim,
+  usuarioCargo
 }, ref) => {
   const formatarData = (data) => {
     if (!data) return '';
@@ -330,6 +336,9 @@ const RelatorioAgenda = React.forwardRef(({
 
 function ModernAgendamentos() {
   const navigate = useNavigate();
+  const [usuario, setUsuario] = useState(null);
+  const [cargo, setCargo] = useState('');
+  
   const [viewMode, setViewMode] = useState('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
@@ -342,7 +351,6 @@ function ModernAgendamentos() {
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
-  const [usuario, setUsuario] = useState(null);
   
   // 🔥 Trigger para forçar atualização
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -383,18 +391,44 @@ function ModernAgendamentos() {
   const { data: profissionais, loading: loadingProfissionais } = useFirebase('profissionais');
   const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
 
-  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos;
-
   useEffect(() => {
-    const userStr = localStorage.getItem('usuario');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      setUsuario(user);
+    const user = usuariosService.getUsuarioAtual();
+    setUsuario(user);
+    setCargo(user?.cargo || '');
+
+    // Se for profissional, filtrar automaticamente pelo profissional
+    if (user?.cargo === 'profissional' && user?.profissionalId) {
+      setSelectedProfessional(user.profissionalId);
+    }
+
+    // Se for cliente, mostrar apenas seus agendamentos
+    if (user?.cargo === 'cliente' && user?.clienteId) {
+      setSelectedProfessional('all');
     }
   }, []);
 
+  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos;
+
+  // Filtrar eventos baseado no cargo do usuário
+  const filtrarEventosPorUsuario = (eventos) => {
+    if (!usuario) return eventos;
+
+    // Cliente: ver apenas seus próprios eventos
+    if (cargo === 'cliente' && usuario.clienteId) {
+      return eventos.filter(e => e.clienteId === usuario.clienteId);
+    }
+
+    // Profissional: ver apenas seus eventos
+    if (cargo === 'profissional' && usuario.profissionalId) {
+      return eventos.filter(e => e.profissionalId === usuario.profissionalId);
+    }
+
+    // Admin, Gerente, Atendente: ver todos
+    return eventos;
+  };
+
   // Combinar agendamentos e atendimentos
-  const todosEventos = [
+  const todosEventos = filtrarEventosPorUsuario([
     ...(agendamentos || []).map(apt => ({
       ...apt,
       tipo: 'agendamento',
@@ -410,18 +444,18 @@ function ModernAgendamentos() {
       dataObj: att.data,
       horarioObj: att.horaInicio
     }))
-  ];
+  ]);
 
   // Estado do formulário
   const [formData, setFormData] = useState({
     clienteId: '',
-    profissionalId: '',
+    profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
     servicoId: '',
     data: selectedDate,
     horario: '',
     observacoes: '',
     status: 'pendente',
-    servicos: [], // Array para múltiplos serviços
+    servicos: [],
     valorTotal: 0
   });
 
@@ -520,7 +554,7 @@ function ModernAgendamentos() {
       if (selectedAppointment) {
         setFormData({
           clienteId: selectedAppointment.clienteId || '',
-          profissionalId: selectedAppointment.profissionalId || '',
+          profissionalId: selectedAppointment.profissionalId || (cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : ''),
           servicoId: selectedAppointment.servicoId || '',
           data: selectedAppointment.data || selectedDate,
           horario: selectedAppointment.horario || '',
@@ -533,7 +567,7 @@ function ModernAgendamentos() {
       } else {
         setFormData({
           clienteId: '',
-          profissionalId: '',
+          profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
           servicoId: '',
           data: selectedDate,
           horario: '',
@@ -549,7 +583,7 @@ function ModernAgendamentos() {
         setBuscaServico('');
       }
     }
-  }, [openDialog, selectedAppointment, selectedDate, updateTrigger]);
+  }, [openDialog, selectedAppointment, selectedDate, usuario, cargo, updateTrigger]);
 
   // ============================================
   // FUNÇÕES DE PESQUISA DE CLIENTES
@@ -649,6 +683,18 @@ function ModernAgendamentos() {
     const professionalMatch = selectedProfessional === 'all' || event.profissionalId === selectedProfessional;
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
+    
+    // Se for profissional, só vê eventos do seu profissionalId (já filtrado no filtrarEventosPorUsuario)
+    if (cargo === 'profissional') {
+      return statusMatch && tipoMatch;
+    }
+    
+    // Se for cliente, só vê seus eventos (já filtrado no filtrarEventosPorUsuario)
+    if (cargo === 'cliente') {
+      return statusMatch && tipoMatch;
+    }
+    
+    // Admin, Gerente, Atendente: todos com filtros
     return professionalMatch && statusMatch && tipoMatch;
   });
 
@@ -741,11 +787,29 @@ function ModernAgendamentos() {
   };
 
   const handleAdd = () => {
+    // Profissionais e clientes não podem criar agendamentos
+    if (cargo === 'profissional') {
+      toast.error('Profissionais não podem criar agendamentos');
+      return;
+    }
+    
+    if (cargo === 'cliente') {
+      // Cliente pode criar? Se sim, redirecionar para página específica
+      toast.info('Para agendar, entre em contato com a recepção');
+      return;
+    }
+    
     setSelectedAppointment(null);
     setOpenDialog(true);
   };
 
   const handleEdit = (event) => {
+    // Profissionais e clientes não podem editar
+    if (cargo === 'profissional' || cargo === 'cliente') {
+      toast.error('Você não tem permissão para editar agendamentos');
+      return;
+    }
+    
     if (event.tipo === 'agendamento') {
       setSelectedAppointment(event);
       setOpenDialog(true);
@@ -755,6 +819,12 @@ function ModernAgendamentos() {
   };
 
   const handleDelete = (id, tipo) => {
+    // Profissionais e clientes não podem excluir
+    if (cargo === 'profissional' || cargo === 'cliente') {
+      toast.error('Você não tem permissão para cancelar agendamentos');
+      return;
+    }
+    
     if (tipo === 'agendamento') {
       setAppointmentToDelete(id);
       setOpenDeleteDialog(true);
@@ -767,7 +837,6 @@ function ModernAgendamentos() {
     try {
       await excluir(appointmentToDelete);
       toast.success('Agendamento cancelado com sucesso!');
-      // Forçar atualização
       setUpdateTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Erro ao excluir:', error);
@@ -779,12 +848,17 @@ function ModernAgendamentos() {
 
   // 🔥 FUNÇÃO CORRIGIDA: Atualizar status com trigger
   const handleStatusChange = async (id, newStatus) => {
+    // Profissionais e clientes não podem alterar status
+    if (cargo === 'profissional' || cargo === 'cliente') {
+      toast.error('Você não tem permissão para alterar status');
+      return;
+    }
+    
     try {
       const toastId = toast.loading('Atualizando status...');
       
       await atualizar(id, { status: newStatus });
       
-      // Forçar atualização da UI
       setUpdateTrigger(prev => prev + 1);
       
       toast.dismiss(toastId);
@@ -839,7 +913,10 @@ function ModernAgendamentos() {
         observacoes: formData.observacoes || '',
         status: formData.status || 'pendente',
         valorTotal: formData.valorTotal,
-        origem: 'sistema'
+        origem: 'sistema',
+        createdBy: usuario?.id || usuario?.uid || 'sistema',
+        createdByName: usuario?.nome || 'Sistema',
+        createdByCargo: usuario?.cargo || 'sistema'
       };
 
       let agendamentoCriado;
@@ -853,7 +930,6 @@ function ModernAgendamentos() {
         toast.success('Agendamento criado!');
       }
 
-      // Forçar atualização
       setUpdateTrigger(prev => prev + 1);
 
       // Notificar profissional
@@ -878,6 +954,12 @@ function ModernAgendamentos() {
   };
 
   const iniciarAtendimento = async (agendamento) => {
+    // Profissionais e clientes não podem iniciar atendimentos
+    if (cargo === 'cliente') {
+      toast.error('Apenas funcionários podem iniciar atendimentos');
+      return;
+    }
+    
     try {
       if (!agendamento || !agendamento.id) {
         toast.error('Agendamento não encontrado');
@@ -918,7 +1000,9 @@ function ModernAgendamentos() {
         itensProduto: [],
         valorTotal: agendamento.valorTotal || 0,
         createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        updatedAt: Timestamp.now(),
+        iniciadoPor: usuario?.nome || 'Sistema',
+        iniciadoPorId: usuario?.id || usuario?.uid
       };
 
       const atendimentoCriado = await firebaseService.add('atendimentos', novoAtendimento);
@@ -928,7 +1012,6 @@ function ModernAgendamentos() {
         updatedAt: Timestamp.now()
       });
 
-      // Forçar atualização
       setUpdateTrigger(prev => prev + 1);
 
       toast.dismiss(toastId);
@@ -943,6 +1026,11 @@ function ModernAgendamentos() {
   };
 
   const continuarAtendimento = (atendimento) => {
+    // Profissionais e atendentes podem continuar, clientes não
+    if (cargo === 'cliente') {
+      toast.error('Você não tem acesso a esta funcionalidade');
+      return;
+    }
     navigate(`/atendimento/${atendimento.id}`);
   };
 
@@ -1039,6 +1127,11 @@ function ModernAgendamentos() {
   };
 
   const handleOpenRelatorio = () => {
+    // Apenas admin, gerente e atendente podem gerar relatórios
+    if (cargo === 'profissional' || cargo === 'cliente') {
+      toast.error('Você não tem permissão para gerar relatórios');
+      return;
+    }
     setOpenRelatorioDialog(true);
   };
 
@@ -1371,18 +1464,42 @@ function ModernAgendamentos() {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-          Agenda
-        </Typography>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            {cargo === 'cliente' ? 'Meus Agendamentos' : 'Agenda'}
+          </Typography>
+          {cargo === 'cliente' && (
+            <Typography variant="body2" color="textSecondary">
+              Acompanhe seus agendamentos e histórico
+            </Typography>
+          )}
+          {cargo === 'profissional' && (
+            <Typography variant="body2" color="textSecondary">
+              Sua agenda de atendimentos
+            </Typography>
+          )}
+          {cargo === 'atendente' && (
+            <Typography variant="body2" color="textSecondary">
+              Gerencie os agendamentos do dia
+            </Typography>
+          )}
+          {(cargo === 'admin' || cargo === 'gerente') && (
+            <Typography variant="body2" color="textSecondary">
+              Gerencie todos os agendamentos do salão
+            </Typography>
+          )}
+        </Box>
         
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handleOpenRelatorio}
-          >
-            Relatórios
-          </Button>
+          {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handleOpenRelatorio}
+            >
+              Relatórios
+            </Button>
+          )}
           
           <Button
             variant="outlined"
@@ -1409,25 +1526,27 @@ function ModernAgendamentos() {
             </ToggleButton>
           </ToggleButtonGroup>
           
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAdd}
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                color: 'white',
-                boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
-              }}
-            >
-              Novo Agendamento
-            </Button>
-          </motion.div>
+          {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAdd}
+                sx={{
+                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                  color: 'white',
+                  boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+                }}
+              >
+                Novo Agendamento
+              </Button>
+            </motion.div>
+          )}
         </Box>
       </Box>
 
-      {/* Atendimentos em Andamento */}
-      {atendimentosEmAndamento.length > 0 && (
+      {/* Atendimentos em Andamento - Apenas para admin/gerente/atendente/profissional */}
+      {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1523,58 +1642,67 @@ function ModernAgendamentos() {
               </Box>
             </Grid>
             
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Profissional</InputLabel>
-                <Select
-                  value={selectedProfessional}
-                  label="Profissional"
-                  onChange={(e) => setSelectedProfessional(e.target.value)}
-                >
-                  <MenuItem value="all">Todos</MenuItem>
-                  {(profissionais || []).map(prof => (
-                    <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+            {/* Filtro de Profissional - Visível para admin/gerente/atendente */}
+            {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Profissional</InputLabel>
+                  <Select
+                    value={selectedProfessional}
+                    label="Profissional"
+                    onChange={(e) => setSelectedProfessional(e.target.value)}
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    {(profissionais || []).map(prof => (
+                      <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={selectedStatus}
-                  label="Status"
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                >
-                  <MenuItem value="all">Todos</MenuItem>
-                  <MenuItem value="confirmado">Confirmado</MenuItem>
-                  <MenuItem value="pendente">Pendente</MenuItem>
-                  <MenuItem value="em_andamento">Em Andamento</MenuItem>
-                  <MenuItem value="cancelado">Cancelado</MenuItem>
-                  <MenuItem value="finalizado">Finalizado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+            {/* Filtro de Status - Visível para todos exceto cliente */}
+            {cargo !== 'cliente' && (
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={selectedStatus}
+                    label="Status"
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                  >
+                    <MenuItem value="all">Todos</MenuItem>
+                    <MenuItem value="confirmado">Confirmado</MenuItem>
+                    <MenuItem value="pendente">Pendente</MenuItem>
+                    <MenuItem value="em_andamento">Em Andamento</MenuItem>
+                    <MenuItem value="cancelado">Cancelado</MenuItem>
+                    <MenuItem value="finalizado">Finalizado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Mostrar</InputLabel>
-                <Select
-                  value={showAtendimentos ? 'todos' : 'agendamentos'}
-                  label="Mostrar"
-                  onChange={(e) => setShowAtendimentos(e.target.value === 'todos')}
-                >
-                  <MenuItem value="todos">Agendamentos e Atendimentos</MenuItem>
-                  <MenuItem value="agendamentos">Apenas Agendamentos</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+            {/* Filtro de Mostrar - Visível para admin/gerente/atendente */}
+            {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Mostrar</InputLabel>
+                  <Select
+                    value={showAtendimentos ? 'todos' : 'agendamentos'}
+                    label="Mostrar"
+                    onChange={(e) => setShowAtendimentos(e.target.value === 'todos')}
+                  >
+                    <MenuItem value="todos">Agendamentos e Atendimentos</MenuItem>
+                    <MenuItem value="agendamentos">Apenas Agendamentos</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={cargo === 'cliente' ? 10 : cargo === 'profissional' ? 8 : 4}>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <Chip 
-                  label={`${stats.total} hoje`} 
+                  label={`${stats.total} ${cargo === 'cliente' ? 'agendamentos' : 'hoje'}`} 
                   color="primary" 
                   size="small"
                   variant="outlined"
@@ -1587,7 +1715,7 @@ function ModernAgendamentos() {
                     size="small"
                   />
                 )}
-                {viewMode === 'day' && stats.atendimentos > 0 && (
+                {viewMode === 'day' && stats.atendimentos > 0 && (cargo !== 'cliente') && (
                   <Chip 
                     icon={<TimerIcon />}
                     label={`${stats.atendimentos} atend.`} 
@@ -1606,7 +1734,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {getHeaderText()}
+              {cargo === 'cliente' ? 'Meus Agendamentos' : getHeaderText()}
             </Typography>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1672,9 +1800,11 @@ function ModernAgendamentos() {
                                                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                                                   {cliente?.nome || 'N/A'}
                                                 </Typography>
-                                                <Typography variant="caption" color="textSecondary">
-                                                  {cliente?.telefone || '---'}
-                                                </Typography>
+                                                {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && cliente?.telefone && (
+                                                  <Typography variant="caption" color="textSecondary">
+                                                    {cliente.telefone}
+                                                  </Typography>
+                                                )}
                                               </Box>
                                             </Box>
                                           </Grid>
@@ -1688,19 +1818,21 @@ function ModernAgendamentos() {
                                             </Typography>
                                           </Grid>
 
-                                          <Grid item xs={12} sm={6} md={2}>
-                                            <Typography variant="body2">
-                                              {profissional?.nome || 'N/A'}
-                                            </Typography>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                              {getTipoIcon(event.tipo)}
-                                              <Typography variant="caption" color="textSecondary">
-                                                {getTipoLabel(event.tipo)}
+                                          {cargo !== 'cliente' && (
+                                            <Grid item xs={12} sm={6} md={2}>
+                                              <Typography variant="body2">
+                                                {profissional?.nome || 'N/A'}
                                               </Typography>
-                                            </Box>
-                                          </Grid>
+                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                                {getTipoIcon(event.tipo)}
+                                                <Typography variant="caption" color="textSecondary">
+                                                  {getTipoLabel(event.tipo)}
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                          )}
 
-                                          <Grid item xs={12} sm={6} md={2}>
+                                          <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 3 : 2}>
                                             <Chip
                                               icon={getStatusIcon(event.status)}
                                               label={getStatusLabel(event.status)}
@@ -1710,9 +1842,9 @@ function ModernAgendamentos() {
                                             />
                                           </Grid>
 
-                                          <Grid item xs={12} md={3}>
+                                          <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                                              {event.tipo === 'agendamento' && event.status === 'confirmado' && (
+                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
                                                 <Button
                                                   size="small"
                                                   variant="contained"
@@ -1724,7 +1856,7 @@ function ModernAgendamentos() {
                                                 </Button>
                                               )}
                                               
-                                              {event.tipo === 'atendimento' && event.status === 'em_andamento' && (
+                                              {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
                                                 <Button
                                                   size="small"
                                                   variant="contained"
@@ -1736,7 +1868,7 @@ function ModernAgendamentos() {
                                                 </Button>
                                               )}
                                               
-                                              {event.tipo === 'agendamento' && event.status === 'pendente' && (
+                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'pendente' && (
                                                 <>
                                                   <IconButton 
                                                     size="small" 
@@ -1757,7 +1889,7 @@ function ModernAgendamentos() {
                                                 </>
                                               )}
                                               
-                                              {event.tipo === 'agendamento' && (
+                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && (
                                                 <>
                                                   <IconButton 
                                                     size="small" 
@@ -1779,6 +1911,18 @@ function ModernAgendamentos() {
                                                     </IconButton>
                                                   )}
                                                 </>
+                                              )}
+
+                                              {cargo === 'cliente' && (
+                                                <Tooltip title="Detalhes do agendamento">
+                                                  <IconButton 
+                                                    size="small"
+                                                    color="info"
+                                                    onClick={() => handleDayDetails(event.data, [event])}
+                                                  >
+                                                    <VisibilityIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
                                               )}
                                             </Box>
                                           </Grid>
@@ -2047,10 +2191,12 @@ function ModernAgendamentos() {
                         Total: R$ {event.valorTotal?.toFixed(2)}
                       </Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
-                      <Typography variant="body1">{profissional?.nome}</Typography>
-                    </Grid>
+                    {cargo !== 'cliente' && (
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
+                        <Typography variant="body1">{profissional?.nome}</Typography>
+                      </Grid>
+                    )}
                     <Grid item xs={12}>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         <Chip
@@ -2075,7 +2221,7 @@ function ModernAgendamentos() {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                    {event.tipo === 'agendamento' && event.status === 'confirmado' && (
+                    {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
                       <Button
                         size="small"
                         variant="contained"
@@ -2089,7 +2235,7 @@ function ModernAgendamentos() {
                         Iniciar
                       </Button>
                     )}
-                    {event.tipo === 'atendimento' && event.status === 'em_andamento' && (
+                    {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
                       <Button
                         size="small"
                         variant="contained"
@@ -2108,12 +2254,12 @@ function ModernAgendamentos() {
                       variant="outlined"
                       onClick={() => {
                         setOpenDayDialog(false);
-                        if (event.tipo === 'agendamento') {
+                        if (event.tipo === 'agendamento' && cargo !== 'cliente') {
                           handleEdit(event);
                         }
                       }}
                     >
-                      Ver detalhes
+                      Fechar
                     </Button>
                   </Box>
                 </Card>
@@ -2138,449 +2284,451 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento - COM MÚLTIPLOS SERVIÇOS E AUTOCOMPLETE */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
-        </DialogTitle>
-        <form onSubmit={handleSave}>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              {/* Campo de Cliente com Pesquisa */}
-              <Grid item xs={12}>
-                <Box sx={{ mb: 2 }}>
-                  {!formData.clienteId ? (
-                    <Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
-                          Selecione o Cliente
-                        </Typography>
-                        <Button
-                          size="small"
-                          startIcon={<PersonSearchIcon />}
-                          onClick={handleOpenClientSearch}
-                          variant="contained"
-                          sx={{
-                            background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                          }}
-                        >
-                          Buscar Cliente
-                        </Button>
-                      </Box>
-
-                      {/* Painel de Pesquisa */}
-                      <Collapse in={showClientSearch}>
-                        <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
-                          <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
-                            🔍 Buscar cliente por:
+      {/* Dialog de Agendamento - Apenas para admin/gerente/atendente */}
+      {openDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+            {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
+          </DialogTitle>
+          <form onSubmit={handleSave}>
+            <DialogContent>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {/* Campo de Cliente com Pesquisa */}
+                <Grid item xs={12}>
+                  <Box sx={{ mb: 2 }}>
+                    {!formData.clienteId ? (
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
+                            Selecione o Cliente
                           </Typography>
-                          
-                          <RadioGroup
-                            row
-                            value={searchClientType}
-                            onChange={(e) => setSearchClientType(e.target.value)}
-                            sx={{ mb: 2 }}
+                          <Button
+                            size="small"
+                            startIcon={<PersonSearchIcon />}
+                            onClick={handleOpenClientSearch}
+                            variant="contained"
+                            sx={{
+                              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                            }}
                           >
-                            <FormControlLabel value="nome" control={<Radio />} label="Nome" />
-                            <FormControlLabel value="cpf" control={<Radio />} label="CPF" />
-                            <FormControlLabel value="dataNascimento" control={<Radio />} label="Data de Nascimento" />
-                          </RadioGroup>
-
-                          {searchClientType === 'nome' && (
-                            <TextField
-                              fullWidth
-                              size="small"
-                              placeholder="Digite o nome do cliente..."
-                              value={searchClientTerm}
-                              onChange={(e) => setSearchClientTerm(e.target.value)}
-                              InputProps={{
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    <PersonSearchIcon color="action" />
-                                  </InputAdornment>
-                                ),
-                                endAdornment: searchClientTerm && (
-                                  <InputAdornment position="end">
-                                    <IconButton size="small" onClick={() => setSearchClientTerm('')}>
-                                      <ClearIcon fontSize="small" />
-                                    </IconButton>
-                                  </InputAdornment>
-                                )
-                              }}
-                              autoFocus
-                            />
-                          )}
-
-                          {searchClientType === 'cpf' && (
-                            <TextField
-                              fullWidth
-                              size="small"
-                              placeholder="Digite o CPF (apenas números)"
-                              value={cpfInput}
-                              onChange={(e) => setCpfInput(e.target.value)}
-                              InputProps={{
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    <FingerprintIcon color="action" />
-                                  </InputAdornment>
-                                ),
-                              }}
-                              autoFocus
-                            />
-                          )}
-
-                          {searchClientType === 'dataNascimento' && (
-                            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                              <DatePicker
-                                label="Data de Nascimento"
-                                value={dataNascimentoInput}
-                                onChange={(newValue) => setDataNascimentoInput(newValue)}
-                                renderInput={(params) => 
-                                  <TextField {...params} fullWidth size="small" />
-                                }
-                              />
-                            </LocalizationProvider>
-                          )}
-
-                          {/* Resultados da Busca */}
-                          {searchClientResults.length > 0 && (
-                            <Box sx={{ mt: 2 }}>
-                              <Typography variant="caption" color="textSecondary">
-                                {searchClientResults.length} cliente(s) encontrado(s):
-                              </Typography>
-                              <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                                {searchClientResults.map((cliente) => (
-                                  <React.Fragment key={cliente.id}>
-                                    <ListItem 
-                                      button
-                                      onClick={() => handleSelectClient(cliente)}
-                                      sx={{
-                                        borderRadius: 1,
-                                        '&:hover': { bgcolor: '#f3e5f5' }
-                                      }}
-                                    >
-                                      <ListItemAvatar>
-                                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
-                                          {cliente.nome?.charAt(0)}
-                                        </Avatar>
-                                      </ListItemAvatar>
-                                      <ListItemText
-                                        primary={
-                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                              {cliente.nome}
-                                            </Typography>
-                                            {cliente.cpf && (
-                                              <Chip
-                                                label={formatarCPF(cliente.cpf)}
-                                                size="small"
-                                                variant="outlined"
-                                                sx={{ fontSize: '0.7rem' }}
-                                              />
-                                            )}
-                                          </Box>
-                                        }
-                                        secondary={
-                                          <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
-                                            {cliente.telefone && (
-                                              <Typography variant="caption">
-                                                📞 {cliente.telefone}
-                                              </Typography>
-                                            )}
-                                            {cliente.dataNascimento && (
-                                              <Typography variant="caption">
-                                                🎂 {formatarDataBrasil(cliente.dataNascimento)}
-                                              </Typography>
-                                            )}
-                                          </Box>
-                                        }
-                                      />
-                                    </ListItem>
-                                    <Divider />
-                                  </React.Fragment>
-                                ))}
-                              </List>
-                            </Box>
-                          )}
-
-                          {searchClientTerm && searchClientResults.length === 0 && (
-                            <Alert severity="info" sx={{ mt: 2 }}>
-                              Nenhum cliente encontrado com os dados informados.
-                            </Alert>
-                          )}
-                        </Card>
-                      </Collapse>
-                    </Box>
-                  ) : (
-                    // Cliente Selecionado
-                    <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                        <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                          {getSelectedClientData()?.nome?.charAt(0)}
-                        </Avatar>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {getSelectedClientData()?.nome}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                            {getSelectedClientData()?.cpf && (
-                              <Typography variant="caption">
-                                CPF: {formatarCPF(getSelectedClientData()?.cpf)}
-                              </Typography>
-                            )}
-                            {getSelectedClientData()?.telefone && (
-                              <Typography variant="caption">
-                                📞 {getSelectedClientData()?.telefone}
-                              </Typography>
-                            )}
-                          </Box>
+                            Buscar Cliente
+                          </Button>
                         </Box>
-                        <Tooltip title="Trocar cliente">
-                          <IconButton onClick={handleClearClient} color="primary">
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </Card>
-                  )}
-                </Box>
-              </Grid>
 
-              {/* Seção de Serviços Múltiplos */}
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                  Serviços do Agendamento
-                </Typography>
-
-                {/* Lista de Serviços Selecionados */}
-                {servicosSelecionados.length > 0 && (
-                  <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: '#faf5ff' }}>
-                    <TableContainer>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Serviço</TableCell>
-                            <TableCell align="right">Preço</TableCell>
-                            <TableCell align="right">Duração</TableCell>
-                            <TableCell align="center">Ações</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {servicosSelecionados.map((servico) => (
-                            <TableRow key={servico.id}>
-                              <TableCell>{servico.nome}</TableCell>
-                              <TableCell align="right">R$ {servico.preco?.toFixed(2)}</TableCell>
-                              <TableCell align="right">{servico.duracao} min</TableCell>
-                              <TableCell align="center">
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => removerServico(servico.id)}
-                                >
-                                  <RemoveCircleIcon fontSize="small" />
-                                </IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                        <TableFooter>
-                          <TableRow>
-                            <TableCell colSpan={3} align="right">
-                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                Total:
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                                R$ {formData.valorTotal?.toFixed(2)}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        </TableFooter>
-                      </Table>
-                    </TableContainer>
-                  </Card>
-                )}
-
-                {/* Adicionar Novo Serviço com Autocomplete */}
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} md={5}>
-                    <Autocomplete
-                      options={profissionaisFiltrados}
-                      getOptionLabel={(option) => option.nome || ''}
-                      value={profissionais?.find(p => p.id === formData.profissionalId) || null}
-                      onChange={(e, newValue) => {
-                        setFormData({ ...formData, profissionalId: newValue?.id || '' });
-                        setProfissionalSelecionado(newValue?.id || '');
-                      }}
-                      inputValue={buscaProfissional}
-                      onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Profissional"
-                          size="small"
-                          placeholder="Digite para buscar..."
-                        />
-                      )}
-                      renderOption={(props, option) => (
-                        <li {...props}>
-                          <Box>
-                            <Typography variant="body2">{option.nome}</Typography>
-                            {option.especialidade && (
-                              <Typography variant="caption" color="textSecondary">
-                                {option.especialidade}
-                              </Typography>
-                            )}
-                          </Box>
-                        </li>
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} md={5}>
-                    <Autocomplete
-                      options={servicosFiltrados}
-                      getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
-                      value={servicos?.find(s => s.id === servicoAtual) || null}
-                      onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
-                      inputValue={buscaServico}
-                      onInputChange={(e, newValue) => setBuscaServico(newValue)}
-                      disabled={!formData.profissionalId}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Serviço"
-                          size="small"
-                          placeholder="Digite para buscar..."
-                        />
-                      )}
-                      renderOption={(props, option) => (
-                        <li {...props}>
-                          <Box>
-                            <Typography variant="body2">{option.nome}</Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              R$ {option.preco?.toFixed(2)} • {option.duracao} min
+                        {/* Painel de Pesquisa */}
+                        <Collapse in={showClientSearch}>
+                          <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
+                              🔍 Buscar cliente por:
                             </Typography>
-                          </Box>
-                        </li>
-                      )}
-                    />
-                  </Grid>
+                            
+                            <RadioGroup
+                              row
+                              value={searchClientType}
+                              onChange={(e) => setSearchClientType(e.target.value)}
+                              sx={{ mb: 2 }}
+                            >
+                              <FormControlLabel value="nome" control={<Radio />} label="Nome" />
+                              <FormControlLabel value="cpf" control={<Radio />} label="CPF" />
+                              <FormControlLabel value="dataNascimento" control={<Radio />} label="Data de Nascimento" />
+                            </RadioGroup>
 
-                  <Grid item xs={12} md={2}>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      startIcon={<AddCircleIcon />}
-                      onClick={adicionarServico}
-                      disabled={!servicoAtual}
-                      sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
-                    >
-                      Adicionar
-                    </Button>
-                  </Grid>
+                            {searchClientType === 'nome' && (
+                              <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="Digite o nome do cliente..."
+                                value={searchClientTerm}
+                                onChange={(e) => setSearchClientTerm(e.target.value)}
+                                InputProps={{
+                                  startAdornment: (
+                                    <InputAdornment position="start">
+                                      <PersonSearchIcon color="action" />
+                                    </InputAdornment>
+                                  ),
+                                  endAdornment: searchClientTerm && (
+                                    <InputAdornment position="end">
+                                      <IconButton size="small" onClick={() => setSearchClientTerm('')}>
+                                        <ClearIcon fontSize="small" />
+                                      </IconButton>
+                                    </InputAdornment>
+                                  )
+                                }}
+                                autoFocus
+                              />
+                            )}
+
+                            {searchClientType === 'cpf' && (
+                              <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="Digite o CPF (apenas números)"
+                                value={cpfInput}
+                                onChange={(e) => setCpfInput(e.target.value)}
+                                InputProps={{
+                                  startAdornment: (
+                                    <InputAdornment position="start">
+                                      <FingerprintIcon color="action" />
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                autoFocus
+                              />
+                            )}
+
+                            {searchClientType === 'dataNascimento' && (
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                                <DatePicker
+                                  label="Data de Nascimento"
+                                  value={dataNascimentoInput}
+                                  onChange={(newValue) => setDataNascimentoInput(newValue)}
+                                  renderInput={(params) => 
+                                    <TextField {...params} fullWidth size="small" />
+                                  }
+                                />
+                              </LocalizationProvider>
+                            )}
+
+                            {/* Resultados da Busca */}
+                            {searchClientResults.length > 0 && (
+                              <Box sx={{ mt: 2 }}>
+                                <Typography variant="caption" color="textSecondary">
+                                  {searchClientResults.length} cliente(s) encontrado(s):
+                                </Typography>
+                                <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                                  {searchClientResults.map((cliente) => (
+                                    <React.Fragment key={cliente.id}>
+                                      <ListItem 
+                                        button
+                                        onClick={() => handleSelectClient(cliente)}
+                                        sx={{
+                                          borderRadius: 1,
+                                          '&:hover': { bgcolor: '#f3e5f5' }
+                                        }}
+                                      >
+                                        <ListItemAvatar>
+                                          <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                                            {cliente.nome?.charAt(0)}
+                                          </Avatar>
+                                        </ListItemAvatar>
+                                        <ListItemText
+                                          primary={
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                {cliente.nome}
+                                              </Typography>
+                                              {cliente.cpf && (
+                                                <Chip
+                                                  label={formatarCPF(cliente.cpf)}
+                                                  size="small"
+                                                  variant="outlined"
+                                                  sx={{ fontSize: '0.7rem' }}
+                                                />
+                                              )}
+                                            </Box>
+                                          }
+                                          secondary={
+                                            <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+                                              {cliente.telefone && (
+                                                <Typography variant="caption">
+                                                  📞 {cliente.telefone}
+                                                </Typography>
+                                              )}
+                                              {cliente.dataNascimento && (
+                                                <Typography variant="caption">
+                                                  🎂 {formatarDataBrasil(cliente.dataNascimento)}
+                                                </Typography>
+                                              )}
+                                            </Box>
+                                          }
+                                        />
+                                      </ListItem>
+                                      <Divider />
+                                    </React.Fragment>
+                                  ))}
+                                </List>
+                              </Box>
+                            )}
+
+                            {searchClientTerm && searchClientResults.length === 0 && (
+                              <Alert severity="info" sx={{ mt: 2 }}>
+                                Nenhum cliente encontrado com os dados informados.
+                              </Alert>
+                            )}
+                          </Card>
+                        </Collapse>
+                      </Box>
+                    ) : (
+                      // Cliente Selecionado
+                      <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                          <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
+                            {getSelectedClientData()?.nome?.charAt(0)}
+                          </Avatar>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {getSelectedClientData()?.nome}
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                              {getSelectedClientData()?.cpf && (
+                                <Typography variant="caption">
+                                  CPF: {formatarCPF(getSelectedClientData()?.cpf)}
+                                </Typography>
+                              )}
+                              {getSelectedClientData()?.telefone && (
+                                <Typography variant="caption">
+                                  📞 {getSelectedClientData()?.telefone}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                          <Tooltip title="Trocar cliente">
+                            <IconButton onClick={handleClearClient} color="primary">
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Card>
+                    )}
+                  </Box>
                 </Grid>
 
-                {servicosSelecionados.length > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                    <Button
-                      size="small"
-                      color="error"
-                      startIcon={<DeleteIcon />}
-                      onClick={limparServicos}
-                    >
-                      Limpar todos
-                    </Button>
-                  </Box>
-                )}
-              </Grid>
+                {/* Seção de Serviços Múltiplos */}
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                    Serviços do Agendamento
+                  </Typography>
 
-              {/* Data e Hora */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Data"
-                  value={formData.data}
-                  onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  required
-                  size="small"
-                />
-              </Grid>
+                  {/* Lista de Serviços Selecionados */}
+                  {servicosSelecionados.length > 0 && (
+                    <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: '#faf5ff' }}>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Serviço</TableCell>
+                              <TableCell align="right">Preço</TableCell>
+                              <TableCell align="right">Duração</TableCell>
+                              <TableCell align="center">Ações</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {servicosSelecionados.map((servico) => (
+                              <TableRow key={servico.id}>
+                                <TableCell>{servico.nome}</TableCell>
+                                <TableCell align="right">R$ {servico.preco?.toFixed(2)}</TableCell>
+                                <TableCell align="right">{servico.duracao} min</TableCell>
+                                <TableCell align="center">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => removerServico(servico.id)}
+                                  >
+                                    <RemoveCircleIcon fontSize="small" />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                          <TableFooter>
+                            <TableRow>
+                              <TableCell colSpan={3} align="right">
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                  Total:
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                                  R$ {formData.valorTotal?.toFixed(2)}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        </Table>
+                      </TableContainer>
+                    </Card>
+                  )}
 
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required size="small">
-                  <InputLabel>Horário</InputLabel>
-                  <Select
-                    value={formData.horario}
-                    label="Horário"
-                    onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
-                  >
-                    <MenuItem value="">Selecione um horário</MenuItem>
-                    {timeSlots.map(time => (
-                      <MenuItem 
-                        key={time} 
-                        value={time}
-                        disabled={!isHorarioDisponivel(time)}
+                  {/* Adicionar Novo Serviço com Autocomplete */}
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} md={5}>
+                      <Autocomplete
+                        options={profissionaisFiltrados}
+                        getOptionLabel={(option) => option.nome || ''}
+                        value={profissionais?.find(p => p.id === formData.profissionalId) || null}
+                        onChange={(e, newValue) => {
+                          setFormData({ ...formData, profissionalId: newValue?.id || '' });
+                          setProfissionalSelecionado(newValue?.id || '');
+                        }}
+                        inputValue={buscaProfissional}
+                        onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Profissional"
+                            size="small"
+                            placeholder="Digite para buscar..."
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <li {...props}>
+                            <Box>
+                              <Typography variant="body2">{option.nome}</Typography>
+                              {option.especialidade && (
+                                <Typography variant="caption" color="textSecondary">
+                                  {option.especialidade}
+                                </Typography>
+                              )}
+                            </Box>
+                          </li>
+                        )}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={5}>
+                      <Autocomplete
+                        options={servicosFiltrados}
+                        getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
+                        value={servicos?.find(s => s.id === servicoAtual) || null}
+                        onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
+                        inputValue={buscaServico}
+                        onInputChange={(e, newValue) => setBuscaServico(newValue)}
+                        disabled={!formData.profissionalId}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Serviço"
+                            size="small"
+                            placeholder="Digite para buscar..."
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <li {...props}>
+                            <Box>
+                              <Typography variant="body2">{option.nome}</Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                R$ {option.preco?.toFixed(2)} • {option.duracao} min
+                              </Typography>
+                            </Box>
+                          </li>
+                        )}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={2}>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        startIcon={<AddCircleIcon />}
+                        onClick={adicionarServico}
+                        disabled={!servicoAtual}
+                        sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <TimeIcon fontSize="small" />
-                          {time}
-                          {!isHorarioDisponivel(time) && ' (Ocupado)'}
-                        </Box>
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+                        Adicionar
+                      </Button>
+                    </Grid>
+                  </Grid>
 
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={formData.status}
-                    label="Status"
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  >
-                    <MenuItem value="pendente">Pendente</MenuItem>
-                    <MenuItem value="confirmado">Confirmado</MenuItem>
-                    <MenuItem value="cancelado">Cancelado</MenuItem>
-                    <MenuItem value="em_andamento">Em andamento</MenuItem>   
-                    <MenuItem value="finalizado">Finalizado</MenuItem>  
-                  </Select>
-                </FormControl>
-              </Grid>
+                  {servicosSelecionados.length > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={limparServicos}
+                      >
+                        Limpar todos
+                      </Button>
+                    </Box>
+                  )}
+                </Grid>
 
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Observações"
-                  multiline
-                  rows={3}
-                  value={formData.observacoes}
-                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                  placeholder="Alguma observação especial?"
-                  size="small"
-                />
+                {/* Data e Hora */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Data"
+                    value={formData.data}
+                    onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    required
+                    size="small"
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth required size="small">
+                    <InputLabel>Horário</InputLabel>
+                    <Select
+                      value={formData.horario}
+                      label="Horário"
+                      onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                    >
+                      <MenuItem value="">Selecione um horário</MenuItem>
+                      {timeSlots.map(time => (
+                        <MenuItem 
+                          key={time} 
+                          value={time}
+                          disabled={!isHorarioDisponivel(time)}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TimeIcon fontSize="small" />
+                            {time}
+                            {!isHorarioDisponivel(time) && ' (Ocupado)'}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Status</InputLabel>
+                    <Select
+                      value={formData.status}
+                      label="Status"
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <MenuItem value="pendente">Pendente</MenuItem>
+                      <MenuItem value="confirmado">Confirmado</MenuItem>
+                      <MenuItem value="cancelado">Cancelado</MenuItem>
+                      <MenuItem value="em_andamento">Em andamento</MenuItem>   
+                      <MenuItem value="finalizado">Finalizado</MenuItem>  
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Observações"
+                    multiline
+                    rows={3}
+                    value={formData.observacoes}
+                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                    placeholder="Alguma observação especial?"
+                    size="small"
+                  />
+                </Grid>
               </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              }}
-            >
-              {selectedAppointment ? 'Atualizar' : 'Salvar'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button 
+                type="submit" 
+                variant="contained"
+                sx={{
+                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                }}
+              >
+                {selectedAppointment ? 'Atualizar' : 'Salvar'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
+      )}
 
       {/* Dialog de Confirmação de Exclusão */}
       <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
@@ -2604,144 +2752,146 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Relatórios */}
-      <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          Exportar Agenda
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Selecione o período:
-            </Typography>
-            
-            <RadioGroup
-              value={periodoRelatorio.tipo}
-              onChange={(e) => setPeriodoRelatorio({ ...periodoRelatorio, tipo: e.target.value })}
-              sx={{ mb: 2 }}
-            >
-              <FormControlLabel value="dia" control={<Radio />} label="Dia atual" />
-              <FormControlLabel value="semana" control={<Radio />} label="Semana atual" />
-              <FormControlLabel value="mes" control={<Radio />} label="Mês atual" />
-              <FormControlLabel value="personalizado" control={<Radio />} label="Personalizado" />
-            </RadioGroup>
-
-            {periodoRelatorio.tipo === 'personalizado' && (
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12} md={6}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                    <DatePicker
-                      label="Data Início"
-                      value={new Date(periodoRelatorio.dataInicio + 'T12:00:00')}
-                      onChange={(newValue) => {
-                        if (newValue) {
-                          setPeriodoRelatorio({ 
-                            ...periodoRelatorio, 
-                            dataInicio: formatDate(newValue) 
-                          });
-                        }
-                      }}
-                      renderInput={(params) => (
-                        <TextField {...params} fullWidth size="small" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                    <DatePicker
-                      label="Data Fim"
-                      value={new Date(periodoRelatorio.dataFim + 'T12:00:00')}
-                      onChange={(newValue) => {
-                        if (newValue) {
-                          setPeriodoRelatorio({ 
-                            ...periodoRelatorio, 
-                            dataFim: formatDate(newValue) 
-                          });
-                        }
-                      }}
-                      renderInput={(params) => (
-                        <TextField {...params} fullWidth size="small" />
-                      )}
-                    />
-                  </LocalizationProvider>
-                </Grid>
-              </Grid>
-            )}
-
-            <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>
-              Formato de exportação:
-            </Typography>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<PrintIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handlePrint();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Imprimir</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera uma versão para impressão
-                    </Typography>
-                  </Box>
-                </Button>
-              </Grid>
+      {/* Dialog de Relatórios - Apenas para admin/gerente/atendente */}
+      {openRelatorioDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
+        <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+            Exportar Agenda
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Selecione o período:
+              </Typography>
               
-              <Grid item xs={12} md={6}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<PdfIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handleExportPDF();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                  color="error"
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Exportar como PDF</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera um arquivo PDF
-                    </Typography>
-                  </Box>
-                </Button>
+              <RadioGroup
+                value={periodoRelatorio.tipo}
+                onChange={(e) => setPeriodoRelatorio({ ...periodoRelatorio, tipo: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <FormControlLabel value="dia" control={<Radio />} label="Dia atual" />
+                <FormControlLabel value="semana" control={<Radio />} label="Semana atual" />
+                <FormControlLabel value="mes" control={<Radio />} label="Mês atual" />
+                <FormControlLabel value="personalizado" control={<Radio />} label="Personalizado" />
+              </RadioGroup>
+
+              {periodoRelatorio.tipo === 'personalizado' && (
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} md={6}>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                      <DatePicker
+                        label="Data Início"
+                        value={new Date(periodoRelatorio.dataInicio + 'T12:00:00')}
+                        onChange={(newValue) => {
+                          if (newValue) {
+                            setPeriodoRelatorio({ 
+                              ...periodoRelatorio, 
+                              dataInicio: formatDate(newValue) 
+                            });
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} fullWidth size="small" />
+                        )}
+                      />
+                    </LocalizationProvider>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                      <DatePicker
+                        label="Data Fim"
+                        value={new Date(periodoRelatorio.dataFim + 'T12:00:00')}
+                        onChange={(newValue) => {
+                          if (newValue) {
+                            setPeriodoRelatorio({ 
+                              ...periodoRelatorio, 
+                              dataFim: formatDate(newValue) 
+                            });
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} fullWidth size="small" />
+                        )}
+                      />
+                    </LocalizationProvider>
+                  </Grid>
+                </Grid>
+              )}
+
+              <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>
+                Formato de exportação:
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<PrintIcon />}
+                    onClick={() => {
+                      handleCloseRelatorio();
+                      handlePrint();
+                    }}
+                    sx={{ justifyContent: 'flex-start', p: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1">Imprimir</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Gera uma versão para impressão
+                      </Typography>
+                    </Box>
+                  </Button>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<PdfIcon />}
+                    onClick={() => {
+                      handleCloseRelatorio();
+                      handleExportPDF();
+                    }}
+                    sx={{ justifyContent: 'flex-start', p: 2 }}
+                    color="error"
+                  >
+                    <Box>
+                      <Typography variant="subtitle1">Exportar como PDF</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Gera um arquivo PDF
+                      </Typography>
+                    </Box>
+                  </Button>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<ExcelIcon />}
+                    onClick={() => {
+                      handleCloseRelatorio();
+                      handleExportExcel();
+                    }}
+                    sx={{ justifyContent: 'flex-start', p: 2 }}
+                    color="success"
+                  >
+                    <Box>
+                      <Typography variant="subtitle1">Exportar como Excel</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Gera uma planilha
+                      </Typography>
+                    </Box>
+                  </Button>
+                </Grid>
               </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<ExcelIcon />}
-                  onClick={() => {
-                    handleCloseRelatorio();
-                    handleExportExcel();
-                  }}
-                  sx={{ justifyContent: 'flex-start', p: 2 }}
-                  color="success"
-                >
-                  <Box>
-                    <Typography variant="subtitle1">Exportar como Excel</Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Gera uma planilha
-                    </Typography>
-                  </Box>
-                </Button>
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseRelatorio}>Cancelar</Button>
-        </DialogActions>
-      </Dialog>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseRelatorio}>Cancelar</Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       {/* Componente oculto para impressão */}
       <Box sx={{ display: 'none' }}>
@@ -2755,6 +2905,7 @@ function ModernAgendamentos() {
           viewMode={viewMode}
           dataInicio={periodoRelatorio.dataInicio}
           dataFim={periodoRelatorio.dataFim}
+          usuarioCargo={cargo}
         />
       </Box>
 
