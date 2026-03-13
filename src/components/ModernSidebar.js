@@ -176,6 +176,7 @@ const menuGroups = [
     icon: <EmojiEventsIcon />,
     items: [
       { text: 'Programa de Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade', permission: 'visualizar_fidelidade' },
+      { text: 'Gerenciar Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade/gerenciar', permission: 'gerenciar_fidelidade' },
       { text: 'Recompensas', icon: <CardGiftcardIcon />, path: '/fidelidade/recompensas', permission: 'visualizar_fidelidade' },
       { text: 'Meus Pontos', icon: <StarsIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
     ],
