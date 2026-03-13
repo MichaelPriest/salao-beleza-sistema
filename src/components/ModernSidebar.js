@@ -136,6 +136,10 @@ import {
   Info as InfoIcon,
   Close as CloseIcon,
   EmojiEvents as EmojiEventsIcon,
+  CardGiftcard as CardGiftcardIcon,
+  Loyalty as LoyaltyIcon,
+  Stars as StarsIcon,
+  Redeem as RedeemIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -173,7 +177,7 @@ const menuGroups = [
     items: [
       { text: 'Programa de Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade', permission: 'visualizar_fidelidade' },
       { text: 'Recompensas', icon: <CardGiftcardIcon />, path: '/fidelidade/recompensas', permission: 'visualizar_fidelidade' },
-      { text: 'Meus Pontos', icon: <CoinIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
+      { text: 'Meus Pontos', icon: <StarsIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
     ],
   },
   {
@@ -234,6 +238,10 @@ export const extraIcons = {
   priceCheck: <PriceCheckIcon />,
   qrCode: <QrCodeIcon />,
   emojiEvents: <EmojiEventsIcon />,
+  cardGiftcard: <CardGiftcardIcon />,
+  loyalty: <LoyaltyIcon />,
+  stars: <StarsIcon />,
+  redeem: <RedeemIcon />,
 };
 
 // Componente Mobile Sidebar
