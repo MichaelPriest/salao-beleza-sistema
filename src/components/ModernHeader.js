@@ -1,5 +1,5 @@
 // src/components/ModernHeader.js
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -28,7 +28,8 @@ import {
   Fab,
   Zoom,
   SwipeableDrawer,
-  TextField,  
+  TextField,
+  Tooltip, // 🔥 IMPORTANTE: ADICIONAR ESTE IMPORT
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
