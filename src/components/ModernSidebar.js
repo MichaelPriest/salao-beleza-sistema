@@ -135,6 +135,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
   Close as CloseIcon,
+  EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -164,6 +165,15 @@ const menuGroups = [
     items: [
       { text: 'Clientes', icon: <GroupIcon />, path: '/clientes', permission: 'gerenciar_clientes' },
       { text: 'Histórico', icon: <RestoreIcon />, path: '/historico', permission: 'visualizar_relatorios' },
+    ],
+  },
+  {
+    title: 'FIDELIDADE',
+    icon: <EmojiEventsIcon />,
+    items: [
+      { text: 'Programa de Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade', permission: 'visualizar_fidelidade' },
+      { text: 'Recompensas', icon: <CardGiftcardIcon />, path: '/fidelidade/recompensas', permission: 'visualizar_fidelidade' },
+      { text: 'Meus Pontos', icon: <CoinIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
     ],
   },
   {
@@ -223,6 +233,7 @@ export const extraIcons = {
   pointOfSale: <PointOfSaleIcon />,
   priceCheck: <PriceCheckIcon />,
   qrCode: <QrCodeIcon />,
+  emojiEvents: <EmojiEventsIcon />,
 };
 
 // Componente Mobile Sidebar
@@ -608,7 +619,7 @@ function ModernSidebar() {
     );
   }
 
-  // Versão Desktop (mantida igual)
+  // Versão Desktop
   return (
     <Drawer
       variant="permanent"
