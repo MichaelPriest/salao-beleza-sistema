@@ -1,5 +1,5 @@
 // src/pages/ModernAgendamentos.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -45,6 +45,8 @@ import {
   TableHead,
   TableRow,
   TableFooter,
+  Autocomplete,
+  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -72,6 +74,10 @@ import {
   RemoveCircle as RemoveCircleIcon,
   AttachMoney as AttachMoneyIcon,
   Work as WorkIcon,
+  Print as PrintIcon,
+  Download as DownloadIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as ExcelIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -84,6 +90,11 @@ import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
 import { Timestamp } from 'firebase/firestore';
+
+// Importações para PDF e Excel
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // Funções auxiliares de data
 const getDaysInMonth = (date) => {
@@ -134,6 +145,189 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+// Componente para impressão da agenda
+const RelatorioAgenda = React.forwardRef(({ 
+  eventos, 
+  profissional, 
+  periodo, 
+  clientes,
+  profissionais,
+  viewMode,
+  dataInicio,
+  dataFim
+}, ref) => {
+  const formatarData = (data) => {
+    if (!data) return '';
+    return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+  };
+
+  const formatarHora = (hora) => {
+    return hora || '--:--';
+  };
+
+  const calcularDuracaoTotal = (servicos) => {
+    if (!servicos || servicos.length === 0) return 0;
+    return servicos.reduce((acc, s) => acc + (s.duracao || 60), 0);
+  };
+
+  const formatarDuracao = (minutos) => {
+    if (minutos < 60) return `${minutos}min`;
+    const horas = Math.floor(minutos / 60);
+    const mins = minutos % 60;
+    return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+  };
+
+  return (
+    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Cabeçalho */}
+      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0', mb: 1 }}>
+          Salão de Beleza
+        </Typography>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
+          Relatório de Agenda
+        </Typography>
+        <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>
+          {profissional === 'all' ? 'Todos os Profissionais' : 
+            profissionais?.find(p => p.id === profissional)?.nome || 'Profissional'}
+        </Typography>
+        <Typography variant="subtitle1" color="textSecondary" sx={{ mt: 1 }}>
+          Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
+        </Typography>
+        <Typography variant="subtitle2" color="textSecondary">
+          Emitido em: {new Date().toLocaleString('pt-BR')}
+        </Typography>
+      </Box>
+
+      {/* Estatísticas */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+          Resumo do Período
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Total de Eventos</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {eventos.length}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Agendamentos</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+                {eventos.filter(e => e.tipo === 'agendamento').length}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Atendimentos</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+                {eventos.filter(e => e.tipo === 'atendimento').length}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">Em Andamento</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#f44336' }}>
+                {eventos.filter(e => e.status === 'em_andamento').length}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Eventos por Dia */}
+      <Box>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+          Agenda Detalhada
+        </Typography>
+        
+        {/* Agrupar eventos por data */}
+        {Object.entries(
+          eventos.reduce((acc, evento) => {
+            const data = evento.data;
+            if (!acc[data]) acc[data] = [];
+            acc[data].push(evento);
+            return acc;
+          }, {})
+        ).sort(([dataA], [dataB]) => dataA.localeCompare(dataB)).map(([data, eventosDoDia]) => {
+          const eventosOrdenados = eventosDoDia.sort((a, b) => 
+            (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '')
+          );
+
+          return (
+            <Card key={data} variant="outlined" sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: '#9c27b0' }}>
+                  {formatarData(data)}
+                </Typography>
+                
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                        <TableCell><strong>Horário</strong></TableCell>
+                        <TableCell><strong>Cliente</strong></TableCell>
+                        <TableCell><strong>Serviços</strong></TableCell>
+                        <TableCell><strong>Duração</strong></TableCell>
+                        <TableCell><strong>Profissional</strong></TableCell>
+                        <TableCell><strong>Tipo</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {eventosOrdenados.map(evento => {
+                        const cliente = clientes?.find(c => c.id === evento.clienteId);
+                        const profissional = profissionais?.find(p => p.id === evento.profissionalId);
+                        const servicos = evento.servicos || 
+                          (evento.servicoId ? [{ 
+                            id: evento.servicoId, 
+                            nome: evento.servicoNome || 'Serviço',
+                            duracao: evento.duracao || 60
+                          }] : []);
+                        const duracaoTotal = calcularDuracaoTotal(servicos);
+                        
+                        return (
+                          <TableRow key={evento.id}>
+                            <TableCell>{evento.horario || evento.horaInicio}</TableCell>
+                            <TableCell>{cliente?.nome || '—'}</TableCell>
+                            <TableCell>
+                              {servicos.map(s => s.nome).join(', ')}
+                            </TableCell>
+                            <TableCell>{formatarDuracao(duracaoTotal)}</TableCell>
+                            <TableCell>{profissional?.nome || '—'}</TableCell>
+                            <TableCell>
+                              {evento.tipo === 'agendamento' ? 'Agendamento' : 'Atendimento'}
+                            </TableCell>
+                            <TableCell>
+                              {evento.status}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Box>
+
+      {/* Rodapé */}
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
+        <Typography variant="caption">
+          Relatório gerado automaticamente pelo sistema • Documento não fiscal
+        </Typography>
+      </Box>
+    </Box>
+  );
+});
+
 function ModernAgendamentos() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('day');
@@ -150,6 +344,16 @@ function ModernAgendamentos() {
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   const [usuario, setUsuario] = useState(null);
 
+  // Estados para impressão/exportação
+  const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [periodoRelatorio, setPeriodoRelatorio] = useState({
+    tipo: 'dia',
+    dataInicio: formatDate(new Date()),
+    dataFim: formatDate(new Date())
+  });
+  const relatorioRef = useRef(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
   // Estados para pesquisa de clientes
   const [searchClientTerm, setSearchClientTerm] = useState('');
   const [searchClientType, setSearchClientType] = useState('nome');
@@ -164,6 +368,10 @@ function ModernAgendamentos() {
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
   const [profissionaisDisponiveis, setProfissionaisDisponiveis] = useState([]);
   const [profissionalSelecionado, setProfissionalSelecionado] = useState('');
+
+  // Estados para pesquisa de profissionais e serviços nos selects
+  const [buscaProfissional, setBuscaProfissional] = useState('');
+  const [buscaServico, setBuscaServico] = useState('');
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -239,23 +447,15 @@ function ModernAgendamentos() {
     }
   }, [formData.profissionalId, servicos, profissionais]);
 
-  // Atualizar profissionais disponíveis quando serviço é selecionado
-  useEffect(() => {
-    if (servicoAtual && profissionais) {
-      // Buscar o serviço selecionado
-      const servico = servicos?.find(s => s.id === servicoAtual);
-      
-      if (servico && servico.profissionaisIds) {
-        // Filtrar profissionais pelos IDs associados ao serviço
-        const profissionaisDoServico = profissionais.filter(p => 
-          servico.profissionaisIds.includes(p.id) && p.ativo !== false
-        );
-        setProfissionaisDisponiveis(profissionaisDoServico);
-      }
-    } else {
-      setProfissionaisDisponiveis([]);
-    }
-  }, [servicoAtual, profissionais, servicos]);
+  // Filtrar serviços pela busca
+  const servicosFiltrados = servicosDisponiveis.filter(servico => 
+    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
+  );
+
+  // Filtrar profissionais pela busca
+  const profissionaisFiltrados = (profissionais || []).filter(prof => 
+    prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
+  );
 
   // ============================================
   // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
@@ -288,6 +488,7 @@ function ModernAgendamentos() {
 
     setServicosSelecionados([...servicosSelecionados, novoServico]);
     setServicoAtual('');
+    setBuscaServico('');
     
     // Calcular novo valor total
     const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
@@ -341,6 +542,8 @@ function ModernAgendamentos() {
         setServicosSelecionados([]);
         setServicoAtual('');
         setProfissionalSelecionado('');
+        setBuscaProfissional('');
+        setBuscaServico('');
       }
     }
   }, [openDialog, selectedAppointment, selectedDate]);
@@ -572,6 +775,18 @@ function ModernAgendamentos() {
   const handleStatusChange = async (id, newStatus) => {
     try {
       await atualizar(id, { status: newStatus });
+      
+      // Atualizar a lista local para refletir a mudança imediatamente
+      const updatedEvents = todosEventos.map(event => {
+        if (event.id === id) {
+          return { ...event, status: newStatus };
+        }
+        return event;
+      });
+      
+      // Forçar atualização da UI
+      setViewMode(prev => prev);
+      
       toast.success(`Status alterado para ${getStatusLabel(newStatus)}!`);
     } catch (error) {
       console.error('Erro ao alterar status:', error);
@@ -803,6 +1018,332 @@ function ModernAgendamentos() {
     }
   };
 
+  // ============================================
+  // FUNÇÕES DE EXPORTAÇÃO E IMPRESSÃO
+  // ============================================
+
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleOpenRelatorio = () => {
+    setOpenRelatorioDialog(true);
+  };
+
+  const handleCloseRelatorio = () => {
+    setOpenRelatorioDialog(false);
+  };
+
+  // Função para imprimir a agenda
+  const handlePrint = () => {
+    try {
+      mostrarSnackbar('Preparando impressão...', 'info');
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
+        return;
+      }
+      
+      const content = relatorioRef.current;
+      if (!content) {
+        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
+        return;
+      }
+      
+      const contentClone = content.cloneNode(true);
+      
+      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+      let stylesHTML = '';
+      styles.forEach(style => {
+        if (style.tagName === 'STYLE') {
+          stylesHTML += style.outerHTML;
+        } else if (style.tagName === 'LINK') {
+          stylesHTML += style.outerHTML;
+        }
+      });
+      
+      const printHTML = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Relatório de Agenda</title>
+            ${stylesHTML}
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              @media print {
+                body { margin: 0; padding: 20px; }
+              }
+            </style>
+          </head>
+          <body>
+            ${contentClone.outerHTML}
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+        printWindow.print();
+        mostrarSnackbar('Impressão concluída!', 'success');
+      }, 500);
+      
+    } catch (error) {
+      console.error('Erro na impressão:', error);
+      mostrarSnackbar('Erro ao imprimir', 'error');
+    }
+  };
+
+  // Função para exportar PDF
+  const handleExportPDF = () => {
+    try {
+      mostrarSnackbar('Gerando PDF...', 'info');
+      
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Filtrar eventos pelo período
+      let eventosFiltrados = filteredEvents;
+      if (periodoRelatorio.tipo === 'dia') {
+        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
+      } else {
+        eventosFiltrados = eventosFiltrados.filter(e => 
+          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
+        );
+      }
+
+      // Ordenar por data e horário
+      eventosFiltrados.sort((a, b) => {
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
+        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
+      });
+
+      // Título
+      doc.setFontSize(20);
+      doc.setTextColor(156, 39, 176);
+      doc.text('Relatório de Agenda', pageWidth / 2, 20, { align: 'center' });
+      
+      // Subtítulo
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
+        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
+      doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 30, { align: 'center' });
+      
+      // Período
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
+      doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 38, { align: 'center' });
+      
+      // Data de emissão
+      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 46, { align: 'center' });
+
+      let yPos = 55;
+
+      // Estatísticas
+      const totalEventos = eventosFiltrados.length;
+      const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
+      const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Resumo', 14, yPos);
+      yPos += 8;
+
+      const statsData = [
+        ['Total de Eventos', totalEventos.toString()],
+        ['Agendamentos', totalAgendamentos.toString()],
+        ['Atendimentos', totalAtendimentos.toString()],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Descrição', 'Quantidade']],
+        body: statsData,
+        theme: 'striped',
+        headStyles: { fillColor: [156, 39, 176] },
+        margin: { left: 14, right: 14 },
+      });
+
+      yPos = doc.lastAutoTable.finalY + 10;
+
+      // Eventos por dia
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Agenda Detalhada', 14, yPos);
+      yPos += 8;
+
+      // Agrupar por data
+      const eventosPorData = {};
+      eventosFiltrados.forEach(evento => {
+        if (!eventosPorData[evento.data]) {
+          eventosPorData[evento.data] = [];
+        }
+        eventosPorData[evento.data].push(evento);
+      });
+
+      Object.keys(eventosPorData).sort().forEach(data => {
+        // Verificar espaço na página
+        if (yPos > doc.internal.pageSize.getHeight() - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(12);
+        doc.setTextColor(156, 39, 176);
+        doc.text(new Date(data + 'T12:00:00').toLocaleDateString('pt-BR'), 14, yPos);
+        yPos += 6;
+
+        const eventosDoDia = eventosPorData[data];
+        const tableData = eventosDoDia.map(evento => {
+          const cliente = clientes?.find(c => c.id === evento.clienteId);
+          const profissional = profissionais?.find(p => p.id === evento.profissionalId);
+          const servicos = evento.servicos || 
+            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+          
+          return [
+            evento.horario || evento.horaInicio || '--:--',
+            cliente?.nome || '—',
+            servicos.map(s => s.nome).join(', '),
+            profissional?.nome || '—',
+            evento.tipo === 'agendamento' ? 'Agendamento' : 'Atendimento',
+            evento.status || '—'
+          ];
+        });
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Horário', 'Cliente', 'Serviços', 'Profissional', 'Tipo', 'Status']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { fillColor: [156, 39, 176] },
+          margin: { left: 14, right: 14 },
+          styles: { fontSize: 8 },
+        });
+
+        yPos = doc.lastAutoTable.finalY + 10;
+      });
+
+      // Salvar PDF
+      const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
+      doc.save(fileName);
+      
+      mostrarSnackbar('PDF gerado com sucesso!', 'success');
+      handleCloseRelatorio();
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      mostrarSnackbar('Erro ao gerar PDF', 'error');
+    }
+  };
+
+  // Função para exportar Excel
+  const handleExportExcel = () => {
+    try {
+      mostrarSnackbar('Gerando planilha...', 'info');
+      
+      // Filtrar eventos pelo período
+      let eventosFiltrados = filteredEvents;
+      if (periodoRelatorio.tipo === 'dia') {
+        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
+      } else {
+        eventosFiltrados = eventosFiltrados.filter(e => 
+          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
+        );
+      }
+
+      // Ordenar por data e horário
+      eventosFiltrados.sort((a, b) => {
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
+        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
+      });
+
+      // Criar workbook
+      const wb = XLSX.utils.book_new();
+
+      // Aba de Resumo
+      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
+        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
+
+      const resumoData = [
+        ['Relatório de Agenda'],
+        [''],
+        ['Profissional', profissionalNome],
+        ['Período', `${dataInicioFormat} - ${dataFimFormat}`],
+        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
+        [''],
+        ['Resumo do Período'],
+        ['Total de Eventos', eventosFiltrados.length],
+        ['Agendamentos', eventosFiltrados.filter(e => e.tipo === 'agendamento').length],
+        ['Atendimentos', eventosFiltrados.filter(e => e.tipo === 'atendimento').length],
+      ];
+
+      const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+      XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+      // Aba de Agenda Detalhada
+      const agendaData = [
+        ['Data', 'Horário', 'Cliente', 'Serviços', 'Profissional', 'Tipo', 'Status'],
+        ...eventosFiltrados.map(evento => {
+          const cliente = clientes?.find(c => c.id === evento.clienteId);
+          const profissional = profissionais?.find(p => p.id === evento.profissionalId);
+          const servicos = evento.servicos || 
+            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+          
+          return [
+            new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+            evento.horario || evento.horaInicio || '--:--',
+            cliente?.nome || '—',
+            servicos.map(s => s.nome).join(', '),
+            profissional?.nome || '—',
+            evento.tipo === 'agendamento' ? 'Agendamento' : 'Atendimento',
+            evento.status || '—'
+          ];
+        })
+      ];
+
+      const wsAgenda = XLSX.utils.aoa_to_sheet(agendaData);
+      XLSX.utils.book_append_sheet(wb, wsAgenda, 'Agenda Detalhada');
+
+      // Aba de Estatísticas por Status
+      const statsPorStatus = {};
+      eventosFiltrados.forEach(evento => {
+        const status = evento.status || 'desconhecido';
+        if (!statsPorStatus[status]) statsPorStatus[status] = 0;
+        statsPorStatus[status]++;
+      });
+
+      const statsData = [
+        ['Status', 'Quantidade'],
+        ...Object.entries(statsPorStatus).map(([status, qtd]) => [status, qtd])
+      ];
+
+      const wsStats = XLSX.utils.aoa_to_sheet(statsData);
+      XLSX.utils.book_append_sheet(wb, wsStats, 'Por Status');
+
+      // Salvar arquivo
+      const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      mostrarSnackbar('Planilha gerada com sucesso!', 'success');
+      handleCloseRelatorio();
+    } catch (error) {
+      console.error('Erro ao gerar Excel:', error);
+      mostrarSnackbar('Erro ao gerar planilha', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -827,6 +1368,14 @@ function ModernAgendamentos() {
         </Typography>
         
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={handleOpenRelatorio}
+          >
+            Relatórios
+          </Button>
+          
           <Button
             variant="outlined"
             onClick={handleToday}
@@ -1581,7 +2130,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento - COM MÚLTIPLOS SERVIÇOS */}
+      {/* Dialog de Agendamento - COM MÚLTIPLOS SERVIÇOS E AUTOCOMPLETE */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -1845,43 +2394,70 @@ function ModernAgendamentos() {
                   </Card>
                 )}
 
-                {/* Adicionar Novo Serviço */}
+                {/* Adicionar Novo Serviço com Autocomplete */}
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} md={5}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Profissional</InputLabel>
-                      <Select
-                        value={formData.profissionalId}
-                        label="Profissional"
-                        onChange={(e) => {
-                          setFormData({ ...formData, profissionalId: e.target.value });
-                          setProfissionalSelecionado(e.target.value);
-                        }}
-                      >
-                        <MenuItem value="">Selecione um profissional</MenuItem>
-                        {(profissionais || []).map(prof => (
-                          <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      options={profissionaisFiltrados}
+                      getOptionLabel={(option) => option.nome || ''}
+                      value={profissionais?.find(p => p.id === formData.profissionalId) || null}
+                      onChange={(e, newValue) => {
+                        setFormData({ ...formData, profissionalId: newValue?.id || '' });
+                        setProfissionalSelecionado(newValue?.id || '');
+                      }}
+                      inputValue={buscaProfissional}
+                      onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Profissional"
+                          size="small"
+                          placeholder="Digite para buscar..."
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <li {...props}>
+                          <Box>
+                            <Typography variant="body2">{option.nome}</Typography>
+                            {option.especialidade && (
+                              <Typography variant="caption" color="textSecondary">
+                                {option.especialidade}
+                              </Typography>
+                            )}
+                          </Box>
+                        </li>
+                      )}
+                    />
                   </Grid>
 
                   <Grid item xs={12} md={5}>
-                    <FormControl fullWidth size="small" disabled={!formData.profissionalId}>
-                      <InputLabel>Serviço</InputLabel>
-                      <Select
-                        value={servicoAtual}
-                        label="Serviço"
-                        onChange={(e) => setServicoAtual(e.target.value)}
-                      >
-                        <MenuItem value="">Selecione um serviço</MenuItem>
-                        {servicosDisponiveis.map(servico => (
-                          <MenuItem key={servico.id} value={servico.id}>
-                            {servico.nome} - R$ {servico.preco?.toFixed(2)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      options={servicosFiltrados}
+                      getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
+                      value={servicos?.find(s => s.id === servicoAtual) || null}
+                      onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
+                      inputValue={buscaServico}
+                      onInputChange={(e, newValue) => setBuscaServico(newValue)}
+                      disabled={!formData.profissionalId}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Serviço"
+                          size="small"
+                          placeholder="Digite para buscar..."
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <li {...props}>
+                          <Box>
+                            <Typography variant="body2">{option.nome}</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              R$ {option.preco?.toFixed(2)} • {option.duracao} min
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                    />
                   </Grid>
 
                   <Grid item xs={12} md={2}>
@@ -2019,6 +2595,172 @@ function ModernAgendamentos() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog de Relatórios */}
+      <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Exportar Agenda
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Selecione o período:
+            </Typography>
+            
+            <RadioGroup
+              value={periodoRelatorio.tipo}
+              onChange={(e) => setPeriodoRelatorio({ ...periodoRelatorio, tipo: e.target.value })}
+              sx={{ mb: 2 }}
+            >
+              <FormControlLabel value="dia" control={<Radio />} label="Dia atual" />
+              <FormControlLabel value="semana" control={<Radio />} label="Semana atual" />
+              <FormControlLabel value="mes" control={<Radio />} label="Mês atual" />
+              <FormControlLabel value="personalizado" control={<Radio />} label="Personalizado" />
+            </RadioGroup>
+
+            {periodoRelatorio.tipo === 'personalizado' && (
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} md={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                    <DatePicker
+                      label="Data Início"
+                      value={new Date(periodoRelatorio.dataInicio + 'T12:00:00')}
+                      onChange={(newValue) => {
+                        if (newValue) {
+                          setPeriodoRelatorio({ 
+                            ...periodoRelatorio, 
+                            dataInicio: formatDate(newValue) 
+                          });
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField {...params} fullWidth size="small" />
+                      )}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                    <DatePicker
+                      label="Data Fim"
+                      value={new Date(periodoRelatorio.dataFim + 'T12:00:00')}
+                      onChange={(newValue) => {
+                        if (newValue) {
+                          setPeriodoRelatorio({ 
+                            ...periodoRelatorio, 
+                            dataFim: formatDate(newValue) 
+                          });
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField {...params} fullWidth size="small" />
+                      )}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+              </Grid>
+            )}
+
+            <Typography variant="subtitle1" sx={{ mt: 3, mb: 2 }}>
+              Formato de exportação:
+            </Typography>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<PrintIcon />}
+                  onClick={() => {
+                    handleCloseRelatorio();
+                    handlePrint();
+                  }}
+                  sx={{ justifyContent: 'flex-start', p: 2 }}
+                >
+                  <Box>
+                    <Typography variant="subtitle1">Imprimir</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Gera uma versão para impressão
+                    </Typography>
+                  </Box>
+                </Button>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<PdfIcon />}
+                  onClick={() => {
+                    handleCloseRelatorio();
+                    handleExportPDF();
+                  }}
+                  sx={{ justifyContent: 'flex-start', p: 2 }}
+                  color="error"
+                >
+                  <Box>
+                    <Typography variant="subtitle1">Exportar como PDF</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Gera um arquivo PDF
+                    </Typography>
+                  </Box>
+                </Button>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<ExcelIcon />}
+                  onClick={() => {
+                    handleCloseRelatorio();
+                    handleExportExcel();
+                  }}
+                  sx={{ justifyContent: 'flex-start', p: 2 }}
+                  color="success"
+                >
+                  <Box>
+                    <Typography variant="subtitle1">Exportar como Excel</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Gera uma planilha
+                    </Typography>
+                  </Box>
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseRelatorio}>Cancelar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <RelatorioAgenda
+          ref={relatorioRef}
+          eventos={filteredEvents}
+          profissional={selectedProfessional}
+          periodo={periodoRelatorio}
+          clientes={clientes}
+          profissionais={profissionais}
+          viewMode={viewMode}
+          dataInicio={periodoRelatorio.dataInicio}
+          dataFim={periodoRelatorio.dataFim}
+        />
+      </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
