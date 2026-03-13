@@ -179,9 +179,9 @@ function AnimatedRoutes() {
           <Route path="/atendimento/:id" element={<ModernAtendimento />} />
 
           {/* Fidelidade */}
-          <Route path="/fidelidade" element={<Fidelidade />} />   
-          <Route path="/fidelidade/recompensas" element={<Recompensas />} /> 
-          <Route path="/fidelidade/meuspontos" element={<MeusPontos />} />            
+          <Route path="/fidelidade" element={<Fidelidade />} />
+          <Route path="/fidelidade/recompensas" element={<Recompensas />} />
+          <Route path="/meus-pontos" element={<MeusPontos />} />         
           
           {/* Financeiro */}
           <Route path="/financeiro" element={<ModernFinanceiro />} />
