@@ -678,32 +678,95 @@ function ModernAtendimento() {
   
       // 1. Buscar o agendamento associado a este atendimento
       let agendamentoId = null;
+      
+      // Primeiro, verificar se o atendimento já tem um agendamentoId
       if (atendimento.agendamentoId) {
         agendamentoId = atendimento.agendamentoId;
-        console.log('📌 Agendamento ID encontrado:', agendamentoId);
+        console.log('📌 Agendamento ID encontrado no atendimento:', agendamentoId);
+      } 
+      // Se não tiver, tentar buscar pelo serviço, profissional e data
+      else {
+        console.log('📌 Buscando agendamento por:');
+        console.log('   - Profissional:', atendimento.profissionalId);
+        console.log('   - Data:', atendimento.data);
+        console.log('   - Serviço:', atendimento.servicoId || (itensServico[0]?.id));
+  
+        // Buscar agendamentos que correspondam aos critérios
+        const agendamentos = await firebaseService.query('agendamentos', [
+          { field: 'profissionalId', operator: '==', value: atendimento.profissionalId },
+          { field: 'data', operator: '==', value: atendimento.data },
+          { field: 'status', operator: '==', value: 'agendado' } // Apenas agendamentos não cancelados/finalizados
+        ]);
+  
+        console.log('📌 Agendamentos encontrados:', agendamentos.length);
+  
+        // Filtrar por serviço (pode ter múltiplos serviços no agendamento)
+        const servicoId = atendimento.servicoId || itensServico[0]?.id;
+        const agendamentoCorrespondente = agendamentos.find(ag => {
+          // Verificar se o agendamento tem o serviço na lista de serviços
+          if (ag.servicos && Array.isArray(ag.servicos)) {
+            return ag.servicos.some(s => s.id === servicoId);
+          }
+          // Verificar se tem servicoId diretamente (formato antigo)
+          return ag.servicoId === servicoId;
+        });
+  
+        if (agendamentoCorrespondente) {
+          agendamentoId = agendamentoCorrespondente.id;
+          console.log('📌 Agendamento correspondente encontrado:', agendamentoId);
+        } else {
+          console.log('📌 Nenhum agendamento correspondente encontrado');
+        }
       }
   
       // 2. Atualizar o atendimento no Firebase
       console.log('📌 Atualizando atendimento...');
-      await firebaseService.update('atendimentos', id, {
+      const dadosAtendimento = {
         status: 'finalizado',
         horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         valorTotal,
         itensServico,
         itensProduto,
         updatedAt: Timestamp.now()
-      });
+      };
+  
+      // Se encontrou um agendamento, salvar o ID
+      if (agendamentoId) {
+        dadosAtendimento.agendamentoId = agendamentoId;
+      }
+  
+      await firebaseService.update('atendimentos', id, dadosAtendimento);
       console.log('✅ Atendimento atualizado');
   
       // 3. Se houver agendamento vinculado, atualizar para finalizado
       if (agendamentoId) {
         console.log('📌 Atualizando agendamento...');
-        await firebaseService.update('agendamentos', agendamentoId, {
-          status: 'finalizado',
-          atendimentoRealizado: true,
-          updatedAt: Timestamp.now()
-        });
-        console.log('✅ Agendamento atualizado para finalizado');
+        
+        // Buscar o agendamento atual para preservar os dados
+        const agendamentoAtual = await firebaseService.getById('agendamentos', agendamentoId);
+        
+        if (agendamentoAtual) {
+          const dadosAgendamento = {
+            status: 'finalizado',
+            atendimentoRealizado: true,
+            atendimentoId: id, // Vincular o atendimento ao agendamento
+            updatedAt: Timestamp.now()
+          };
+  
+          // Se o agendamento tiver lista de serviços, podemos marcar qual foi realizado
+          if (agendamentoAtual.servicos && Array.isArray(agendamentoAtual.servicos)) {
+            const servicoRealizado = atendimento.servicoId || itensServico[0]?.id;
+            dadosAgendamento.servicosRealizados = agendamentoAtual.servicos.map(s => ({
+              ...s,
+              realizado: s.id === servicoRealizado
+            }));
+          }
+  
+          await firebaseService.update('agendamentos', agendamentoId, dadosAgendamento);
+          console.log('✅ Agendamento atualizado para finalizado');
+        } else {
+          console.log('⚠️ Agendamento não encontrado no banco');
+        }
       }
   
       // 4. Buscar dados para comissão
@@ -736,6 +799,11 @@ function ModernAtendimento() {
         dataRegistro: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+  
+      // Adicionar agendamentoId à comissão se existir
+      if (agendamentoId) {
+        comissaoData.agendamentoId = agendamentoId;
+      }
   
       console.log('📌 Salvando comissão no Firebase...');
       const comissaoId = await firebaseService.add('comissoes', comissaoData);
