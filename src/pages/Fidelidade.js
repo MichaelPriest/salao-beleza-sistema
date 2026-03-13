@@ -31,6 +31,15 @@ import {
   Tab,
   Tabs,
   Badge,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -47,6 +56,7 @@ import {
   Cancel as CancelIcon,
   MonetizationOn as CoinIcon,
   LocalOffer as TagIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -96,6 +106,34 @@ const recompensasPadrao = [
   { id: 'cortesia_aniversario', nome: 'Cortesia de Aniversário', pontos: 0, tipo: 'especial', valor: 0 },
 ];
 
+// Regras de segurança para o Firebase (adicione no Firebase Console)
+/*
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regras para fidelidade
+    match /pontuacao/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.usuarioId || 
+         request.auth.token.isAdmin == true);
+    }
+    
+    match /resgates_fidelidade/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.usuarioId || 
+         request.auth.token.isAdmin == true);
+    }
+    
+    match /config_fidelidade/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.isAdmin == true;
+    }
+  }
+}
+*/
+
 function Fidelidade() {
   const [loading, setLoading] = useState(true);
   const [clientesFidelidade, setClientesFidelidade] = useState([]);
@@ -116,22 +154,38 @@ function Fidelidade() {
     pontosAniversario: 50,
     pontosIndicacao: 100,
   });
+  const [usuario, setUsuario] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Hooks do Firebase
   const { data: clientes, loading: loadingClientes } = useFirebase('clientes');
-  const { data: pontuacao, loading: loadingPontuacao } = useFirebase('pontuacao');
-  const { data: resgates, loading: loadingResgates } = useFirebase('resgates_fidelidade');
-  const { data: configuracoes, loading: loadingConfig } = useFirebase('config_fidelidade');
+  const { data: pontuacao, loading: loadingPontuacao, error: errorPontuacao } = useFirebase('pontuacao');
+  const { data: resgates, loading: loadingResgates, error: errorResgates } = useFirebase('resgates_fidelidade');
+  const { data: configuracoes, loading: loadingConfig, error: errorConfig } = useFirebase('config_fidelidade');
 
   useEffect(() => {
-    if (!loadingClientes && !loadingPontuacao && !loadingResgates && !loadingConfig) {
+    // Carregar usuário do localStorage
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        const user = JSON.parse(usuarioStr);
+        setUsuario(user);
+        setIsAdmin(user.cargo === 'admin' || user.permissoes?.includes('admin'));
+      }
+    } catch (e) {
+      console.error('Erro ao carregar usuário:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!loadingClientes) {
       carregarDados();
     }
-  }, [loadingClientes, loadingPontuacao, loadingResgates, loadingConfig]);
+  }, [loadingClientes, pontuacao, resgates, configuracoes]);
 
   const carregarDados = async () => {
     try {
-      // Carregar configurações
+      // Carregar configurações (se houver erro, usar padrão)
       if (configuracoes && configuracoes.length > 0) {
         setConfig(configuracoes[0]);
       }
@@ -139,10 +193,10 @@ function Fidelidade() {
       // Calcular pontuação de cada cliente
       const dados = clientes?.map(cliente => {
         const pontosGanhos = pontuacao?.filter(p => p.clienteId === cliente.id && p.tipo === 'credito')
-          .reduce((acc, p) => acc + p.pontos, 0) || 0;
+          .reduce((acc, p) => acc + (p.quantidade || 0), 0) || 0;
         
         const pontosGastos = pontuacao?.filter(p => p.clienteId === cliente.id && p.tipo === 'debito')
-          .reduce((acc, p) => acc + p.pontos, 0) || 0;
+          .reduce((acc, p) => acc + (p.quantidade || 0), 0) || 0;
         
         const saldo = pontosGanhos - pontosGastos;
         
@@ -153,13 +207,17 @@ function Fidelidade() {
         
         const proximoNivel = nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina';
         const pontosFaltantes = Math.max(0, niveis[proximoNivel].minimo - saldo);
-        const progresso = (saldo / niveis[proximoNivel].minimo) * 100;
+        const progresso = Math.min((saldo / niveis[proximoNivel].minimo) * 100, 100);
         
         // Histórico do cliente
         const historicoCliente = [
           ...(pontuacao?.filter(p => p.clienteId === cliente.id) || []),
           ...(resgates?.filter(r => r.clienteId === cliente.id) || [])
-        ].sort((a, b) => new Date(b.data) - new Date(a.data));
+        ].sort((a, b) => {
+          const dataA = a.data ? new Date(a.data) : new Date(0);
+          const dataB = b.data ? new Date(b.data) : new Date(0);
+          return dataB - dataA;
+        });
 
         return {
           ...cliente,
@@ -167,7 +225,7 @@ function Fidelidade() {
           nivel,
           proximoNivel,
           pontosFaltantes,
-          progresso: Math.min(progresso, 100),
+          progresso,
           historico: historicoCliente.slice(0, 5),
         };
       }).sort((a, b) => b.saldo - a.saldo) || [];
@@ -178,12 +236,19 @@ function Fidelidade() {
       const historicoGeral = [
         ...(pontuacao || []),
         ...(resgates || [])
-      ].sort((a, b) => new Date(b.data) - new Date(a.data));
+      ].sort((a, b) => {
+        const dataA = a.data ? new Date(a.data) : new Date(0);
+        const dataB = b.data ? new Date(b.data) : new Date(0);
+        return dataB - dataA;
+      });
       setHistorico(historicoGeral);
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados de fidelidade');
+      // Não mostrar toast para erros de permissão para não poluir a interface
+      if (!error.message.includes('permissions')) {
+        toast.error('Erro ao carregar dados de fidelidade');
+      }
     } finally {
       setLoading(false);
     }
@@ -197,6 +262,12 @@ function Fidelidade() {
         return;
       }
 
+      // Verificar se tem permissão (apenas admin pode adicionar/remover pontos manualmente)
+      if (!isAdmin) {
+        toast.error('Apenas administradores podem gerenciar pontos manualmente');
+        return;
+      }
+
       const novaPontuacao = {
         clienteId: selectedCliente.id,
         clienteNome: selectedCliente.nome,
@@ -204,7 +275,8 @@ function Fidelidade() {
         tipo: pontosForm.tipo,
         motivo: pontosForm.motivo || (pontosForm.tipo === 'credito' ? 'Crédito manual' : 'Débito manual'),
         data: new Date().toISOString(),
-        usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema',
+        usuarioId: usuario?.uid || 'sistema',
+        usuarioNome: usuario?.nome || 'Sistema',
         createdAt: Timestamp.now(),
       };
 
@@ -218,7 +290,12 @@ function Fidelidade() {
 
       setOpenPontosDialog(false);
       setPontosForm({ quantidade: '', motivo: '', tipo: 'credito' });
-      carregarDados();
+      
+      // Recarregar dados
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
     } catch (error) {
       console.error('Erro ao adicionar pontos:', error);
       toast.error('Erro ao processar pontos');
@@ -243,6 +320,8 @@ function Fidelidade() {
         data: new Date().toISOString(),
         status: 'resgatado',
         utilizado: false,
+        usuarioId: usuario?.uid || 'sistema',
+        usuarioNome: usuario?.nome || 'Sistema',
         createdAt: Timestamp.now(),
       };
 
@@ -256,14 +335,20 @@ function Fidelidade() {
         tipo: 'debito',
         motivo: `Resgate: ${recompensa.nome}`,
         data: new Date().toISOString(),
-        usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema',
+        usuarioId: usuario?.uid || 'sistema',
+        usuarioNome: usuario?.nome || 'Sistema',
         createdAt: Timestamp.now(),
       };
       await firebaseService.add('pontuacao', debito);
 
       toast.success(`Recompensa "${recompensa.nome}" resgatada!`);
       setOpenRecompensaDialog(false);
-      carregarDados();
+      
+      // Recarregar dados
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
     } catch (error) {
       console.error('Erro ao resgatar recompensa:', error);
       toast.error('Erro ao resgatar recompensa');
@@ -272,6 +357,11 @@ function Fidelidade() {
 
   const handleConfigChange = async () => {
     try {
+      if (!isAdmin) {
+        toast.error('Apenas administradores podem alterar configurações');
+        return;
+      }
+
       if (configuracoes && configuracoes.length > 0) {
         await firebaseService.update('config_fidelidade', configuracoes[0].id, config);
       } else {
@@ -309,17 +399,24 @@ function Fidelidade() {
           <Typography variant="body2" color="textSecondary">
             Recompense seus clientes mais fiéis
           </Typography>
+          {!isAdmin && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Você está no modo cliente. Apenas visualização.
+            </Alert>
+          )}
         </Box>
         
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<SettingsIcon />}
-            onClick={handleConfigChange}
-          >
-            Configurações
-          </Button>
-        </Box>
+        {isAdmin && (
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<SettingsIcon />}
+              onClick={handleConfigChange}
+            >
+              Configurações
+            </Button>
+          </Box>
+        )}
       </Box>
 
       {/* Cards dos Níveis */}
@@ -420,7 +517,7 @@ function Fidelidade() {
                     <TableCell><strong>Nível</strong></TableCell>
                     <TableCell><strong>Saldo</strong></TableCell>
                     <TableCell><strong>Progresso</strong></TableCell>
-                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                    {isAdmin && <TableCell align="center"><strong>Ações</strong></TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -485,41 +582,43 @@ function Fidelidade() {
                         </Box>
                       </TableCell>
                       
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          <Tooltip title="Adicionar/Remover Pontos">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedCliente(cliente);
-                                setOpenPontosDialog(true);
-                              }}
-                              sx={{ color: '#9c27b0' }}
-                            >
-                              <CoinIcon />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Resgatar Recompensa">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedCliente(cliente);
-                                setOpenRecompensaDialog(true);
-                              }}
-                              sx={{ color: '#ff9800' }}
-                            >
-                              <GiftIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Tooltip title="Adicionar/Remover Pontos">
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  setSelectedCliente(cliente);
+                                  setOpenPontosDialog(true);
+                                }}
+                                sx={{ color: '#9c27b0' }}
+                              >
+                                <CoinIcon />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="Resgatar Recompensa">
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  setSelectedCliente(cliente);
+                                  setOpenRecompensaDialog(true);
+                                }}
+                                sx={{ color: '#ff9800' }}
+                              >
+                                <GiftIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
 
                   {clientesFiltrados.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={isAdmin ? 5 : 4} align="center" sx={{ py: 4 }}>
                         <StarIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography color="textSecondary">
                           Nenhum cliente encontrado
@@ -572,17 +671,19 @@ function Fidelidade() {
                       </Typography>
                     </Box>
 
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
-                      onClick={() => {
-                        setSelectedCliente(null);
-                        setOpenRecompensaDialog(true);
-                      }}
-                    >
-                      Resgatar
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
+                        onClick={() => {
+                          setSelectedCliente(null);
+                          setOpenRecompensaDialog(true);
+                        }}
+                      >
+                        Resgatar
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -614,7 +715,7 @@ function Fidelidade() {
                   {historico.slice(0, 50).map((item, index) => (
                     <TableRow key={index}>
                       <TableCell>
-                        {new Date(item.data).toLocaleDateString('pt-BR')}
+                        {item.data ? new Date(item.data).toLocaleDateString('pt-BR') : '-'}
                       </TableCell>
                       <TableCell>{item.clienteNome || item.clienteId}</TableCell>
                       <TableCell>
@@ -654,6 +755,7 @@ function Fidelidade() {
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <FormControl component="fieldset">
+                <FormLabel component="legend">Tipo de operação</FormLabel>
                 <RadioGroup
                   row
                   value={pontosForm.tipo}
@@ -731,11 +833,11 @@ function Fidelidade() {
                 <Card
                   variant="outlined"
                   sx={{
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: '#f5f5f5' },
+                    cursor: selectedCliente ? 'pointer' : 'default',
+                    '&:hover': selectedCliente ? { bgcolor: '#f5f5f5' } : {},
                     opacity: selectedCliente && selectedCliente.saldo < recompensa.pontos ? 0.5 : 1,
                   }}
-                  onClick={() => handleResgatarRecompensa(recompensa)}
+                  onClick={() => selectedCliente && handleResgatarRecompensa(recompensa)}
                 >
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
