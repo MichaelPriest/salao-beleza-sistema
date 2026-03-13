@@ -21,6 +21,8 @@ import {
   useTheme,
   Fab,
   Zoom,
+  Paper,
+  alpha,
 } from '@mui/material';
 import {
   // Dashboard
@@ -159,7 +161,7 @@ const menuGroups = [
     title: 'AGENDAMENTOS',
     icon: <EventAvailableIcon />,
     items: [
-      { text: 'Agenda/Agendamentos', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
+      { text: 'Agenda', icon: <DateRangeIcon />, path: '/agendamentos', permission: 'gerenciar_agendamentos' },
       { text: 'Atendimentos', icon: <AssignmentTurnedInIcon />, path: '/atendimentos', permission: 'gerenciar_atendimentos' },
     ],
   },
@@ -175,10 +177,9 @@ const menuGroups = [
     title: 'FIDELIDADE',
     icon: <EmojiEventsIcon />,
     items: [
-      { text: 'Programa de Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade', permission: 'visualizar_fidelidade' },
-      { text: 'Gerenciar Fidelidade', icon: <EmojiEventsIcon />, path: '/fidelidade/gerenciar', permission: 'gerenciar_fidelidade' },
       { text: 'Recompensas', icon: <CardGiftcardIcon />, path: '/fidelidade/recompensas', permission: 'visualizar_fidelidade' },
       { text: 'Meus Pontos', icon: <StarsIcon />, path: '/meus-pontos', permission: 'visualizar_fidelidade' },
+      { text: 'Gerenciar', icon: <EmojiEventsIcon />, path: '/fidelidade/gerenciar', permission: 'gerenciar_fidelidade' },
     ],
   },
   {
@@ -194,7 +195,7 @@ const menuGroups = [
     title: 'FINANCEIRO',
     icon: <AccountBalanceWalletIcon />,
     items: [
-      { text: 'Dashboard Financeiro', icon: <BarChartIcon />, path: '/financeiro', permission: 'financeiro' },
+      { text: 'Dashboard', icon: <BarChartIcon />, path: '/financeiro', permission: 'financeiro' },
       { text: 'Contas a Receber', icon: <TrendingUpIcon />, path: '/financeiro/receber', permission: 'financeiro' },
       { text: 'Contas a Pagar', icon: <TrendingDownIcon />, path: '/financeiro/pagar', permission: 'financeiro' },
       { text: 'Fluxo de Caixa', icon: <TimelineIcon />, path: '/financeiro/fluxo', permission: 'financeiro' },
@@ -216,8 +217,8 @@ const menuGroups = [
     icon: <ManageAccountsIcon />,
     items: [
       { text: 'Usuários', icon: <AdminIcon />, path: '/usuarios', permission: 'gerenciar_usuarios' },
-      { text: 'Auditoria', icon: <SecurityIcon />, path: '/auditoria', permission: 'visualizar_relatorios' },
       { text: 'Configurações', icon: <TuneIcon />, path: '/configuracoes', permission: 'configurar_sistema' },
+      { text: 'Auditoria', icon: <SecurityIcon />, path: '/auditoria', permission: 'visualizar_relatorios' },
     ],
   },
 ];
@@ -245,7 +246,7 @@ export const extraIcons = {
   redeem: <RedeemIcon />,
 };
 
-// Componente Mobile Sidebar
+// Componente Mobile Sidebar Otimizado
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
   
@@ -263,6 +264,179 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
     return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
+  // Função para renderizar o perfil do usuário
+  const renderUserProfile = () => (
+    <Box
+      sx={{
+        p: 2,
+        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Elementos decorativos */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: -20,
+          right: -20,
+          width: 100,
+          height: 100,
+          borderRadius: '50%',
+          backgroundColor: 'rgba(255,255,255,0.1)',
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: -30,
+          left: -30,
+          width: 150,
+          height: 150,
+          borderRadius: '50%',
+          backgroundColor: 'rgba(255,255,255,0.05)',
+        }}
+      />
+      
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative', zIndex: 1 }}>
+        <Avatar
+          src={temFotoValida() ? fotoUrl : undefined}
+          sx={{
+            width: 56,
+            height: 56,
+            border: '3px solid white',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+            bgcolor: '#ffffff',
+            color: '#9c27b0',
+            fontWeight: 'bold',
+          }}
+        >
+          {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
+        </Avatar>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'white', mb: 0.5 }}>
+            {usuario?.nome || 'Usuário'}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', textTransform: 'capitalize' }}>
+              {usuario?.cargo || 'Usuário'}
+            </Typography>
+            <Badge
+              variant="dot"
+              color="success"
+              sx={{
+                '& .MuiBadge-badge': {
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                },
+              }}
+            />
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+
+  // Função para renderizar um grupo do menu
+  const renderGroup = (group) => {
+    const groupActive = isGroupActive(group);
+    const isOpen = openGroups[group.title] || false;
+
+    return (
+      <Box key={group.title} sx={{ mb: 1 }}>
+        <ListItemButton
+          onClick={() => handleGroupClick(group.title)}
+          sx={{
+            py: 1.5,
+            px: 2,
+            borderRadius: 2,
+            mx: 1,
+            backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
+            '&:hover': {
+              backgroundColor: alpha('#9c27b0', 0.04),
+            },
+          }}
+        >
+          <ListItemIcon sx={{ 
+            minWidth: 40, 
+            color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+          }}>
+            {group.icon}
+          </ListItemIcon>
+          <ListItemText
+            primary={group.title}
+            primaryTypographyProps={{
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              color: groupActive ? '#9c27b0' : 'textSecondary',
+            }}
+          />
+          {isOpen ? <ExpandLessIcon sx={{ color: 'textSecondary' }} /> : <ExpandMoreIcon sx={{ color: 'textSecondary' }} />}
+        </ListItemButton>
+
+        <Collapse in={isOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {group.items.map((item) => {
+              const isActive = location.pathname === item.path ||
+                (item.path !== '/' && location.pathname.startsWith(item.path));
+
+              return (
+                <motion.div
+                  key={item.text}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ListItem
+                    button
+                    component={Link}
+                    to={item.path}
+                    onClick={onClose}
+                    sx={{
+                      pl: 4,
+                      py: 1.2,
+                      ml: 2,
+                      mr: 1,
+                      borderRadius: 2,
+                      backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
+                      color: isActive ? '#9c27b0' : 'text.primary',
+                      '&:hover': {
+                        backgroundColor: alpha('#9c27b0', 0.04),
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                        minWidth: 36,
+                      },
+                    }}
+                  >
+                    <ListItemIcon>
+                      {item.text === 'Notificações' ? (
+                        <Badge badgeContent={unreadCount} color="secondary" max={99}>
+                          {item.icon}
+                        </Badge>
+                      ) : (
+                        item.icon
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{
+                        fontSize: '0.95rem',
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    />
+                  </ListItem>
+                </motion.div>
+              );
+            })}
+          </List>
+        </Collapse>
+      </Box>
+    );
+  };
+
   return (
     <SwipeableDrawer
       anchor="left"
@@ -273,167 +447,375 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
       ModalProps={{
         keepMounted: true,
       }}
-      sx={{
-        '& .MuiDrawer-paper': {
+      PaperProps={{
+        sx: {
           width: 280,
           backgroundColor: '#ffffff',
-          boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
+          borderRadius: '0 20px 20px 0',
+          backgroundImage: 'none',
         },
       }}
     >
-      {/* Header Mobile */}
-      <Box sx={{ 
-        p: 2, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SpaIcon sx={{ fontSize: 32, color: 'white' }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
-            BeautyPro
-          </Typography>
-        </Box>
-        <IconButton onClick={onClose} sx={{ color: 'white' }}>
-          <CloseIcon />
-        </IconButton>
-      </Box>
-
-      {/* Perfil Mobile */}
-      <Box sx={{ p: 2, bgcolor: '#faf5ff' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar 
-            alt={usuario?.nome || 'Usuário'}
-            src={temFotoValida() ? fotoUrl : undefined}
-            sx={{ 
-              width: 48, 
-              height: 48,
-              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-            }}
-          >
-            {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
-          </Avatar>
-          <Box>
-            <Typography variant="subtitle2" color="textSecondary">
-              Bem-vindo(a)
-            </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {usuario?.nome?.split(' ')[0] || 'Usuário'}
-            </Typography>
-            <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }}>
-              {usuario?.cargo || 'Usuário'}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+      {/* Perfil do Usuário */}
+      {renderUserProfile()}
 
       {/* Menu Mobile */}
-      <Box sx={{ 
-        flex: 1, 
-        overflowY: 'auto',
-        p: 1,
-      }}>
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          py: 2,
+          '&::-webkit-scrollbar': {
+            width: '4px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#f1f1f1',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#9c27b0',
+            borderRadius: '4px',
+          },
+        }}
+      >
+        {filteredGroups.map(renderGroup)}
+      </Box>
+
+      {/* Versão e Fechar */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Typography variant="caption" color="textSecondary">
+          Versão 2.0.0
+        </Typography>
+        <IconButton size="small" onClick={onClose} sx={{ color: 'textSecondary' }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Paper>
+    </SwipeableDrawer>
+  );
+};
+
+// Componente Desktop Sidebar Otimizado
+const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const temFotoValida = () => {
+    return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
+  };
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: collapsed ? 80 : 300,
+        flexShrink: 0,
+        transition: theme => theme.transitions.create('width', {
+          easing: theme.transitions.easing.sharp,
+          duration: theme.transitions.duration.enteringScreen,
+        }),
+        '& .MuiDrawer-paper': {
+          width: collapsed ? 80 : 300,
+          boxSizing: 'border-box',
+          backgroundColor: '#ffffff',
+          borderRight: 'none',
+          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+          overflowX: 'hidden',
+          transition: theme => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+        },
+      }}
+    >
+      {/* Logo com botão de colapso */}
+      <Box
+        sx={{
+          p: collapsed ? 1 : 3,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        {!collapsed ? (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SpaIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                Beauty<span style={{ color: '#ff4081' }}>Pro</span>
+              </Typography>
+            </Box>
+            <Tooltip title="Recolher menu" placement="right">
+              <IconButton onClick={onToggleCollapse} size="small">
+                <ChevronLeftIcon />
+              </IconButton>
+            </Tooltip>
+          </>
+        ) : (
+          <Tooltip title="Expandir menu" placement="right">
+            <IconButton onClick={onToggleCollapse} sx={{ mx: 'auto' }}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+
+      {/* Perfil do Usuário */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={collapsed ? 'collapsed' : 'expanded'}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Box sx={{ px: 2, py: 3, mb: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: collapsed ? 1 : 2,
+                backgroundColor: alpha('#9c27b0', 0.04),
+                borderRadius: 3,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+              }}
+            >
+              <Avatar
+                alt={usuario?.nome || 'Usuário'}
+                src={temFotoValida() ? fotoUrl : undefined}
+                sx={{
+                  width: collapsed ? 40 : 56,
+                  height: collapsed ? 40 : 56,
+                  background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+                }}
+              >
+                {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
+              </Avatar>
+
+              {!collapsed && (
+                <Box sx={{ overflow: 'hidden' }}>
+                  <Typography variant="subtitle2" color="textSecondary" noWrap>
+                    Bem-vindo(a)
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+                    {usuario?.nome?.split(' ')[0] || 'Usuário'}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }} noWrap>
+                    {usuario?.cargo || 'Usuário'}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Menu Itens Agrupados */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          px: 1,
+          '&::-webkit-scrollbar': {
+            width: '4px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#f1f1f1',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#9c27b0',
+            borderRadius: '4px',
+          },
+        }}
+      >
         {filteredGroups.map((group) => {
           const groupActive = isGroupActive(group);
           const isOpen = openGroups[group.title] || false;
-          
+
           return (
             <Box key={group.title} sx={{ mb: 1 }}>
-              <ListItemButton
-                onClick={() => handleGroupClick(group.title)}
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  borderRadius: 2,
-                  backgroundColor: groupActive && !isOpen ? '#f3e5f5' : 'transparent',
-                  '&:hover': {
-                    backgroundColor: '#f5f5f5',
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#9c27b0' : '#666' }}>
-                  {group.icon}
-                </ListItemIcon>
-                <ListItemText 
-                  primary={group.title}
-                  primaryTypographyProps={{
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    color: 'textSecondary',
-                  }}
-                />
-                {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              </ListItemButton>
+              {!collapsed ? (
+                <>
+                  <ListItemButton
+                    onClick={() => handleGroupClick(group.title)}
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      borderRadius: 2,
+                      backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
+                      '&:hover': {
+                        backgroundColor: alpha('#9c27b0', 0.04),
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#9c27b0' : alpha('#000', 0.54) }}>
+                      {group.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={group.title}
+                      primaryTypographyProps={{
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        color: groupActive ? '#9c27b0' : 'textSecondary',
+                      }}
+                    />
+                    {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </ListItemButton>
 
-              <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding>
-                  {group.items.map((item) => {
-                    const isActive = location.pathname === item.path || 
-                      (item.path !== '/' && location.pathname.startsWith(item.path));
-                    
+                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding>
+                      {group.items.map((item) => {
+                        const isActive = location.pathname === item.path ||
+                          (item.path !== '/' && location.pathname.startsWith(item.path));
+
+                        return (
+                          <motion.div
+                            key={item.text}
+                            whileHover={{ x: 5 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <ListItem
+                              button
+                              component={Link}
+                              to={item.path}
+                              sx={{
+                                pl: 4,
+                                py: 0.8,
+                                borderRadius: '0 20px 20px 0',
+                                mr: 1,
+                                backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
+                                color: isActive ? '#9c27b0' : 'text.primary',
+                                '&:hover': {
+                                  backgroundColor: alpha('#9c27b0', 0.04),
+                                },
+                                '& .MuiListItemIcon-root': {
+                                  color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                                  minWidth: 36,
+                                },
+                              }}
+                            >
+                              <ListItemIcon>
+                                {item.text === 'Notificações' ? (
+                                  <Badge badgeContent={unreadCount} color="secondary">
+                                    {item.icon}
+                                  </Badge>
+                                ) : (
+                                  item.icon
+                                )}
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={item.text}
+                                primaryTypographyProps={{
+                                  fontSize: '0.95rem',
+                                  fontWeight: isActive ? 600 : 400,
+                                  noWrap: true,
+                                }}
+                              />
+                            </ListItem>
+                          </motion.div>
+                        );
+                      })}
+                    </List>
+                  </Collapse>
+                </>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, my: 1 }}>
+                  <Tooltip title={group.title} placement="right">
+                    <IconButton
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        backgroundColor: groupActive ? alpha('#9c27b0', 0.08) : 'transparent',
+                        color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+                        '&:hover': {
+                          backgroundColor: alpha('#9c27b0', 0.04),
+                        },
+                      }}
+                    >
+                      {group.icon}
+                    </IconButton>
+                  </Tooltip>
+
+                  {group.items.slice(0, 2).map((item) => {
+                    const isActive = location.pathname === item.path;
                     return (
-                      <motion.div
-                        key={item.text}
-                        whileHover={{ x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <ListItem
-                          button
+                      <Tooltip key={item.text} title={item.text} placement="right">
+                        <IconButton
                           component={Link}
                           to={item.path}
-                          onClick={onClose}
+                          size="small"
                           sx={{
-                            pl: 4,
-                            py: 1.5,
-                            borderRadius: 2,
-                            ml: 1,
-                            backgroundColor: isActive ? '#f3e5f5' : 'transparent',
-                            color: isActive ? '#9c27b0' : '#666',
+                            width: 40,
+                            height: 40,
+                            backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
+                            color: isActive ? '#9c27b0' : alpha('#000', 0.54),
                             '&:hover': {
-                              backgroundColor: '#f3e5f5',
-                            },
-                            '& .MuiListItemIcon-root': {
-                              color: isActive ? '#9c27b0' : '#999',
-                              minWidth: 36,
+                              backgroundColor: alpha('#9c27b0', 0.04),
                             },
                           }}
                         >
-                          <ListItemIcon>
-                            {item.text === 'Notificações' ? (
-                              <Badge badgeContent={unreadCount} color="secondary">
-                                {item.icon}
-                              </Badge>
-                            ) : (
-                              item.icon
-                            )}
-                          </ListItemIcon>
-                          <ListItemText 
-                            primary={item.text}
-                            primaryTypographyProps={{
-                              fontSize: '0.95rem',
-                              fontWeight: isActive ? 600 : 400,
-                            }}
-                          />
-                        </ListItem>
-                      </motion.div>
+                          {item.text === 'Notificações' && unreadCount > 0 ? (
+                            <Badge badgeContent={unreadCount} color="secondary" variant="dot">
+                              {item.icon}
+                            </Badge>
+                          ) : (
+                            item.icon
+                          )}
+                        </IconButton>
+                      </Tooltip>
                     );
                   })}
-                </List>
-              </Collapse>
+
+                  {group.items.length > 2 && (
+                    <Tooltip title={`+${group.items.length - 2} mais`} placement="right">
+                      <IconButton
+                        size="small"
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          color: alpha('#000', 0.38),
+                        }}
+                      >
+                        <ExpandMoreIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+              )}
             </Box>
           );
         })}
       </Box>
 
-      {/* Versão Mobile */}
-      <Box sx={{ p: 2, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-        <Typography variant="caption" color="textSecondary">
-          Versão 2.0.0
-        </Typography>
-      </Box>
-    </SwipeableDrawer>
+      {/* Rodapé */}
+      {!collapsed && (
+        <Box sx={{ mt: 'auto', p: 2, textAlign: 'center' }}>
+          <Divider sx={{ mb: 2 }} />
+          <Typography variant="caption" color="textSecondary">
+            Versão 2.0.0
+          </Typography>
+        </Box>
+      )}
+    </Drawer>
   );
 };
 
@@ -453,7 +835,7 @@ function ModernSidebar() {
     try {
       const user = usuariosService.getUsuarioAtual();
       setUsuario(user);
-      
+
       if (user?.avatar && user.avatar !== 'null' && user.avatar !== 'undefined' && user.avatar.trim() !== '') {
         setFotoUrl(user.avatar);
       } else {
@@ -503,7 +885,7 @@ function ModernSidebar() {
         const data = await firebaseService.query('notificacoes', [
           { field: 'usuarioId', operator: '==', value: user.uid }
         ], 'data');
-        
+
         setUnreadCount(data.filter(n => !n.lida).length);
       }
     } catch (error) {
@@ -518,20 +900,6 @@ function ModernSidebar() {
       return usuario.permissoes?.includes(item.permission) || false;
     }
     return true;
-  };
-
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const temFotoValida = () => {
-    return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
   const toggleCollapse = () => {
@@ -554,8 +922,8 @@ function ModernSidebar() {
   };
 
   const isGroupActive = (group) => {
-    return group.items.some(item => 
-      location.pathname === item.path || 
+    return group.items.some(item =>
+      location.pathname === item.path ||
       (item.path !== '/' && location.pathname.startsWith(item.path))
     );
   };
@@ -601,9 +969,10 @@ function ModernSidebar() {
               bottom: 16,
               left: 16,
               zIndex: 1000,
-              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+              boxShadow: '0 4px 12px rgba(156,39,176,0.3)',
               '&:hover': {
-                background: 'linear-gradient(45deg, #7b1fa2 30%, #f50057 90%)',
+                background: 'linear-gradient(135deg, #7b1fa2 0%, #f50057 100%)',
               },
             }}
           >
@@ -630,293 +999,18 @@ function ModernSidebar() {
 
   // Versão Desktop
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: collapsed ? 80 : 300,
-        flexShrink: 0,
-        transition: 'width 0.3s ease',
-        '& .MuiDrawer-paper': {
-          width: collapsed ? 80 : 300,
-          boxSizing: 'border-box',
-          backgroundColor: '#ffffff',
-          borderRight: 'none',
-          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
-          overflowX: 'hidden',
-          transition: 'width 0.3s ease',
-        },
-      }}
-    >
-      {/* Logo com botão de colapso */}
-      <Box sx={{ 
-        p: collapsed ? 1 : 3, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        gap: 1,
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-      }}>
-        {!collapsed ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpaIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                Beauty<span style={{ color: '#ff4081' }}>Pro</span>
-              </Typography>
-            </Box>
-            <Tooltip title="Recolher menu">
-              <IconButton onClick={toggleCollapse} size="small">
-                <ChevronLeftIcon />
-              </IconButton>
-            </Tooltip>
-          </>
-        ) : (
-          <Tooltip title="Expandir menu">
-            <IconButton onClick={toggleCollapse} sx={{ mx: 'auto' }}>
-              <ChevronRightIcon />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-
-      {/* Perfil do Usuário */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={collapsed ? 'collapsed' : 'expanded'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <Box sx={{ px: 2, py: 3, mb: 2 }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 2,
-              p: collapsed ? 1 : 2,
-              backgroundColor: '#faf5ff',
-              borderRadius: 3,
-              justifyContent: collapsed ? 'center' : 'flex-start',
-            }}>
-              <Avatar 
-                alt={usuario?.nome || 'Usuário'}
-                src={temFotoValida() ? fotoUrl : undefined}
-                key={fotoUrl}
-                imgProps={{
-                  onError: (e) => {
-                    e.target.style.display = 'none';
-                  },
-                }}
-                sx={{ 
-                  width: collapsed ? 40 : 56, 
-                  height: collapsed ? 40 : 56,
-                  background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-                }}
-              >
-                {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
-              </Avatar>
-              
-              {!collapsed && (
-                <Box>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Bem-vindo(a)
-                  </Typography>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {usuario?.nome?.split(' ')[0] || 'Usuário'}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }}>
-                    {usuario?.cargo || 'Usuário'}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Box>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Menu Itens Agrupados */}
-      <Box sx={{ 
-        flex: 1, 
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        '&::-webkit-scrollbar': {
-          width: '4px',
-        },
-        '&::-webkit-scrollbar-track': {
-          background: '#f1f1f1',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: '#9c27b0',
-          borderRadius: '4px',
-        },
-      }}>
-        {filteredGroups.map((group) => {
-          const groupActive = isGroupActive(group);
-          const isOpen = openGroups[group.title] || false;
-          
-          return (
-            <Box key={group.title} sx={{ mb: 2 }}>
-              {!collapsed ? (
-                <>
-                  <ListItemButton
-                    onClick={() => handleGroupClick(group.title)}
-                    sx={{
-                      py: 1,
-                      px: 3,
-                      backgroundColor: groupActive && !isOpen ? '#f3e5f5' : 'transparent',
-                      '&:hover': {
-                        backgroundColor: '#f5f5f5',
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#9c27b0' : '#666' }}>
-                      {group.icon}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={group.title}
-                      primaryTypographyProps={{
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'textSecondary',
-                      }}
-                    />
-                    {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                  </ListItemButton>
-
-                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding>
-                      {group.items.map((item) => {
-                        const isActive = location.pathname === item.path || 
-                          (item.path !== '/' && location.pathname.startsWith(item.path));
-                        
-                        return (
-                          <motion.div
-                            key={item.text}
-                            whileHover={{ x: 5 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            <ListItem
-                              button
-                              component={Link}
-                              to={item.path}
-                              sx={{
-                                pl: 4,
-                                py: 1,
-                                borderRadius: '0 20px 20px 0',
-                                mr: 2,
-                                backgroundColor: isActive ? '#f3e5f5' : 'transparent',
-                                color: isActive ? '#9c27b0' : '#666',
-                                '&:hover': {
-                                  backgroundColor: '#f3e5f5',
-                                },
-                                '& .MuiListItemIcon-root': {
-                                  color: isActive ? '#9c27b0' : '#999',
-                                  minWidth: 36,
-                                },
-                              }}
-                            >
-                              <ListItemIcon>
-                                {item.text === 'Notificações' ? (
-                                  <Badge badgeContent={unreadCount} color="secondary">
-                                    {item.icon}
-                                  </Badge>
-                                ) : (
-                                  item.icon
-                                )}
-                              </ListItemIcon>
-                              <ListItemText 
-                                primary={item.text}
-                                primaryTypographyProps={{
-                                  fontSize: '0.95rem',
-                                  fontWeight: isActive ? 600 : 400,
-                                }}
-                              />
-                            </ListItem>
-                          </motion.div>
-                        );
-                      })}
-                    </List>
-                  </Collapse>
-                </>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                  <Tooltip title={group.title} placement="right">
-                    <IconButton
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        backgroundColor: groupActive ? '#f3e5f5' : 'transparent',
-                        color: groupActive ? '#9c27b0' : '#666',
-                        '&:hover': {
-                          backgroundColor: '#f3e5f5',
-                        },
-                      }}
-                    >
-                      {group.icon}
-                    </IconButton>
-                  </Tooltip>
-                  
-                  {group.items.slice(0, 3).map((item) => {
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Tooltip key={item.text} title={item.text} placement="right">
-                        <IconButton
-                          component={Link}
-                          to={item.path}
-                          size="small"
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            backgroundColor: isActive ? '#f3e5f5' : 'transparent',
-                            color: isActive ? '#9c27b0' : '#999',
-                            '&:hover': {
-                              backgroundColor: '#f3e5f5',
-                            },
-                          }}
-                        >
-                          {item.text === 'Notificações' && unreadCount > 0 ? (
-                            <Badge badgeContent={unreadCount} color="secondary" variant="dot">
-                              {item.icon}
-                            </Badge>
-                          ) : (
-                            item.icon
-                          )}
-                        </IconButton>
-                      </Tooltip>
-                    );
-                  })}
-                  
-                  {group.items.length > 3 && (
-                    <Tooltip title={`+${group.items.length - 3} mais`} placement="right">
-                      <IconButton
-                        size="small"
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          color: '#999',
-                        }}
-                      >
-                        <ExpandMoreIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
-
-      {/* Rodapé */}
-      {!collapsed && (
-        <Box sx={{ mt: 'auto', p: 2, textAlign: 'center' }}>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="caption" color="textSecondary">
-            Versão 2.0.0
-          </Typography>
-        </Box>
-      )}
-    </Drawer>
+    <DesktopSidebar
+      collapsed={collapsed}
+      onToggleCollapse={toggleCollapse}
+      usuario={usuario}
+      fotoUrl={fotoUrl}
+      unreadCount={unreadCount}
+      filteredGroups={filteredGroups}
+      location={location}
+      handleGroupClick={handleGroupClick}
+      openGroups={openGroups}
+      isGroupActive={isGroupActive}
+    />
   );
 }
 
