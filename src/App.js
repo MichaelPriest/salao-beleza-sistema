@@ -35,6 +35,7 @@ import ModernAtendimento from './pages/ModernAtendimento';
 
 // Pages Fidelidade
 import Fidelidade from './pages/Fidelidade';
+import GerenciarFidelidade from './pages/GerenciarFidelidade';
 import Recompensas from './pages/Recompensas';
 import MeusPontos from './pages/MeusPontos';
 
@@ -180,6 +181,7 @@ function AnimatedRoutes() {
 
           {/* Fidelidade */}
           <Route path="/fidelidade" element={<Fidelidade />} />
+          <Route path="/fidelidade/gerenciar" element={<GerenciarFidelidade />} />
           <Route path="/fidelidade/recompensas" element={<Recompensas />} />
           <Route path="/meus-pontos" element={<MeusPontos />} />         
           
