@@ -46,7 +46,6 @@ import {
   Checkbox,
 } from '@mui/material';
 import { motion } from 'framer-motion';
-import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useReactToPrint } from 'react-to-print';
 
@@ -903,11 +902,10 @@ function MinhasComissoes() {
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
-    toast[severity](message);
   };
 
   // Função para exportar PDF
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
       
@@ -1100,7 +1098,7 @@ function MinhasComissoes() {
   };
 
   // Função para exportar Excel
-  const handleExportExcel = async () => {
+  const handleExportExcel = () => {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
       
@@ -2026,7 +2024,9 @@ function MinhasComissoes() {
                     variant="contained"
                     color="error"
                     startIcon={<PictureAsPdfIcon />}
-                    onClick={handleExportPDF}
+                    onClick={() => {
+                      handleExportPDF();
+                    }}
                     sx={{ mt: 2 }}
                     disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
                   >
@@ -2095,7 +2095,9 @@ function MinhasComissoes() {
                     variant="contained"
                     color="success"
                     startIcon={<TableChartIcon />}
-                    onClick={handleExportExcel}
+                    onClick={() => {
+                      handleExportExcel();
+                    }}
                     sx={{ mt: 2 }}
                     disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
                   >
