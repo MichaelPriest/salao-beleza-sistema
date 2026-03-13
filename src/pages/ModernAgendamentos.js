@@ -343,6 +343,9 @@ function ModernAgendamentos() {
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   const [usuario, setUsuario] = useState(null);
+  
+  // 🔥 Trigger para forçar atualização
+  const [updateTrigger, setUpdateTrigger] = useState(0);
 
   // Estados para impressão/exportação
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
@@ -445,7 +448,7 @@ function ModernAgendamentos() {
     } else {
       setServicosDisponiveis([]);
     }
-  }, [formData.profissionalId, servicos, profissionais]);
+  }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
 
   // Filtrar serviços pela busca
   const servicosFiltrados = servicosDisponiveis.filter(servico => 
@@ -546,7 +549,7 @@ function ModernAgendamentos() {
         setBuscaServico('');
       }
     }
-  }, [openDialog, selectedAppointment, selectedDate]);
+  }, [openDialog, selectedAppointment, selectedDate, updateTrigger]);
 
   // ============================================
   // FUNÇÕES DE PESQUISA DE CLIENTES
@@ -612,7 +615,7 @@ function ModernAgendamentos() {
       const resultados = buscarClientes();
       setSearchClientResults(resultados);
     }
-  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch]);
+  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
 
   const handleOpenClientSearch = () => {
     setShowClientSearch(true);
@@ -764,6 +767,8 @@ function ModernAgendamentos() {
     try {
       await excluir(appointmentToDelete);
       toast.success('Agendamento cancelado com sucesso!');
+      // Forçar atualização
+      setUpdateTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Erro ao excluir:', error);
       toast.error('Erro ao cancelar agendamento');
@@ -772,22 +777,19 @@ function ModernAgendamentos() {
     setAppointmentToDelete(null);
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA: Atualizar status com trigger
   const handleStatusChange = async (id, newStatus) => {
     try {
+      const toastId = toast.loading('Atualizando status...');
+      
       await atualizar(id, { status: newStatus });
       
-      // Atualizar a lista local para refletir a mudança imediatamente
-      const updatedEvents = todosEventos.map(event => {
-        if (event.id === id) {
-          return { ...event, status: newStatus };
-        }
-        return event;
-      });
-      
       // Forçar atualização da UI
-      setViewMode(prev => prev);
+      setUpdateTrigger(prev => prev + 1);
       
+      toast.dismiss(toastId);
       toast.success(`Status alterado para ${getStatusLabel(newStatus)}!`);
+      
     } catch (error) {
       console.error('Erro ao alterar status:', error);
       toast.error('Erro ao alterar status');
@@ -850,6 +852,9 @@ function ModernAgendamentos() {
         agendamentoCriado = await adicionar(dadosParaSalvar);
         toast.success('Agendamento criado!');
       }
+
+      // Forçar atualização
+      setUpdateTrigger(prev => prev + 1);
 
       // Notificar profissional
       if (usuario && formData.profissionalId) {
@@ -922,6 +927,9 @@ function ModernAgendamentos() {
         status: 'em_andamento',
         updatedAt: Timestamp.now()
       });
+
+      // Forçar atualização
+      setUpdateTrigger(prev => prev + 1);
 
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
