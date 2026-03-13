@@ -327,8 +327,11 @@ function ModernDashboard() {
   const calcularDados = () => {
     const { start, end } = getDateRange();
     const hoje = new Date();
-    const ontem = subDays(hoje, 1);
-    const mesPassado = subMonths(hoje, 1);
+    
+    // Calcular período anterior (mesma duração)
+    const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    const periodoAnteriorStart = subDays(start, diffDays);
+    const periodoAnteriorEnd = subDays(end, diffDays);
 
     // ============================================
     // FATURAMENTO
@@ -348,9 +351,6 @@ function ModernDashboard() {
     const faturamentoHoje = pagamentosHoje.reduce((acc, p) => acc + (p.valor || 0), 0);
 
     // Faturamento período anterior
-    const periodoAnteriorStart = subDays(start, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-    const periodoAnteriorEnd = subDays(end, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-
     const pagamentosPeriodoAnterior = (pagamentos || []).filter(p => {
       const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
       return dataPagamento >= periodoAnteriorStart && dataPagamento <= periodoAnteriorEnd;
@@ -378,6 +378,10 @@ function ModernDashboard() {
     // ============================================
     const agendamentosPeriodo = (agendamentos || []).filter(a => {
       return a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd');
+    });
+
+    const agendamentosPeriodoAnterior = (agendamentos || []).filter(a => {
+      return a.data >= format(periodoAnteriorStart, 'yyyy-MM-dd') && a.data <= format(periodoAnteriorEnd, 'yyyy-MM-dd');
     });
 
     const agendamentosHoje = (agendamentos || []).filter(a => a.data === format(hoje, 'yyyy-MM-dd'));
@@ -929,7 +933,7 @@ function ModernDashboard() {
                         color={selectedMetric === 'bar' ? 'primary' : 'default'}
                         onClick={() => setSelectedMetric('bar')}
                       >
-                        <BarChartIcon />
+                        <PieChartIcon />
                       </IconButton>
                     </Tooltip>
                   </Box>
