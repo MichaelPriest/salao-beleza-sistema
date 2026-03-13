@@ -50,7 +50,8 @@
     "eject": "react-scripts eject",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "react-scripts start",
-    "server": "node server.js"
+    "server": "node server.js",
+    "criar-fidelidade": "node src/scripts/criarColecoesFidelidade.js"
   },
   "eslintConfig": {
     "extends": [
