@@ -29,6 +29,7 @@ import ModernClientes from './pages/ModernClientes';
 import ModernServicos from './pages/ModernServicos';
 import ModernProfissionais from './pages/ModernProfissionais';
 import Agenda from './pages/agenda';
+import Fidelidade from './pages/Fidelidade';
 import ModernAgendamentos from './pages/ModernAgendamentos';
 import ModernAtendimentos from './pages/ModernAtendimentos';
 import ModernAtendimento from './pages/ModernAtendimento';
@@ -169,7 +170,8 @@ function AnimatedRoutes() {
           <Route path="/servicos" element={<ModernServicos />} />
           <Route path="/profissionais" element={<ModernProfissionais />} />
           <Route path="/agendamentos" element={<ModernAgendamentos />} />
-          <Route path="/agenda" element={<Agenda />} />  
+          <Route path="/agenda" element={<Agenda />} /> 
+          <Route path="/fidelidade" element={<Fidelidade />} />  
           <Route path="/atendimentos" element={<ModernAtendimentos />} />
           <Route path="/atendimento/:id" element={<ModernAtendimento />} />
           
