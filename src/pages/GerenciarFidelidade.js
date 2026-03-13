@@ -67,17 +67,44 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom'; // 🔥 IMPORT ADICIONADO
 import { firebaseService } from '../services/firebase';
 
-// Níveis de fidelidade
+// Níveis de fidelidade - CORRIGIDO: adicionado corFundo
 const niveis = {
-  bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, multiplicador: 1 },
-  prata: { cor: '#c0c0c0', nome: 'Prata', minimo: 500, multiplicador: 1.2 },
-  ouro: { cor: '#ffd700', nome: 'Ouro', minimo: 2000, multiplicador: 1.5 },
-  platina: { cor: '#e5e4e2', nome: 'Platina', minimo: 5000, multiplicador: 2 },
+  bronze: { 
+    cor: '#cd7f32', 
+    corFundo: '#fff3e0', // 🔥 CORRIGIDO
+    nome: 'Bronze', 
+    minimo: 0, 
+    multiplicador: 1 
+  },
+  prata: { 
+    cor: '#c0c0c0', 
+    corFundo: '#f5f5f5', // 🔥 CORRIGIDO
+    nome: 'Prata', 
+    minimo: 500, 
+    multiplicador: 1.2 
+  },
+  ouro: { 
+    cor: '#ffd700', 
+    corFundo: '#fff9e6', // 🔥 CORRIGIDO
+    nome: 'Ouro', 
+    minimo: 2000, 
+    multiplicador: 1.5 
+  },
+  platina: { 
+    cor: '#e5e4e2', 
+    corFundo: '#f0f0f0', // 🔥 CORRIGIDO
+    nome: 'Platina', 
+    minimo: 5000, 
+    multiplicador: 2 
+  },
 };
 
 function GerenciarFidelidade() {
+  const navigate = useNavigate(); // 🔥 HOOK ADICIONADO
+  
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState([]);
   const [pontuacoes, setPontuacoes] = useState([]);
@@ -324,7 +351,7 @@ function GerenciarFidelidade() {
 
   const handleDeleteRecompensa = async () => {
     try {
-      await firebaseService.delete('recompen   sas', confirmDelete.id);
+      await firebaseService.delete('recompensas', confirmDelete.id); // 🔥 CORRIGIDO: remover espaço
       setRecompensas(recompensas.filter(r => r.id !== confirmDelete.id));
       mostrarSnackbar('Recompensa excluída com sucesso!');
       setConfirmDelete(null);
@@ -718,7 +745,7 @@ function GerenciarFidelidade() {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Avatar
                               src={recompensa.imagem}
-                              sx={{ bgcolor: niveis[recompensa.nivelMinimo].cor }}
+                              sx={{ bgcolor: niveis[recompensa.nivelMinimo]?.cor || '#999' }}
                             >
                               <GiftIcon />
                             </Avatar>
