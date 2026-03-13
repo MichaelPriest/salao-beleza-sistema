@@ -48,8 +48,12 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { useFeedback } from '../contexts/FeedbackContext';
 import { useReactToPrint } from 'react-to-print';
+
+// Importações para PDF e Excel - usando require para evitar problemas de build
+const jsPDF = typeof window !== 'undefined' ? require('jspdf') : null;
+const autoTable = typeof window !== 'undefined' ? require('jspdf-autotable') : null;
+const XLSX = typeof window !== 'undefined' ? require('xlsx') : null;
 
 // Ícones
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -76,11 +80,6 @@ import WarningIcon from '@mui/icons-material/Warning';
 import PeopleIcon from '@mui/icons-material/People';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TableChartIcon from '@mui/icons-material/TableChart';
-
-// Importações para PDF e Excel
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ 
@@ -329,7 +328,6 @@ const RelatorioComissoes = React.forwardRef(({
 });
 
 function MinhasComissoes() {
-  const { showSnackbar } = useFeedback();
   const [loading, setLoading] = useState(true);
   const [comissoes, setComissoes] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
@@ -369,8 +367,6 @@ function MinhasComissoes() {
   const relatorioRef = useRef();
   const handlePrint = useReactToPrint({
     content: () => relatorioRef.current,
-    onBeforePrint: () => toast.info('Preparando impressão...'),
-    onAfterPrint: () => toast.success('Impressão concluída!'),
   });
 
   const meses = [
@@ -485,7 +481,7 @@ function MinhasComissoes() {
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      showSnackbar('Erro ao carregar dados', 'error');
+      mostrarSnackbar('Erro ao carregar dados', 'error');
     } finally {
       setLoading(false);
     }
@@ -830,17 +826,24 @@ function MinhasComissoes() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const showNotification = (message, severity = 'success') => {
+  const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
-    toast[severity](message);
   };
 
   // Função para exportar PDF
   const handleExportPDF = async () => {
     try {
-      showNotification('Gerando PDF...', 'info');
+      mostrarSnackbar('Gerando PDF...', 'info');
       
-      const doc = new jsPDF();
+      // Verificar se as bibliotecas estão disponíveis
+      if (!jsPDF || !autoTable) {
+        throw new Error('Bibliotecas de PDF não disponíveis');
+      }
+
+      const { default: JsPDF } = jsPDF;
+      const { default: AutoTable } = autoTable;
+      
+      const doc = new JsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
@@ -881,7 +884,7 @@ function MinhasComissoes() {
           ['Comissões Pendentes', resumo.quantidadePendente.toString()],
         ];
         
-        autoTable(doc, {
+        AutoTable(doc, {
           startY: yPos,
           head: [['Descrição', 'Valor']],
           body: resumoData,
@@ -915,7 +918,7 @@ function MinhasComissoes() {
           a.comissaoPaga ? 'Pago' : 'Pendente'
         ]);
         
-        autoTable(doc, {
+        AutoTable(doc, {
           startY: yPos,
           head: [['Data', 'Cliente', 'Serviços', 'Valor', 'Comissão', 'Status']],
           body: atendimentosData,
@@ -959,7 +962,7 @@ function MinhasComissoes() {
           c.dataPagamento ? formatarData(c.dataPagamento) : '—'
         ]);
         
-        autoTable(doc, {
+        AutoTable(doc, {
           startY: yPos,
           head: [['Data', 'Serviço', '%', 'Valor Base', 'Comissão', 'Status', 'Pagamento']],
           body: comissoesData,
@@ -1001,7 +1004,7 @@ function MinhasComissoes() {
           `${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`
         ]);
         
-        autoTable(doc, {
+        AutoTable(doc, {
           startY: yPos,
           head: [['Serviço', 'Qtd', 'Total', '%']],
           body: servicosData,
@@ -1015,21 +1018,28 @@ function MinhasComissoes() {
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.pdf`;
       doc.save(fileName);
       
-      showNotification('PDF gerado com sucesso!', 'success');
+      mostrarSnackbar('PDF gerado com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
-      showNotification('Erro ao gerar PDF', 'error');
+      mostrarSnackbar('Erro ao gerar PDF', 'error');
     }
   };
 
   // Função para exportar Excel
   const handleExportExcel = async () => {
     try {
-      showNotification('Gerando planilha...', 'info');
+      mostrarSnackbar('Gerando planilha...', 'info');
+      
+      // Verificar se a biblioteca está disponível
+      if (!XLSX) {
+        throw new Error('Biblioteca Excel não disponível');
+      }
+
+      const { utils, writeFile } = XLSX;
       
       // Criar workbook
-      const wb = XLSX.utils.book_new();
+      const wb = utils.book_new();
       
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
       
@@ -1047,12 +1057,12 @@ function MinhasComissoes() {
           ['Total de Comissões', resumo.quantidade],
           ['Comissões Pagas', resumo.quantidadePaga],
           ['Comissões Pendentes', resumo.quantidadePendente],
-          ['Comissões Canceladas', resumo.quantidadeCancelada],
+          ['Comissões Canceladas', resumo.quantidadeCancelada || 0],
           ['Total de Atendimentos', atendimentosFiltrados.length],
         ];
         
-        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
-        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+        const wsResumo = utils.aoa_to_sheet(resumoData);
+        utils.book_append_sheet(wb, wsResumo, 'Resumo');
       }
       
       // Aba de Atendimentos
@@ -1070,8 +1080,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsAtendimentos = XLSX.utils.aoa_to_sheet(atendimentosData);
-        XLSX.utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
+        const wsAtendimentos = utils.aoa_to_sheet(atendimentosData);
+        utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
       }
       
       // Aba de Comissões
@@ -1089,8 +1099,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsComissoes = XLSX.utils.aoa_to_sheet(comissoesData);
-        XLSX.utils.book_append_sheet(wb, wsComissoes, 'Comissões');
+        const wsComissoes = utils.aoa_to_sheet(comissoesData);
+        utils.book_append_sheet(wb, wsComissoes, 'Comissões');
       }
       
       // Aba de Resumo por Serviço
@@ -1105,8 +1115,8 @@ function MinhasComissoes() {
           ])
         ];
         
-        const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
-        XLSX.utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
+        const wsServicos = utils.aoa_to_sheet(servicosData);
+        utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
       }
       
       // Informações do relatório
@@ -1119,18 +1129,18 @@ function MinhasComissoes() {
         ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
       ];
       
-      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-      XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
+      const wsInfo = utils.aoa_to_sheet(infoData);
+      utils.book_append_sheet(wb, wsInfo, 'Informações');
       
       // Salvar arquivo
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      writeFile(wb, fileName);
       
-      showNotification('Planilha gerada com sucesso!', 'success');
+      mostrarSnackbar('Planilha gerada com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar Excel:', error);
-      showNotification('Erro ao gerar planilha', 'error');
+      mostrarSnackbar('Erro ao gerar planilha', 'error');
     }
   };
 
