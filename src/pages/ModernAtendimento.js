@@ -663,20 +663,27 @@ function ModernAtendimento() {
       const totalPago = calcularTotalPago();
       const saldoRestante = valorTotal - totalPago;
       const MARGEM_ERRO = 0.01;
-
+  
       if (Math.abs(saldoRestante) > MARGEM_ERRO) {
         toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
         return;
       }
-
+  
       console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
       console.log('📌 Atendimento ID:', id);
       console.log('📌 Valor total:', valorTotal);
       console.log('📌 Itens serviço:', itensServico);
       console.log('📌 Itens produto:', itensProduto);
       console.log('📌 Pagamentos:', pagamentos);
-
-      // 1. Atualizar o atendimento no Firebase
+  
+      // 1. Buscar o agendamento associado a este atendimento
+      let agendamentoId = null;
+      if (atendimento.agendamentoId) {
+        agendamentoId = atendimento.agendamentoId;
+        console.log('📌 Agendamento ID encontrado:', agendamentoId);
+      }
+  
+      // 2. Atualizar o atendimento no Firebase
       console.log('📌 Atualizando atendimento...');
       await firebaseService.update('atendimentos', id, {
         status: 'finalizado',
@@ -687,23 +694,34 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
       console.log('✅ Atendimento atualizado');
-
-      // 2. Buscar dados para comissão
+  
+      // 3. Se houver agendamento vinculado, atualizar para finalizado
+      if (agendamentoId) {
+        console.log('📌 Atualizando agendamento...');
+        await firebaseService.update('agendamentos', agendamentoId, {
+          status: 'finalizado',
+          atendimentoRealizado: true,
+          updatedAt: Timestamp.now()
+        });
+        console.log('✅ Agendamento atualizado para finalizado');
+      }
+  
+      // 4. Buscar dados para comissão
       const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
       const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
       
       console.log('📌 Profissional:', profissional);
       console.log('📌 Serviço principal:', servicoPrincipal);
-
-      // 3. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
+  
+      // 5. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
       const percentual = profissional?.comissao || 40;
       const valorComissao = (calcularTotalServicos() * percentual) / 100;
-
+  
       console.log('📊 Cálculo da comissão:');
       console.log('   - Percentual:', percentual);
       console.log('   - Valor serviços:', calcularTotalServicos());
       console.log('   - Comissão:', valorComissao);
-
+  
       const comissaoData = {
         atendimentoId: id,
         profissionalId: atendimento.profissionalId,
@@ -718,23 +736,23 @@ function ModernAtendimento() {
         dataRegistro: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-
+  
       console.log('📌 Salvando comissão no Firebase...');
       const comissaoId = await firebaseService.add('comissoes', comissaoData);
       console.log('✅ Comissão registrada com ID:', comissaoId);
-
-      // 4. Atualizar cliente
+  
+      // 6. Atualizar cliente
       console.log('📌 Atualizando cliente...');
       await firebaseService.update('clientes', cliente.id, {
         ultimaVisita: new Date().toISOString().split('T')[0],
         totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(), // Só serviços entram no total gasto
         updatedAt: Timestamp.now()
       });
-
+  
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       
-      // 5. Verificar se a comissão foi criada
+      // 7. Verificar se a comissão foi criada
       setTimeout(async () => {
         const comissoes = await firebaseService.getAll('comissoes');
         const minhaComissao = comissoes.find(c => c.atendimentoId === id);
@@ -743,6 +761,11 @@ function ModernAtendimento() {
         const transacoes = await firebaseService.getAll('transacoes');
         const minhasTransacoes = transacoes.filter(t => t.atendimentoId === id);
         console.log('🔍 Verificação pós-finalização - Transações encontradas:', minhasTransacoes);
+  
+        if (agendamentoId) {
+          const agendamento = await firebaseService.getById('agendamentos', agendamentoId);
+          console.log('🔍 Verificação pós-finalização - Agendamento atualizado:', agendamento);
+        }
       }, 2000);
       
     } catch (error) {
