@@ -35,6 +35,9 @@ import {
   Divider,
   LinearProgress,
   TablePagination,
+  Badge,
+  Tab,
+  Tabs,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -55,7 +58,11 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   Badge as BadgeIcon,
-  AttachMoney as MoneyIcon, // NOVO ÍCONE
+  AttachMoney as MoneyIcon,
+  Star as StarIcon,
+  CardGiftcard as FidelidadeIcon,
+  History as HistoryIcon,
+  PointOfSale as PointIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -79,6 +86,8 @@ const CARGOS = {
       'configurar_sistema',
       'visualizar_comissoes',
       'gerenciar_backup',
+      'gerenciar_fidelidade', // NOVA PERMISSÃO
+      'visualizar_todos_pontos', // NOVA PERMISSÃO
     ]
   },
   gerente: {
@@ -91,7 +100,9 @@ const CARGOS = {
       'gerenciar_servicos',
       'gerenciar_profissionais',
       'visualizar_relatorios',
-      'visualizar_comissoes', // NOVA PERMISSÃO
+      'visualizar_comissoes',
+      'gerenciar_fidelidade', // NOVA PERMISSÃO
+      'visualizar_todos_pontos', // NOVA PERMISSÃO
     ]
   },
   atendente: {
@@ -101,6 +112,7 @@ const CARGOS = {
     permissoes: [
       'gerenciar_agendamentos',
       'visualizar_clientes',
+      'visualizar_pontos_cliente', // NOVA PERMISSÃO
     ]
   },
   profissional: {
@@ -110,28 +122,89 @@ const CARGOS = {
     permissoes: [
       'visualizar_agenda',
       'gerenciar_atendimentos',
-      'visualizar_comissoes', // NOVA PERMISSÃO (para o profissional ver suas próprias comissões)
+      'visualizar_comissoes',
+    ]
+  },
+  cliente: { // NOVO CARGO
+    nome: 'Cliente',
+    cor: '#2196f3',
+    icone: <PersonIcon />,
+    permissoes: [
+      'visualizar_meus_agendamentos',
+      'visualizar_fidelidade',
+      'visualizar_meus_pontos',
+      'resgatar_recompensas',
     ]
   }
+};
+
+// Componente para exibir informações de fidelidade do cliente
+const FidelidadeInfo = ({ clienteId, pontos, nivel, ultimaAtualizacao }) => {
+  const getNivelCor = (nivel) => {
+    switch(nivel) {
+      case 'bronze': return '#cd7f32';
+      case 'prata': return '#C0C0C0';
+      case 'ouro': return '#FFD700';
+      case 'platina': return '#E5E4E2';
+      default: return '#cd7f32';
+    }
+  };
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Tooltip title="Pontos acumulados">
+        <Chip
+          icon={<StarIcon />}
+          label={`${pontos || 0} pts`}
+          size="small"
+          sx={{ bgcolor: '#fff3e0', color: '#f57c00' }}
+        />
+      </Tooltip>
+      <Tooltip title="Nível de fidelidade">
+        <Chip
+          label={nivel || 'bronze'}
+          size="small"
+          sx={{
+            bgcolor: `${getNivelCor(nivel)}20`,
+            color: getNivelCor(nivel),
+            fontWeight: 500,
+            textTransform: 'uppercase',
+          }}
+        />
+      </Tooltip>
+    </Box>
+  );
 };
 
 function GerenciarUsuarios() {
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState([]);
-  const [profissionais, setProfissionais] = useState([]); // NOVO: lista de profissionais
+  const [profissionais, setProfissionais] = useState([]);
+  const [clientes, setClientes] = useState([]); // NOVO: lista de clientes
+  const [pontuacaoClientes, setPontuacaoClientes] = useState({}); // NOVO: pontuação por cliente
   const [filtro, setFiltro] = useState('');
   const [filtroCargo, setFiltroCargo] = useState('todos');
   const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroNivel, setFiltroNivel] = useState('todos'); // NOVO
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openDialog, setOpenDialog] = useState(false);
   const [openPermissoesDialog, setOpenPermissoesDialog] = useState(false);
+  const [openPontosDialog, setOpenPontosDialog] = useState(false); // NOVO
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
+  const [tabValue, setTabValue] = useState(0); // NOVO: abas (todos, clientes, funcionarios)
+  
+  // Estado para gerenciamento de pontos
+  const [pontosForm, setPontosForm] = useState({
+    quantidade: '',
+    tipo: 'credito',
+    motivo: '',
+  });
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -141,7 +214,8 @@ function GerenciarUsuarios() {
     confirmarSenha: '',
     cargo: 'atendente',
     telefone: '',
-    profissionalId: '', // NOVO: ID do profissional vinculado
+    profissionalId: '',
+    clienteId: '', // NOVO: ID do cliente vinculado
     permissoes: [],
     status: 'ativo',
     avatar: null,
@@ -154,13 +228,35 @@ function GerenciarUsuarios() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [usuariosData, profissionaisData] = await Promise.all([
+      const [usuariosData, profissionaisData, clientesData, pontuacaoData] = await Promise.all([
         firebaseService.getAll('usuarios').catch(() => []),
-        firebaseService.getAll('profissionais').catch(() => [])
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('pontuacao').catch(() => [])
       ]);
       
       setUsuarios(usuariosData || []);
       setProfissionais(profissionaisData || []);
+      setClientes(clientesData || []);
+      
+      // Processar pontuação por cliente
+      const pontuacaoPorCliente = {};
+      pontuacaoData.forEach(p => {
+        if (!pontuacaoPorCliente[p.clienteId]) {
+          pontuacaoPorCliente[p.clienteId] = {
+            total: 0,
+            historico: []
+          };
+        }
+        pontuacaoPorCliente[p.clienteId].historico.push(p);
+        if (p.tipo === 'credito') {
+          pontuacaoPorCliente[p.clienteId].total += p.quantidade || 0;
+        } else if (p.tipo === 'debito') {
+          pontuacaoPorCliente[p.clienteId].total -= p.quantidade || 0;
+        }
+      });
+      
+      setPontuacaoClientes(pontuacaoPorCliente);
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -188,7 +284,8 @@ function GerenciarUsuarios() {
         confirmarSenha: '',
         cargo: usuario.cargo || 'atendente',
         telefone: usuario.telefone || '',
-        profissionalId: usuario.profissionalId || '', // NOVO
+        profissionalId: usuario.profissionalId || '',
+        clienteId: usuario.clienteId || '', // NOVO
         permissoes: usuario.permissoes || CARGOS[usuario.cargo]?.permissoes || [],
         status: usuario.status || 'ativo',
         avatar: usuario.avatar || null,
@@ -202,7 +299,8 @@ function GerenciarUsuarios() {
         confirmarSenha: '',
         cargo: 'atendente',
         telefone: '',
-        profissionalId: '', // NOVO
+        profissionalId: '',
+        clienteId: '', // NOVO
         permissoes: CARGOS.atendente.permissoes,
         status: 'ativo',
         avatar: null,
@@ -232,6 +330,21 @@ function GerenciarUsuarios() {
     setUsuarioSelecionado(null);
   };
 
+  const handleOpenPontosDialog = (usuario) => {
+    setUsuarioSelecionado(usuario);
+    setPontosForm({
+      quantidade: '',
+      tipo: 'credito',
+      motivo: '',
+    });
+    setOpenPontosDialog(true);
+  };
+
+  const handleClosePontosDialog = () => {
+    setOpenPontosDialog(false);
+    setUsuarioSelecionado(null);
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -243,6 +356,11 @@ function GerenciarUsuarios() {
         permissoes: CARGOS[value]?.permissoes || []
       }));
     }
+  };
+
+  const handlePontosInputChange = (e) => {
+    const { name, value } = e.target;
+    setPontosForm(prev => ({ ...prev, [name]: value }));
   };
 
   const handlePermissaoChange = (permissao) => {
@@ -297,7 +415,8 @@ function GerenciarUsuarios() {
         email: String(formData.email).toLowerCase().trim(),
         cargo: String(formData.cargo),
         telefone: formData.telefone ? String(formData.telefone).trim() : null,
-        profissionalId: formData.profissionalId || null, // NOVO
+        profissionalId: formData.profissionalId || null,
+        clienteId: formData.clienteId || null, // NOVO
         permissoes: formData.permissoes || [],
         status: String(formData.status),
         avatar: formData.avatar,
@@ -333,6 +452,61 @@ function GerenciarUsuarios() {
     } catch (error) {
       console.error('Erro ao salvar usuário:', error);
       mostrarSnackbar('Erro ao salvar usuário', 'error');
+    }
+  };
+
+  const handleSalvarPontos = async () => {
+    try {
+      if (!pontosForm.quantidade || pontosForm.quantidade <= 0) {
+        mostrarSnackbar('Quantidade inválida', 'error');
+        return;
+      }
+
+      if (!pontosForm.motivo.trim()) {
+        mostrarSnackbar('Motivo é obrigatório', 'error');
+        return;
+      }
+
+      const clienteVinculado = clientes.find(c => c.id === usuarioSelecionado.clienteId);
+      
+      if (!clienteVinculado) {
+        mostrarSnackbar('Usuário não está vinculado a um cliente', 'error');
+        return;
+      }
+
+      const pontuacaoData = {
+        clienteId: usuarioSelecionado.clienteId,
+        clienteNome: clienteVinculado.nome,
+        quantidade: parseInt(pontosForm.quantidade),
+        tipo: pontosForm.tipo,
+        motivo: pontosForm.motivo,
+        data: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        usuarioResponsavel: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema',
+      };
+
+      await firebaseService.add('pontuacao', pontuacaoData);
+
+      // Atualizar pontuação local
+      setPontuacaoClientes(prev => {
+        const novo = { ...prev };
+        if (!novo[usuarioSelecionado.clienteId]) {
+          novo[usuarioSelecionado.clienteId] = { total: 0, historico: [] };
+        }
+        novo[usuarioSelecionado.clienteId].historico.push(pontuacaoData);
+        if (pontuacaoData.tipo === 'credito') {
+          novo[usuarioSelecionado.clienteId].total += pontuacaoData.quantidade;
+        } else {
+          novo[usuarioSelecionado.clienteId].total -= pontuacaoData.quantidade;
+        }
+        return novo;
+      });
+
+      mostrarSnackbar('Pontos adicionados com sucesso!');
+      handleClosePontosDialog();
+    } catch (error) {
+      console.error('Erro ao adicionar pontos:', error);
+      mostrarSnackbar('Erro ao adicionar pontos', 'error');
     }
   };
 
@@ -391,8 +565,20 @@ function GerenciarUsuarios() {
     }
   };
 
+  // Determinar nível baseado em pontos
+  const getNivelByPontos = (pontos) => {
+    if (pontos >= 5000) return 'platina';
+    if (pontos >= 2000) return 'ouro';
+    if (pontos >= 500) return 'prata';
+    return 'bronze';
+  };
+
   // Filtrar usuários
   const usuariosFiltrados = usuarios.filter(usuario => {
+    // Filtrar por aba
+    if (tabValue === 1 && usuario.cargo !== 'cliente') return false;
+    if (tabValue === 2 && usuario.cargo === 'cliente') return false;
+
     const matchesTexto = filtro === '' || 
       usuario.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
       usuario.email?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -401,7 +587,15 @@ function GerenciarUsuarios() {
     const matchesCargo = filtroCargo === 'todos' || usuario.cargo === filtroCargo;
     const matchesStatus = filtroStatus === 'todos' || usuario.status === filtroStatus;
 
-    return matchesTexto && matchesCargo && matchesStatus;
+    // Filtrar por nível de fidelidade (apenas para clientes)
+    let matchesNivel = true;
+    if (filtroNivel !== 'todos' && usuario.cargo === 'cliente' && usuario.clienteId) {
+      const pontosCliente = pontuacaoClientes[usuario.clienteId]?.total || 0;
+      const nivelCliente = getNivelByPontos(pontosCliente);
+      matchesNivel = nivelCliente === filtroNivel;
+    }
+
+    return matchesTexto && matchesCargo && matchesStatus && matchesNivel;
   });
 
   // Paginação
@@ -419,6 +613,13 @@ function GerenciarUsuarios() {
     setPage(0);
   };
 
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    setPage(0);
+    setFiltroCargo('todos');
+    setFiltroNivel('todos');
+  };
+
   // Estatísticas
   const stats = {
     total: usuarios.length,
@@ -428,6 +629,19 @@ function GerenciarUsuarios() {
     gerentes: usuarios.filter(u => u.cargo === 'gerente').length,
     atendentes: usuarios.filter(u => u.cargo === 'atendente').length,
     profissionais: usuarios.filter(u => u.cargo === 'profissional').length,
+    clientes: usuarios.filter(u => u.cargo === 'cliente').length, // NOVO
+  };
+
+  // Estatísticas de fidelidade
+  const statsFidelidade = {
+    totalPontos: Object.values(pontuacaoClientes).reduce((acc, c) => acc + (c.total || 0), 0),
+    clientesComPontos: Object.keys(pontuacaoClientes).length,
+    niveis: {
+      bronze: Object.values(pontuacaoClientes).filter(c => getNivelByPontos(c.total) === 'bronze').length,
+      prata: Object.values(pontuacaoClientes).filter(c => getNivelByPontos(c.total) === 'prata').length,
+      ouro: Object.values(pontuacaoClientes).filter(c => getNivelByPontos(c.total) === 'ouro').length,
+      platina: Object.values(pontuacaoClientes).filter(c => getNivelByPontos(c.total) === 'platina').length,
+    }
   };
 
   if (loading) {
@@ -447,7 +661,7 @@ function GerenciarUsuarios() {
             Gerenciar Usuários
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Gerencie todos os usuários do sistema e suas permissões
+            Gerencie todos os usuários do sistema, suas permissões e pontos de fidelidade
           </Typography>
         </Box>
         <Button
@@ -458,6 +672,15 @@ function GerenciarUsuarios() {
         >
           Novo Usuário
         </Button>
+      </Box>
+
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Todos os Usuários" />
+          <Tab label="Clientes" />
+          <Tab label="Funcionários" />
+        </Tabs>
       </Box>
 
       {/* Cards de Estatísticas */}
@@ -506,13 +729,13 @@ function GerenciarUsuarios() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card sx={{ bgcolor: '#ffebee' }}>
+            <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  Usuários Inativos
+                  Clientes
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
-                  {stats.inativos}
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {stats.clientes}
                 </Typography>
               </CardContent>
             </Card>
@@ -525,13 +748,13 @@ function GerenciarUsuarios() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card>
+            <Card sx={{ bgcolor: '#e3f2fd' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  Administradores
+                  Total de Pontos
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  {stats.admins}
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                  {statsFidelidade.totalPontos}
                 </Typography>
               </CardContent>
             </Card>
@@ -547,10 +770,10 @@ function GerenciarUsuarios() {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  Profissionais
+                  Clientes com Pontos
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                  {stats.profissionais}
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                  {statsFidelidade.clientesComPontos}
                 </Typography>
               </CardContent>
             </Card>
@@ -562,7 +785,7 @@ function GerenciarUsuarios() {
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
                 size="small"
@@ -604,7 +827,7 @@ function GerenciarUsuarios() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Filtrar por Status</InputLabel>
                 <Select
@@ -615,6 +838,23 @@ function GerenciarUsuarios() {
                   <MenuItem value="todos">Todos os Status</MenuItem>
                   <MenuItem value="ativo">Ativo</MenuItem>
                   <MenuItem value="inativo">Inativo</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Nível Fidelidade</InputLabel>
+                <Select
+                  value={filtroNivel}
+                  label="Nível Fidelidade"
+                  onChange={(e) => setFiltroNivel(e.target.value)}
+                >
+                  <MenuItem value="todos">Todos os Níveis</MenuItem>
+                  <MenuItem value="bronze">Bronze</MenuItem>
+                  <MenuItem value="prata">Prata</MenuItem>
+                  <MenuItem value="ouro">Ouro</MenuItem>
+                  <MenuItem value="platina">Platina</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -642,9 +882,9 @@ function GerenciarUsuarios() {
                 <TableCell><strong>Usuário</strong></TableCell>
                 <TableCell><strong>Contato</strong></TableCell>
                 <TableCell><strong>Cargo</strong></TableCell>
-                <TableCell><strong>Profissional</strong></TableCell> {/* NOVA COLUNA */}
+                <TableCell><strong>Vínculo</strong></TableCell>
+                <TableCell><strong>Fidelidade</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
-                <TableCell><strong>Último Acesso</strong></TableCell>
                 <TableCell align="center"><strong>Ações</strong></TableCell>
               </TableRow>
             </TableHead>
@@ -652,6 +892,9 @@ function GerenciarUsuarios() {
               <AnimatePresence>
                 {paginatedUsuarios.map((usuario, index) => {
                   const profissionalVinculado = profissionais.find(p => p.id === usuario.profissionalId);
+                  const clienteVinculado = clientes.find(c => c.id === usuario.clienteId);
+                  const pontosCliente = usuario.clienteId ? pontuacaoClientes[usuario.clienteId]?.total || 0 : 0;
+                  const nivelCliente = usuario.clienteId ? getNivelByPontos(pontosCliente) : null;
                   
                   return (
                     <motion.tr
@@ -702,19 +945,44 @@ function GerenciarUsuarios() {
                         />
                       </TableCell>
                       <TableCell>
-                        {profissionalVinculado ? (
-                          <Tooltip title={profissionalVinculado.nome}>
+                        {profissionalVinculado && (
+                          <Tooltip title={`Profissional: ${profissionalVinculado.nome}`}>
                             <Chip
                               icon={<BadgeIcon />}
-                              label={profissionalVinculado.nome.split(' ')[0]}
+                              label="Profissional"
                               size="small"
                               variant="outlined"
                               sx={{ color: '#ff9800', borderColor: '#ff9800' }}
                             />
                           </Tooltip>
+                        )}
+                        {clienteVinculado && (
+                          <Tooltip title={`Cliente: ${clienteVinculado.nome}`}>
+                            <Chip
+                              icon={<PersonIcon />}
+                              label="Cliente"
+                              size="small"
+                              variant="outlined"
+                              sx={{ color: '#2196f3', borderColor: '#2196f3', mt: profissionalVinculado ? 0.5 : 0 }}
+                            />
+                          </Tooltip>
+                        )}
+                        {!profissionalVinculado && !clienteVinculado && (
+                          <Typography variant="caption" color="textSecondary">
+                            Sem vínculo
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {usuario.cargo === 'cliente' && clienteVinculado ? (
+                          <FidelidadeInfo 
+                            clienteId={usuario.clienteId}
+                            pontos={pontosCliente}
+                            nivel={nivelCliente}
+                          />
                         ) : (
                           <Typography variant="caption" color="textSecondary">
-                            Não vinculado
+                            Não aplicável
                           </Typography>
                         )}
                       </TableCell>
@@ -726,18 +994,6 @@ function GerenciarUsuarios() {
                           color={usuario.status === 'ativo' ? 'success' : 'error'}
                           variant="outlined"
                         />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {usuario.ultimoAcesso 
-                            ? new Date(usuario.ultimoAcesso).toLocaleDateString('pt-BR')
-                            : 'Nunca acessou'}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {usuario.ultimoAcesso 
-                            ? new Date(usuario.ultimoAcesso).toLocaleTimeString('pt-BR')
-                            : ''}
-                        </Typography>
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
@@ -760,6 +1016,18 @@ function GerenciarUsuarios() {
                               <LockIcon />
                             </IconButton>
                           </Tooltip>
+
+                          {usuario.cargo === 'cliente' && usuario.clienteId && (
+                            <Tooltip title="Gerenciar Pontos">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenPontosDialog(usuario)}
+                                sx={{ color: '#ff9800' }}
+                              >
+                                <StarIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
 
                           <Tooltip title={usuario.status === 'ativo' ? 'Desativar' : 'Ativar'}>
                             <IconButton
@@ -896,22 +1164,41 @@ function GerenciarUsuarios() {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Profissional Vinculado</InputLabel> {/* NOVO CAMPO */}
-                <Select
-                  name="profissionalId"
-                  value={formData.profissionalId}
-                  label="Profissional Vinculado"
-                  onChange={handleInputChange}
-                >
-                  <MenuItem value="">Nenhum</MenuItem>
-                  {profissionais.map(prof => (
-                    <MenuItem key={prof.id} value={prof.id}>
-                      {prof.nome}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              {formData.cargo === 'profissional' ? (
+                <FormControl fullWidth size="small">
+                  <InputLabel>Profissional Vinculado</InputLabel>
+                  <Select
+                    name="profissionalId"
+                    value={formData.profissionalId}
+                    label="Profissional Vinculado"
+                    onChange={handleInputChange}
+                  >
+                    <MenuItem value="">Nenhum</MenuItem>
+                    {profissionais.map(prof => (
+                      <MenuItem key={prof.id} value={prof.id}>
+                        {prof.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : formData.cargo === 'cliente' ? (
+                <FormControl fullWidth size="small">
+                  <InputLabel>Cliente Vinculado</InputLabel>
+                  <Select
+                    name="clienteId"
+                    value={formData.clienteId}
+                    label="Cliente Vinculado"
+                    onChange={handleInputChange}
+                  >
+                    <MenuItem value="">Nenhum</MenuItem>
+                    {clientes.map(cli => (
+                      <MenuItem key={cli.id} value={cli.id}>
+                        {cli.nome}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : null}
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -1030,6 +1317,13 @@ function GerenciarUsuarios() {
                 { valor: 'gerenciar_atendimentos', label: 'Gerenciar Atendimentos' },
                 { valor: 'visualizar_comissoes', label: 'Visualizar Comissões' },
                 { valor: 'gerenciar_backup', label: 'Gerenciar Backup' },
+                { valor: 'gerenciar_fidelidade', label: 'Gerenciar Fidelidade' },
+                { valor: 'visualizar_todos_pontos', label: 'Visualizar Pontos (Todos)' },
+                { valor: 'visualizar_pontos_cliente', label: 'Visualizar Pontos do Cliente' },
+                { valor: 'visualizar_meus_agendamentos', label: 'Visualizar Meus Agendamentos' },
+                { valor: 'visualizar_fidelidade', label: 'Visualizar Fidelidade' },
+                { valor: 'visualizar_meus_pontos', label: 'Visualizar Meus Pontos' },
+                { valor: 'resgatar_recompensas', label: 'Resgatar Recompensas' },
               ].map((permissao) => (
                 <Grid item xs={12} sm={6} key={permissao.valor}>
                   <FormControlLabel
@@ -1056,6 +1350,82 @@ function GerenciarUsuarios() {
             sx={{ bgcolor: '#ff4081', '&:hover': { bgcolor: '#f50057' } }}
           >
             Salvar Permissões
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Gerenciamento de Pontos */}
+      <Dialog open={openPontosDialog} onClose={handleClosePontosDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
+          Gerenciar Pontos - {usuarioSelecionado?.nome}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ color: '#ff9800', fontWeight: 600 }}>
+              Saldo Atual: {usuarioSelecionado?.clienteId ? pontuacaoClientes[usuarioSelecionado.clienteId]?.total || 0 : 0} pontos
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Tipo de Movimentação</InputLabel>
+                  <Select
+                    name="tipo"
+                    value={pontosForm.tipo}
+                    label="Tipo de Movimentação"
+                    onChange={handlePontosInputChange}
+                  >
+                    <MenuItem value="credito">Adicionar Pontos (Crédito)</MenuItem>
+                    <MenuItem value="debito">Remover Pontos (Débito)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Quantidade de Pontos"
+                  name="quantidade"
+                  type="number"
+                  value={pontosForm.quantidade}
+                  onChange={handlePontosInputChange}
+                  variant="outlined"
+                  size="small"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <StarIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Motivo"
+                  name="motivo"
+                  value={pontosForm.motivo}
+                  onChange={handlePontosInputChange}
+                  variant="outlined"
+                  size="small"
+                  multiline
+                  rows={2}
+                  placeholder="Ex: Compra de serviço, Indicação, Aniversário..."
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePontosDialog}>Cancelar</Button>
+          <Button
+            onClick={handleSalvarPontos}
+            variant="contained"
+            sx={{ bgcolor: '#ff9800', '&:hover': { bgcolor: '#f57c00' } }}
+          >
+            Salvar Movimentação
           </Button>
         </DialogActions>
       </Dialog>
