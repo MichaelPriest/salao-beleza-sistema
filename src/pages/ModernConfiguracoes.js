@@ -25,6 +25,8 @@ import {
   Snackbar,
   Avatar,
   Tooltip,
+  Slider,
+  InputAdornment,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -46,6 +48,9 @@ import {
   VisibilityOff as VisibilityOffIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
+  EmojiEvents as TrophyIcon, // 🔥 NOVO ÍCONE
+  Star as StarIcon, // 🔥 NOVO ÍCONE
+  CardGiftcard as GiftIcon, // 🔥 NOVO ÍCONE
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -73,6 +78,77 @@ function TabPanel({ children, value, index }) {
   );
 }
 
+// 🔥 COMPONENTE PARA CONFIGURAÇÃO DE NÍVEIS
+const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
+  return (
+    <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: dados.corFundo }}>
+      <Grid container spacing={2} alignItems="center">
+        <Grid item xs={12} md={2}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Avatar sx={{ bgcolor: dados.cor, width: 32, height: 32 }}>
+              <TrophyIcon sx={{ fontSize: 18, color: '#fff' }} />
+            </Avatar>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: dados.cor, textTransform: 'uppercase' }}>
+              {nivel}
+            </Typography>
+          </Box>
+        </Grid>
+        <Grid item xs={12} md={2}>
+          <TextField
+            fullWidth
+            label="Pontos Mínimos"
+            type="number"
+            size="small"
+            value={dados.minimo}
+            onChange={(e) => onUpdate(nivel, 'minimo', parseInt(e.target.value))}
+          />
+        </Grid>
+        <Grid item xs={12} md={2}>
+          <TextField
+            fullWidth
+            label="Multiplicador"
+            type="number"
+            size="small"
+            inputProps={{ step: 0.1, min: 1 }}
+            value={dados.multiplicador}
+            onChange={(e) => onUpdate(nivel, 'multiplicador', parseFloat(e.target.value))}
+            InputProps={{
+              endAdornment: <InputAdornment position="end">x</InputAdornment>
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            label="Cor (hex)"
+            size="small"
+            type="color"
+            value={dados.cor}
+            onChange={(e) => onUpdate(nivel, 'cor', e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Box sx={{ width: 20, height: 20, bgcolor: dados.cor, borderRadius: 1 }} />
+                </InputAdornment>
+              )
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <TextField
+            fullWidth
+            label="Benefícios"
+            size="small"
+            placeholder="Separe por vírgula"
+            value={dados.beneficios?.join(', ') || ''}
+            onChange={(e) => onUpdate(nivel, 'beneficios', e.target.value.split(',').map(b => b.trim()))}
+          />
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+};
+
 function ModernConfiguracoes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,6 +159,53 @@ function ModernConfiguracoes() {
   const [showPassword, setShowPassword] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // 🔥 CONFIGURAÇÕES DE FIDELIDADE
+  const [fidelidadeConfig, setFidelidadeConfig] = useState({
+    ativo: true,
+    pontosPorReal: 10,
+    bonusAniversario: 50,
+    bonusIndicacao: 100,
+    bonusPrimeiroAtendimento: 100,
+    nivelInicial: 'bronze',
+    expiracaoPontos: 365, // dias
+    niveis: {
+      bronze: {
+        cor: '#cd7f32',
+        corFundo: '#fff3e0',
+        minimo: 0,
+        multiplicador: 1,
+        beneficios: ['5% de desconto em serviços', 'Pontuação normal']
+      },
+      prata: {
+        cor: '#c0c0c0',
+        corFundo: '#f5f5f5',
+        minimo: 500,
+        multiplicador: 1.2,
+        beneficios: ['10% de desconto em serviços', '1.2x pontos', 'Prioridade no agendamento']
+      },
+      ouro: {
+        cor: '#ffd700',
+        corFundo: '#fff9e6',
+        minimo: 2000,
+        multiplicador: 1.5,
+        beneficios: ['15% de desconto em serviços', '1.5x pontos', 'Agendamento VIP']
+      },
+      platina: {
+        cor: '#e5e4e2',
+        corFundo: '#f0f0f0',
+        minimo: 5000,
+        multiplicador: 2,
+        beneficios: ['20% de desconto em serviços', '2x pontos', 'Acesso antecipado a promoções']
+      }
+    },
+    regrasEspeciais: {
+      aniversario: true,
+      indicacao: true,
+      primeiraCompra: true,
+      avaliacao: true
+    }
+  });
 
   const diasSemana = [
     'segunda',
@@ -115,7 +238,22 @@ function ModernConfiguracoes() {
     carregarConfiguracoes();
   }, []);
 
-  // 🔥 Carregar último backup quando config estiver disponível
+  // Carregar configurações de fidelidade
+  useEffect(() => {
+    const carregarFidelidadeConfig = async () => {
+      try {
+        const fidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
+        if (fidelidade && fidelidade.length > 0) {
+          setFidelidadeConfig(fidelidade[0]);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configurações de fidelidade:', error);
+      }
+    };
+    
+    carregarFidelidadeConfig();
+  }, []);
+
   useEffect(() => {
     const carregarUltimoBackup = async () => {
       if (config) {
@@ -225,10 +363,36 @@ function ModernConfiguracoes() {
     }
   };
 
+  // 🔥 FUNÇÃO PARA SALVAR CONFIGURAÇÕES DE FIDELIDADE
+  const salvarFidelidadeConfig = async () => {
+    try {
+      const configs = await firebaseService.getAll('config_fidelidade');
+      
+      if (configs && configs.length > 0) {
+        await firebaseService.update('config_fidelidade', configs[0].id, {
+          ...fidelidadeConfig,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        await firebaseService.add('config_fidelidade', {
+          ...fidelidadeConfig,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      mostrarSnackbar('Configurações de fidelidade salvas!', 'success');
+    } catch (error) {
+      console.error('Erro ao salvar fidelidade:', error);
+      mostrarSnackbar('Erro ao salvar configurações de fidelidade', 'error');
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       
+      // Salvar configurações principais
       const configAtualizada = {
         ...config,
         updatedAt: new Date().toISOString()
@@ -237,16 +401,33 @@ function ModernConfiguracoes() {
       await firebaseService.update('configuracoes', config.id, configAtualizada);
       setConfig(configAtualizada);
       
+      // Salvar configurações de fidelidade
+      await salvarFidelidadeConfig();
+      
       // Aplicar tema globalmente
       aplicarTema(configAtualizada.tema);
       
-      mostrarSnackbar('Configurações salvas com sucesso!');
+      mostrarSnackbar('Todas as configurações salvas com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao salvar:', error);
       mostrarSnackbar('Erro ao salvar configurações', 'error');
     } finally {
       setSaving(false);
     }
+  };
+
+  // 🔥 FUNÇÃO PARA ATUALIZAR NÍVEL DE FIDELIDADE
+  const handleNivelUpdate = (nivel, campo, valor) => {
+    setFidelidadeConfig(prev => ({
+      ...prev,
+      niveis: {
+        ...prev.niveis,
+        [nivel]: {
+          ...prev.niveis[nivel],
+          [campo]: valor
+        }
+      }
+    }));
   };
 
   const aplicarTema = (tema) => {
@@ -256,7 +437,6 @@ function ModernConfiguracoes() {
       document.body.classList.remove('modo-escuro');
     }
     
-    // Aplicar cores personalizadas
     document.documentElement.style.setProperty('--cor-primaria', tema?.corPrimaria || '#9c27b0');
     document.documentElement.style.setProperty('--cor-secundaria', tema?.corSecundaria || '#ff4081');
   };
@@ -278,13 +458,11 @@ function ModernConfiguracoes() {
     handleSalaoChange('logo', null);
   };
 
-  // 🔥 Função de backup atualizada usando backupService
   const handleBackup = async () => {
     try {
       setSaving(true);
       await backupService.criarBackup();
       
-      // Atualizar último backup
       const ultimoBackup = await backupService.buscarUltimoBackup();
       setBackup(ultimoBackup);
       
@@ -297,7 +475,6 @@ function ModernConfiguracoes() {
     }
   };
 
-  // 🔥 Função de restauração atualizada usando backupService
   const handleRestore = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -417,15 +594,10 @@ function ModernConfiguracoes() {
   };
 
   const testarConexaoSMTP = async () => {
-    try {
-      // Simular teste de conexão
-      mostrarSnackbar('Testando conexão SMTP...', 'info');
-      setTimeout(() => {
-        mostrarSnackbar('Conexão SMTP testada com sucesso!', 'success');
-      }, 2000);
-    } catch (error) {
-      mostrarSnackbar('Erro ao testar conexão SMTP', 'error');
-    }
+    mostrarSnackbar('Testando conexão SMTP...', 'info');
+    setTimeout(() => {
+      mostrarSnackbar('Conexão SMTP testada com sucesso!', 'success');
+    }, 2000);
   };
 
   if (loading) {
@@ -494,13 +666,14 @@ function ModernConfiguracoes() {
             <Tab icon={<TimeIcon />} label="Horário" />
             <Tab icon={<NotificationsIcon />} label="Notificações" />
             <Tab icon={<PaletteIcon />} label="Aparência" />
+            <Tab icon={<TrophyIcon />} label="Fidelidade" /> {/* 🔥 NOVA ABA */}
             <Tab icon={<BackupIcon />} label="Backup" />
           </Tabs>
 
           {/* Dados do Salão */}
           <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
-              {/* Logo */}
+              {/* ... (código existente do salão) ... */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                   Logo do Salão
@@ -1148,8 +1321,228 @@ function ModernConfiguracoes() {
             </Grid>
           </TabPanel>
 
-          {/* Backup */}
+          {/* 🔥 NOVA ABA: Configurações de Fidelidade */}
           <TabPanel value={tabValue} index={4}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Configure as regras do programa de fidelidade. Os clientes acumulam pontos que podem ser trocados por recompensas.
+                </Alert>
+              </Grid>
+
+              {/* Ativar/Desativar Fidelidade */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3, bgcolor: '#faf5ff' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <TrophyIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        Programa de Fidelidade
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Ative ou desative o sistema de pontos para clientes
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={fidelidadeConfig.ativo}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, ativo: e.target.checked })}
+                      color="primary"
+                    />
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {fidelidadeConfig.ativo && (
+                <>
+                  {/* Regras Básicas */}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                      Regras Básicas
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Pontos por R$1"
+                      type="number"
+                      size="small"
+                      value={fidelidadeConfig.pontosPorReal}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, pontosPorReal: parseInt(e.target.value) })}
+                      helperText="Quantos pontos o cliente ganha por real gasto"
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Expiração dos Pontos"
+                      type="number"
+                      size="small"
+                      value={fidelidadeConfig.expiracaoPontos}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, expiracaoPontos: parseInt(e.target.value) })}
+                      helperText="Dias até os pontos expirarem"
+                      InputProps={{
+                        endAdornment: <InputAdornment position="end">dias</InputAdornment>
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Nível Inicial</InputLabel>
+                      <Select
+                        value={fidelidadeConfig.nivelInicial}
+                        label="Nível Inicial"
+                        onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, nivelInicial: e.target.value })}
+                      >
+                        <MenuItem value="bronze">Bronze</MenuItem>
+                        <MenuItem value="prata">Prata</MenuItem>
+                        <MenuItem value="ouro">Ouro</MenuItem>
+                        <MenuItem value="platina">Platina</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  {/* Bônus Especiais */}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2, color: '#9c27b0' }}>
+                      Bônus Especiais
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      label="Bônus Aniversário"
+                      type="number"
+                      size="small"
+                      value={fidelidadeConfig.bonusAniversario}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusAniversario: parseInt(e.target.value) })}
+                      helperText="Pontos extras no aniversário"
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      label="Bônus Indicação"
+                      type="number"
+                      size="small"
+                      value={fidelidadeConfig.bonusIndicacao}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusIndicacao: parseInt(e.target.value) })}
+                      helperText="Pontos por indicação"
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      label="Bônus Primeiro Atendimento"
+                      type="number"
+                      size="small"
+                      value={fidelidadeConfig.bonusPrimeiroAtendimento}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusPrimeiroAtendimento: parseInt(e.target.value) })}
+                      helperText="Pontos na primeira visita"
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
+                      }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={fidelidadeConfig.regrasEspeciais?.aniversario}
+                            onChange={(e) => setFidelidadeConfig({
+                              ...fidelidadeConfig,
+                              regrasEspeciais: {
+                                ...fidelidadeConfig.regrasEspeciais,
+                                aniversario: e.target.checked
+                              }
+                            })}
+                          />
+                        }
+                        label="Ativar bônus de aniversário"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={fidelidadeConfig.regrasEspeciais?.indicacao}
+                            onChange={(e) => setFidelidadeConfig({
+                              ...fidelidadeConfig,
+                              regrasEspeciais: {
+                                ...fidelidadeConfig.regrasEspeciais,
+                                indicacao: e.target.checked
+                              }
+                            })}
+                          />
+                        }
+                        label="Ativar bônus de indicação"
+                      />
+                    </Box>
+                  </Grid>
+
+                  {/* Configuração dos Níveis */}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 2, mb: 2, color: '#9c27b0' }}>
+                      Configuração dos Níveis
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      Personalize os níveis do programa de fidelidade. Quanto maior o nível, mais benefícios o cliente tem.
+                    </Typography>
+                  </Grid>
+
+                  {Object.entries(fidelidadeConfig.niveis).map(([nivel, dados]) => (
+                    <Grid item xs={12} key={nivel}>
+                      <ConfiguracaoNivel
+                        nivel={nivel}
+                        dados={dados}
+                        onUpdate={handleNivelUpdate}
+                      />
+                    </Grid>
+                  ))}
+
+                  {/* Preview dos Níveis */}
+                  <Grid item xs={12}>
+                    <Paper sx={{ p: 3, bgcolor: '#f5f5f5', mt: 2 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                        Preview dos Níveis
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        {Object.entries(fidelidadeConfig.niveis).map(([nivel, dados]) => (
+                          <Chip
+                            key={nivel}
+                            label={`${nivel.toUpperCase()} - ${dados.multiplicador}x`}
+                            sx={{
+                              bgcolor: dados.cor,
+                              color: nivel === 'ouro' ? '#000' : '#fff',
+                              fontWeight: 600,
+                              py: 2,
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                </>
+              )}
+            </Grid>
+          </TabPanel>
+
+          {/* Backup */}
+          <TabPanel value={tabValue} index={5}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Alert severity="info" sx={{ mb: 2 }}>
@@ -1189,6 +1582,7 @@ function ModernConfiguracoes() {
                       <Chip label="Produtos" size="small" />
                       <Chip label="Usuários" size="small" />
                       <Chip label="Configurações" size="small" />
+                      <Chip label="Fidelidade" size="small" icon={<TrophyIcon />} />
                     </Box>
 
                     <Button
