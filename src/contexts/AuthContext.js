@@ -24,15 +24,20 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
+          console.log('🔍 AuthContext - Usuário Firebase:', firebaseUser.uid, firebaseUser.email);
+          
           // Buscar dados do usuário no Firestore (coleção 'usuarios')
           const userRef = doc(db, 'usuarios', firebaseUser.uid);
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
+            console.log('✅ AuthContext - Usuário encontrado:', userData);
             setUser({ id: firebaseUser.uid, ...userData });
-            localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...userData })); // 🔥 CORRIGIDO: firefirebaseUser -> firebaseUser
+            localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...userData }));
           } else {
+            console.log('⚠️ AuthContext - Usuário não encontrado no Firestore');
+            
             // Tentar buscar por email como fallback
             const usuarios = await firebaseService.query('usuarios', [
               { field: 'email', operator: '==', value: firebaseUser.email }
@@ -40,6 +45,8 @@ export const AuthProvider = ({ children }) => {
             
             if (usuarios && usuarios.length > 0) {
               const usuarioData = usuarios[0];
+              console.log('✅ AuthContext - Usuário encontrado por email:', usuarioData);
+              
               // Criar documento com o UID correto
               await setDoc(doc(db, 'usuarios', firebaseUser.uid), {
                 ...usuarioData,
@@ -47,17 +54,19 @@ export const AuthProvider = ({ children }) => {
                 migrado: true,
                 migradoEm: new Date().toISOString()
               });
+              
               setUser({ id: firebaseUser.uid, ...usuarioData });
               localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...usuarioData }));
             } else {
-              console.log('Usuário não encontrado no Firestore');
+              console.log('❌ AuthContext - Usuário não encontrado no sistema');
               await signOut(auth);
             }
           }
         } catch (error) {
-          console.error('Erro ao buscar usuário:', error);
+          console.error('❌ AuthContext - Erro ao buscar usuário:', error);
         }
       } else {
+        console.log('👋 AuthContext - Usuário deslogado');
         setUser(null);
         localStorage.removeItem('usuario');
       }
@@ -73,16 +82,42 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(auth, email, senha);
       const firebaseUser = userCredential.user;
       
+      console.log('✅ Login bem-sucedido no Firebase Auth:', firebaseUser.uid);
+      
       // Buscar dados do usuário
       const userRef = doc(db, 'usuarios', firebaseUser.uid);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        await signOut(auth);
-        throw new Error('Usuário não encontrado no sistema');
+        console.log('⚠️ Usuário não encontrado no Firestore, tentando buscar por email...');
+        
+        const usuarios = await firebaseService.query('usuarios', [
+          { field: 'email', operator: '==', value: email }
+        ]);
+        
+        if (usuarios && usuarios.length > 0) {
+          const usuarioData = usuarios[0];
+          
+          // Criar documento com o UID correto
+          await setDoc(doc(db, 'usuarios', firebaseUser.uid), {
+            ...usuarioData,
+            uid: firebaseUser.uid,
+            migrado: true,
+            migradoEm: new Date().toISOString()
+          });
+          
+          const usuarioCompleto = { id: firebaseUser.uid, ...usuarioData };
+          setUser(usuarioCompleto);
+          localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+          
+          return usuarioCompleto;
+        } else {
+          throw new Error('Usuário não encontrado no sistema');
+        }
       }
 
       const userData = userSnap.data();
+      console.log('✅ Dados do usuário carregados:', userData);
       
       // Verificar se está ativo
       if (userData.status !== 'ativo') {
@@ -96,7 +131,7 @@ export const AuthProvider = ({ children }) => {
       
       return usuarioCompleto;
     } catch (error) {
-      console.error('Erro no login:', error);
+      console.error('❌ Erro no login:', error);
       
       // Mapear erros comuns
       if (error.code === 'auth/user-not-found') {
