@@ -12,7 +12,8 @@ import {
   query,
   where,
   orderBy,
-  Timestamp
+  Timestamp,
+  setDoc // 🔥 IMPORTANTE: ADICIONAR setDoc
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -62,7 +63,7 @@ export const firebaseService = {
     }
   },
 
-  // Adicionar um documento
+  // Adicionar um documento (ID automático)
   add: async (collectionName, data) => {
     try {
       const dataWithTimestamps = {
@@ -75,6 +76,29 @@ export const firebaseService = {
       return { id: docRef.id, ...dataWithTimestamps };
     } catch (error) {
       console.error(`Erro ao adicionar em ${collectionName}:`, error);
+      throw error;
+    }
+  },
+
+  // 🔥 NOVO: Adicionar/atualizar documento com ID específico
+  set: async (collectionName, id, data) => {
+    try {
+      const docRef = doc(db, collectionName, id);
+      const dataWithTimestamps = {
+        ...data,
+        updatedAt: Timestamp.now()
+      };
+      
+      // Se não tiver createdAt, adicionar
+      if (!data.createdAt) {
+        dataWithTimestamps.createdAt = Timestamp.now();
+      }
+      
+      await setDoc(docRef, dataWithTimestamps, { merge: true });
+      console.log(`✅ Documento ${collectionName}/${id} salvo com sucesso`);
+      return { id, ...dataWithTimestamps };
+    } catch (error) {
+      console.error(`❌ Erro ao salvar em ${collectionName}:`, error);
       throw error;
     }
   },
@@ -136,7 +160,12 @@ export const firebaseService = {
       console.error(`Erro na query de ${collectionName}:`, error);
       throw error;
     }
+  },
+
+  // Gerar ID único (opcional)
+  generateId: (collectionName) => {
+    return doc(collection(db, collectionName)).id;
   }
-}; // <-- AGORA O OBJETO ESTÁ CORRETAMENTE FECHADO
+};
 
 export default firebaseService;
