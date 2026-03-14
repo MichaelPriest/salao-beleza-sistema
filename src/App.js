@@ -38,6 +38,7 @@ import Fidelidade from './pages/Fidelidade';
 import GerenciarFidelidade from './pages/GerenciarFidelidade';
 import Recompensas from './pages/Recompensas';
 import MeusPontos from './pages/MeusPontos';
+import FidelidadeHistorico from './pages/FidelidadeHistorico'; // 🔥 NOVA IMPORT
 
 // Pages Financeiras
 import ModernFinanceiro from './pages/ModernFinanceiro';
@@ -183,7 +184,8 @@ function AnimatedRoutes() {
           <Route path="/fidelidade" element={<Fidelidade />} />
           <Route path="/fidelidade/gerenciar" element={<GerenciarFidelidade />} />
           <Route path="/fidelidade/recompensas" element={<Recompensas />} />
-          <Route path="/meus-pontos" element={<MeusPontos />} />         
+          <Route path="/meus-pontos" element={<MeusPontos />} />
+          <Route path="/fidelidade/historico/:id" element={<FidelidadeHistorico />} /> {/* 🔥 NOVA ROTA */}
           
           {/* Financeiro */}
           <Route path="/financeiro" element={<ModernFinanceiro />} />
