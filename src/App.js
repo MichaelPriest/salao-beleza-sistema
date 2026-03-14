@@ -76,7 +76,7 @@ import ClientePerfil from './pages/ClientePerfil';
 // Página de Teste
 import TesteAPI from './pages/TesteAPI';
 
-// Site Público
+// Site Público (AGORA É A PÁGINA PRINCIPAL)
 import SiteSalao from './pages/SiteSalao';
 
 // Páginas de Erro
@@ -150,10 +150,14 @@ function App() {
             <Router>
               <Routes>
                 {/* =========================================== */}
+                {/* ROTA PRINCIPAL - SITE PÚBLICO */}
+                {/* =========================================== */}
+                <Route path="/" element={<SiteSalao />} />
+                
+                {/* =========================================== */}
                 {/* ROTAS PÚBLICAS */}
                 {/* =========================================== */}
                 <Route path="/teste" element={<TesteAPI />} />
-                <Route path="/site" element={<SiteSalao />} />
                 <Route path="/403" element={<Page403 />} />
                 <Route path="/500" element={<Page500 />} />
                 <Route path="/manutencao" element={<Manutencao />} />
@@ -204,8 +208,8 @@ function App() {
                 {/* Login do sistema */}
                 <Route path="/login" element={<ModernLogin />} />
                 
-                {/* ROTA RAIZ - DASHBOARD */}
-                <Route path="/" element={
+                {/* DASHBOARD DO SISTEMA (agora em /dashboard) */}
+                <Route path="/dashboard" element={
                   <PrivateRoute>
                     <SistemaLayout>
                       <ModernDashboard />
