@@ -21,13 +21,9 @@ import {
   LinearProgress,
   Alert,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Badge,
   Tabs,
   Tab,
+  CircularProgress,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -36,11 +32,10 @@ import {
   EmojiEvents as TrophyIcon,
   CardGiftcard as GiftIcon,
   History as HistoryIcon,
-  Schedule as ScheduleIcon,
-  CheckCircle as CheckIcon,
   Event as EventIcon,
   Logout as LogoutIcon,
   Settings as SettingsIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -57,8 +52,9 @@ function TabPanel({ children, value, index }) {
 
 function ClienteDashboard() {
   const navigate = useNavigate();
-  const { cliente, logout, loading: authLoading } = useAuthCliente();
+  const { cliente, logout, loading: authLoading, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   
   // Dados do cliente
@@ -83,76 +79,88 @@ function ClienteDashboard() {
     } else if (cliente) {
       carregarDados();
     }
-  }, [cliente, authLoading]);
+  }, [cliente, authLoading, firebaseUser]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      // Carregar agendamentos do cliente
-      const agendamentosData = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ], 'data', 'desc');
-      setAgendamentos(agendamentosData || []);
+      // 🔥 CARREGAR AGENDAMENTOS DO CLIENTE COM TRATAMENTO DE ERRO
+      try {
+        const agendamentosData = await firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: cliente.id }
+        ], 'data', 'desc');
+        setAgendamentos(agendamentosData || []);
+      } catch (err) {
+        console.error('Erro ao carregar agendamentos:', err);
+        // Não mostrar erro para o usuário, apenas continuar
+      }
 
-      // Filtrar próximos agendamentos
-      const hoje = new Date().toISOString().split('T')[0];
-      const proximos = (agendamentosData || [])
-        .filter(a => a.data >= hoje && a.status !== 'cancelado')
-        .sort((a, b) => a.data.localeCompare(b.data));
-      setProximosAgendamentos(proximos.slice(0, 3));
+      // 🔥 CARREGAR PONTUAÇÕES
+      try {
+        const pontuacoesData = await firebaseService.query('pontuacao', [
+          { field: 'clienteId', operator: '==', value: cliente.id }
+        ], 'data', 'desc');
+        setPontuacoes(pontuacoesData || []);
+      } catch (err) {
+        console.error('Erro ao carregar pontuações:', err);
+      }
 
-      // Carregar pontuações
-      const pontuacoesData = await firebaseService.query('pontuacao', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ], 'data', 'desc');
-      setPontuacoes(pontuacoesData || []);
+      // 🔥 CARREGAR RECOMPENSAS
+      try {
+        const recompensasData = await firebaseService.query('recompensas', [
+          { field: 'ativo', operator: '==', value: true }
+        ]);
+        setRecompensasDisponiveis(recompensasData?.slice(0, 3) || []);
+      } catch (err) {
+        console.error('Erro ao carregar recompensas:', err);
+      }
 
-      // Calcular saldo
-      const creditos = (pontuacoesData || [])
-        .filter(p => p.tipo === 'credito')
-        .reduce((acc, p) => acc + (p.quantidade || 0), 0);
-      const debitos = (pontuacoesData || [])
-        .filter(p => p.tipo === 'debito')
-        .reduce((acc, p) => acc + (p.quantidade || 0), 0);
-      
-      const saldoAtual = creditos - debitos;
-      setSaldo(saldoAtual);
-
-      // Determinar nível
-      let nivelAtual = 'bronze';
-      if (saldoAtual >= 5000) nivelAtual = 'platina';
-      else if (saldoAtual >= 2000) nivelAtual = 'ouro';
-      else if (saldoAtual >= 500) nivelAtual = 'prata';
-      setNivel(nivelAtual);
-
-      // Carregar atendimentos (histórico)
-      const atendimentosData = await firebaseService.query('atendimentos', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ], 'data', 'desc');
-      setHistoricoAtendimentos(atendimentosData?.slice(0, 5) || []);
-
-      // Carregar recompensas disponíveis
-      const recompensasData = await firebaseService.query('recompensas', [
-        { field: 'ativo', operator: '==', value: true }
-      ]);
-      
-      // Filtrar por nível
-      const recompensasFiltradas = (recompensasData || []).filter(r => {
-        const niveisOrdenados = ['bronze', 'prata', 'ouro', 'platina'];
-        const indexNivelCliente = niveisOrdenados.indexOf(nivelAtual);
-        const indexNivelRecompensa = niveisOrdenados.indexOf(r.nivelMinimo);
-        return indexNivelCliente >= indexNivelRecompensa;
-      });
-      
-      setRecompensasDisponiveis(recompensasFiltradas.slice(0, 3));
+      // 🔥 CARREGAR ATENDIMENTOS
+      try {
+        const atendimentosData = await firebaseService.query('atendimentos', [
+          { field: 'clienteId', operator: '==', value: cliente.id }
+        ], 'data', 'desc');
+        setHistoricoAtendimentos(atendimentosData?.slice(0, 5) || []);
+      } catch (err) {
+        console.error('Erro ao carregar atendimentos:', err);
+      }
 
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Erro geral ao carregar dados:', error);
+      setError('Alguns dados não puderam ser carregados. Tente atualizar a página.');
     } finally {
       setLoading(false);
     }
   };
+
+  // 🔥 CALCULAR SALDO E NÍVEL QUANDO PONTUAÇÕES MUDAREM
+  useEffect(() => {
+    const creditos = pontuacoes
+      .filter(p => p.tipo === 'credito')
+      .reduce((acc, p) => acc + (p.quantidade || 0), 0);
+    const debitos = pontuacoes
+      .filter(p => p.tipo === 'debito')
+      .reduce((acc, p) => acc + (p.quantidade || 0), 0);
+    
+    const saldoAtual = creditos - debitos;
+    setSaldo(saldoAtual);
+
+    let nivelAtual = 'bronze';
+    if (saldoAtual >= 5000) nivelAtual = 'platina';
+    else if (saldoAtual >= 2000) nivelAtual = 'ouro';
+    else if (saldoAtual >= 500) nivelAtual = 'prata';
+    setNivel(nivelAtual);
+
+    // Filtrar próximos agendamentos
+    const hoje = new Date().toISOString().split('T')[0];
+    const proximos = agendamentos
+      .filter(a => a.data >= hoje && a.status !== 'cancelado' && a.status !== 'finalizado')
+      .sort((a, b) => a.data.localeCompare(b.data));
+    setProximosAgendamentos(proximos.slice(0, 3));
+
+  }, [pontuacoes, agendamentos]);
 
   const handleLogout = () => {
     logout();
@@ -160,23 +168,38 @@ function ClienteDashboard() {
   };
 
   const handleAgendar = () => {
-    navigate('/cliente/agendamento');
+    navigate('/cliente/agendamentos');
   };
 
   const handleVerRecompensas = () => {
     navigate('/cliente/recompensas');
   };
 
-  const handleVerHistorico = () => {
-    setTabValue(1);
+  const handleRefresh = () => {
+    carregarDados();
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const formatarData = (data) => {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return data;
+    }
   };
 
   const getStatusColor = (status) => {
@@ -195,24 +218,14 @@ function ClienteDashboard() {
       case 'pendente': return 'Pendente';
       case 'cancelado': return 'Cancelado';
       case 'finalizado': return 'Realizado';
-      default: return status;
+      default: return status || 'Pendente';
     }
   };
 
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
-      <Box sx={{ width: '100%' }}>
-        <LinearProgress />
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <CircularProgress />
       </Box>
     );
   }
@@ -221,17 +234,17 @@ function ClienteDashboard() {
     return null;
   }
 
-  const progressoParaProximoNivel = niveis[nivel].proximo 
+  const progressoParaProximoNivel = niveis[nivel]?.proximo 
     ? (saldo / niveis[nivel].proximo) * 100 
     : 100;
 
-  const pontosFaltantes = niveis[nivel].proximo 
+  const pontosFaltantes = niveis[nivel]?.proximo 
     ? niveis[nivel].proximo - saldo 
     : 0;
 
   return (
     <Box>
-      {/* Header */}
+      {/* Header com botão de atualizar */}
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -264,6 +277,11 @@ function ClienteDashboard() {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title="Atualizar">
+            <IconButton onClick={handleRefresh} sx={{ color: '#9c27b0' }}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Configurações">
             <IconButton onClick={() => navigate('/cliente/perfil')} sx={{ color: '#9c27b0' }}>
               <SettingsIcon />
@@ -276,6 +294,13 @@ function ClienteDashboard() {
           </Tooltip>
         </Box>
       </Box>
+
+      {/* Mensagem de erro (se houver) */}
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       {/* Cards de Resumo */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -376,10 +401,10 @@ function ClienteDashboard() {
               </Box>
             </Grid>
             <Grid item xs={12} md={6}>
-              {niveis[nivel].proximo && (
+              {niveis[nivel]?.proximo && (
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, color: 'white' }}>
-                    <Typography variant="body2">Progresso para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina'].nome}</Typography>
+                    <Typography variant="body2">Progresso para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina']?.nome}</Typography>
                     <Typography variant="body2">{pontosFaltantes} pontos faltam</Typography>
                   </Box>
                   <LinearProgress
@@ -419,7 +444,11 @@ function ClienteDashboard() {
                   Seus Agendamentos
                 </Typography>
 
-                {proximosAgendamentos.length > 0 ? (
+                {loading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : proximosAgendamentos.length > 0 ? (
                   proximosAgendamentos.map((agendamento, index) => (
                     <Card key={index} variant="outlined" sx={{ mb: 2, p: 2 }}>
                       <Grid container spacing={2} alignItems="center">
@@ -427,7 +456,7 @@ function ClienteDashboard() {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <CalendarIcon sx={{ color: '#9c27b0' }} />
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {formatarData(agendamento.data)} às {agendamento.horario}
+                              {formatarData(agendamento.data)} às {agendamento.horario || '--:--'}
                             </Typography>
                           </Box>
                           <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
@@ -447,6 +476,7 @@ function ClienteDashboard() {
                             size="small"
                             fullWidth
                             sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                            onClick={() => navigate('/cliente/agendamentos')}
                           >
                             Detalhes
                           </Button>
@@ -481,7 +511,11 @@ function ClienteDashboard() {
                   Recompensas Disponíveis
                 </Typography>
 
-                {recompensasDisponiveis.length > 0 ? (
+                {loading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : recompensasDisponiveis.length > 0 ? (
                   recompensasDisponiveis.map((recompensa, index) => (
                     <Card key={index} variant="outlined" sx={{ mb: 2, p: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -499,7 +533,11 @@ function ClienteDashboard() {
                           label={`${recompensa.pontosNecessarios} pontos`}
                           sx={{ bgcolor: '#fff3e0', color: '#ff9800' }}
                         />
-                        <Button size="small" sx={{ color: '#9c27b0' }}>
+                        <Button 
+                          size="small" 
+                          sx={{ color: '#9c27b0' }}
+                          onClick={() => navigate('/cliente/recompensas')}
+                        >
                           Resgatar
                         </Button>
                       </Box>
@@ -534,7 +572,11 @@ function ClienteDashboard() {
               Histórico de Atendimentos
             </Typography>
 
-            {historicoAtendimentos.length > 0 ? (
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : historicoAtendimentos.length > 0 ? (
               <TableContainer>
                 <Table>
                   <TableHead>
