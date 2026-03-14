@@ -8,8 +8,7 @@ import { Toaster } from 'react-hot-toast';
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
 import { DadosProvider } from './contexts/DadosContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { AuthClienteProvider } from './contexts/AuthClienteContext';
+import { AuthProvider } from './contexts/AuthContext'; // PARA O SISTEMA
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -17,7 +16,6 @@ import ModernSidebar from './components/ModernSidebar';
 import PrivateRoute from './components/PrivateRoute';
 import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
-import ClienteLayout from './components/ClienteLayout';
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -61,17 +59,6 @@ import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
 
-// Páginas do Cliente
-import ClienteLogin from './pages/ClienteLogin';
-import ClienteCadastro from './pages/ClienteCadastro';
-import ClienteRecuperarSenha from './pages/ClienteRecuperarSenha';
-import ClienteDashboard from './pages/ClienteDashboard';
-import ClienteAgendamentos from './pages/ClienteAgendamentos';
-import ClienteRecompensas from './pages/ClienteRecompensas';
-import ClientePontos from './pages/ClientePontos';
-import ClienteHistorico from './pages/ClienteHistorico';
-import ClientePerfil from './pages/ClientePerfil';
-
 // Página de Teste
 import TesteAPI from './pages/TesteAPI';
 
@@ -84,6 +71,19 @@ import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
+
+// 🔥 IMPORTAÇÕES DO CLIENTE
+import { AuthClienteProvider } from './contexts/AuthClienteContext';
+import ClienteLayout from './components/ClienteLayout';
+import ClienteLogin from './pages/ClienteLogin';
+import ClienteCadastro from './pages/ClienteCadastro';
+import ClienteRecuperarSenha from './pages/ClienteRecuperarSenha';
+import ClienteDashboard from './pages/ClienteDashboard';
+import ClienteAgendamentos from './pages/ClienteAgendamentos';
+import ClienteRecompensas from './pages/ClienteRecompensas';
+import ClientePontos from './pages/ClientePontos';
+import ClienteHistorico from './pages/ClienteHistorico';
+import ClientePerfil from './pages/ClientePerfil';
 
 const theme = createTheme({
   palette: {
@@ -110,113 +110,130 @@ const theme = createTheme({
   },
 });
 
+// Componente para rotas do sistema (com sidebar)
+const SistemaLayout = ({ children }) => (
+  <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <ModernSidebar />
+    <div style={{ 
+      flexGrow: 1, 
+      display: 'flex', 
+      flexDirection: 'column',
+      width: 'calc(100% - 300px)',
+    }}>
+      <ModernHeader />
+      <main style={{ 
+        flexGrow: 1, 
+        padding: '24px',
+        backgroundColor: '#faf5ff',
+        minHeight: 'calc(100vh - 64px)',
+        overflow: 'auto'
+      }}>
+        {children}
+      </main>
+    </div>
+  </div>
+);
+
 function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <FeedbackProvider>
         <DadosProvider>
+          {/* Provider do SISTEMA (funcionários) */}
           <AuthProvider>
-            <AuthClienteProvider>
-              <GlobalLoading />
-              <Toaster position="top-right" />
-              <GlobalSnackbar />
-              
-              <Router>
-                <Routes>
-                  {/* =========================================== */}
-                  {/* ROTAS PÚBLICAS - SEM SIDEBAR */}
-                  {/* =========================================== */}
-                  <Route path="/login" element={<ModernLogin />} />
-                  <Route path="/teste" element={<TesteAPI />} />
-                  <Route path="/site" element={<SiteSalao />} />
-                  <Route path="/403" element={<Page403 />} />
-                  <Route path="/500" element={<Page500 />} />
-                  <Route path="/manutencao" element={<Manutencao />} />
-                  
-                  {/* =========================================== */}
-                  {/* ROTAS DO CLIENTE */}
-                  {/* =========================================== */}
-                  <Route path="/cliente/login" element={<ClienteLogin />} />
-                  <Route path="/cliente/cadastro" element={<ClienteCadastro />} />
-                  <Route path="/cliente/recuperar-senha" element={<ClienteRecuperarSenha />} />
-                  
-                  {/* Rotas do cliente com layout próprio */}
-                  <Route path="/cliente" element={<ClienteLayout />}>
-                    <Route path="dashboard" element={<ClienteDashboard />} />
-                    <Route path="agendamentos" element={<ClienteAgendamentos />} />
-                    <Route path="recompensas" element={<ClienteRecompensas />} />
-                    <Route path="pontos" element={<ClientePontos />} />
-                    <Route path="historico" element={<ClienteHistorico />} />
-                    <Route path="perfil" element={<ClientePerfil />} />
-                  </Route>
-                  
-                  {/* =========================================== */}
-                  {/* ROTAS PRIVADAS DO SISTEMA - COM SIDEBAR */}
-                  {/* =========================================== */}
-                  <Route path="/" element={
-                    <PrivateRoute>
-                      <div style={{ display: 'flex', minHeight: '100vh' }}>
-                        <ModernSidebar />
-                        <div style={{ 
-                          flexGrow: 1, 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          width: 'calc(100% - 300px)',
-                        }}>
-                          <ModernHeader />
-                          <main style={{ 
-                            flexGrow: 1, 
-                            padding: '24px',
-                            backgroundColor: '#faf5ff',
-                            minHeight: 'calc(100vh - 64px)',
-                            overflow: 'auto'
-                          }}>
-                            <Routes>
-                              <Route index element={<ModernDashboard />} />
-                              <Route path="clientes" element={<ModernClientes />} />
-                              <Route path="servicos" element={<ModernServicos />} />
-                              <Route path="profissionais" element={<ModernProfissionais />} />
-                              <Route path="agendamentos" element={<ModernAgendamentos />} />
-                              <Route path="agenda" element={<Agenda />} />
-                              <Route path="atendimentos" element={<ModernAtendimentos />} />
-                              <Route path="atendimento/:id" element={<ModernAtendimento />} />
-                              <Route path="fidelidade" element={<Fidelidade />} />
-                              <Route path="fidelidade/gerenciar" element={<GerenciarFidelidade />} />
-                              <Route path="fidelidade/recompensas" element={<Recompensas />} />
-                              <Route path="meus-pontos" element={<MeusPontos />} />
-                              <Route path="fidelidade/historico/:id" element={<FidelidadeHistorico />} />
-                              <Route path="financeiro" element={<ModernFinanceiro />} />
-                              <Route path="financeiro/pagar" element={<ContasPagar />} />
-                              <Route path="financeiro/receber" element={<ContasReceber />} />
-                              <Route path="financeiro/fluxo" element={<FluxoCaixa />} />
-                              <Route path="compras" element={<ModernCompras />} />
-                              <Route path="relatorios" element={<ModernRelatorios />} />
-                              <Route path="estoque" element={<ModernEstoque />} />
-                              <Route path="fornecedores" element={<Fornecedores />} />
-                              <Route path="entradas" element={<Entradas />} />
-                              <Route path="usuarios" element={<GerenciarUsuarios />} />
-                              <Route path="historico" element={<HistoricoAtendimentos />} />
-                              <Route path="auditoria" element={<Auditoria />} />
-                              <Route path="perfil" element={<ModernPerfil />} />
-                              <Route path="notificacoes" element={<ModernNotificacoes />} />
-                              <Route path="configuracoes" element={<ModernConfiguracoes />} />
-                              <Route path="minhas-comissoes" element={<MinhasComissoes />} />
-                              <Route path="importar-servicos" element={<ImportarServicos />} />
-                            </Routes>
-                          </main>
-                        </div>
-                      </div>
-                    </PrivateRoute>
-                  } />
-                  
-                  {/* =========================================== */}
-                  {/* ROTA 404 - DEVE SER A ÚLTIMA */}
-                  {/* =========================================== */}
-                  <Route path="*" element={<Page404 />} />
-                </Routes>
-              </Router>
-            </AuthClienteProvider>
+            <GlobalLoading />
+            <Toaster position="top-right" />
+            <GlobalSnackbar />
+            
+            <Router>
+              <Routes>
+                {/* =========================================== */}
+                {/* ROTAS PÚBLICAS */}
+                {/* =========================================== */}
+                <Route path="/teste" element={<TesteAPI />} />
+                <Route path="/site" element={<SiteSalao />} />
+                <Route path="/403" element={<Page403 />} />
+                <Route path="/500" element={<Page500 />} />
+                <Route path="/manutencao" element={<Manutencao />} />
+                
+                {/* =========================================== */}
+                {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) */}
+                {/* =========================================== */}
+                
+                {/* Login do sistema */}
+                <Route path="/login" element={<ModernLogin />} />
+                
+                {/* Rotas protegidas do sistema */}
+                <Route path="/" element={
+                  <PrivateRoute>
+                    <SistemaLayout>
+                      <Routes>
+                        <Route index element={<ModernDashboard />} />
+                        <Route path="clientes" element={<ModernClientes />} />
+                        <Route path="servicos" element={<ModernServicos />} />
+                        <Route path="profissionais" element={<ModernProfissionais />} />
+                        <Route path="agendamentos" element={<ModernAgendamentos />} />
+                        <Route path="agenda" element={<Agenda />} />
+                        <Route path="atendimentos" element={<ModernAtendimentos />} />
+                        <Route path="atendimento/:id" element={<ModernAtendimento />} />
+                        <Route path="fidelidade" element={<Fidelidade />} />
+                        <Route path="fidelidade/gerenciar" element={<GerenciarFidelidade />} />
+                        <Route path="fidelidade/recompensas" element={<Recompensas />} />
+                        <Route path="meus-pontos" element={<MeusPontos />} />
+                        <Route path="fidelidade/historico/:id" element={<FidelidadeHistorico />} />
+                        <Route path="financeiro" element={<ModernFinanceiro />} />
+                        <Route path="financeiro/pagar" element={<ContasPagar />} />
+                        <Route path="financeiro/receber" element={<ContasReceber />} />
+                        <Route path="financeiro/fluxo" element={<FluxoCaixa />} />
+                        <Route path="compras" element={<ModernCompras />} />
+                        <Route path="relatorios" element={<ModernRelatorios />} />
+                        <Route path="estoque" element={<ModernEstoque />} />
+                        <Route path="fornecedores" element={<Fornecedores />} />
+                        <Route path="entradas" element={<Entradas />} />
+                        <Route path="usuarios" element={<GerenciarUsuarios />} />
+                        <Route path="historico" element={<HistoricoAtendimentos />} />
+                        <Route path="auditoria" element={<Auditoria />} />
+                        <Route path="perfil" element={<ModernPerfil />} />
+                        <Route path="notificacoes" element={<ModernNotificacoes />} />
+                        <Route path="configuracoes" element={<ModernConfiguracoes />} />
+                        <Route path="minhas-comissoes" element={<MinhasComissoes />} />
+                        <Route path="importar-servicos" element={<ImportarServicos />} />
+                      </Routes>
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* =========================================== */}
+                {/* ROTAS DO CLIENTE - COM SEU PRÓPRIO PROVIDER */}
+                {/* =========================================== */}
+                <Route path="/cliente/*" element={
+                  <AuthClienteProvider>
+                    <Routes>
+                      {/* Login do cliente - público dentro da área do cliente */}
+                      <Route path="login" element={<ClienteLogin />} />
+                      <Route path="cadastro" element={<ClienteCadastro />} />
+                      <Route path="recuperar-senha" element={<ClienteRecuperarSenha />} />
+                      
+                      {/* Rotas protegidas do cliente */}
+                      <Route path="/" element={<ClienteLayout />}>
+                        <Route path="dashboard" element={<ClienteDashboard />} />
+                        <Route path="agendamentos" element={<ClienteAgendamentos />} />
+                        <Route path="recompensas" element={<ClienteRecompensas />} />
+                        <Route path="pontos" element={<ClientePontos />} />
+                        <Route path="historico" element={<ClienteHistorico />} />
+                        <Route path="perfil" element={<ClientePerfil />} />
+                      </Route>
+                    </Routes>
+                  </AuthClienteProvider>
+                } />
+                
+                {/* =========================================== */}
+                {/* ROTA 404 */}
+                {/* =========================================== */}
+                <Route path="*" element={<Page404 />} />
+              </Routes>
+            </Router>
           </AuthProvider>
         </DadosProvider>
       </FeedbackProvider>
