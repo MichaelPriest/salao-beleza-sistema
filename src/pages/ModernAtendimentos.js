@@ -60,6 +60,59 @@ import { Timestamp } from 'firebase/firestore';
 // Importar o logo
 import logo from '../assets/logo.png';
 
+// 🔥 FUNÇÃO PARA OBTER DADOS DO CLIENTE DE FORMA SEGURA
+const getClienteData = (clienteId, clientes) => {
+  if (!clienteId || !clientes) return null;
+  
+  // Buscar cliente pelo ID (pode ser o uid do Firebase Auth ou o id do documento)
+  const cliente = clientes.find(c => 
+    c.id === clienteId || 
+    c.uid === clienteId || 
+    c.googleUid === clienteId
+  );
+  
+  if (!cliente) return null;
+  
+  // Retornar objeto padronizado com todos os campos necessários
+  return {
+    id: cliente.id || cliente.uid || cliente.googleUid,
+    nome: cliente.nome || cliente.displayName || 'Cliente',
+    telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
+    email: cliente.email || '',
+    cpf: cliente.cpf || '',
+    foto: cliente.foto || cliente.photoURL || cliente.avatar || null,
+    dataNascimento: cliente.dataNascimento || '',
+    genero: cliente.genero || '',
+    cep: cliente.cep || '',
+    logradouro: cliente.logradouro || '',
+    numero: cliente.numero || '',
+    complemento: cliente.complemento || '',
+    bairro: cliente.bairro || '',
+    cidade: cliente.cidade || '',
+    estado: cliente.estado || '',
+    status: cliente.status || 'Ativo'
+  };
+};
+
+// 🔥 FUNÇÃO PARA OBTER DADOS DO PROFISSIONAL
+const getProfissionalData = (profissionalId, profissionais) => {
+  if (!profissionalId || !profissionais) return null;
+  
+  const profissional = profissionais.find(p => 
+    p.id === profissionalId || 
+    p.uid === profissionalId
+  );
+  
+  if (!profissional) return null;
+  
+  return {
+    id: profissional.id || profissional.uid,
+    nome: profissional.nome || profissional.displayName || 'Profissional',
+    especialidade: profissional.especialidade || '',
+    foto: profissional.foto || profissional.photoURL || null
+  };
+};
+
 function ModernAtendimentos() {
   const navigate = useNavigate();
   const [usuario, setUsuario] = useState(null);
@@ -239,8 +292,8 @@ function ModernAtendimentos() {
   const atendimentosFiltradosPorUsuario = filtrarAtendimentosPorUsuario(atendimentos);
   
   const filteredAtendimentos = atendimentosFiltradosPorUsuario.filter(atendimento => {
-    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
+    const cliente = getClienteData(atendimento.clienteId, clientes);
+    const profissional = getProfissionalData(atendimento.profissionalId, profissionais);
     const servicosResumo = getServicosResumo(atendimento);
     const dataAtendimento = new Date(atendimento.data);
     const hoje = new Date();
@@ -335,8 +388,8 @@ function ModernAtendimentos() {
 
   const handleImprimir = (atendimento) => {
     // Clientes podem imprimir? Talvez sim
-    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
+    const cliente = getClienteData(atendimento.clienteId, clientes);
+    const profissional = getProfissionalData(atendimento.profissionalId, profissionais);
     const todosServicos = getTodosServicos(atendimento);
     const produtos = atendimento.itensProduto || [];
     const valorTotal = calcularValorTotal(atendimento);
@@ -780,16 +833,24 @@ function ModernAtendimentos() {
                 .filter(a => a.status === 'em_andamento')
                 .slice(0, 3)
                 .map(atendimento => {
-                  const cliente = clientes.find(c => c.id === atendimento.clienteId);
-                  const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
+                  const cliente = getClienteData(atendimento.clienteId, clientes);
+                  const profissional = getProfissionalData(atendimento.profissionalId, profissionais);
                   const servicosResumo = getServicosResumo(atendimento);
 
                   return (
                     <Grid item xs={12} md={4} key={atendimento.id}>
                       <Card variant="outlined" sx={{ p: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                          <Avatar src={cliente?.avatar} sx={{ bgcolor: '#ff9800', mr: 2, width: 48, height: 48 }}>
-                            {cliente?.nome?.charAt(0)}
+                          <Avatar 
+                            src={cliente?.foto} 
+                            sx={{ 
+                              bgcolor: '#ff9800', 
+                              mr: 2, 
+                              width: 48, 
+                              height: 48 
+                            }}
+                          >
+                            {!cliente?.foto && cliente?.nome?.charAt(0)}
                           </Avatar>
                           <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -903,8 +964,8 @@ function ModernAtendimentos() {
                 {filteredAtendimentos
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((atendimento) => {
-                    const cliente = clientes.find(c => c.id === atendimento.clienteId);
-                    const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
+                    const cliente = getClienteData(atendimento.clienteId, clientes);
+                    const profissional = getProfissionalData(atendimento.profissionalId, profissionais);
                     const todosServicos = getTodosServicos(atendimento);
                     const servicosResumo = todosServicos.map(s => s.nome).join(', ');
                     const valorTotal = calcularValorTotal(atendimento);
@@ -913,8 +974,15 @@ function ModernAtendimentos() {
                       <TableRow key={atendimento.id} hover>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar src={cliente?.avatar} sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
-                              {cliente?.nome?.charAt(0)}
+                            <Avatar 
+                              src={cliente?.foto} 
+                              sx={{ 
+                                width: 32, 
+                                height: 32, 
+                                bgcolor: '#9c27b0' 
+                              }}
+                            >
+                              {!cliente?.foto && cliente?.nome?.charAt(0)}
                             </Avatar>
                             <Box>
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -1082,18 +1150,29 @@ function ModernAtendimentos() {
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                    {clientes.find(c => c.id === selectedAtendimento.clienteId)?.nome}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {clientes.find(c => c.id === selectedAtendimento.clienteId)?.telefone}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                    <Avatar 
+                      src={getClienteData(selectedAtendimento.clienteId, clientes)?.foto}
+                      sx={{ width: 48, height: 48, bgcolor: '#9c27b0' }}
+                    >
+                      {!getClienteData(selectedAtendimento.clienteId, clientes)?.foto && 
+                        getClienteData(selectedAtendimento.clienteId, clientes)?.nome?.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {getClienteData(selectedAtendimento.clienteId, clientes)?.nome}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {getClienteData(selectedAtendimento.clienteId, clientes)?.telefone}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Grid>
                 {cargo !== 'cliente' && (
                   <Grid item xs={12} md={6}>
                     <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                      {profissionais.find(p => p.id === selectedAtendimento.profissionalId)?.nome}
+                    <Typography variant="body1" sx={{ fontWeight: 600, mt: 1 }}>
+                      {getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.nome}
                     </Typography>
                   </Grid>
                 )}
