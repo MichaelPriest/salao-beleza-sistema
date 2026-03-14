@@ -1503,8 +1503,8 @@ function ModernConfiguracoes() {
                       Personalize os níveis do programa de fidelidade. Quanto maior o nível, mais benefícios o cliente tem.
                     </Typography>
                   </Grid>
-
-                  {Object.entries(fidelidadeConfig.niveis).map(([nivel, dados]) => (
+                  
+                  {Object.entries(fidelidadeConfig?.niveis || {}).map(([nivel, dados]) => (
                     <Grid item xs={12} key={nivel}>
                       <ConfiguracaoNivel
                         nivel={nivel}
@@ -1513,7 +1513,7 @@ function ModernConfiguracoes() {
                       />
                     </Grid>
                   ))}
-
+                  
                   {/* Preview dos Níveis */}
                   <Grid item xs={12}>
                     <Paper sx={{ p: 3, bgcolor: '#f5f5f5', mt: 2 }}>
@@ -1521,12 +1521,12 @@ function ModernConfiguracoes() {
                         Preview dos Níveis
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                        {Object.entries(fidelidadeConfig.niveis).map(([nivel, dados]) => (
+                        {Object.entries(fidelidadeConfig?.niveis || {}).map(([nivel, dados]) => (
                           <Chip
                             key={nivel}
-                            label={`${nivel.toUpperCase()} - ${dados.multiplicador}x`}
+                            label={`${nivel.toUpperCase()} - ${dados?.multiplicador || 1}x`}
                             sx={{
-                              bgcolor: dados.cor,
+                              bgcolor: dados?.cor || '#999',
                               color: nivel === 'ouro' ? '#000' : '#fff',
                               fontWeight: 600,
                               py: 2,
@@ -1645,32 +1645,33 @@ function ModernConfiguracoes() {
                 </Card>
               </Grid>
 
-                {backup && (
-                  <Grid item xs={12}>
-                    <Alert 
-                      severity="success"
-                      action={
-                        <Button color="inherit" size="small" onClick={handleBackup}>
-                          Novo Backup
-                        </Button>
-                      }
-                    >
-                      <strong>Último backup:</strong> {new Date(backup.dataBackup).toLocaleString('pt-BR')}
-                      {backup.dados && typeof backup.dados === 'object' && (
-                        <Typography variant="caption" display="block">
-                          Total de registros: {
-                            Object.values(backup.dados).reduce((acc, arr) => {
-                              if (Array.isArray(arr)) {
-                                return acc + arr.length;
-                              }
-                              return acc;
-                            }, 0)
-                          }
-                        </Typography>
-                      )}
-                    </Alert>
-                  </Grid>
-                )}
+              {/* Seção de Backup */}
+              {backup && (
+                <Grid item xs={12}>
+                  <Alert 
+                    severity="success"
+                    action={
+                      <Button color="inherit" size="small" onClick={handleBackup}>
+                        Novo Backup
+                      </Button>
+                    }
+                  >
+                    <strong>Último backup:</strong> {new Date(backup.dataBackup).toLocaleString('pt-BR')}
+                    {backup.dados && typeof backup.dados === 'object' && (
+                      <Typography variant="caption" display="block">
+                        Total de registros: {
+                          Object.values(backup.dados || {}).reduce((acc, arr) => {
+                            if (Array.isArray(arr)) {
+                              return acc + arr.length;
+                            }
+                            return acc;
+                          }, 0)
+                        }
+                      </Typography>
+                    )}
+                  </Alert>
+                </Grid>
+              )}
             </Grid>
           </TabPanel>
         </CardContent>
