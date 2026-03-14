@@ -1,140 +1,138 @@
 // src/services/usuariosService.js
 import { firebaseService } from './firebase';
-import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut,
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-export const usuariosService = {
+class UsuariosService {
+  constructor() {
+    this.usuario = null;
+    this.auth = getAuth();
+    this.init();
+  }
+
+  init() {
+    // Ouvir mudanças na autenticação
+    onAuthStateChanged(this.auth, async (user) => {
+      if (user) {
+        // Usuário logado no Firebase Auth
+        try {
+          // Buscar dados no Firestore
+          const userRef = doc(db, 'usuarios', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            this.usuario = { id: user.uid, ...userSnap.data() };
+            localStorage.setItem('usuario', JSON.stringify(this.usuario));
+          } else {
+            // Tentar buscar por email
+            const usuarios = await firebaseService.query('usuarios', [
+              { field: 'email', operator: '==', value: user.email }
+            ]);
+            
+            if (usuarios && usuarios.length > 0) {
+              const usuarioData = usuarios[0];
+              // Corrigir: criar documento com o UID correto
+              await setDoc(doc(db, 'usuarios', user.uid), {
+                ...usuarioData,
+                uid: user.uid,
+                migrado: true,
+                migradoEm: new Date().toISOString()
+              });
+              
+              this.usuario = { id: user.uid, ...usuarioData };
+              localStorage.setItem('usuario', JSON.stringify(this.usuario));
+            } else {
+              console.log('❌ Usuário não encontrado no Firestore');
+              this.logout();
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao buscar usuário:', error);
+        }
+      } else {
+        // Usuário não logado
+        this.usuario = null;
+        localStorage.removeItem('usuario');
+      }
+    });
+  }
+
   // Login
-  login: async (email, senha) => {
+  async login(email, senha) {
     try {
-      console.log('🔑 Tentando login com:', email);
-      
-      const auth = getAuth();
-      
-      // Autenticar com Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
+      const userCredential = await signInWithEmailAndPassword(this.auth, email, senha);
       const user = userCredential.user;
       
-      // Buscar dados adicionais do usuário no Firestore
-      const usuarios = await firebaseService.query('usuarios', [
-        { field: 'email', operator: '==', value: email }
-      ]);
+      // Buscar dados do usuário no Firestore
+      const userRef = doc(db, 'usuarios', user.uid);
+      const userSnap = await getDoc(userRef);
       
-      if (!usuarios || usuarios.length === 0) {
-        throw new Error('Usuário não encontrado no banco de dados');
+      if (!userSnap.exists()) {
+        throw new Error('Usuário não encontrado no sistema');
       }
+
+      const usuarioData = userSnap.data();
       
-      const usuarioData = usuarios[0];
-      
-      // Combinar dados do Firebase Auth com dados do Firestore
-      const usuarioCompleto = {
-        id: user.uid,
-        ...usuarioData,
-        email: user.email
-      };
-      
-      // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
-      
-      // Disparar evento para notificar outros componentes
-      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioCompleto }));
-      
-      console.log('✅ Login bem-sucedido:', usuarioCompleto.nome);
-      return usuarioCompleto;
-      
-    } catch (error) {
-      console.error('❌ Erro no login:', error);
-      
-      // Tratar erros específicos do Firebase
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        throw new Error('Email ou senha inválidos');
-      } else if (error.code === 'auth/too-many-requests') {
-        throw new Error('Muitas tentativas. Tente novamente mais tarde');
-      } else if (error.code === 'auth/network-request-failed') {
-        throw new Error('Erro de conexão. Verifique sua internet');
+      // Verificar se está ativo
+      if (usuarioData.status !== 'ativo') {
+        await this.logout();
+        throw new Error('Usuário inativo. Contate o administrador.');
       }
+
+      this.usuario = { id: user.uid, ...usuarioData };
+      localStorage.setItem('usuario', JSON.stringify(this.usuario));
       
-      throw error;
-    }
-  },
-
-  // Logout
-  logout: async () => {
-    try {
-      const auth = getAuth();
-      await signOut(auth);
-      localStorage.removeItem('usuario');
-      window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: null }));
-      console.log('👋 Logout realizado');
+      return this.usuario;
     } catch (error) {
-      console.error('❌ Erro no logout:', error);
-      throw error;
-    }
-  },
-
-  // Obter usuário atual
-  getUsuarioAtual: () => {
-    try {
-      const user = localStorage.getItem('usuario');
-      return user ? JSON.parse(user) : null;
-    } catch (error) {
-      console.error('Erro ao recuperar usuário:', error);
-      return null;
-    }
-  },
-
-  // Verificar se está logado
-  isLoggedIn: () => {
-    return !!localStorage.getItem('usuario');
-  },
-
-  // Atualizar usuário
-  atualizar: async (id, dados) => {
-    try {
-      // Atualizar no Firestore
-      await firebaseService.update('usuarios', id, dados);
-      
-      // Atualizar localStorage se for o usuário atual
-      const usuarioAtual = usuariosService.getUsuarioAtual();
-      if (usuarioAtual && usuarioAtual.id === id) {
-        const usuarioAtualizado = { ...usuarioAtual, ...dados };
-        localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
-        window.dispatchEvent(new CustomEvent('usuarioAtualizado', { detail: usuarioAtualizado }));
-      }
-      
-      return { id, ...dados };
-    } catch (error) {
-      console.error('Erro ao atualizar usuário:', error);
-      throw error;
-    }
-  },
-
-  // Criar usuário (para cadastro)
-  criar: async (dados) => {
-    try {
-      const novoUsuario = await firebaseService.add('usuarios', dados);
-      return novoUsuario;
-    } catch (error) {
-      console.error('Erro ao criar usuário:', error);
-      throw error;
-    }
-  },
-
-  // Buscar usuário por ID
-  getById: async (id) => {
-    try {
-      const docRef = doc(db, 'usuarios', id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
-      }
-      return null;
-    } catch (error) {
-      console.error('Erro ao buscar usuário:', error);
+      console.error('Erro no login:', error);
       throw error;
     }
   }
-};
 
-export default usuariosService;
+  // Logout
+  async logout() {
+    try {
+      await signOut(this.auth);
+      this.usuario = null;
+      localStorage.removeItem('usuario');
+    } catch (error) {
+      console.error('Erro no logout:', error);
+      throw error;
+    }
+  }
+
+  // Obter usuário atual
+  getUsuarioAtual() {
+    // Tentar pegar do localStorage primeiro
+    const usuarioSalvo = localStorage.getItem('usuario');
+    if (usuarioSalvo) {
+      try {
+        return JSON.parse(usuarioSalvo);
+      } catch {
+        return null;
+      }
+    }
+    return this.usuario;
+  }
+
+  // Verificar se está logado
+  isLoggedIn() {
+    return !!this.getUsuarioAtual();
+  }
+
+  // Verificar permissão
+  temPermissao(permissao) {
+    const usuario = this.getUsuarioAtual();
+    if (!usuario) return false;
+    if (usuario.cargo === 'admin') return true;
+    return usuario.permissoes?.includes(permissao) || false;
+  }
+}
+
+export const usuariosService = new UsuariosService();
