@@ -33,8 +33,17 @@ export const AuthProvider = ({ children }) => {
           if (userSnap.exists()) {
             const userData = userSnap.data();
             console.log('✅ AuthContext - Usuário encontrado:', userData);
-            setUser({ id: firebaseUser.uid, ...userData });
-            localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...userData }));
+            
+            // IMPORTANTE: Não verificar cliente aqui!
+            const usuarioCompleto = { 
+              id: firebaseUser.uid, 
+              ...userData,
+              isCliente: false // Marcar explicitamente que não é cliente
+            };
+            
+            setUser(usuarioCompleto);
+            localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+            
           } else {
             console.log('⚠️ AuthContext - Usuário não encontrado no Firestore');
             
@@ -55,11 +64,21 @@ export const AuthProvider = ({ children }) => {
                 migradoEm: new Date().toISOString()
               });
               
-              setUser({ id: firebaseUser.uid, ...usuarioData });
-              localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...usuarioData }));
+              const usuarioCompleto = { 
+                id: firebaseUser.uid, 
+                ...usuarioData,
+                isCliente: false 
+              };
+              
+              setUser(usuarioCompleto);
+              localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
             } else {
               console.log('❌ AuthContext - Usuário não encontrado no sistema');
-              await signOut(auth);
+              // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO
+              // await signOut(auth);
+              
+              // Apenas mostra erro mas mantém logado?
+              toast.error('Usuário não encontrado no sistema');
             }
           }
         } catch (error) {
@@ -106,7 +125,12 @@ export const AuthProvider = ({ children }) => {
             migradoEm: new Date().toISOString()
           });
           
-          const usuarioCompleto = { id: firebaseUser.uid, ...usuarioData };
+          const usuarioCompleto = { 
+            id: firebaseUser.uid, 
+            ...usuarioData,
+            isCliente: false 
+          };
+          
           setUser(usuarioCompleto);
           localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
           
@@ -125,7 +149,12 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Usuário inativo. Contate o administrador.');
       }
 
-      const usuarioCompleto = { id: firebaseUser.uid, ...userData };
+      const usuarioCompleto = { 
+        id: firebaseUser.uid, 
+        ...userData,
+        isCliente: false 
+      };
+      
       setUser(usuarioCompleto);
       localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
       
