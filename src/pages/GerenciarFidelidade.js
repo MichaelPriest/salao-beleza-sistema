@@ -67,35 +67,35 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom'; // 🔥 IMPORT ADICIONADO
+import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 
-// Níveis de fidelidade - CORRIGIDO: adicionado corFundo
+// Níveis de fidelidade
 const niveis = {
   bronze: { 
     cor: '#cd7f32', 
-    corFundo: '#fff3e0', // 🔥 CORRIGIDO
+    corFundo: '#fff3e0',
     nome: 'Bronze', 
     minimo: 0, 
     multiplicador: 1 
   },
   prata: { 
     cor: '#c0c0c0', 
-    corFundo: '#f5f5f5', // 🔥 CORRIGIDO
+    corFundo: '#f5f5f5',
     nome: 'Prata', 
     minimo: 500, 
     multiplicador: 1.2 
   },
   ouro: { 
     cor: '#ffd700', 
-    corFundo: '#fff9e6', // 🔥 CORRIGIDO
+    corFundo: '#fff9e6',
     nome: 'Ouro', 
     minimo: 2000, 
     multiplicador: 1.5 
   },
   platina: { 
     cor: '#e5e4e2', 
-    corFundo: '#f0f0f0', // 🔥 CORRIGIDO
+    corFundo: '#f0f0f0',
     nome: 'Platina', 
     minimo: 5000, 
     multiplicador: 2 
@@ -103,7 +103,7 @@ const niveis = {
 };
 
 function GerenciarFidelidade() {
-  const navigate = useNavigate(); // 🔥 HOOK ADICIONADO
+  const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState([]);
@@ -266,6 +266,22 @@ function GerenciarFidelidade() {
     return 'bronze';
   };
 
+  // 🔥 Função para obter iniciais do nome
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // 🔥 Função para verificar se a foto é válida
+  const temFotoValida = (foto) => {
+    return foto && foto !== 'null' && foto !== 'undefined' && foto.trim() !== '';
+  };
+
   const handleSalvarPontos = async () => {
     try {
       if (!pontosForm.quantidade || pontosForm.quantidade <= 0) {
@@ -351,7 +367,7 @@ function GerenciarFidelidade() {
 
   const handleDeleteRecompensa = async () => {
     try {
-      await firebaseService.delete('recompensas', confirmDelete.id); // 🔥 CORRIGIDO: remover espaço
+      await firebaseService.delete('recompensas', confirmDelete.id);
       setRecompensas(recompensas.filter(r => r.id !== confirmDelete.id));
       mostrarSnackbar('Recompensa excluída com sucesso!');
       setConfirmDelete(null);
@@ -640,8 +656,16 @@ function GerenciarFidelidade() {
                         >
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <Avatar src={cliente.avatar}>
-                                {cliente.nome?.charAt(0).toUpperCase()}
+                              {/* 🔥 AVATAR COM FOTO */}
+                              <Avatar 
+                                src={temFotoValida(cliente.foto) ? cliente.foto : undefined}
+                                sx={{ 
+                                  width: 40, 
+                                  height: 40,
+                                  bgcolor: '#9c27b0',
+                                }}
+                              >
+                                {!temFotoValida(cliente.foto) && (cliente.nome ? getInitials(cliente.nome) : '?')}
                               </Avatar>
                               <Box>
                                 <Typography variant="body1" sx={{ fontWeight: 500 }}>
@@ -850,31 +874,44 @@ function GerenciarFidelidade() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {resgates.slice().sort((a, b) => new Date(b.data) - new Date(a.data)).map((resgate, index) => (
-                  <TableRow key={index} hover>
-                    <TableCell>
-                      <Typography variant="body2">{resgate.clienteNome || 'Cliente'}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{resgate.recompensaNome}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(resgate.data).toLocaleDateString('pt-BR')}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                        {resgate.pontosGastos}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        size="small"
-                        label={resgate.status || 'Resgatado'}
-                        color={resgate.status === 'cancelado' ? 'error' : 'success'}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {resgates.slice().sort((a, b) => new Date(b.data) - new Date(a.data)).map((resgate, index) => {
+                  // 🔥 Buscar cliente para pegar a foto
+                  const cliente = clientes.find(c => c.id === resgate.clienteId);
+                  
+                  return (
+                    <TableRow key={index} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar 
+                            src={temFotoValida(cliente?.foto) ? cliente.foto : undefined}
+                            sx={{ width: 24, height: 24, fontSize: '0.8rem', bgcolor: '#9c27b0' }}
+                          >
+                            {!temFotoValida(cliente?.foto) && (cliente?.nome ? cliente.nome.charAt(0) : '?')}
+                          </Avatar>
+                          <Typography variant="body2">{resgate.clienteNome || 'Cliente'}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{resgate.recompensaNome}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(resgate.data).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
+                          {resgate.pontosGastos}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={resgate.status || 'Resgatado'}
+                          color={resgate.status === 'cancelado' ? 'error' : 'success'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
 
                 {resgates.length === 0 && (
                   <TableRow>
