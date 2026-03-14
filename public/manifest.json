@@ -1,6 +1,9 @@
 {
   "name": "BeautyPro",
   "short_name": "BeautyPro",
+  "theme_color": "#8e24aa",
+  "background_color": "#ffffff",
+  "display": "standalone",
   "icons": [
     {
       "src": "icons/icon-192x192.png",
@@ -12,8 +15,5 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "theme_color": "#8e24aa",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  ]
 }
