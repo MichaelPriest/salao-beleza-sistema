@@ -40,6 +40,16 @@ export const AuthClienteProvider = ({ children }) => {
 
   // 🔥 OUVIR MUDANÇAS NO ESTADO DE AUTENTICAÇÃO DO FIREBASE
   useEffect(() => {
+    // 🔥 VERIFICAÇÃO CRÍTICA: Só ativar se estiver na área do cliente
+    const path = window.location.pathname;
+    if (!path.startsWith('/cliente')) {
+      console.log('🚫 AuthClienteProvider - Ignorando inicialização fora da área do cliente');
+      setLoading(false);
+      return; // Não inicializar fora da área do cliente
+    }
+
+    console.log('✅ AuthClienteProvider - Inicializando na área do cliente');
+    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       
@@ -76,9 +86,12 @@ export const AuthClienteProvider = ({ children }) => {
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
-        console.log('Cliente não encontrado para o UID:', uid);
-        // Se não encontrar, fazer logout
-        await signOut(auth);
+        console.log('❌ Cliente não encontrado para o UID:', uid);
+        console.log('🚫 AuthClienteProvider - Usuário não é cliente, mantendo logout');
+        // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO - apenas limpar estado
+        setCliente(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem('cliente');
       }
     } catch (error) {
       console.error('Erro ao carregar cliente:', error);
