@@ -64,6 +64,7 @@ import MinhasComissoes from './pages/MinhasComissoes';
 // 🔥 NOVAS PÁGINAS DO CLIENTE
 import ClienteLogin from './pages/ClienteLogin';
 import ClienteCadastro from './pages/ClienteCadastro';
+import ClienteRecuperarSenha from './pages/ClienteRecuperarSenha';
 import ClienteDashboard from './pages/ClienteDashboard';
 import ClienteAgendamentos from './pages/ClienteAgendamentos';
 import ClienteRecompensas from './pages/ClienteRecompensas';
@@ -291,6 +292,7 @@ function App() {
                 {/* 🔥 ROTAS DO CLIENTE (SEM SIDEBAR DO SISTEMA) */}
                 <Route path="/cliente/login" element={<ClienteLogin />} />
                 <Route path="/cliente/cadastro" element={<ClienteCadastro />} />
+                <Route path="/cliente/recuperar-senha" element={<ClienteRecuperarSenha />} />
                 
                 {/* 🔥 ROTAS DO CLIENTE COM LAYOUT PRÓPRIO */}
                 <Route path="/cliente" element={<ClienteLayout />}>
