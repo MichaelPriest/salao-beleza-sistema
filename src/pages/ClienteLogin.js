@@ -25,6 +25,7 @@ import {
   VisibilityOff as VisibilityOffIcon,
   Spa as SpaIcon,
   ArrowBack as ArrowBackIcon,
+  Google as GoogleIcon, // 🔥 NOVO ÍCONE
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -34,7 +35,7 @@ function ClienteLogin() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { login, loading } = useAuthCliente();
+  const { login, loginComGoogle, loading } = useAuthCliente();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -59,6 +60,14 @@ function ClienteLogin() {
     }
 
     const success = await login(formData.email, formData.senha);
+    if (success) {
+      navigate('/cliente/dashboard');
+    }
+  };
+
+  // 🔥 NOVO: Login com Google
+  const handleGoogleLogin = async () => {
+    const success = await loginComGoogle();
     if (success) {
       navigate('/cliente/dashboard');
     }
@@ -128,6 +137,36 @@ function ClienteLogin() {
               </Alert>
             )}
 
+            {/* 🔥 BOTÃO DE LOGIN COM GOOGLE */}
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              startIcon={<GoogleIcon />}
+              sx={{
+                mb: 2,
+                py: 1.5,
+                borderColor: '#ddd',
+                color: '#333',
+                '&:hover': {
+                  borderColor: '#9c27b0',
+                  backgroundColor: 'rgba(156,39,176,0.04)',
+                },
+              }}
+            >
+              Continuar com Google
+            </Button>
+
+            <Box sx={{ position: 'relative', my: 3 }}>
+              <Divider>
+                <Typography variant="body2" color="textSecondary" sx={{ px: 1 }}>
+                  ou
+                </Typography>
+              </Divider>
+            </Box>
+
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
@@ -189,17 +228,11 @@ function ClienteLogin() {
                   fontSize: '1.1rem',
                 }}
               >
-                {loading ? <CircularProgress size={24} /> : 'Entrar'}
+                {loading ? <CircularProgress size={24} /> : 'Entrar com Email'}
               </Button>
             </form>
 
-            <Divider sx={{ my: 3 }}>
-              <Typography variant="body2" color="textSecondary">
-                ou
-              </Typography>
-            </Divider>
-
-            <Box sx={{ textAlign: 'center' }}>
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
               <Typography variant="body2" color="textSecondary" gutterBottom>
                 Não tem uma conta?
               </Typography>
