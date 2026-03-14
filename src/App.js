@@ -1,5 +1,5 @@
 // src/App.js
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -8,7 +8,7 @@ import { Toaster } from 'react-hot-toast';
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
 import { DadosProvider } from './contexts/DadosContext';
-import { AuthProvider } from './contexts/AuthContext'; // PARA O SISTEMA
+import { AuthProvider } from './contexts/AuthContext';
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -17,14 +17,25 @@ import PrivateRoute from './components/PrivateRoute';
 import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 
-// Pages Principais
+// Lazy load das páginas do cliente para evitar carregamento desnecessário
+const AuthClienteProvider = lazy(() => import('./contexts/AuthClienteContext').then(m => ({ default: m.AuthClienteProvider })));
+const ClienteLayout = lazy(() => import('./components/ClienteLayout'));
+const ClienteLogin = lazy(() => import('./pages/ClienteLogin'));
+const ClienteCadastro = lazy(() => import('./pages/ClienteCadastro'));
+const ClienteRecuperarSenha = lazy(() => import('./pages/ClienteRecuperarSenha'));
+const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
+const ClienteAgendamentos = lazy(() => import('./pages/ClienteAgendamentos'));
+const ClienteRecompensas = lazy(() => import('./pages/ClienteRecompensas'));
+const ClientePontos = lazy(() => import('./pages/ClientePontos'));
+const ClienteHistorico = lazy(() => import('./pages/ClienteHistorico'));
+const ClientePerfil = lazy(() => import('./pages/ClientePerfil'));
+
+// Importações normais (não cliente)
 import ModernDashboard from './pages/ModernDashboard';
 import ModernLogin from './pages/ModernLogin';
 import ModernPerfil from './pages/ModernPerfil';
 import ModernNotificacoes from './pages/ModernNotificacoes';
 import ModernConfiguracoes from './pages/ModernConfiguracoes';
-
-// Pages Operacionais
 import ModernClientes from './pages/ModernClientes';
 import ModernServicos from './pages/ModernServicos';
 import ModernProfissionais from './pages/ModernProfissionais';
@@ -32,58 +43,31 @@ import Agenda from './pages/agenda';
 import ModernAgendamentos from './pages/ModernAgendamentos';
 import ModernAtendimentos from './pages/ModernAtendimentos';
 import ModernAtendimento from './pages/ModernAtendimento';
-
-// Pages Fidelidade
 import Fidelidade from './pages/Fidelidade';
 import GerenciarFidelidade from './pages/GerenciarFidelidade';
 import Recompensas from './pages/Recompensas';
 import MeusPontos from './pages/MeusPontos';
 import FidelidadeHistorico from './pages/FidelidadeHistorico';
-
-// Pages Financeiras
 import ModernFinanceiro from './pages/ModernFinanceiro';
 import ModernCompras from './pages/ModernCompras';
 import ModernRelatorios from './pages/ModernRelatorios';
 import ContasPagar from './pages/ContasPagar';
 import ContasReceber from './pages/ContasReceber';
 import FluxoCaixa from './pages/FluxoCaixa';
-
-// Pages Estoque
 import ModernEstoque from './pages/ModernEstoque';
 import Fornecedores from './pages/Fornecedores';
 import Entradas from './pages/Entradas';
-
-// Pages Administrativas
 import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
-
-// Página de Teste
 import TesteAPI from './pages/TesteAPI';
-
-// Site Público
 import SiteSalao from './pages/SiteSalao';
-
-// Páginas de Erro
 import Page404 from './pages/404';
 import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
-
-// 🔥 IMPORTAÇÕES DO CLIENTE
-import { AuthClienteProvider } from './contexts/AuthClienteContext';
-import ClienteLayout from './components/ClienteLayout';
-import ClienteLogin from './pages/ClienteLogin';
-import ClienteCadastro from './pages/ClienteCadastro';
-import ClienteRecuperarSenha from './pages/ClienteRecuperarSenha';
-import ClienteDashboard from './pages/ClienteDashboard';
-import ClienteAgendamentos from './pages/ClienteAgendamentos';
-import ClienteRecompensas from './pages/ClienteRecompensas';
-import ClientePontos from './pages/ClientePontos';
-import ClienteHistorico from './pages/ClienteHistorico';
-import ClientePerfil from './pages/ClientePerfil';
 
 const theme = createTheme({
   palette: {
@@ -110,7 +94,6 @@ const theme = createTheme({
   },
 });
 
-// Componente para rotas do sistema (com sidebar)
 const SistemaLayout = ({ children }) => (
   <div style={{ display: 'flex', minHeight: '100vh' }}>
     <ModernSidebar />
@@ -208,24 +191,23 @@ function App() {
                 {/* ROTAS DO CLIENTE - COM SEU PRÓPRIO PROVIDER */}
                 {/* =========================================== */}
                 <Route path="/cliente/*" element={
-                  <AuthClienteProvider>
-                    <Routes>
-                      {/* Login do cliente - público dentro da área do cliente */}
-                      <Route path="login" element={<ClienteLogin />} />
-                      <Route path="cadastro" element={<ClienteCadastro />} />
-                      <Route path="recuperar-senha" element={<ClienteRecuperarSenha />} />
-                      
-                      {/* Rotas protegidas do cliente */}
-                      <Route path="/" element={<ClienteLayout />}>
-                        <Route path="dashboard" element={<ClienteDashboard />} />
-                        <Route path="agendamentos" element={<ClienteAgendamentos />} />
-                        <Route path="recompensas" element={<ClienteRecompensas />} />
-                        <Route path="pontos" element={<ClientePontos />} />
-                        <Route path="historico" element={<ClienteHistorico />} />
-                        <Route path="perfil" element={<ClientePerfil />} />
-                      </Route>
-                    </Routes>
-                  </AuthClienteProvider>
+                  <Suspense fallback={<div>Carregando...</div>}>
+                    <AuthClienteProvider>
+                      <Routes>
+                        <Route path="login" element={<ClienteLogin />} />
+                        <Route path="cadastro" element={<ClienteCadastro />} />
+                        <Route path="recuperar-senha" element={<ClienteRecuperarSenha />} />
+                        <Route path="/" element={<ClienteLayout />}>
+                          <Route path="dashboard" element={<ClienteDashboard />} />
+                          <Route path="agendamentos" element={<ClienteAgendamentos />} />
+                          <Route path="recompensas" element={<ClienteRecompensas />} />
+                          <Route path="pontos" element={<ClientePontos />} />
+                          <Route path="historico" element={<ClienteHistorico />} />
+                          <Route path="perfil" element={<ClientePerfil />} />
+                        </Route>
+                      </Routes>
+                    </AuthClienteProvider>
+                  </Suspense>
                 } />
                 
                 {/* =========================================== */}
