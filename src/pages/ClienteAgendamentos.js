@@ -78,6 +78,8 @@ function ClienteAgendamentos() {
     try {
       setLoading(true);
       
+      console.log('📌 Buscando agendamentos para clienteId:', cliente.id);
+      
       const [agendamentosData, servicosData, profissionaisData] = await Promise.all([
         firebaseService.query('agendamentos', [
           { field: 'clienteId', operator: '==', value: cliente.id }
@@ -86,6 +88,7 @@ function ClienteAgendamentos() {
         firebaseService.getAll('profissionais')
       ]);
 
+      console.log('✅ Agendamentos encontrados:', agendamentosData?.length || 0);
       setAgendamentos(agendamentosData || []);
       setServicos(servicosData || []);
       setProfissionais(profissionaisData || []);
@@ -118,12 +121,19 @@ function ClienteAgendamentos() {
 
       const servico = servicos.find(s => s.id === formData.servicoId);
       
+      const hoje = new Date().toISOString().split('T')[0];
+      if (formData.data < hoje) {
+        toast.error('Não é possível agendar para datas passadas');
+        return;
+      }
+
       const novoAgendamento = {
         clienteId: cliente.id,
         clienteNome: cliente.nome,
         servicoId: formData.servicoId,
         servicoNome: servico?.nome,
         profissionalId: formData.profissionalId || null,
+        profissionalNome: profissionais.find(p => p.id === formData.profissionalId)?.nome || null,
         data: formData.data,
         horario: formData.horario,
         observacoes: formData.observacoes,
@@ -183,7 +193,7 @@ function ClienteAgendamentos() {
       case 'pendente': return 'Pendente';
       case 'cancelado': return 'Cancelado';
       case 'finalizado': return 'Realizado';
-      default: return status;
+      default: return status || 'Pendente';
     }
   };
 
@@ -400,6 +410,7 @@ function ClienteAgendamentos() {
                 onChange={(e) => setFormData({ ...formData, data: e.target.value })}
                 InputLabelProps={{ shrink: true }}
                 size="small"
+                inputProps={{ min: new Date().toISOString().split('T')[0] }}
               />
             </Grid>
 
