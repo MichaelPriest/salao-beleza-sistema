@@ -33,6 +33,9 @@ import {
   Divider,
   Tab,
   Tabs,
+  Autocomplete,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -47,6 +50,9 @@ import {
   Visibility as VisibilityIcon,
   History as HistoryIcon,
   Print as PrintIcon,
+  Star as StarIcon, // 🔥 NOVO ÍCONE
+  EmojiEvents as TrophyIcon, // 🔥 NOVO ÍCONE
+  PersonAdd as PersonAddIcon, // 🔥 NOVO ÍCONE
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -79,11 +85,14 @@ function ModernClientes() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
+  const [openIndicacaoDialog, setOpenIndicacaoDialog] = useState(false); // 🔥 NOVO
   const [selectedCliente, setSelectedCliente] = useState(null);
+  const [clienteIndicado, setClienteIndicado] = useState(null); // 🔥 NOVO
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [clientes, setClientes] = useState([]);
+  const [indicacoes, setIndicacoes] = useState([]); // 🔥 NOVO
   const [isPrinting, setIsPrinting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -109,6 +118,10 @@ function ModernClientes() {
       servicosPreferidos: [],
       notificacoes: true,
     },
+    // 🔥 NOVOS CAMPOS PARA INDICAÇÃO
+    indicadoPor: '',
+    indicadoPorNome: '',
+    dataIndicacao: null,
   });
 
   // 🔥 FUNÇÃO DE IMPRESSÃO CORRIGIDA
@@ -149,6 +162,13 @@ function ModernClientes() {
     carregarClientes();
   }, []);
 
+  // 🔥 Carregar indicações quando cliente é selecionado
+  useEffect(() => {
+    if (selectedCliente?.id) {
+      carregarIndicacoes(selectedCliente.id);
+    }
+  }, [selectedCliente]);
+
   const carregarClientes = async () => {
     try {
       setLoading(true);
@@ -161,6 +181,18 @@ function ModernClientes() {
       toast.error('Erro ao carregar clientes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔥 Carregar indicações do cliente
+  const carregarIndicacoes = async (clienteId) => {
+    try {
+      const indicacoesData = await firebaseService.query('indicacoes', [
+        { field: 'clienteId', operator: '==', value: clienteId }
+      ]);
+      setIndicacoes(indicacoesData || []);
+    } catch (error) {
+      console.error('Erro ao carregar indicações:', error);
     }
   };
 
@@ -196,6 +228,9 @@ function ModernClientes() {
         servicosPreferidos: [],
         notificacoes: true,
       },
+      indicadoPor: '',
+      indicadoPorNome: '',
+      dataIndicacao: null,
     });
     setTabValue(0);
     setOpenDialog(true);
@@ -226,6 +261,9 @@ function ModernClientes() {
         servicosPreferidos: [],
         notificacoes: true,
       },
+      indicadoPor: cliente.indicadoPor || '',
+      indicadoPorNome: cliente.indicadoPorNome || '',
+      dataIndicacao: cliente.dataIndicacao || null,
     });
     setTabValue(0);
     setOpenDialog(true);
@@ -234,6 +272,114 @@ function ModernClientes() {
   const handleView = (cliente) => {
     setSelectedCliente(cliente);
     setOpenViewDialog(true);
+  };
+
+  // 🔥 FUNÇÃO PARA ABRIR DIALOG DE INDICAÇÃO
+  const handleOpenIndicacao = (cliente) => {
+    setSelectedCliente(cliente);
+    setClienteIndicado(null);
+    setOpenIndicacaoDialog(true);
+  };
+
+  // 🔥 FUNÇÃO PARA REGISTRAR INDICAÇÃO
+  const handleRegistrarIndicacao = async () => {
+    if (!clienteIndicado) {
+      toast.error('Selecione o cliente indicado');
+      return;
+    }
+
+    if (clienteIndicado.id === selectedCliente.id) {
+      toast.error('O cliente não pode indicar a si mesmo');
+      return;
+    }
+
+    try {
+      // Verificar se já existe indicação para este cliente
+      const indicacoesExistentes = await firebaseService.query('indicacoes', [
+        { field: 'clienteIndicadoId', operator: '==', value: clienteIndicado.id }
+      ]);
+
+      if (indicacoesExistentes.length > 0) {
+        toast.error('Este cliente já foi indicado por alguém');
+        return;
+      }
+
+      // Buscar configurações de fidelidade
+      const configFidelidade = await firebaseService.getAll('config_fidelidade');
+      const config = configFidelidade[0] || { bonusIndicacao: 100 };
+
+      const indicacaoData = {
+        clienteId: selectedCliente.id, // Quem indicou
+        clienteNome: selectedCliente.nome,
+        clienteIndicadoId: clienteIndicado.id,
+        clienteIndicadoNome: clienteIndicado.nome,
+        dataIndicacao: new Date().toISOString(),
+        status: 'pendente', // pendente, confirmada, cancelada
+        pontosGanhos: 0,
+        pontosBonus: config.bonusIndicacao || 100,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      await firebaseService.add('indicacoes', indicacaoData);
+
+      // Atualizar o cliente indicado com quem o indicou
+      await firebaseService.update('clientes', clienteIndicado.id, {
+        indicadoPor: selectedCliente.id,
+        indicadoPorNome: selectedCliente.nome,
+        dataIndicacao: new Date().toISOString(),
+        updatedAt: Timestamp.now()
+      });
+
+      toast.success(`Indicação registrada! ${config.bonusIndicacao || 100} pontos serão creditados quando ${clienteIndicado.nome} realizar o primeiro atendimento.`);
+      
+      setOpenIndicacaoDialog(false);
+      carregarIndicacoes(selectedCliente.id);
+      
+    } catch (err) {
+      console.error('Erro ao registrar indicação:', err);
+      toast.error('Erro ao registrar indicação');
+    }
+  };
+
+  // 🔥 FUNÇÃO PARA CONFIRMAR INDICAÇÃO (quando o indicado faz primeiro atendimento)
+  const handleConfirmarIndicacao = async (indicacaoId) => {
+    try {
+      const indicacao = indicacoes.find(i => i.id === indicacaoId);
+      if (!indicacao) return;
+
+      // Buscar configurações de fidelidade
+      const configFidelidade = await firebaseService.getAll('config_fidelidade');
+      const config = configFidelidade[0] || { bonusIndicacao: 100 };
+      const pontosBonus = config.bonusIndicacao || 100;
+
+      // Atualizar status da indicação
+      await firebaseService.update('indicacoes', indicacaoId, {
+        status: 'confirmada',
+        pontosGanhos: pontosBonus,
+        dataConfirmacao: new Date().toISOString(),
+        updatedAt: Timestamp.now()
+      });
+
+      // Adicionar pontos ao cliente que indicou
+      await firebaseService.add('pontuacao', {
+        clienteId: indicacao.clienteId,
+        clienteNome: indicacao.clienteNome,
+        quantidade: pontosBonus,
+        tipo: 'credito',
+        motivo: `Bônus por indicação de ${indicacao.clienteIndicadoNome}`,
+        data: new Date().toISOString(),
+        indicacaoId: indicacaoId,
+        createdAt: Timestamp.now()
+      });
+
+      toast.success(`Indicação confirmada! ${pontosBonus} pontos creditados para ${indicacao.clienteNome}.`);
+      carregarIndicacoes(selectedCliente.id);
+      
+    } catch (error) {
+      console.error('Erro ao confirmar indicação:', error);
+      toast.error('Erro ao confirmar indicação');
+    }
   };
 
   const handleDelete = async (id) => {
@@ -535,6 +681,20 @@ function ModernClientes() {
                             <Typography variant="caption" color="textSecondary">
                               ID: {cliente.id ? String(cliente.id).substring(0, 8) : 'N/A'}
                             </Typography>
+                            {cliente.indicadoPorNome && (
+                              <Chip
+                                icon={<StarIcon />}
+                                label={`Indicado por: ${cliente.indicadoPorNome}`}
+                                size="small"
+                                sx={{ 
+                                  mt: 0.5, 
+                                  bgcolor: '#fff3e0',
+                                  color: '#ff9800',
+                                  fontSize: '0.6rem',
+                                  height: 20
+                                }}
+                              />
+                            )}
                           </Box>
                         </Box>
                       </TableCell>
@@ -574,27 +734,42 @@ function ModernClientes() {
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleView(cliente)}
-                            sx={{ color: '#9c27b0' }}
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleEdit(cliente)}
-                            sx={{ color: '#ff4081' }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDelete(cliente.id)}
-                            sx={{ color: '#f44336' }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <Tooltip title="Ver detalhes">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleView(cliente)}
+                              sx={{ color: '#9c27b0' }}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Registrar indicação">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleOpenIndicacao(cliente)}
+                              sx={{ color: '#ff9800' }}
+                            >
+                              <PersonAddIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Editar">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleEdit(cliente)}
+                              sx={{ color: '#ff4081' }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Excluir">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleDelete(cliente.id)}
+                              sx={{ color: '#f44336' }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                     </motion.tr>
@@ -752,6 +927,30 @@ function ModernClientes() {
                     </Select>
                   </FormControl>
                 </Grid>
+
+                {/* 🔥 CAMPO DE INDICAÇÃO */}
+                <Grid item xs={12}>
+                  <Autocomplete
+                    options={clientes.filter(c => c.id !== (selectedCliente?.id || ''))}
+                    getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`}
+                    value={clientes.find(c => c.id === formData.indicadoPor) || null}
+                    onChange={(e, newValue) => setFormData({
+                      ...formData,
+                      indicadoPor: newValue?.id || '',
+                      indicadoPorNome: newValue?.nome || '',
+                      dataIndicacao: newValue ? new Date().toISOString() : null
+                    })}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Indicado por (cliente)"
+                        placeholder="Buscar cliente que indicou..."
+                        helperText="Selecione o cliente que fez a indicação"
+                        size="small"
+                      />
+                    )}
+                  />
+                </Grid>
               </Grid>
             </TabPanel>
 
@@ -908,6 +1107,21 @@ function ModernClientes() {
                       fontWeight: 600,
                     }}
                   />
+                  
+                  {/* 🔥 INFORMAÇÃO DE INDICAÇÃO */}
+                  {selectedCliente.indicadoPorNome && (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <StarIcon fontSize="small" />
+                        Indicado por: {selectedCliente.indicadoPorNome}
+                      </Typography>
+                      {selectedCliente.dataIndicacao && (
+                        <Typography variant="caption" color="textSecondary">
+                          em {new Date(selectedCliente.dataIndicacao).toLocaleDateString('pt-BR')}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
                 </Grid>
 
                 <Grid item xs={12} md={8}>
@@ -973,12 +1187,57 @@ function ModernClientes() {
                   </Card>
                 </Grid>
 
-                <Grid item xs={12}>
-                  <HistoricoAtendimentosCliente 
-                    clienteId={selectedCliente.id}
-                    clienteNome={selectedCliente.nome}
-                  />
-                </Grid>
+                {/* 🔥 SEÇÃO DE INDICAÇÕES FEITAS POR ESTE CLIENTE */}
+                {indicacoes.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#ff9800' }}>
+                          <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                          Indicações Feitas
+                        </Typography>
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Cliente Indicado</TableCell>
+                                <TableCell>Data</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell align="right">Pontos</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {indicacoes.map((ind) => (
+                                <TableRow key={ind.id}>
+                                  <TableCell>{ind.clienteIndicadoNome}</TableCell>
+                                  <TableCell>{new Date(ind.dataIndicacao).toLocaleDateString('pt-BR')}</TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      size="small"
+                                      label={ind.status === 'confirmada' ? 'Confirmada' : ind.status === 'pendente' ? 'Pendente' : 'Cancelada'}
+                                      color={ind.status === 'confirmada' ? 'success' : ind.status === 'pendente' ? 'warning' : 'error'}
+                                    />
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    {ind.status === 'confirmada' ? (
+                                      <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>
+                                        +{ind.pontosGanhos}
+                                      </Typography>
+                                    ) : (
+                                      <Typography sx={{ color: '#ff9800' }}>
+                                        +{ind.pontosBonus} (pendente)
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
               </Grid>
             </Box>
           )}
@@ -996,6 +1255,76 @@ function ModernClientes() {
               {isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* 🔥 DIALOG DE INDICAÇÃO */}
+      <Dialog open={openIndicacaoDialog} onClose={() => setOpenIndicacaoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
+          <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Registrar Indicação
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Ao indicar um novo cliente, você ganhará pontos de fidelidade quando ele realizar o primeiro atendimento.
+            </Alert>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Cliente que está indicando:
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar src={selectedCliente?.foto} sx={{ bgcolor: '#9c27b0' }}>
+                      {selectedCliente?.nome?.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {selectedCliente?.nome}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {selectedCliente?.telefone}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Cliente indicado:
+                </Typography>
+                <Autocomplete
+                  options={clientes.filter(c => c.id !== selectedCliente?.id)}
+                  getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`}
+                  value={clienteIndicado}
+                  onChange={(e, newValue) => setClienteIndicado(newValue)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Buscar cliente indicado"
+                      placeholder="Digite o nome do cliente..."
+                      size="small"
+                      fullWidth
+                    />
+                  )}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenIndicacaoDialog(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={handleRegistrarIndicacao}
+            disabled={!clienteIndicado}
+            sx={{ bgcolor: '#ff9800' }}
+          >
+            Registrar Indicação
+          </Button>
         </DialogActions>
       </Dialog>
 
