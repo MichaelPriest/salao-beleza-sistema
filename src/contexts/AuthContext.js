@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
           if (userSnap.exists()) {
             const userData = userSnap.data();
             setUser({ id: firebaseUser.uid, ...userData });
-            localStorage.setItem('usuario', JSON.stringify({ id: firefirebaseUser.uid, ...userData }));
+            localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...userData })); // 🔥 CORRIGIDO: firefirebaseUser -> firebaseUser
           } else {
             // Tentar buscar por email como fallback
             const usuarios = await firebaseService.query('usuarios', [
