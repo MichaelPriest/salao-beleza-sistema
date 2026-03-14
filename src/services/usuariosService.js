@@ -49,7 +49,19 @@ class UsuariosService {
               localStorage.setItem('usuario', JSON.stringify(this.usuario));
             } else {
               console.log('❌ Usuário não encontrado no Firestore');
-              this.logout();
+              // 🔥 CORREÇÃO: NÃO FAZER LOGOUT AUTOMÁTICO
+              // this.logout();  <-- COMENTAR ESTA LINHA
+              
+              // Apenas mostrar erro mas manter logado
+              this.usuario = {
+                id: user.uid,
+                email: user.email,
+                nome: user.email.split('@')[0],
+                cargo: 'cliente', // Assumir como cliente por padrão
+                status: 'ativo',
+                permissoes: []
+              };
+              localStorage.setItem('usuario', JSON.stringify(this.usuario));
             }
           }
         } catch (error) {
@@ -74,10 +86,50 @@ class UsuariosService {
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        throw new Error('Usuário não encontrado no sistema');
+        console.log('⚠️ Usuário não encontrado no Firestore, tentando criar...');
+        
+        // Tentar buscar por email
+        const usuarios = await firebaseService.query('usuarios', [
+          { field: 'email', operator: '==', value: email }
+        ]);
+        
+        if (usuarios && usuarios.length > 0) {
+          const usuarioData = usuarios[0];
+          
+          // Criar documento com o UID correto
+          await setDoc(doc(db, 'usuarios', user.uid), {
+            ...usuarioData,
+            uid: user.uid,
+            migrado: true,
+            migradoEm: new Date().toISOString()
+          });
+          
+          this.usuario = { id: user.uid, ...usuarioData };
+          localStorage.setItem('usuario', JSON.stringify(this.usuario));
+          
+          return this.usuario;
+        } else {
+          // Criar um documento básico para o usuário
+          const novoUsuario = {
+            email: user.email,
+            nome: user.email.split('@')[0],
+            cargo: 'cliente',
+            status: 'ativo',
+            createdAt: new Date().toISOString(),
+            permissoes: []
+          };
+          
+          await setDoc(doc(db, 'usuarios', user.uid), novoUsuario);
+          
+          this.usuario = { id: user.uid, ...novoUsuario };
+          localStorage.setItem('usuario', JSON.stringify(this.usuario));
+          
+          return this.usuario;
+        }
       }
 
       const usuarioData = userSnap.data();
+      console.log('✅ Dados do usuário carregados:', usuarioData);
       
       // Verificar se está ativo
       if (usuarioData.status !== 'ativo') {
