@@ -164,7 +164,7 @@ function App() {
                 {/* Login do sistema */}
                 <Route path="/login" element={<ModernLogin />} />
                 
-                {/* Dashboard - rota raiz */}
+                {/* ROTA RAIZ - DASHBOARD */}
                 <Route path="/" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -173,7 +173,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
-                {/* Todas as outras rotas do sistema - SEM aninhamento de Routes */}
+                {/* CLIENTES */}
                 <Route path="/clientes" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -182,6 +182,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* SERVIÇOS */}
                 <Route path="/servicos" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -190,6 +191,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* PROFISSIONAIS */}
                 <Route path="/profissionais" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -198,6 +200,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* AGENDAMENTOS */}
                 <Route path="/agendamentos" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -206,6 +209,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* AGENDA */}
                 <Route path="/agenda" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -214,6 +218,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* ATENDIMENTOS */}
                 <Route path="/atendimentos" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -222,6 +227,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* ATENDIMENTO DETALHE */}
                 <Route path="/atendimento/:id" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -230,6 +236,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* FIDELIDADE */}
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -238,6 +245,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* GERENCIAR FIDELIDADE */}
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -246,6 +254,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* RECOMPENSAS */}
                 <Route path="/fidelidade/recompensas" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -254,6 +263,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* MEUS PONTOS */}
                 <Route path="/meus-pontos" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -262,6 +272,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* HISTÓRICO FIDELIDADE */}
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -270,6 +281,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* FINANCEIRO */}
                 <Route path="/financeiro" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -278,6 +290,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* CONTAS A PAGAR */}
                 <Route path="/financeiro/pagar" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -286,6 +299,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* CONTAS A RECEBER */}
                 <Route path="/financeiro/receber" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -294,6 +308,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* FLUXO DE CAIXA */}
                 <Route path="/financeiro/fluxo" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -302,6 +317,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* COMPRAS */}
                 <Route path="/compras" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -310,6 +326,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* RELATÓRIOS */}
                 <Route path="/relatorios" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -318,6 +335,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* ESTOQUE */}
                 <Route path="/estoque" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -326,6 +344,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* FORNECEDORES */}
                 <Route path="/fornecedores" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -334,6 +353,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* ENTRADAS */}
                 <Route path="/entradas" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -342,6 +362,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* USUÁRIOS */}
                 <Route path="/usuarios" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -350,6 +371,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* HISTÓRICO ATENDIMENTOS */}
                 <Route path="/historico" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -358,6 +380,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* AUDITORIA */}
                 <Route path="/auditoria" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -366,6 +389,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* PERFIL */}
                 <Route path="/perfil" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -374,6 +398,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* NOTIFICAÇÕES */}
                 <Route path="/notificacoes" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -382,6 +407,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* CONFIGURAÇÕES */}
                 <Route path="/configuracoes" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -390,6 +416,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* MINHAS COMISSÕES */}
                 <Route path="/minhas-comissoes" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -398,6 +425,7 @@ function App() {
                   </PrivateRoute>
                 } />
                 
+                {/* IMPORTAR SERVIÇOS */}
                 <Route path="/importar-servicos" element={
                   <PrivateRoute>
                     <SistemaLayout>
@@ -407,27 +435,31 @@ function App() {
                 } />
                 
                 {/* =========================================== */}
-                {/* ROTAS DO CLIENTE - COM SEU PRÓPRIO PROVIDER */}
+                {/* ROTAS DO CLIENTE */}
                 {/* =========================================== */}
+                
+                {/* LOGIN DO CLIENTE */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
                     <ClienteLogin />
                   </AuthClienteProvider>
                 } />
                 
+                {/* CADASTRO DO CLIENTE */}
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
                     <ClienteCadastro />
                   </AuthClienteProvider>
                 } />
                 
+                {/* RECUPERAR SENHA DO CLIENTE */}
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <ClienteRecuperarSenha />
                   </AuthClienteProvider>
                 } />
                 
-                {/* Rotas protegidas do cliente com layout */}
+                {/* DASHBOARD DO CLIENTE */}
                 <Route path="/cliente/dashboard" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -436,6 +468,7 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
+                {/* AGENDAMENTOS DO CLIENTE */}
                 <Route path="/cliente/agendamentos" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -444,6 +477,7 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
+                {/* RECOMPENSAS DO CLIENTE */}
                 <Route path="/cliente/recompensas" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -452,6 +486,7 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
+                {/* PONTOS DO CLIENTE */}
                 <Route path="/cliente/pontos" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -460,6 +495,7 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
+                {/* HISTÓRICO DO CLIENTE */}
                 <Route path="/cliente/historico" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -468,6 +504,7 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
+                {/* PERFIL DO CLIENTE */}
                 <Route path="/cliente/perfil" element={
                   <AuthClienteProvider>
                     <ClienteLayout>
@@ -477,7 +514,7 @@ function App() {
                 } />
                 
                 {/* =========================================== */}
-                {/* ROTA 404 */}
+                {/* ROTA 404 - DEVE SER A ÚLTIMA */}
                 {/* =========================================== */}
                 <Route path="*" element={<Page404 />} />
               </Routes>
