@@ -32,6 +32,25 @@ class UsuariosService {
               if (usuarioParsed && usuarioParsed.id === user.uid) {
                 console.log('✅ usuariosService - Usuário já existe no localStorage, mantendo:', usuarioParsed);
                 this.usuario = usuarioParsed;
+                
+                // 🔥 PROTEÇÃO EXTRA: Verificar se é funcionário e NUNCA deslogar
+                const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
+                if (cargosFuncionario.includes(usuarioParsed.cargo)) {
+                  console.log('🛡️ USUÁRIO É FUNCIONÁRIO - PROTEGIDO CONTRA LOGOUT');
+                  
+                  // Sobrescrever o método logout temporariamente
+                  const originalSignOut = this.auth.signOut;
+                  this.auth.signOut = function() {
+                    console.warn('🚫 TENTATIVA DE LOGOUT BLOQUEADA - USUÁRIO FUNCIONÁRIO');
+                    return Promise.resolve();
+                  };
+                  
+                  // Restaurar após 5 segundos
+                  setTimeout(() => {
+                    this.auth.signOut = originalSignOut;
+                  }, 5000);
+                }
+                
                 return; // 🔥 IMPORTANTE: Não continuar a execução
               }
             } catch (e) {
@@ -187,6 +206,15 @@ class UsuariosService {
   // Logout
   async logout() {
     try {
+      // 🔥 PROTEÇÃO: Verificar se é funcionário antes de deslogar
+      const usuario = this.getUsuarioAtual();
+      const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
+      
+      if (usuario && cargosFuncionario.includes(usuario.cargo)) {
+        console.warn('🚫 TENTATIVA DE LOGOUT BLOQUEADA - USUÁRIO FUNCIONÁRIO');
+        return; // Não faz logout
+      }
+      
       await signOut(this.auth);
       this.usuario = null;
       localStorage.removeItem('usuario');
