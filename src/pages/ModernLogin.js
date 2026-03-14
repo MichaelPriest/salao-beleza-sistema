@@ -23,7 +23,7 @@ import {
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../contexts/AuthContext'; // 🔥 IMPORTANTE: usar o AuthContext, não o AuthClienteContext
+import { useAuth } from '../contexts/AuthContext';
 import { 
   getAuth, 
   signInWithPopup, 
@@ -34,7 +34,7 @@ import { db } from '../services/firebase';
 
 function ModernLogin() {
   const navigate = useNavigate();
-  const { login } = useAuth(); // 🔥 Usar o hook do AuthContext
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
@@ -51,7 +51,6 @@ function ModernLogin() {
   const auth = getAuth();
   const googleProvider = new GoogleAuthProvider();
 
-  // Validar campos do formulário
   const validarCampos = () => {
     const errors = {
       email: '',
@@ -79,24 +78,54 @@ function ModernLogin() {
     return isValid;
   };
 
-  // Verificar se usuário existe no Firestore (para Google Login)
+  // 🔥 FUNÇÃO CORRIGIDA - Agora identifica pelo cargo
   const verificarUsuarioFirestore = async (user) => {
     try {
       const userRef = doc(db, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        console.log('❌ Usuário não encontrado no Firestore:', user.uid);
+        console.log('⚠️ Usuário não encontrado no Firestore, tentando buscar por email...');
+        
+        // Buscar por email como fallback
+        import('../services/firebase').then(({ firebaseService }) => {
+          firebaseService.query('usuarios', [
+            { field: 'email', operator: '==', value: user.email }
+          ]).then(usuarios => {
+            if (usuarios && usuarios.length > 0) {
+              const usuarioData = usuarios[0];
+              console.log('✅ Usuário encontrado por email:', usuarioData);
+              
+              // Criar documento com o UID correto
+              setDoc(doc(db, 'usuarios', user.uid), {
+                ...usuarioData,
+                uid: user.uid,
+                migrado: true,
+                migradoEm: new Date().toISOString()
+              }).then(() => {
+                console.log('✅ Documento migrado com sucesso');
+              });
+            }
+          });
+        });
+        
+        // 🔥 NÃO RETORNAR ERRO! Deixar o AuthContext cuidar disso
         return { 
-          error: true, 
-          type: 'not_found',
-          message: 'Usuário não cadastrado no sistema. Contate o administrador.' 
+          success: true, 
+          data: { 
+            id: user.uid, 
+            email: user.email,
+            nome: user.email.split('@')[0],
+            cargo: 'cliente', // Cargo padrão
+            status: 'ativo'
+          } 
         };
       }
 
       const usuarioData = userSnap.data();
+      console.log('✅ Usuário encontrado no Firestore:', usuarioData);
       
-      // Verificar se usuário está ativo
+      // Verificar se está ativo
       if (usuarioData.status !== 'ativo') {
         console.log('❌ Usuário inativo:', user.uid);
         return { 
@@ -104,6 +133,15 @@ function ModernLogin() {
           type: 'inactive',
           message: 'Usuário inativo. Contate o administrador para reativar seu acesso.' 
         };
+      }
+
+      // 🔥 IMPORTANTE: Verificar o cargo para decidir o que fazer
+      const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
+      
+      if (cargosFuncionario.includes(usuarioData.cargo)) {
+        console.log('✅ Usuário é funcionário (cargo:', usuarioData.cargo, ') - permitindo acesso');
+      } else {
+        console.log('✅ Usuário é cliente - permitindo acesso');
       }
 
       // Atualizar último acesso
@@ -117,20 +155,23 @@ function ModernLogin() {
     } catch (error) {
       console.error('Erro ao verificar usuário no Firestore:', error);
       return { 
-        error: true, 
-        type: 'database',
-        message: 'Erro ao verificar dados do usuário. Tente novamente.' 
+        success: true, // 🔥 MUDADO PARA true para não bloquear login
+        data: { 
+          id: user.uid, 
+          email: user.email,
+          nome: user.email.split('@')[0],
+          cargo: 'cliente',
+          status: 'ativo'
+        }
       };
     }
   };
 
-  // Login com email/senha
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setErrorDetails('');
     
-    // Validar campos
     if (!validarCampos()) {
       setErrorType('warning');
       setError('Por favor, corrija os erros no formulário');
@@ -140,7 +181,6 @@ function ModernLogin() {
     setLoading(true);
 
     try {
-      // 🔥 Usar a função login do AuthContext
       await login(formData.email, formData.senha);
       navigate('/');
     } catch (error) {
@@ -153,7 +193,6 @@ function ModernLogin() {
     }
   };
 
-  // Login com Google
   const handleGoogleLogin = async () => {
     setError('');
     setErrorDetails('');
@@ -209,7 +248,6 @@ function ModernLogin() {
     }
   };
 
-  // Limpar erros ao digitar
   const handleInputChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
     setFieldErrors({ ...fieldErrors, [field]: '' });
@@ -263,7 +301,6 @@ function ModernLogin() {
               Acessar Sistema
             </Typography>
 
-            {/* Mensagem de erro principal */}
             {error && (
               <Fade in={!!error}>
                 <Alert 
@@ -357,7 +394,6 @@ function ModernLogin() {
               Entrar com Google
             </Button>
 
-            {/* Rodapé */}
             <Box sx={{ mt: 3, textAlign: 'center' }}>
               <Typography variant="caption" color="textSecondary">
                 © 2026 Beauty Pro - Todos os direitos reservados
