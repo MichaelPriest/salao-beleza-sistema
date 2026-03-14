@@ -319,6 +319,11 @@ function ModernHeader() {
   const [fotoUrl, setFotoUrl] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // 🔥 REFS PARA CONTROLE
+  const isMounted = useRef(true);
+  const notificationInterval = useRef(null);
+  const usuarioRef = useRef(usuario);
+  
   // 🔥 ESTADOS PARA BUSCA LIVRE
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -332,8 +337,6 @@ function ModernHeader() {
   const lastSearchTerm = useRef('');
   const abortControllerRef = useRef(null);
   const searchInputRef = useRef(null);
-  
-  const usuarioRef = useRef(usuario);
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -379,37 +382,86 @@ function ModernHeader() {
     };
   }, []);
 
-  // 🔥 CARREGAR NOTIFICAÇÕES
-  const carregarNotificacoes = useCallback(async () => {
+  // 🔥 FUNÇÃO CORRIGIDA PARA CARREGAR NOTIFICAÇÕES
+  const carregarNotificacoes = useCallback(async (force = false) => {
+    const user = usuariosService.getUsuarioAtual();
+    const userId = user?.uid || user?.id;
+    
+    if (!userId) {
+      console.log('❌ Header - Nenhum usuário logado');
+      return;
+    }
+
     try {
-      const user = usuariosService.getUsuarioAtual();
-      if (user && user.uid) {
-        const data = await notificacoesService.listar(user.uid);
+      console.log(`📥 Header - Carregando notificações para ${userId}${force ? ' (forçado)' : ''}`);
+      
+      // Timeout para evitar travamento
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+
+      const dataPromise = notificacoesService.listar(userId);
+      const data = await Promise.race([dataPromise, timeoutPromise]);
+      
+      if (isMounted.current) {
+        console.log(`✅ Header - ${data.length} notificações carregadas`);
         setNotifications(data);
         setUnreadCount(data.filter(n => !n.lida).length);
       }
     } catch (error) {
-      console.error('Erro ao carregar notificações:', error);
+      console.error('❌ Header - Erro ao carregar notificações:', error);
     }
   }, []);
 
+  // 🔥 EFFECT PARA CARREGAR NOTIFICAÇÕES
   useEffect(() => {
-    if (usuario?.uid) {
-      carregarNotificacoes();
+    isMounted.current = true;
+    
+    if (usuario?.uid || usuario?.id) {
+      const userId = usuario?.uid || usuario?.id;
+      console.log(`🔄 Header - Configurando notificações para usuário: ${userId}`);
       
-      const handleNotificacoesAtualizadas = () => {
+      // Carregar imediatamente
+      carregarNotificacoes(true);
+      
+      // Configurar polling a cada 30 segundos
+      notificationInterval.current = setInterval(() => {
         carregarNotificacoes();
+      }, 30000);
+      
+      // Ouvir eventos personalizados
+      const handleNotificacoesAtualizadas = () => {
+        console.log('🔄 Header - Evento notificacoesAtualizadas recebido');
+        carregarNotificacoes(true);
+      };
+      
+      const handleNovaNotificacao = () => {
+        console.log('🔄 Header - Evento novaNotificacao recebido');
+        carregarNotificacoes(true);
       };
       
       window.addEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
-      window.addEventListener('novaNotificacao', handleNotificacoesAtualizadas);
+      window.addEventListener('novaNotificacao', handleNovaNotificacao);
       
       return () => {
+        isMounted.current = false;
+        if (notificationInterval.current) {
+          clearInterval(notificationInterval.current);
+        }
         window.removeEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
-        window.removeEventListener('novaNotificacao', handleNotificacoesAtualizadas);
+        window.removeEventListener('novaNotificacao', handleNovaNotificacao);
       };
     }
   }, [usuario, carregarNotificacoes]);
+
+  // 🔥 LOG DE DIAGNÓSTICO
+  useEffect(() => {
+    console.log('🔍 Header - Estado atual:', {
+      usuario: usuario?.uid || usuario?.id,
+      notifications: notifications.length,
+      unreadCount
+    });
+  }, [notifications, unreadCount, usuario]);
 
   // 🔥 FUNÇÃO DE BUSCA LIVRE - OTIMIZADA
   const realizarBusca = useCallback(async (termo) => {
@@ -810,11 +862,13 @@ function ModernHeader() {
     try {
       if (!notification.lida) {
         await notificacoesService.marcarComoLida(notification.id);
-        await carregarNotificacoes();
+        await carregarNotificacoes(true);
       }
       
       if (notification.link) {
         navigate(notification.link);
+      } else if (notification.detalhes?.link) {
+        navigate(notification.detalhes.link);
       }
       
       handleNotificationsClose();
@@ -827,8 +881,11 @@ function ModernHeader() {
   const handleMarkAllAsRead = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      await notificacoesService.marcarTodasComoLidas(user.uid);
-      await carregarNotificacoes();
+      const userId = user?.uid || user?.id;
+      if (!userId) return;
+      
+      await notificacoesService.marcarTodasComoLidas(userId);
+      await carregarNotificacoes(true);
       toast.success('Todas as notificações marcadas como lidas');
     } catch (error) {
       console.error('Erro ao marcar notificações:', error);
@@ -839,14 +896,22 @@ function ModernHeader() {
   const handleClearAll = async () => {
     try {
       const user = usuariosService.getUsuarioAtual();
-      await notificacoesService.excluirTodas(user.uid);
-      await carregarNotificacoes();
+      const userId = user?.uid || user?.id;
+      if (!userId) return;
+      
+      await notificacoesService.excluirTodas(userId);
+      await carregarNotificacoes(true);
       toast.success('Notificações removidas');
       handleNotificationsClose();
     } catch (error) {
       console.error('Erro ao remover notificações:', error);
       toast.error('Erro ao remover notificações');
     }
+  };
+
+  const handleRefreshNotifications = () => {
+    carregarNotificacoes(true);
+    toast.success('Notificações atualizadas!');
   };
 
   const handleLogout = async () => {
@@ -891,7 +956,10 @@ function ModernHeader() {
     switch (tipo) {
       case 'agendamento': return <EventIcon sx={{ color: '#9c27b0' }} />;
       case 'cliente': return <PersonIcon sx={{ color: '#ff4081' }} />;
-      case 'estoque': return <WarningIcon sx={{ color: '#f44336' }} />;
+      case 'estoque': return <InventoryIcon sx={{ color: '#f44336' }} />;
+      case 'pagamento': return <ReceiptIcon sx={{ color: '#4caf50' }} />;
+      case 'lembrete': return <AccessTimeIcon sx={{ color: '#ff9800' }} />;
+      case 'atendimento': return <EventIcon sx={{ color: '#2196f3' }} />;
       default: return <InfoIcon sx={{ color: '#2196f3' }} />;
     }
   };
@@ -1052,10 +1120,13 @@ function ModernHeader() {
               Notificações {unreadCount > 0 && `(${unreadCount})`}
             </Typography>
             <Box>
-              <IconButton size="small" onClick={handleMarkAllAsRead}>
+              <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar">
+                <SearchIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas">
                 <DoneAllIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={handleClearAll}>
+              <IconButton size="small" onClick={handleClearAll} title="Limpar todas">
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Box>
@@ -1106,6 +1177,13 @@ function ModernHeader() {
                   <Divider />
                 </React.Fragment>
               ))
+            )}
+            {notifications.length > 5 && (
+              <Box sx={{ p: 1, textAlign: 'center' }}>
+                <Button size="small" onClick={() => navigate('/notificacoes')}>
+                  Ver todas ({notifications.length})
+                </Button>
+              </Box>
             )}
           </List>
         </Menu>
@@ -1256,6 +1334,9 @@ function ModernHeader() {
               Notificações {unreadCount > 0 && `(${unreadCount})`}
             </Typography>
             <Box>
+              <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar">
+                <SearchIcon fontSize="small" />
+              </IconButton>
               <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas">
                 <DoneAllIcon fontSize="small" />
               </IconButton>
