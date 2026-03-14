@@ -8,7 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
-import { DadosProvider } from './contexts/DadosContext'; // 🔥 NOVO CONTEXTO
+import { DadosProvider } from './contexts/DadosContext';
+import { AuthClienteProvider } from './contexts/AuthClienteContext'; // 🔥 NOVO CONTEXTO
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -16,6 +17,7 @@ import ModernSidebar from './components/ModernSidebar';
 import PrivateRoute from './components/PrivateRoute';
 import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
+import ClienteLayout from './components/ClienteLayout'; // 🔥 NOVO LAYOUT
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -38,7 +40,7 @@ import Fidelidade from './pages/Fidelidade';
 import GerenciarFidelidade from './pages/GerenciarFidelidade';
 import Recompensas from './pages/Recompensas';
 import MeusPontos from './pages/MeusPontos';
-import FidelidadeHistorico from './pages/FidelidadeHistorico'; // 🔥 NOVA IMPORT
+import FidelidadeHistorico from './pages/FidelidadeHistorico';
 
 // Pages Financeiras
 import ModernFinanceiro from './pages/ModernFinanceiro';
@@ -58,6 +60,16 @@ import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
+
+// 🔥 NOVAS PÁGINAS DO CLIENTE
+import ClienteLogin from './pages/ClienteLogin';
+import ClienteCadastro from './pages/ClienteCadastro';
+import ClienteDashboard from './pages/ClienteDashboard';
+import ClienteAgendamentos from './pages/ClienteAgendamentos';
+import ClienteRecompensas from './pages/ClienteRecompensas';
+import ClientePontos from './pages/ClientePontos';
+import ClienteHistorico from './pages/ClienteHistorico';
+import ClientePerfil from './pages/ClientePerfil';
 
 // Página de Teste (opcional, pode remover depois)
 import TesteAPI from './pages/TesteAPI';
@@ -185,7 +197,7 @@ function AnimatedRoutes() {
           <Route path="/fidelidade/gerenciar" element={<GerenciarFidelidade />} />
           <Route path="/fidelidade/recompensas" element={<Recompensas />} />
           <Route path="/meus-pontos" element={<MeusPontos />} />
-          <Route path="/fidelidade/historico/:id" element={<FidelidadeHistorico />} /> {/* 🔥 NOVA ROTA */}
+          <Route path="/fidelidade/historico/:id" element={<FidelidadeHistorico />} />
           
           {/* Financeiro */}
           <Route path="/financeiro" element={<ModernFinanceiro />} />
@@ -227,81 +239,98 @@ function App() {
       <FeedbackProvider>
         {/* 🔥 DADOS PROVIDER - ENVOLVE TUDO PARA COMPARTILHAR DADOS */}
         <DadosProvider>
-          {/* Loading Global */}
-          <GlobalLoading />
-          
-          {/* Toaster do react-hot-toast */}
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-                borderRadius: '10px',
-              },
-              success: {
-                icon: '✅',
+          {/* 🔥 AUTH CLIENTE PROVIDER - AUTENTICAÇÃO DE CLIENTES */}
+          <AuthClienteProvider>
+            {/* Loading Global */}
+            <GlobalLoading />
+            
+            {/* Toaster do react-hot-toast */}
+            <Toaster 
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
                 style: {
-                  background: '#4caf50',
+                  background: '#363636',
+                  color: '#fff',
+                  borderRadius: '10px',
                 },
-              },
-              error: {
-                icon: '❌',
-                style: {
-                  background: '#f44336',
+                success: {
+                  icon: '✅',
+                  style: {
+                    background: '#4caf50',
+                  },
                 },
-              },
-              loading: {
-                icon: '⏳',
-                style: {
-                  background: '#ff9800',
+                error: {
+                  icon: '❌',
+                  style: {
+                    background: '#f44336',
+                  },
                 },
-              },
-            }}
-          />
-          
-          {/* Snackbar Global do MUI */}
-          <GlobalSnackbar />
-          
-          <Router>
-            <Routes>
-              {/* Rotas sem sidebar - PÚBLICAS */}
-              <Route path="/login" element={<ModernLogin />} />
-              <Route path="/teste" element={<TesteAPI />} />
-              <Route path="/site" element={<SiteSalao />} />
-              <Route path="/403" element={<Page403 />} />
-              <Route path="/500" element={<Page500 />} />
-              <Route path="/manutencao" element={<Manutencao />} />
-              
-              {/* Rotas com sidebar - todas as outras rotas (privadas) */}
-              <Route path="/*" element={
-                <PrivateRoute>
-                  <div style={{ display: 'flex', minHeight: '100vh' }}>
-                    <ModernSidebar />
-                    <div style={{ 
-                      flexGrow: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column',
-                      width: 'calc(100% - 300px)',
-                      transition: 'width 0.3s ease',
-                    }}>
-                      <ModernHeader />
-                      <main style={{ 
+                loading: {
+                  icon: '⏳',
+                  style: {
+                    background: '#ff9800',
+                  },
+                },
+              }}
+            />
+            
+            {/* Snackbar Global do MUI */}
+            <GlobalSnackbar />
+            
+            <Router>
+              <Routes>
+                {/* Rotas sem sidebar - PÚBLICAS */}
+                <Route path="/login" element={<ModernLogin />} />
+                <Route path="/teste" element={<TesteAPI />} />
+                <Route path="/site" element={<SiteSalao />} />
+                <Route path="/403" element={<Page403 />} />
+                <Route path="/500" element={<Page500 />} />
+                <Route path="/manutencao" element={<Manutencao />} />
+                
+                {/* 🔥 ROTAS DO CLIENTE (SEM SIDEBAR DO SISTEMA) */}
+                <Route path="/cliente/login" element={<ClienteLogin />} />
+                <Route path="/cliente/cadastro" element={<ClienteCadastro />} />
+                
+                {/* 🔥 ROTAS DO CLIENTE COM LAYOUT PRÓPRIO */}
+                <Route path="/cliente" element={<ClienteLayout />}>
+                  <Route path="dashboard" element={<ClienteDashboard />} />
+                  <Route path="agendamentos" element={<ClienteAgendamentos />} />
+                  <Route path="recompensas" element={<ClienteRecompensas />} />
+                  <Route path="pontos" element={<ClientePontos />} />
+                  <Route path="historico" element={<ClienteHistorico />} />
+                  <Route path="perfil" element={<ClientePerfil />} />
+                </Route>
+                
+                {/* Rotas com sidebar - todas as outras rotas (privadas do sistema) */}
+                <Route path="/*" element={
+                  <PrivateRoute>
+                    <div style={{ display: 'flex', minHeight: '100vh' }}>
+                      <ModernSidebar />
+                      <div style={{ 
                         flexGrow: 1, 
-                        padding: '24px',
-                        backgroundColor: '#faf5ff',
-                        minHeight: 'calc(100vh - 64px)',
-                        overflow: 'auto'
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        width: 'calc(100% - 300px)',
+                        transition: 'width 0.3s ease',
                       }}>
-                        <AnimatedRoutes />
-                      </main>
+                        <ModernHeader />
+                        <main style={{ 
+                          flexGrow: 1, 
+                          padding: '24px',
+                          backgroundColor: '#faf5ff',
+                          minHeight: 'calc(100vh - 64px)',
+                          overflow: 'auto'
+                        }}>
+                          <AnimatedRoutes />
+                        </main>
+                      </div>
                     </div>
-                  </div>
-                </PrivateRoute>
-              } />
-            </Routes>
-          </Router>
+                  </PrivateRoute>
+                } />
+              </Routes>
+            </Router>
+          </AuthClienteProvider>
         </DadosProvider>
       </FeedbackProvider>
     </ThemeProvider>
