@@ -18,6 +18,7 @@ import PrivateRoute from './components/PrivateRoute';
 import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
+import ClientePrivateRoute from './components/ClientePrivateRoute'; // 🔥 NOVO: Rota privada para cliente
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -158,7 +159,93 @@ function App() {
                 <Route path="/manutencao" element={<Manutencao />} />
                 
                 {/* =========================================== */}
-                {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) */}
+                {/* ROTAS DO CLIENTE - PRIMEIRO! */}
+                {/* =========================================== */}
+                
+                {/* Login do cliente - PÚBLICO */}
+                <Route path="/cliente/login" element={
+                  <AuthClienteProvider>
+                    <ClienteLogin />
+                  </AuthClienteProvider>
+                } />
+                
+                {/* Cadastro do cliente - PÚBLICO */}
+                <Route path="/cliente/cadastro" element={
+                  <AuthClienteProvider>
+                    <ClienteCadastro />
+                  </AuthClienteProvider>
+                } />
+                
+                {/* Recuperar senha - PÚBLICO */}
+                <Route path="/cliente/recuperar-senha" element={
+                  <AuthClienteProvider>
+                    <ClienteRecuperarSenha />
+                  </AuthClienteProvider>
+                } />
+                
+                {/* 🔥 ROTA PRIVADA DO CLIENTE - USA CLIENTE PRIVATE ROUTE */}
+                <Route path="/cliente/dashboard" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteDashboard />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                <Route path="/cliente/agendamentos" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteAgendamentos />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                <Route path="/cliente/recompensas" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteRecompensas />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                <Route path="/cliente/pontos" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClientePontos />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                <Route path="/cliente/historico" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteHistorico />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                <Route path="/cliente/perfil" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClientePerfil />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                {/* =========================================== */}
+                {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) - DEPOIS */}
                 {/* =========================================== */}
                 
                 {/* Login do sistema */}
@@ -432,85 +519,6 @@ function App() {
                       <ImportarServicos />
                     </SistemaLayout>
                   </PrivateRoute>
-                } />
-                
-                {/* =========================================== */}
-                {/* ROTAS DO CLIENTE */}
-                {/* =========================================== */}
-                
-                {/* LOGIN DO CLIENTE */}
-                <Route path="/cliente/login" element={
-                  <AuthClienteProvider>
-                    <ClienteLogin />
-                  </AuthClienteProvider>
-                } />
-                
-                {/* CADASTRO DO CLIENTE */}
-                <Route path="/cliente/cadastro" element={
-                  <AuthClienteProvider>
-                    <ClienteCadastro />
-                  </AuthClienteProvider>
-                } />
-                
-                {/* RECUPERAR SENHA DO CLIENTE */}
-                <Route path="/cliente/recuperar-senha" element={
-                  <AuthClienteProvider>
-                    <ClienteRecuperarSenha />
-                  </AuthClienteProvider>
-                } />
-                
-                {/* DASHBOARD DO CLIENTE */}
-                <Route path="/cliente/dashboard" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClienteDashboard />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* AGENDAMENTOS DO CLIENTE */}
-                <Route path="/cliente/agendamentos" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClienteAgendamentos />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* RECOMPENSAS DO CLIENTE */}
-                <Route path="/cliente/recompensas" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClienteRecompensas />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* PONTOS DO CLIENTE */}
-                <Route path="/cliente/pontos" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClientePontos />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* HISTÓRICO DO CLIENTE */}
-                <Route path="/cliente/historico" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClienteHistorico />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* PERFIL DO CLIENTE */}
-                <Route path="/cliente/perfil" element={
-                  <AuthClienteProvider>
-                    <ClienteLayout>
-                      <ClientePerfil />
-                    </ClienteLayout>
-                  </AuthClienteProvider>
                 } />
                 
                 {/* =========================================== */}
