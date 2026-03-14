@@ -2,10 +2,16 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut,
+  onAuthStateChanged 
+} from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 
-// 🔥 Configuração do Firebase (use a mesma do seu projeto)
+// Configuração do Firebase (use as mesmas do seu projeto)
 const firebaseConfig = {
   apiKey: "AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA",
   authDomain: "fluted-sentry-305001.firebaseapp.com",
@@ -28,24 +34,56 @@ export const AuthClienteProvider = ({ children }) => {
   const [cliente, setCliente] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(null);
 
+  // 🔥 OUVIR MUDANÇAS NO ESTADO DE AUTENTICAÇÃO DO FIREBASE
   useEffect(() => {
-    // Verificar se há um cliente logado no localStorage
-    const clienteSalvo = localStorage.getItem('cliente');
-    if (clienteSalvo) {
-      try {
-        const clienteData = JSON.parse(clienteSalvo);
-        setCliente(clienteData);
-        setIsAuthenticated(true);
-      } catch (error) {
-        console.error('Erro ao carregar cliente:', error);
-        localStorage.removeItem('cliente');
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      
+      if (user) {
+        // Usuário está logado no Firebase Auth
+        await carregarClientePorEmail(user.email);
+      } else {
+        // Usuário não está logado no Firebase Auth
+        const clienteSalvo = localStorage.getItem('cliente');
+        if (clienteSalvo) {
+          try {
+            const clienteData = JSON.parse(clienteSalvo);
+            setCliente(clienteData);
+            setIsAuthenticated(true);
+          } catch (error) {
+            console.error('Erro ao carregar cliente:', error);
+            localStorage.removeItem('cliente');
+          }
+        }
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // 🔥 LOGIN COM EMAIL/SENHA
+  const carregarClientePorEmail = async (email) => {
+    try {
+      const clientes = await firebaseService.query('clientes', [
+        { field: 'email', operator: '==', value: email }
+      ]);
+
+      if (clientes && clientes.length > 0) {
+        const clienteData = clientes[0];
+        setCliente(clienteData);
+        setIsAuthenticated(true);
+        localStorage.setItem('cliente', JSON.stringify(clienteData));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cliente:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // LOGIN COM EMAIL/SENHA
   const login = async (email, senha) => {
     try {
       setLoading(true);
@@ -61,6 +99,7 @@ export const AuthClienteProvider = ({ children }) => {
 
       const clienteEncontrado = clientes[0];
       
+      // 🔥 NOTA: Em produção, use hash de senha!
       if (clienteEncontrado.senha !== senha) {
         toast.error('Senha incorreta');
         return false;
@@ -84,16 +123,15 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
-  // 🔥 NOVO: LOGIN COM GOOGLE
+  // LOGIN COM GOOGLE
   const loginComGoogle = async () => {
     try {
       setLoading(true);
       
-      // Abrir popup do Google
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Verificar se o cliente já existe no Firebase
+      // Verificar se o cliente já existe
       const clientes = await firebaseService.query('clientes', [
         { field: 'email', operator: '==', value: user.email }
       ]);
@@ -101,10 +139,10 @@ export const AuthClienteProvider = ({ children }) => {
       let clienteData;
 
       if (clientes && clientes.length > 0) {
-        // Cliente já existe - atualizar dados
+        // Cliente já existe
         clienteData = clientes[0];
         
-        // Atualizar foto se veio do Google
+        // Atualizar foto se necessário
         if (user.photoURL && !clienteData.foto) {
           await firebaseService.update('clientes', clienteData.id, {
             foto: user.photoURL,
@@ -113,7 +151,7 @@ export const AuthClienteProvider = ({ children }) => {
           clienteData.foto = user.photoURL;
         }
       } else {
-        // Cliente novo - criar registro
+        // Criar novo cliente
         const agora = new Date().toISOString();
         const hoje = new Date().toISOString().split('T')[0];
 
@@ -140,7 +178,6 @@ export const AuthClienteProvider = ({ children }) => {
         clienteData = { ...novoCliente, id: clienteId };
       }
 
-      // Salvar no estado e localStorage
       setCliente(clienteData);
       setIsAuthenticated(true);
       localStorage.setItem('cliente', JSON.stringify(clienteData));
@@ -165,97 +202,11 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
-  // 🔥 NOVO: LOGIN COM GOOGLE (versão redirect - alternativa)
-  const loginComGoogleRedirect = async () => {
-    try {
-      await signInWithRedirect(auth, googleProvider);
-      // O resultado será processado quando a página recarregar
-    } catch (error) {
-      console.error('Erro no login com Google (redirect):', error);
-      toast.error('Erro ao fazer login com Google');
-    }
-  };
-
-  // 🔥 Processar resultado do redirect (chamar no useEffect)
-  useEffect(() => {
-    const processarRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          // Processar o resultado do login
-          const user = result.user;
-          await processarLoginGoogle(user);
-        }
-      } catch (error) {
-        console.error('Erro ao processar redirect:', error);
-      }
-    };
-
-    processarRedirect();
-  }, []);
-
-  // Função auxiliar para processar usuário do Google
-  const processarLoginGoogle = async (user) => {
-    try {
-      const clientes = await firebaseService.query('clientes', [
-        { field: 'email', operator: '==', value: user.email }
-      ]);
-
-      let clienteData;
-
-      if (clientes && clientes.length > 0) {
-        clienteData = clientes[0];
-        
-        if (user.photoURL && !clienteData.foto) {
-          await firebaseService.update('clientes', clienteData.id, {
-            foto: user.photoURL,
-            updatedAt: new Date().toISOString()
-          });
-          clienteData.foto = user.photoURL;
-        }
-      } else {
-        const agora = new Date().toISOString();
-        const hoje = new Date().toISOString().split('T')[0];
-
-        const novoCliente = {
-          nome: user.displayName || 'Cliente Google',
-          email: user.email,
-          foto: user.photoURL || null,
-          dataCadastro: hoje,
-          ultimaVisita: null,
-          totalGasto: 0,
-          status: 'Novo',
-          preferencias: {
-            notificacoes: true,
-            profissionalPreferido: '',
-            servicosPreferidos: []
-          },
-          loginGoogle: true,
-          googleUid: user.uid,
-          createdAt: agora,
-          updatedAt: agora
-        };
-
-        const clienteId = await firebaseService.add('clientes', novoCliente);
-        clienteData = { ...novoCliente, id: clienteId };
-      }
-
-      setCliente(clienteData);
-      setIsAuthenticated(true);
-      localStorage.setItem('cliente', JSON.stringify(clienteData));
-      
-      toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-      
-    } catch (error) {
-      console.error('Erro ao processar usuário Google:', error);
-      toast.error('Erro ao processar login');
-    }
-  };
-
   const cadastrar = async (dadosCliente) => {
     try {
       setLoading(true);
 
+      // Verificar se email já existe
       const clientesExistentes = await firebaseService.query('clientes', [
         { field: 'email', operator: '==', value: dadosCliente.email }
       ]);
@@ -265,6 +216,7 @@ export const AuthClienteProvider = ({ children }) => {
         return false;
       }
 
+      // Verificar se CPF já existe
       if (dadosCliente.cpf) {
         const cpfExistentes = await firebaseService.query('clientes', [
           { field: 'cpf', operator: '==', value: dadosCliente.cpf }
@@ -296,8 +248,6 @@ export const AuthClienteProvider = ({ children }) => {
 
       const clienteId = await firebaseService.add('clientes', novoCliente);
       
-      const { senha: _, ...clienteSemSenha } = { ...novoCliente, id: clienteId };
-      
       toast.success('Cadastro realizado com sucesso! Faça o login.');
       return true;
 
@@ -312,7 +262,6 @@ export const AuthClienteProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Fazer logout também do Firebase Auth
       await signOut(auth);
     } catch (error) {
       console.error('Erro ao fazer logout do Google:', error);
@@ -352,9 +301,9 @@ export const AuthClienteProvider = ({ children }) => {
       cliente,
       loading,
       isAuthenticated,
+      firebaseUser,
       login,
       loginComGoogle,
-      loginComGoogleRedirect,
       cadastrar,
       logout,
       atualizarCliente
