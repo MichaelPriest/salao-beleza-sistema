@@ -37,6 +37,11 @@ import {
   useTheme,
   CircularProgress,
   Link,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Badge,
+  Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -52,12 +57,23 @@ import {
   ContentCut as CutIcon,
   Brush as BrushIcon,
   Face as FaceIcon,
+  AdminPanelSettings as AdminIcon,
+  Person as PersonIcon,
+  ExpandMore as ExpandMoreIcon,
+  Computer as ComputerIcon,
+  PhoneAndroid as PhoneAndroidIcon,
+  QrCode as QrCodeIcon,
+  Login as LoginIcon,
+  Dashboard as DashboardIcon,
+  Info as InfoIcon,
+  School as SchoolIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
 import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -95,6 +111,7 @@ function SiteSalao() {
   const [profissionais, setProfissionais] = useState([]);
   
   const [openAgendamento, setOpenAgendamento] = useState(false);
+  const [openTutorial, setOpenTutorial] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState({
     clienteNome: '',
     clienteEmail: '',
@@ -120,12 +137,8 @@ function SiteSalao() {
   const [facebookUrl, setFacebookUrl] = useState('');
   const [instagramUser, setInstagramUser] = useState('');
 
-  // Depoimentos simulados
-  const depoimentos = [
-    { id: 1, nome: 'Maria Silva', comentario: 'Melhor salão da cidade! Atendimento excelente.', avaliacao: 5 },
-    { id: 2, nome: 'João Santos', comentario: 'Profissionais muito qualificados. Ambiente agradável.', avaliacao: 5 },
-    { id: 3, nome: 'Ana Oliveira', comentario: 'Sempre saio satisfeita. Recomendo!', avaliacao: 5 },
-  ];
+  // URL base para o sistema
+  const baseUrl = window.location.origin;
 
   useEffect(() => {
     carregarDados();
@@ -353,8 +366,8 @@ function SiteSalao() {
               <MenuIcon />
             </IconButton>
           ) : (
-            <Box sx={{ display: 'flex', gap: 3, flexGrow: 1, justifyContent: 'flex-end' }}>
-              {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
+            <Box sx={{ display: 'flex', gap: 3, flexGrow: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
+              {['home', 'servicos', 'profissionais', 'redes', 'contato', 'tutorial'].map((item) => (
                 <Button
                   key={item}
                   onClick={() => scrollToSection(item)}
@@ -366,7 +379,8 @@ function SiteSalao() {
                   {item === 'home' ? 'Início' : 
                    item === 'servicos' ? 'Serviços' : 
                    item === 'profissionais' ? 'Profissionais' : 
-                   item === 'redes' ? 'Redes Sociais' : 'Contato'}
+                   item === 'redes' ? 'Redes Sociais' : 
+                   item === 'tutorial' ? 'Área Restrita' : 'Contato'}
                 </Button>
               ))}
               <Button
@@ -416,13 +430,14 @@ function SiteSalao() {
           )}
           
           <List>
-            {['home', 'servicos', 'profissionais', 'redes', 'contato'].map((item) => (
+            {['home', 'servicos', 'profissionais', 'redes', 'contato', 'tutorial'].map((item) => (
               <ListItem key={item} button onClick={() => scrollToSection(item)}>
                 <ListItemText 
                   primary={item === 'home' ? 'Início' : 
                           item === 'servicos' ? 'Serviços' : 
                           item === 'profissionais' ? 'Profissionais' : 
-                          item === 'redes' ? 'Redes Sociais' : 'Contato'}
+                          item === 'redes' ? 'Redes Sociais' : 
+                          item === 'tutorial' ? 'Área Restrita' : 'Contato'}
                 />
               </ListItem>
             ))}
@@ -503,6 +518,312 @@ function SiteSalao() {
           </Grid>
         </Grid>
       </Container>
+
+      {/* Seção de Área Restrita - TUTORIAL */}
+      <Box sx={{ bgcolor: 'white', py: 8 }} id="tutorial">
+        <Container maxWidth="lg">
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+            Área <span style={{ color: '#9c27b0' }}>Restrita</span>
+          </Typography>
+          <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
+            Acesse o sistema administrativo ou a área do cliente
+          </Typography>
+
+          <Grid container spacing={4}>
+            {/* Acesso Administrativo */}
+            <Grid item xs={12} md={6}>
+              <Card 
+                sx={{ 
+                  height: '100%',
+                  p: 3,
+                  background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)',
+                  border: '2px solid #9c27b0',
+                  borderRadius: 4,
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 150,
+                    height: 150,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(156,39,176,0.1)',
+                  }}
+                />
+                <Box sx={{ position: 'relative', zIndex: 1 }}>
+                  <Avatar
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      bgcolor: '#9c27b0',
+                      mb: 2,
+                      mx: 'auto',
+                    }}
+                  >
+                    <AdminIcon sx={{ fontSize: 40 }} />
+                  </Avatar>
+                  <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+                    Administração
+                  </Typography>
+                  <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
+                    Acesso exclusivo para administradores, gerentes, atendentes e profissionais do salão.
+                  </Typography>
+
+                  <Accordion sx={{ mb: 2 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        <ListItem>
+                          <ListItemIcon><ComputerIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="1. Abra seu navegador"
+                            secondary="Chrome, Firefox, Edge ou Safari"
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><LoginIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="2. Acesse o link:"
+                            secondary={
+                              <Link 
+                                href={`${baseUrl}/login`} 
+                                target="_blank" 
+                                sx={{ fontWeight: 600, color: '#9c27b0' }}
+                              >
+                                {baseUrl}/login
+                              </Link>
+                            }
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><DashboardIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="3. Faça login com seu email e senha"
+                            secondary="Use as credenciais fornecidas pelo administrador"
+                          />
+                        </ListItem>
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        <ListItem>
+                          <ListItemIcon><PhoneAndroidIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="1. Abra o navegador do celular"
+                            secondary="Chrome, Safari ou navegador padrão"
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><QrCodeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="2. Acesse o mesmo link ou escaneie o QR Code"
+                          />
+                        </ListItem>
+                      </List>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                        <QRCodeSVG
+                          value={`${baseUrl}/login`}
+                          size={120}
+                          bgColor="#ffffff"
+                          fgColor="#9c27b0"
+                          level="H"
+                        />
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Box sx={{ mt: 3, textAlign: 'center' }}>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      href="/login"
+                      startIcon={<AdminIcon />}
+                      sx={{
+                        background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                        color: 'white',
+                        px: 4,
+                      }}
+                    >
+                      Acessar Painel Administrativo
+                    </Button>
+                  </Box>
+                </Box>
+              </Card>
+            </Grid>
+
+            {/* Área do Cliente */}
+            <Grid item xs={12} md={6}>
+              <Card 
+                sx={{ 
+                  height: '100%',
+                  p: 3,
+                  background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)',
+                  border: '2px solid #ff9800',
+                  borderRadius: 4,
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 150,
+                    height: 150,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(255,152,0,0.1)',
+                  }}
+                />
+                <Box sx={{ position: 'relative', zIndex: 1 }}>
+                  <Avatar
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      bgcolor: '#ff9800',
+                      mb: 2,
+                      mx: 'auto',
+                    }}
+                  >
+                    <PersonIcon sx={{ fontSize: 40 }} />
+                  </Avatar>
+                  <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+                    Área do Cliente
+                  </Typography>
+                  <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
+                    Acesse sua área exclusiva para acompanhar agendamentos, histórico e programa de fidelidade.
+                  </Typography>
+
+                  <Accordion sx={{ mb: 2 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        <ListItem>
+                          <ListItemIcon><ComputerIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="1. Abra seu navegador"
+                            secondary="Chrome, Firefox, Edge ou Safari"
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="2. Acesse o link:"
+                            secondary={
+                              <Link 
+                                href={`${baseUrl}/cliente/login`} 
+                                target="_blank" 
+                                sx={{ fontWeight: 600, color: '#ff9800' }}
+                              >
+                                {baseUrl}/cliente/login
+                              </Link>
+                            }
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><DashboardIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="3. Faça login com seu email e senha"
+                            secondary="Use as credenciais criadas no cadastro"
+                          />
+                        </ListItem>
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Accordion>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        <ListItem>
+                          <ListItemIcon><PhoneAndroidIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="1. Abra o navegador do celular"
+                            secondary="Chrome, Safari ou navegador padrão"
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemIcon><QrCodeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                          <ListItemText 
+                            primary="2. Acesse o mesmo link ou escaneie o QR Code"
+                          />
+                        </ListItem>
+                      </List>
+                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                        <QRCodeSVG
+                          value={`${baseUrl}/cliente/login`}
+                          size={120}
+                          bgColor="#ffffff"
+                          fgColor="#ff9800"
+                          level="H"
+                        />
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Box sx={{ mt: 3, textAlign: 'center' }}>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      href="/cliente/login"
+                      startIcon={<PersonIcon />}
+                      sx={{
+                        background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)',
+                        color: 'white',
+                        px: 4,
+                      }}
+                    >
+                      Acessar Área do Cliente
+                    </Button>
+                  </Box>
+                </Box>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Informações adicionais */}
+          <Paper sx={{ mt: 4, p: 3, bgcolor: '#f3e5f5', borderRadius: 2 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                  <InfoIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#9c27b0' }} />
+                  Primeiro acesso?
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  • Para a área administrativa, suas credenciais são fornecidas pelo administrador do sistema.
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  • Para a área do cliente, você pode se cadastrar clicando em "Criar conta" na página de login.
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  • O sistema é responsivo e funciona perfeitamente em qualquer dispositivo.
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
+                <Badge badgeContent="Novo" color="secondary">
+                  <SchoolIcon sx={{ fontSize: 60, color: '#9c27b0' }} />
+                </Badge>
+              </Grid>
+            </Grid>
+          </Paper>
+        </Container>
+      </Box>
 
       {/* Serviços Section */}
       <Box sx={{ bgcolor: 'white', py: 8 }} id="servicos">
