@@ -79,22 +79,29 @@ function ClienteDashboard() {
     } else if (cliente) {
       carregarDados();
     }
-  }, [cliente, authLoading, firebaseUser]);
+  }, [cliente, authLoading]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // 🔥 CARREGAR AGENDAMENTOS DO CLIENTE COM TRATAMENTO DE ERRO
+      console.log('🔍 DEBUG - Cliente logado:', cliente);
+      console.log('🔍 DEBUG - ID do cliente:', cliente.id);
+      console.log('🔍 DEBUG - Firebase Auth UID:', firebaseUser?.uid);
+
+      // 🔥 CARREGAR AGENDAMENTOS DO CLIENTE
       try {
+        console.log('📌 Buscando agendamentos para clienteId:', cliente.id);
+        
         const agendamentosData = await firebaseService.query('agendamentos', [
           { field: 'clienteId', operator: '==', value: cliente.id }
         ], 'data', 'desc');
+        
+        console.log('✅ Agendamentos encontrados:', agendamentosData?.length || 0);
         setAgendamentos(agendamentosData || []);
       } catch (err) {
-        console.error('Erro ao carregar agendamentos:', err);
-        // Não mostrar erro para o usuário, apenas continuar
+        console.error('❌ Erro ao carregar agendamentos:', err);
       }
 
       // 🔥 CARREGAR PONTUAÇÕES
@@ -102,6 +109,7 @@ function ClienteDashboard() {
         const pontuacoesData = await firebaseService.query('pontuacao', [
           { field: 'clienteId', operator: '==', value: cliente.id }
         ], 'data', 'desc');
+        
         setPontuacoes(pontuacoesData || []);
       } catch (err) {
         console.error('Erro ao carregar pontuações:', err);
@@ -112,7 +120,17 @@ function ClienteDashboard() {
         const recompensasData = await firebaseService.query('recompensas', [
           { field: 'ativo', operator: '==', value: true }
         ]);
-        setRecompensasDisponiveis(recompensasData?.slice(0, 3) || []);
+        
+        // Filtrar por nível do cliente
+        const niveisOrdenados = ['bronze', 'prata', 'ouro', 'platina'];
+        const indexNivelCliente = niveisOrdenados.indexOf(nivel);
+        
+        const recompensasFiltradas = (recompensasData || []).filter(r => {
+          const indexNivelRecompensa = niveisOrdenados.indexOf(r.nivelMinimo);
+          return indexNivelCliente >= indexNivelRecompensa;
+        });
+        
+        setRecompensasDisponiveis(recompensasFiltradas.slice(0, 3));
       } catch (err) {
         console.error('Erro ao carregar recompensas:', err);
       }
@@ -122,6 +140,7 @@ function ClienteDashboard() {
         const atendimentosData = await firebaseService.query('atendimentos', [
           { field: 'clienteId', operator: '==', value: cliente.id }
         ], 'data', 'desc');
+        
         setHistoricoAtendimentos(atendimentosData?.slice(0, 5) || []);
       } catch (err) {
         console.error('Erro ao carregar atendimentos:', err);
