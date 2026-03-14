@@ -7,7 +7,9 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
 } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 
@@ -43,7 +45,7 @@ export const AuthClienteProvider = ({ children }) => {
       
       if (user) {
         // Usuário está logado no Firebase Auth
-        await carregarClientePorEmail(user.email);
+        await carregarClientePorUid(user.uid);
       } else {
         // Usuário não está logado no Firebase Auth
         const clienteSalvo = localStorage.getItem('cliente');
@@ -64,17 +66,19 @@ export const AuthClienteProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const carregarClientePorEmail = async (email) => {
+  const carregarClientePorUid = async (uid) => {
     try {
-      const clientes = await firebaseService.query('clientes', [
-        { field: 'email', operator: '==', value: email }
-      ]);
+      // Buscar cliente pelo UID (ID do documento)
+      const clienteData = await firebaseService.getById('clientes', uid);
 
-      if (clientes && clientes.length > 0) {
-        const clienteData = clientes[0];
+      if (clienteData) {
         setCliente(clienteData);
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
+      } else {
+        console.log('Cliente não encontrado para o UID:', uid);
+        // Se não encontrar, fazer logout
+        await signOut(auth);
       }
     } catch (error) {
       console.error('Erro ao carregar cliente:', error);
@@ -88,35 +92,39 @@ export const AuthClienteProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      const clientes = await firebaseService.query('clientes', [
-        { field: 'email', operator: '==', value: email }
-      ]);
-
-      if (!clientes || clientes.length === 0) {
-        toast.error('Email não encontrado');
+      // 1. Autenticar no Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
+      const user = userCredential.user;
+      
+      // 2. Buscar dados do cliente no Firestore usando o UID
+      const clienteData = await firebaseService.getById('clientes', user.uid);
+      
+      if (!clienteData) {
+        toast.error('Dados do cliente não encontrados');
+        await signOut(auth);
         return false;
       }
 
-      const clienteEncontrado = clientes[0];
-      
-      // 🔥 NOTA: Em produção, use hash de senha!
-      if (clienteEncontrado.senha !== senha) {
-        toast.error('Senha incorreta');
-        return false;
-      }
-
-      const { senha: _, ...clienteSemSenha } = clienteEncontrado;
-      
-      setCliente(clienteSemSenha);
+      // 3. Salvar no estado e localStorage
+      setCliente(clienteData);
       setIsAuthenticated(true);
-      localStorage.setItem('cliente', JSON.stringify(clienteSemSenha));
+      localStorage.setItem('cliente', JSON.stringify(clienteData));
       
-      toast.success(`Bem-vindo(a), ${clienteSemSenha.nome}!`);
+      toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
       return true;
       
     } catch (error) {
       console.error('Erro no login:', error);
-      toast.error('Erro ao fazer login');
+      
+      if (error.code === 'auth/user-not-found') {
+        toast.error('Usuário não encontrado');
+      } else if (error.code === 'auth/wrong-password') {
+        toast.error('Senha incorreta');
+      } else if (error.code === 'auth/invalid-credential') {
+        toast.error('Email ou senha inválidos');
+      } else {
+        toast.error('Erro ao fazer login');
+      }
       return false;
     } finally {
       setLoading(false);
@@ -131,31 +139,16 @@ export const AuthClienteProvider = ({ children }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Verificar se o cliente já existe
-      const clientes = await firebaseService.query('clientes', [
-        { field: 'email', operator: '==', value: user.email }
-      ]);
+      // Verificar se o cliente já existe no Firestore (pelo UID)
+      let clienteData = await firebaseService.getById('clientes', user.uid);
 
-      let clienteData;
-
-      if (clientes && clientes.length > 0) {
-        // Cliente já existe
-        clienteData = clientes[0];
-        
-        // Atualizar foto se necessário
-        if (user.photoURL && !clienteData.foto) {
-          await firebaseService.update('clientes', clienteData.id, {
-            foto: user.photoURL,
-            updatedAt: new Date().toISOString()
-          });
-          clienteData.foto = user.photoURL;
-        }
-      } else {
-        // Criar novo cliente
+      if (!clienteData) {
+        // Cliente não existe - criar novo
         const agora = new Date().toISOString();
         const hoje = new Date().toISOString().split('T')[0];
 
         const novoCliente = {
+          id: user.uid,
           nome: user.displayName || 'Cliente Google',
           email: user.email,
           foto: user.photoURL || null,
@@ -163,19 +156,19 @@ export const AuthClienteProvider = ({ children }) => {
           ultimaVisita: null,
           totalGasto: 0,
           status: 'Novo',
+          loginGoogle: true,
+          googleUid: user.uid,
           preferencias: {
             notificacoes: true,
             profissionalPreferido: '',
             servicosPreferidos: []
           },
-          loginGoogle: true,
-          googleUid: user.uid,
           createdAt: agora,
           updatedAt: agora
         };
 
-        const clienteId = await firebaseService.add('clientes', novoCliente);
-        clienteData = { ...novoCliente, id: clienteId };
+        await firebaseService.set('clientes', user.uid, novoCliente);
+        clienteData = novoCliente;
       }
 
       setCliente(clienteData);
@@ -202,51 +195,70 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
+  // CADASTRO
   const cadastrar = async (dadosCliente) => {
     try {
       setLoading(true);
 
-      // Verificar se email já existe
-      const clientesExistentes = await firebaseService.query('clientes', [
-        { field: 'email', operator: '==', value: dadosCliente.email }
-      ]);
-
-      if (clientesExistentes && clientesExistentes.length > 0) {
-        toast.error('Este email já está cadastrado');
+      // 1. Verificar se email já existe no Firebase Auth (tentando criar)
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(
+          auth, 
+          dadosCliente.email, 
+          dadosCliente.senha
+        );
+      } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+          toast.error('Este email já está em uso');
+        } else if (error.code === 'auth/weak-password') {
+          toast.error('Senha muito fraca. Use pelo menos 6 caracteres');
+        } else {
+          toast.error('Erro ao criar conta');
+        }
         return false;
       }
 
-      // Verificar se CPF já existe
-      if (dadosCliente.cpf) {
-        const cpfExistentes = await firebaseService.query('clientes', [
-          { field: 'cpf', operator: '==', value: dadosCliente.cpf }
-        ]);
+      const user = userCredential.user;
 
-        if (cpfExistentes && cpfExistentes.length > 0) {
-          toast.error('Este CPF já está cadastrado');
-          return false;
-        }
-      }
-
+      // 2. Criar documento do cliente com o UID do Firebase Auth
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
       const novoCliente = {
-        ...dadosCliente,
+        id: user.uid,
+        nome: dadosCliente.nome,
+        email: dadosCliente.email,
+        telefone: dadosCliente.telefone,
+        cpf: dadosCliente.cpf || null,
+        dataNascimento: dadosCliente.dataNascimento || null,
+        genero: dadosCliente.genero || null,
+        cep: dadosCliente.cep || null,
+        logradouro: dadosCliente.logradouro || null,
+        numero: dadosCliente.numero || null,
+        complemento: dadosCliente.complemento || null,
+        bairro: dadosCliente.bairro || null,
+        cidade: dadosCliente.cidade || null,
+        estado: dadosCliente.estado || null,
+        foto: dadosCliente.foto || null,
+        profissionalPreferido: dadosCliente.profissionalPreferido || null,
+        servicosPreferidos: dadosCliente.servicosPreferidos || [],
+        receberPromocoes: dadosCliente.receberPromocoes !== false,
         dataCadastro: hoje,
         ultimaVisita: null,
         totalGasto: 0,
         status: 'Novo',
         preferencias: {
           notificacoes: true,
-          profissionalPreferido: '',
-          servicosPreferidos: []
+          profissionalPreferido: dadosCliente.profissionalPreferido || '',
+          servicosPreferidos: dadosCliente.servicosPreferidos || []
         },
         createdAt: agora,
         updatedAt: agora
       };
 
-      const clienteId = await firebaseService.add('clientes', novoCliente);
+      // 3. Salvar no Firestore usando o UID como ID do documento
+      await firebaseService.set('clientes', user.uid, novoCliente);
       
       toast.success('Cadastro realizado com sucesso! Faça o login.');
       return true;
