@@ -48,9 +48,9 @@ import {
   VisibilityOff as VisibilityOffIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
-  EmojiEvents as TrophyIcon, // 🔥 NOVO ÍCONE
-  Star as StarIcon, // 🔥 NOVO ÍCONE
-  CardGiftcard as GiftIcon, // 🔥 NOVO ÍCONE
+  EmojiEvents as TrophyIcon,
+  Star as StarIcon,
+  CardGiftcard as GiftIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -78,17 +78,17 @@ function TabPanel({ children, value, index }) {
   );
 }
 
-// 🔥 COMPONENTE PARA CONFIGURAÇÃO DE NÍVEIS
+// Componente para configuração de níveis
 const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
   return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: dados.corFundo }}>
+    <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: dados?.corFundo || '#f5f5f5' }}>
       <Grid container spacing={2} alignItems="center">
         <Grid item xs={12} md={2}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Avatar sx={{ bgcolor: dados.cor, width: 32, height: 32 }}>
+            <Avatar sx={{ bgcolor: dados?.cor || '#999', width: 32, height: 32 }}>
               <TrophyIcon sx={{ fontSize: 18, color: '#fff' }} />
             </Avatar>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: dados.cor, textTransform: 'uppercase' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: dados?.cor || '#999', textTransform: 'uppercase' }}>
               {nivel}
             </Typography>
           </Box>
@@ -99,8 +99,8 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
             label="Pontos Mínimos"
             type="number"
             size="small"
-            value={dados.minimo}
-            onChange={(e) => onUpdate(nivel, 'minimo', parseInt(e.target.value))}
+            value={dados?.minimo || 0}
+            onChange={(e) => onUpdate(nivel, 'minimo', parseInt(e.target.value) || 0)}
           />
         </Grid>
         <Grid item xs={12} md={2}>
@@ -110,8 +110,8 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
             type="number"
             size="small"
             inputProps={{ step: 0.1, min: 1 }}
-            value={dados.multiplicador}
-            onChange={(e) => onUpdate(nivel, 'multiplicador', parseFloat(e.target.value))}
+            value={dados?.multiplicador || 1}
+            onChange={(e) => onUpdate(nivel, 'multiplicador', parseFloat(e.target.value) || 1)}
             InputProps={{
               endAdornment: <InputAdornment position="end">x</InputAdornment>
             }}
@@ -123,12 +123,12 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
             label="Cor (hex)"
             size="small"
             type="color"
-            value={dados.cor}
+            value={dados?.cor || '#999999'}
             onChange={(e) => onUpdate(nivel, 'cor', e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Box sx={{ width: 20, height: 20, bgcolor: dados.cor, borderRadius: 1 }} />
+                  <Box sx={{ width: 20, height: 20, bgcolor: dados?.cor || '#999', borderRadius: 1 }} />
                 </InputAdornment>
               )
             }}
@@ -140,7 +140,7 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
             label="Benefícios"
             size="small"
             placeholder="Separe por vírgula"
-            value={dados.beneficios?.join(', ') || ''}
+            value={dados?.benefícios?.join(', ') || dados?.beneficios?.join(', ') || ''}
             onChange={(e) => onUpdate(nivel, 'beneficios', e.target.value.split(',').map(b => b.trim()))}
           />
         </Grid>
@@ -160,7 +160,7 @@ function ModernConfiguracoes() {
   const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // 🔥 CONFIGURAÇÕES DE FIDELIDADE
+  // Configurações de fidelidade
   const [fidelidadeConfig, setFidelidadeConfig] = useState({
     ativo: true,
     pontosPorReal: 10,
@@ -168,7 +168,7 @@ function ModernConfiguracoes() {
     bonusIndicacao: 100,
     bonusPrimeiroAtendimento: 100,
     nivelInicial: 'bronze',
-    expiracaoPontos: 365, // dias
+    expiracaoPontos: 365,
     niveis: {
       bronze: {
         cor: '#cd7f32',
@@ -363,10 +363,10 @@ function ModernConfiguracoes() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA SALVAR CONFIGURAÇÕES DE FIDELIDADE
+  // Função para salvar configurações de fidelidade
   const salvarFidelidadeConfig = async () => {
     try {
-      const configs = await firebaseService.getAll('config_fidelidade');
+      const configs = await firebaseService.getAll('config_fidelidade').catch(() => []);
       
       if (configs && configs.length > 0) {
         await firebaseService.update('config_fidelidade', configs[0].id, {
@@ -416,14 +416,14 @@ function ModernConfiguracoes() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA ATUALIZAR NÍVEL DE FIDELIDADE
+  // Função para atualizar nível de fidelidade
   const handleNivelUpdate = (nivel, campo, valor) => {
     setFidelidadeConfig(prev => ({
       ...prev,
       niveis: {
-        ...prev.niveis,
+        ...(prev?.niveis || {}),
         [nivel]: {
-          ...prev.niveis[nivel],
+          ...((prev?.niveis || {})[nivel] || {}),
           [campo]: valor
         }
       }
@@ -499,7 +499,7 @@ function ModernConfiguracoes() {
       horarioFuncionamento: {
         ...config.horarioFuncionamento,
         [dia]: {
-          ...config.horarioFuncionamento[dia],
+          ...(config.horarioFuncionamento[dia] || {}),
           [campo]: valor
         }
       }
@@ -515,7 +515,7 @@ function ModernConfiguracoes() {
         salao: {
           ...config.salao,
           [campo]: {
-            ...config.salao[campo],
+            ...(config.salao[campo] || {}),
             [subcampo]: valor
           }
         }
@@ -666,14 +666,13 @@ function ModernConfiguracoes() {
             <Tab icon={<TimeIcon />} label="Horário" />
             <Tab icon={<NotificationsIcon />} label="Notificações" />
             <Tab icon={<PaletteIcon />} label="Aparência" />
-            <Tab icon={<TrophyIcon />} label="Fidelidade" /> {/* 🔥 NOVA ABA */}
+            <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
           </Tabs>
 
           {/* Dados do Salão */}
           <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
-              {/* ... (código existente do salão) ... */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                   Logo do Salão
@@ -1321,7 +1320,7 @@ function ModernConfiguracoes() {
             </Grid>
           </TabPanel>
 
-          {/* 🔥 NOVA ABA: Configurações de Fidelidade */}
+          {/* Aba de Fidelidade */}
           <TabPanel value={tabValue} index={4}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
@@ -1344,7 +1343,7 @@ function ModernConfiguracoes() {
                       </Typography>
                     </Box>
                     <Switch
-                      checked={fidelidadeConfig.ativo}
+                      checked={fidelidadeConfig?.ativo || false}
                       onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, ativo: e.target.checked })}
                       color="primary"
                     />
@@ -1352,7 +1351,7 @@ function ModernConfiguracoes() {
                 </Paper>
               </Grid>
 
-              {fidelidadeConfig.ativo && (
+              {fidelidadeConfig?.ativo && (
                 <>
                   {/* Regras Básicas */}
                   <Grid item xs={12}>
@@ -1367,8 +1366,8 @@ function ModernConfiguracoes() {
                       label="Pontos por R$1"
                       type="number"
                       size="small"
-                      value={fidelidadeConfig.pontosPorReal}
-                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, pontosPorReal: parseInt(e.target.value) })}
+                      value={fidelidadeConfig?.pontosPorReal || 10}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, pontosPorReal: parseInt(e.target.value) || 0 })}
                       helperText="Quantos pontos o cliente ganha por real gasto"
                       InputProps={{
                         startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
@@ -1382,8 +1381,8 @@ function ModernConfiguracoes() {
                       label="Expiração dos Pontos"
                       type="number"
                       size="small"
-                      value={fidelidadeConfig.expiracaoPontos}
-                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, expiracaoPontos: parseInt(e.target.value) })}
+                      value={fidelidadeConfig?.expiracaoPontos || 365}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, expiracaoPontos: parseInt(e.target.value) || 0 })}
                       helperText="Dias até os pontos expirarem"
                       InputProps={{
                         endAdornment: <InputAdornment position="end">dias</InputAdornment>
@@ -1395,7 +1394,7 @@ function ModernConfiguracoes() {
                     <FormControl fullWidth size="small">
                       <InputLabel>Nível Inicial</InputLabel>
                       <Select
-                        value={fidelidadeConfig.nivelInicial}
+                        value={fidelidadeConfig?.nivelInicial || 'bronze'}
                         label="Nível Inicial"
                         onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, nivelInicial: e.target.value })}
                       >
@@ -1420,8 +1419,8 @@ function ModernConfiguracoes() {
                       label="Bônus Aniversário"
                       type="number"
                       size="small"
-                      value={fidelidadeConfig.bonusAniversario}
-                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusAniversario: parseInt(e.target.value) })}
+                      value={fidelidadeConfig?.bonusAniversario || 50}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusAniversario: parseInt(e.target.value) || 0 })}
                       helperText="Pontos extras no aniversário"
                       InputProps={{
                         startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
@@ -1435,8 +1434,8 @@ function ModernConfiguracoes() {
                       label="Bônus Indicação"
                       type="number"
                       size="small"
-                      value={fidelidadeConfig.bonusIndicacao}
-                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusIndicacao: parseInt(e.target.value) })}
+                      value={fidelidadeConfig?.bonusIndicacao || 100}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusIndicacao: parseInt(e.target.value) || 0 })}
                       helperText="Pontos por indicação"
                       InputProps={{
                         startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
@@ -1450,8 +1449,8 @@ function ModernConfiguracoes() {
                       label="Bônus Primeiro Atendimento"
                       type="number"
                       size="small"
-                      value={fidelidadeConfig.bonusPrimeiroAtendimento}
-                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusPrimeiroAtendimento: parseInt(e.target.value) })}
+                      value={fidelidadeConfig?.bonusPrimeiroAtendimento || 100}
+                      onChange={(e) => setFidelidadeConfig({ ...fidelidadeConfig, bonusPrimeiroAtendimento: parseInt(e.target.value) || 0 })}
                       helperText="Pontos na primeira visita"
                       InputProps={{
                         startAdornment: <InputAdornment position="start"><StarIcon /></InputAdornment>
@@ -1464,11 +1463,11 @@ function ModernConfiguracoes() {
                       <FormControlLabel
                         control={
                           <Switch
-                            checked={fidelidadeConfig.regrasEspeciais?.aniversario}
+                            checked={fidelidadeConfig?.regrasEspeciais?.aniversario || false}
                             onChange={(e) => setFidelidadeConfig({
                               ...fidelidadeConfig,
                               regrasEspeciais: {
-                                ...fidelidadeConfig.regrasEspeciais,
+                                ...(fidelidadeConfig?.regrasEspeciais || {}),
                                 aniversario: e.target.checked
                               }
                             })}
@@ -1479,11 +1478,11 @@ function ModernConfiguracoes() {
                       <FormControlLabel
                         control={
                           <Switch
-                            checked={fidelidadeConfig.regrasEspeciais?.indicacao}
+                            checked={fidelidadeConfig?.regrasEspeciais?.indicacao || false}
                             onChange={(e) => setFidelidadeConfig({
                               ...fidelidadeConfig,
                               regrasEspeciais: {
-                                ...fidelidadeConfig.regrasEspeciais,
+                                ...(fidelidadeConfig?.regrasEspeciais || {}),
                                 indicacao: e.target.checked
                               }
                             })}
@@ -1503,7 +1502,7 @@ function ModernConfiguracoes() {
                       Personalize os níveis do programa de fidelidade. Quanto maior o nível, mais benefícios o cliente tem.
                     </Typography>
                   </Grid>
-                  
+
                   {Object.entries(fidelidadeConfig?.niveis || {}).map(([nivel, dados]) => (
                     <Grid item xs={12} key={nivel}>
                       <ConfiguracaoNivel
@@ -1513,7 +1512,7 @@ function ModernConfiguracoes() {
                       />
                     </Grid>
                   ))}
-                  
+
                   {/* Preview dos Níveis */}
                   <Grid item xs={12}>
                     <Paper sx={{ p: 3, bgcolor: '#f5f5f5', mt: 2 }}>
@@ -1645,7 +1644,6 @@ function ModernConfiguracoes() {
                 </Card>
               </Grid>
 
-              {/* Seção de Backup */}
               {backup && (
                 <Grid item xs={12}>
                   <Alert 
@@ -1692,4 +1690,4 @@ function ModernConfiguracoes() {
   );
 }
 
-export default ModernConfiguracoes;
+export default ModernConfiguracoes;             
