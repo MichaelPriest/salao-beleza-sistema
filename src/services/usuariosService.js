@@ -17,11 +17,14 @@ class UsuariosService {
   }
 
   init() {
+    // Ouvir mudanças na autenticação
     onAuthStateChanged(this.auth, async (user) => {
       if (user) {
+        // Usuário logado no Firebase Auth
         try {
           console.log('🔍 usuariosService - Usuário Firebase:', user.uid, user.email);
           
+          // Buscar dados no Firestore
           const userRef = doc(db, 'usuarios', user.uid);
           const userSnap = await getDoc(userRef);
           
@@ -32,6 +35,7 @@ class UsuariosService {
           } else {
             console.log('⚠️ usuariosService - Usuário não encontrado no Firestore, tentando buscar por email...');
             
+            // Tentar buscar por email
             const usuarios = await firebaseService.query('usuarios', [
               { field: 'email', operator: '==', value: user.email }
             ]);
@@ -40,6 +44,7 @@ class UsuariosService {
               const usuarioData = usuarios[0];
               console.log('✅ usuariosService - Usuário encontrado por email:', usuarioData);
               
+              // Criar documento com o UID correto
               await setDoc(doc(db, 'usuarios', user.uid), {
                 ...usuarioData,
                 uid: user.uid,
@@ -52,12 +57,12 @@ class UsuariosService {
             } else {
               console.log('❌ usuariosService - Usuário não encontrado no sistema');
               
-              // Criar usuário básico em vez de fazer logout
+              // 🔥 NÃO FAZER LOGOUT! Criar usuário básico
               const novoUsuario = {
                 id: user.uid,
                 email: user.email,
                 nome: user.email.split('@')[0],
-                cargo: 'cliente',
+                cargo: 'cliente', // Cargo padrão
                 status: 'ativo',
                 permissoes: [],
                 createdAt: new Date().toISOString()
@@ -66,6 +71,11 @@ class UsuariosService {
               console.log('✅ usuariosService - Criando usuário básico:', novoUsuario);
               this.usuario = novoUsuario;
               localStorage.setItem('usuario', JSON.stringify(novoUsuario));
+              
+              // Tentar salvar no Firestore (não crítico)
+              setDoc(doc(db, 'usuarios', user.uid), novoUsuario).catch(err => {
+                console.warn('⚠️ Não foi possível salvar usuário no Firestore:', err);
+              });
             }
           }
         } catch (error) {
@@ -79,6 +89,7 @@ class UsuariosService {
     });
   }
 
+  // Login
   async login(email, senha) {
     try {
       const userCredential = await signInWithEmailAndPassword(this.auth, email, senha);
@@ -86,6 +97,7 @@ class UsuariosService {
       
       console.log('✅ usuariosService - Login bem-sucedido:', user.uid);
       
+      // Buscar dados do usuário no Firestore
       const userRef = doc(db, 'usuarios', user.uid);
       const userSnap = await getDoc(userRef);
       
@@ -99,6 +111,7 @@ class UsuariosService {
         if (usuarios && usuarios.length > 0) {
           const usuarioData = usuarios[0];
           
+          // Criar documento com o UID correto
           await setDoc(doc(db, 'usuarios', user.uid), {
             ...usuarioData,
             uid: user.uid,
@@ -111,6 +124,7 @@ class UsuariosService {
           
           return this.usuario;
         } else {
+          // Criar um documento básico para o usuário
           const novoUsuario = {
             email: user.email,
             nome: user.email.split('@')[0],
@@ -134,6 +148,7 @@ class UsuariosService {
       const usuarioData = userSnap.data();
       console.log('✅ usuariosService - Dados do usuário carregados:', usuarioData);
       
+      // Verificar se está ativo
       if (usuarioData.status !== 'ativo') {
         await this.logout();
         throw new Error('Usuário inativo. Contate o administrador.');
@@ -149,6 +164,7 @@ class UsuariosService {
     }
   }
 
+  // Logout
   async logout() {
     try {
       await signOut(this.auth);
@@ -160,7 +176,9 @@ class UsuariosService {
     }
   }
 
+  // Obter usuário atual
   getUsuarioAtual() {
+    // Tentar pegar do localStorage primeiro
     const usuarioSalvo = localStorage.getItem('usuario');
     if (usuarioSalvo) {
       try {
@@ -172,10 +190,12 @@ class UsuariosService {
     return this.usuario;
   }
 
+  // Verificar se está logado
   isLoggedIn() {
     return !!this.getUsuarioAtual();
   }
 
+  // Verificar permissão
   temPermissao(permissao) {
     const usuario = this.getUsuarioAtual();
     if (!usuario) return false;
@@ -212,6 +232,16 @@ class UsuariosService {
   isFuncionario() {
     const usuario = this.getUsuarioAtual();
     return ['admin', 'gerente', 'atendente', 'profissional'].includes(usuario?.cargo);
+  }
+
+  // 🔥 MÉTODO PARA FORÇAR A MANUTENÇÃO DO USUÁRIO
+  manterUsuario() {
+    const usuario = this.getUsuarioAtual();
+    if (usuario) {
+      console.log('✅ Mantendo usuário logado:', usuario.email);
+      return true;
+    }
+    return false;
   }
 }
 
