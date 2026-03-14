@@ -24,6 +24,21 @@ class UsuariosService {
         try {
           console.log('🔍 usuariosService - Usuário Firebase:', user.uid, user.email);
           
+          // 🔥 VERIFICAR SE JÁ EXISTE USUÁRIO NO LOCALSTORAGE
+          const usuarioExistente = localStorage.getItem('usuario');
+          if (usuarioExistente) {
+            try {
+              const usuarioParsed = JSON.parse(usuarioExistente);
+              if (usuarioParsed && usuarioParsed.id === user.uid) {
+                console.log('✅ usuariosService - Usuário já existe no localStorage, mantendo:', usuarioParsed);
+                this.usuario = usuarioParsed;
+                return; // 🔥 IMPORTANTE: Não continuar a execução
+              }
+            } catch (e) {
+              console.warn('⚠️ Erro ao parsear usuário do localStorage:', e);
+            }
+          }
+          
           // Buscar dados no Firestore
           const userRef = doc(db, 'usuarios', user.uid);
           const userSnap = await getDoc(userRef);
@@ -57,25 +72,30 @@ class UsuariosService {
             } else {
               console.log('❌ usuariosService - Usuário não encontrado no sistema');
               
-              // 🔥 NÃO FAZER LOGOUT! Criar usuário básico
-              const novoUsuario = {
-                id: user.uid,
-                email: user.email,
-                nome: user.email.split('@')[0],
-                cargo: 'cliente', // Cargo padrão
-                status: 'ativo',
-                permissoes: [],
-                createdAt: new Date().toISOString()
-              };
+              // 🔥 NÃO FAZER LOGOUT! Apenas registrar
+              console.log('⚠️ Mantendo usuário logado mesmo sem dados completos');
               
-              console.log('✅ usuariosService - Criando usuário básico:', novoUsuario);
-              this.usuario = novoUsuario;
-              localStorage.setItem('usuario', JSON.stringify(novoUsuario));
-              
-              // Tentar salvar no Firestore (não crítico)
-              setDoc(doc(db, 'usuarios', user.uid), novoUsuario).catch(err => {
-                console.warn('⚠️ Não foi possível salvar usuário no Firestore:', err);
-              });
+              // Verificar se o AuthContext já tem o usuário
+              const authUser = localStorage.getItem('usuario');
+              if (authUser) {
+                console.log('✅ Mantendo usuário do AuthContext');
+                this.usuario = JSON.parse(authUser);
+              } else {
+                // Criar usuário básico
+                const novoUsuario = {
+                  id: user.uid,
+                  email: user.email,
+                  nome: user.email.split('@')[0],
+                  cargo: 'cliente',
+                  status: 'ativo',
+                  permissoes: [],
+                  createdAt: new Date().toISOString()
+                };
+                
+                console.log('✅ usuariosService - Criando usuário básico:', novoUsuario);
+                this.usuario = novoUsuario;
+                localStorage.setItem('usuario', JSON.stringify(novoUsuario));
+              }
             }
           }
         } catch (error) {
@@ -232,16 +252,6 @@ class UsuariosService {
   isFuncionario() {
     const usuario = this.getUsuarioAtual();
     return ['admin', 'gerente', 'atendente', 'profissional'].includes(usuario?.cargo);
-  }
-
-  // 🔥 MÉTODO PARA FORÇAR A MANUTENÇÃO DO USUÁRIO
-  manterUsuario() {
-    const usuario = this.getUsuarioAtual();
-    if (usuario) {
-      console.log('✅ Mantendo usuário logado:', usuario.email);
-      return true;
-    }
-    return false;
   }
 }
 
