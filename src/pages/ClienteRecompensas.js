@@ -116,6 +116,13 @@ function ClienteRecompensas() {
     try {
       setResgatando(true);
 
+      // Verificar disponibilidade
+      if (recompensaSelecionada.quantidadeDisponivel !== null && 
+          recompensaSelecionada.quantidadeDisponivel <= 0) {
+        toast.error('Recompensa esgotada');
+        return;
+      }
+
       // Registrar o resgate
       const resgateData = {
         clienteId: cliente.id,
@@ -142,6 +149,14 @@ function ClienteRecompensas() {
         data: new Date().toISOString(),
         createdAt: new Date().toISOString()
       });
+
+      // Atualizar quantidade disponível se necessário
+      if (recompensaSelecionada.quantidadeDisponivel !== null) {
+        await firebaseService.update('recompensas', recompensaSelecionada.id, {
+          quantidadeDisponivel: recompensaSelecionada.quantidadeDisponivel - 1,
+          updatedAt: new Date().toISOString()
+        });
+      }
 
       toast.success(`Recompensa resgatada! Código: ${resgateData.codigo}`);
       setOpenResgateDialog(false);
@@ -311,7 +326,7 @@ function ClienteRecompensas() {
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography>Seu saldo:</Typography>
-              <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>
+              <Typography sx={{ fontWeight: 600, color: saldo >= (recompensaSelecionada?.pontosNecessarios || 0) ? '#4caf50' : '#f44336' }}>
                 {saldo}
               </Typography>
             </Box>
