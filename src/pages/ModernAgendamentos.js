@@ -82,6 +82,9 @@ import {
   History as HistoryIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -150,6 +153,37 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+// 🔥 FUNÇÕES DE FORMATAÇÃO
+const formatarTelefone = (telefone) => {
+  if (!telefone) return 'Telefone não informado';
+  const numeros = telefone.replace(/\D/g, '');
+  if (numeros.length === 11) {
+    return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  } else if (numeros.length === 10) {
+    return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+  }
+  return telefone;
+};
+
+const formatarCPF = (cpf) => {
+  if (!cpf) return '';
+  const numeros = cpf.replace(/\D/g, '');
+  if (numeros.length === 11) {
+    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  }
+  return cpf;
+};
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
+
 // Componente para impressão da agenda
 const RelatorioAgenda = React.forwardRef(({ 
   eventos, 
@@ -181,6 +215,16 @@ const RelatorioAgenda = React.forwardRef(({
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
     return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+  };
+
+  // 🔥 FUNÇÃO PARA OBTER CLIENTE NO RELATÓRIO
+  const getClienteRelatorio = (clienteId) => {
+    if (!clienteId || !clientes) return null;
+    return clientes.find(c => 
+      c.id === clienteId || 
+      c.uid === clienteId || 
+      c.googleUid === clienteId
+    );
   };
 
   return (
@@ -287,7 +331,7 @@ const RelatorioAgenda = React.forwardRef(({
                     </TableHead>
                     <TableBody>
                       {eventosOrdenados.map(evento => {
-                        const cliente = clientes?.find(c => c.id === evento.clienteId);
+                        const cliente = getClienteRelatorio(evento.clienteId);
                         const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
@@ -390,6 +434,75 @@ function ModernAgendamentos() {
   const { data: clientes, loading: loadingClientes } = useFirebase('clientes');
   const { data: profissionais, loading: loadingProfissionais } = useFirebase('profissionais');
   const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
+  const { data: usuarios, loading: loadingUsuarios } = useFirebase('usuarios');
+
+  // ============================================
+  // 🔥 FUNÇÕES PARA OBTER DADOS DE CLIENTES (CORRIGIDAS)
+  // ============================================
+
+  const getClienteData = (clienteId) => {
+    if (!clienteId || !clientes) return null;
+    
+    // Buscar cliente pelo ID (pode ser o uid do Firebase Auth ou o id do documento)
+    const cliente = clientes.find(c => 
+      c.id === clienteId || 
+      c.uid === clienteId || 
+      c.googleUid === clienteId
+    );
+    
+    if (!cliente) return null;
+    
+    // 🔥 VERIFICAR VÁRIAS POSSIBILIDADES DE FOTO
+    const fotoUrl = cliente.foto || cliente.avatar || cliente.photoURL || cliente.fotoUrl || null;
+    
+    return {
+      id: cliente.id || cliente.uid || cliente.googleUid,
+      nome: cliente.nome || cliente.displayName || 'Cliente',
+      telefone: cliente.telefone || cliente.phoneNumber || null,
+      email: cliente.email || '',
+      cpf: cliente.cpf || '',
+      foto: fotoUrl,
+      temFoto: !!fotoUrl,
+      dataNascimento: cliente.dataNascimento || null,
+      status: cliente.status || 'Ativo'
+    };
+  };
+
+  const getProfissionalData = (profissionalId) => {
+    if (!profissionalId || !profissionais) return null;
+    
+    const profissional = profissionais.find(p => 
+      p.id === profissionalId || 
+      p.uid === profissionalId
+    );
+    
+    if (!profissional) return null;
+    
+    const fotoUrl = profissional.foto || profissional.avatar || profissional.photoURL || null;
+    
+    return {
+      id: profissional.id || profissional.uid,
+      nome: profissional.nome || profissional.displayName || 'Profissional',
+      especialidade: profissional.especialidade || '',
+      foto: fotoUrl,
+      temFoto: !!fotoUrl
+    };
+  };
+
+  const getUsuarioSistemaData = (usuarioId) => {
+    if (!usuarioId || !usuarios) return null;
+    
+    const usuario = usuarios.find(u => 
+      u.id === usuarioId || 
+      u.uid === usuarioId
+    );
+    
+    return usuario || null;
+  };
+
+  // ============================================
+  // EFFECTS
+  // ============================================
 
   useEffect(() => {
     const user = usuariosService.getUsuarioAtual();
@@ -407,76 +520,19 @@ function ModernAgendamentos() {
     }
   }, []);
 
-  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos;
-
-  // Filtrar eventos baseado no cargo do usuário
-  const filtrarEventosPorUsuario = (eventos) => {
-    if (!usuario) return eventos;
-
-    // Cliente: ver apenas seus próprios eventos
-    if (cargo === 'cliente' && usuario.clienteId) {
-      return eventos.filter(e => e.clienteId === usuario.clienteId);
-    }
-
-    // Profissional: ver apenas seus eventos
-    if (cargo === 'profissional' && usuario.profissionalId) {
-      return eventos.filter(e => e.profissionalId === usuario.profissionalId);
-    }
-
-    // Admin, Gerente, Atendente: ver todos
-    return eventos;
-  };
-
-  // Combinar agendamentos e atendimentos
-  const todosEventos = filtrarEventosPorUsuario([
-    ...(agendamentos || []).map(apt => ({
-      ...apt,
-      tipo: 'agendamento',
-      icone: <ScheduleIcon />,
-      dataObj: apt.data,
-      horarioObj: apt.horario
-    })),
-    ...(atendimentos || []).map(att => ({
-      ...att,
-      tipo: 'atendimento',
-      icone: <TimerIcon />,
-      status: att.status || 'em_andamento',
-      dataObj: att.data,
-      horarioObj: att.horaInicio
-    }))
-  ]);
-
-  // Estado do formulário
-  const [formData, setFormData] = useState({
-    clienteId: '',
-    profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
-    servicoId: '',
-    data: selectedDate,
-    horario: '',
-    observacoes: '',
-    status: 'pendente',
-    servicos: [],
-    valorTotal: 0
-  });
-
-  // ============================================
-  // FUNÇÕES PARA FILTRAR SERVIÇOS POR PROFISSIONAL
-  // ============================================
+  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos || loadingUsuarios;
 
   // Atualizar serviços disponíveis quando profissional é selecionado
   useEffect(() => {
     if (formData.profissionalId && servicos) {
-      // Buscar o profissional selecionado
       const profissional = profissionais?.find(p => p.id === formData.profissionalId);
       
       if (profissional && profissional.servicosIds) {
-        // Filtrar serviços pelos IDs associados ao profissional
         const servicosDoProfissional = servicos.filter(s => 
           profissional.servicosIds.includes(s.id) && s.ativo !== false
         );
         setServicosDisponiveis(servicosDoProfissional);
       } else {
-        // Se profissional não tem serviços específicos, mostrar todos ativos
         setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
       }
     } else {
@@ -493,60 +549,6 @@ function ModernAgendamentos() {
   const profissionaisFiltrados = (profissionais || []).filter(prof => 
     prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
   );
-
-  // ============================================
-  // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
-  // ============================================
-
-  // Adicionar serviço à lista
-  const adicionarServico = () => {
-    if (!servicoAtual) {
-      toast.error('Selecione um serviço');
-      return;
-    }
-
-    const servico = servicos?.find(s => s.id === servicoAtual);
-    if (!servico) return;
-
-    // Verificar se serviço já foi adicionado
-    if (servicosSelecionados.some(s => s.id === servico.id)) {
-      toast.error('Este serviço já foi adicionado');
-      return;
-    }
-
-    const novoServico = {
-      id: servico.id,
-      nome: servico.nome,
-      preco: servico.preco || 0,
-      duracao: servico.duracao || 60,
-      comissao: servico.comissaoProfissional || 50,
-      profissionalId: profissionalSelecionado || formData.profissionalId
-    };
-
-    setServicosSelecionados([...servicosSelecionados, novoServico]);
-    setServicoAtual('');
-    setBuscaServico('');
-    
-    // Calcular novo valor total
-    const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
-    setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
-  };
-
-  // Remover serviço da lista
-  const removerServico = (id) => {
-    const novosServicos = servicosSelecionados.filter(s => s.id !== id);
-    setServicosSelecionados(novosServicos);
-    
-    // Calcular novo valor total
-    const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
-    setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
-  };
-
-  // Limpar lista de serviços
-  const limparServicos = () => {
-    setServicosSelecionados([]);
-    setFormData({ ...formData, valorTotal: 0, servicos: [] });
-  };
 
   // Reset quando abrir modal
   useEffect(() => {
@@ -588,12 +590,6 @@ function ModernAgendamentos() {
   // ============================================
   // FUNÇÕES DE PESQUISA DE CLIENTES
   // ============================================
-
-  const formatarCPF = (cpf) => {
-    if (!cpf) return '';
-    const numeros = cpf.replace(/\D/g, '');
-    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
 
   const removerMascaraCPF = (cpf) => {
     return cpf ? cpf.replace(/\D/g, '') : '';
@@ -664,7 +660,7 @@ function ModernAgendamentos() {
   };
 
   const handleSelectClient = (cliente) => {
-    setFormData({ ...formData, clienteId: cliente.id });
+    setFormData({ ...formData, clienteId: cliente.id || cliente.uid || cliente.googleUid });
     setShowClientSearch(false);
     toast.success(`Cliente ${cliente.nome} selecionado`);
   };
@@ -674,9 +670,93 @@ function ModernAgendamentos() {
   };
 
   const getSelectedClientData = () => {
-    if (!formData.clienteId) return null;
-    return (clientes || []).find(c => c.id === formData.clienteId);
+    return getClienteData(formData.clienteId);
   };
+
+  // ============================================
+  // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
+  // ============================================
+
+  const adicionarServico = () => {
+    if (!servicoAtual) {
+      toast.error('Selecione um serviço');
+      return;
+    }
+
+    const servico = servicos?.find(s => s.id === servicoAtual);
+    if (!servico) return;
+
+    if (servicosSelecionados.some(s => s.id === servico.id)) {
+      toast.error('Este serviço já foi adicionado');
+      return;
+    }
+
+    const novoServico = {
+      id: servico.id,
+      nome: servico.nome,
+      preco: servico.preco || 0,
+      duracao: servico.duracao || 60,
+      comissao: servico.comissaoProfissional || 50,
+      profissionalId: profissionalSelecionado || formData.profissionalId
+    };
+
+    setServicosSelecionados([...servicosSelecionados, novoServico]);
+    setServicoAtual('');
+    setBuscaServico('');
+    
+    const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
+  };
+
+  const removerServico = (id) => {
+    const novosServicos = servicosSelecionados.filter(s => s.id !== id);
+    setServicosSelecionados(novosServicos);
+    
+    const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
+  };
+
+  const limparServicos = () => {
+    setServicosSelecionados([]);
+    setFormData({ ...formData, valorTotal: 0, servicos: [] });
+  };
+
+  // ============================================
+  // FUNÇÕES DE FILTRAGEM
+  // ============================================
+
+  const filtrarEventosPorUsuario = (eventos) => {
+    if (!usuario) return eventos;
+
+    if (cargo === 'cliente' && usuario.clienteId) {
+      return eventos.filter(e => e.clienteId === usuario.clienteId);
+    }
+
+    if (cargo === 'profissional' && usuario.profissionalId) {
+      return eventos.filter(e => e.profissionalId === usuario.profissionalId);
+    }
+
+    return eventos;
+  };
+
+  // Combinar agendamentos e atendimentos
+  const todosEventos = filtrarEventosPorUsuario([
+    ...(agendamentos || []).map(apt => ({
+      ...apt,
+      tipo: 'agendamento',
+      icone: <ScheduleIcon />,
+      dataObj: apt.data,
+      horarioObj: apt.horario
+    })),
+    ...(atendimentos || []).map(att => ({
+      ...att,
+      tipo: 'atendimento',
+      icone: <TimerIcon />,
+      status: att.status || 'em_andamento',
+      dataObj: att.data,
+      horarioObj: att.horaInicio
+    }))
+  ]);
 
   // Filtrar eventos
   const filteredEvents = todosEventos.filter(event => {
@@ -684,17 +764,10 @@ function ModernAgendamentos() {
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
     
-    // Se for profissional, só vê eventos do seu profissionalId (já filtrado no filtrarEventosPorUsuario)
-    if (cargo === 'profissional') {
+    if (cargo === 'profissional' || cargo === 'cliente') {
       return statusMatch && tipoMatch;
     }
     
-    // Se for cliente, só vê seus eventos (já filtrado no filtrarEventosPorUsuario)
-    if (cargo === 'cliente') {
-      return statusMatch && tipoMatch;
-    }
-    
-    // Admin, Gerente, Atendente: todos com filtros
     return professionalMatch && statusMatch && tipoMatch;
   });
 
@@ -750,6 +823,10 @@ function ModernAgendamentos() {
     finalizados: dayEvents.filter(e => e.status === 'finalizado').length,
   };
 
+  // ============================================
+  // FUNÇÕES DE NAVEGAÇÃO
+  // ============================================
+
   const handlePrevious = () => {
     if (viewMode === 'day') {
       const newDate = addDays(new Date(selectedDate), -1);
@@ -787,14 +864,12 @@ function ModernAgendamentos() {
   };
 
   const handleAdd = () => {
-    // Profissionais e clientes não podem criar agendamentos
     if (cargo === 'profissional') {
       toast.error('Profissionais não podem criar agendamentos');
       return;
     }
     
     if (cargo === 'cliente') {
-      // Cliente pode criar? Se sim, redirecionar para página específica
       toast.info('Para agendar, entre em contato com a recepção');
       return;
     }
@@ -804,7 +879,6 @@ function ModernAgendamentos() {
   };
 
   const handleEdit = (event) => {
-    // Profissionais e clientes não podem editar
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para editar agendamentos');
       return;
@@ -819,7 +893,6 @@ function ModernAgendamentos() {
   };
 
   const handleDelete = (id, tipo) => {
-    // Profissionais e clientes não podem excluir
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para cancelar agendamentos');
       return;
@@ -846,9 +919,7 @@ function ModernAgendamentos() {
     setAppointmentToDelete(null);
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA: Atualizar status com trigger
   const handleStatusChange = async (id, newStatus) => {
-    // Profissionais e clientes não podem alterar status
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para alterar status');
       return;
@@ -870,6 +941,19 @@ function ModernAgendamentos() {
     }
   };
 
+  // Estado do formulário
+  const [formData, setFormData] = useState({
+    clienteId: '',
+    profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
+    servicoId: '',
+    data: selectedDate,
+    horario: '',
+    observacoes: '',
+    status: 'pendente',
+    servicos: [],
+    valorTotal: 0
+  });
+
   const handleSave = async (event) => {
     event.preventDefault();
     
@@ -889,7 +973,6 @@ function ModernAgendamentos() {
         return;
       }
 
-      // Verificar horário ocupado
       const horarioOcupado = (agendamentos || []).some(apt => 
         apt.data === formData.data && 
         apt.horario === formData.horario && 
@@ -906,7 +989,7 @@ function ModernAgendamentos() {
       const dadosParaSalvar = {
         clienteId: formData.clienteId,
         profissionalId: formData.profissionalId,
-        servicoId: servicosSelecionados[0]?.id, // Primeiro serviço para compatibilidade
+        servicoId: servicosSelecionados[0]?.id,
         servicos: servicosSelecionados,
         data: formData.data,
         horario: formData.horario,
@@ -932,7 +1015,6 @@ function ModernAgendamentos() {
 
       setUpdateTrigger(prev => prev + 1);
 
-      // Notificar profissional
       if (usuario && formData.profissionalId) {
         try {
           const usuarios = await firebaseService.getAll('usuarios');
@@ -954,7 +1036,6 @@ function ModernAgendamentos() {
   };
 
   const iniciarAtendimento = async (agendamento) => {
-    // Profissionais e clientes não podem iniciar atendimentos
     if (cargo === 'cliente') {
       toast.error('Apenas funcionários podem iniciar atendimentos');
       return;
@@ -1026,7 +1107,6 @@ function ModernAgendamentos() {
   };
 
   const continuarAtendimento = (atendimento) => {
-    // Profissionais e atendentes podem continuar, clientes não
     if (cargo === 'cliente') {
       toast.error('Você não tem acesso a esta funcionalidade');
       return;
@@ -1127,7 +1207,6 @@ function ModernAgendamentos() {
   };
 
   const handleOpenRelatorio = () => {
-    // Apenas admin, gerente e atendente podem gerar relatórios
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para gerar relatórios');
       return;
@@ -1139,7 +1218,6 @@ function ModernAgendamentos() {
     setOpenRelatorioDialog(false);
   };
 
-  // Função para imprimir a agenda
   const handlePrint = () => {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
@@ -1201,7 +1279,6 @@ function ModernAgendamentos() {
     }
   };
 
-  // Função para exportar PDF
   const handleExportPDF = () => {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
@@ -1209,7 +1286,6 @@ function ModernAgendamentos() {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       
-      // Filtrar eventos pelo período
       let eventosFiltrados = filteredEvents;
       if (periodoRelatorio.tipo === 'dia') {
         eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
@@ -1219,25 +1295,21 @@ function ModernAgendamentos() {
         );
       }
 
-      // Ordenar por data e horário
       eventosFiltrados.sort((a, b) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
 
-      // Título
       doc.setFontSize(20);
       doc.setTextColor(156, 39, 176);
       doc.text('Relatório de Agenda', pageWidth / 2, 20, { align: 'center' });
       
-      // Subtítulo
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 30, { align: 'center' });
       
-      // Período
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
@@ -1245,12 +1317,10 @@ function ModernAgendamentos() {
         new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
       doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 38, { align: 'center' });
       
-      // Data de emissão
       doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 46, { align: 'center' });
 
       let yPos = 55;
 
-      // Estatísticas
       const totalEventos = eventosFiltrados.length;
       const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
       const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
@@ -1277,13 +1347,11 @@ function ModernAgendamentos() {
 
       yPos = doc.lastAutoTable.finalY + 10;
 
-      // Eventos por dia
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
       doc.text('Agenda Detalhada', 14, yPos);
       yPos += 8;
 
-      // Agrupar por data
       const eventosPorData = {};
       eventosFiltrados.forEach(evento => {
         if (!eventosPorData[evento.data]) {
@@ -1293,7 +1361,6 @@ function ModernAgendamentos() {
       });
 
       Object.keys(eventosPorData).sort().forEach(data => {
-        // Verificar espaço na página
         if (yPos > doc.internal.pageSize.getHeight() - 40) {
           doc.addPage();
           yPos = 20;
@@ -1306,7 +1373,11 @@ function ModernAgendamentos() {
 
         const eventosDoDia = eventosPorData[data];
         const tableData = eventosDoDia.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId);
+          const cliente = clientes?.find(c => 
+            c.id === evento.clienteId || 
+            c.uid === evento.clienteId || 
+            c.googleUid === evento.clienteId
+          );
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
@@ -1334,7 +1405,6 @@ function ModernAgendamentos() {
         yPos = doc.lastAutoTable.finalY + 10;
       });
 
-      // Salvar PDF
       const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
       doc.save(fileName);
       
@@ -1346,12 +1416,10 @@ function ModernAgendamentos() {
     }
   };
 
-  // Função para exportar Excel
   const handleExportExcel = () => {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
       
-      // Filtrar eventos pelo período
       let eventosFiltrados = filteredEvents;
       if (periodoRelatorio.tipo === 'dia') {
         eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
@@ -1361,16 +1429,13 @@ function ModernAgendamentos() {
         );
       }
 
-      // Ordenar por data e horário
       eventosFiltrados.sort((a, b) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
 
-      // Criar workbook
       const wb = XLSX.utils.book_new();
 
-      // Aba de Resumo
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
@@ -1393,11 +1458,14 @@ function ModernAgendamentos() {
       const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
       XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
 
-      // Aba de Agenda Detalhada
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Serviços', 'Profissional', 'Tipo', 'Status'],
         ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId);
+          const cliente = clientes?.find(c => 
+            c.id === evento.clienteId || 
+            c.uid === evento.clienteId || 
+            c.googleUid === evento.clienteId
+          );
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
@@ -1417,7 +1485,6 @@ function ModernAgendamentos() {
       const wsAgenda = XLSX.utils.aoa_to_sheet(agendaData);
       XLSX.utils.book_append_sheet(wb, wsAgenda, 'Agenda Detalhada');
 
-      // Aba de Estatísticas por Status
       const statsPorStatus = {};
       eventosFiltrados.forEach(evento => {
         const status = evento.status || 'desconhecido';
@@ -1433,7 +1500,6 @@ function ModernAgendamentos() {
       const wsStats = XLSX.utils.aoa_to_sheet(statsData);
       XLSX.utils.book_append_sheet(wb, wsStats, 'Por Status');
 
-      // Salvar arquivo
       const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.xlsx`;
       XLSX.writeFile(wb, fileName);
       
@@ -1463,6 +1529,7 @@ function ModernAgendamentos() {
 
   return (
     <Box>
+      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
@@ -1545,7 +1612,7 @@ function ModernAgendamentos() {
         </Box>
       </Box>
 
-      {/* Atendimentos em Andamento - Apenas para admin/gerente/atendente/profissional */}
+      {/* Atendimentos em Andamento */}
       {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
           <CardContent>
@@ -1558,20 +1625,30 @@ function ModernAgendamentos() {
             
             <Grid container spacing={2}>
               {atendimentosEmAndamento.slice(0, 3).map(atendimento => {
-                const cliente = (clientes || []).find(c => c.id === atendimento.clienteId);
-                const profissional = (profissionais || []).find(p => p.id === atendimento.profissionalId);
+                const cliente = getClienteData(atendimento.clienteId);
+                const profissional = getProfissionalData(atendimento.profissionalId);
                 const servicosLista = atendimento.servicos || [];
+
+                if (!cliente) return null;
 
                 return (
                   <Grid item xs={12} md={4} key={atendimento.id}>
                     <Card variant="outlined" sx={{ p: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <Avatar sx={{ bgcolor: '#ff9800', mr: 2 }}>
-                          {cliente?.nome?.charAt(0)}
+                        <Avatar 
+                          src={cliente.foto}
+                          sx={{ 
+                            bgcolor: '#ff9800', 
+                            mr: 2,
+                            width: 48,
+                            height: 48
+                          }}
+                        >
+                          {!cliente.temFoto && cliente.nome?.charAt(0)}
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {cliente?.nome}
+                            {cliente.nome}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
                             {servicosLista.length} serviço(s)
@@ -1642,7 +1719,6 @@ function ModernAgendamentos() {
               </Box>
             </Grid>
             
-            {/* Filtro de Profissional - Visível para admin/gerente/atendente */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -1661,7 +1737,6 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Status - Visível para todos exceto cliente */}
             {cargo !== 'cliente' && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -1682,7 +1757,6 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Mostrar - Visível para admin/gerente/atendente */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -1770,9 +1844,11 @@ function ModernAgendamentos() {
                           <AnimatePresence>
                             <Grid container spacing={2}>
                               {eventsAtTime.map(event => {
-                                const cliente = (clientes || []).find(c => c.id === event.clienteId);
-                                const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
+                                const cliente = getClienteData(event.clienteId);
+                                const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
+
+                                if (!cliente) return null;
 
                                 return (
                                   <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
@@ -1791,24 +1867,46 @@ function ModernAgendamentos() {
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
                                         <Grid container spacing={2} alignItems="center">
+                                          {/* Cliente com Foto */}
                                           <Grid item xs={12} sm={6} md={3}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                              <Avatar sx={{ bgcolor: event.tipo === 'atendimento' ? '#ff9800' : '#9c27b0', width: 32, height: 32 }}>
-                                                {cliente?.nome?.charAt(0)}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                              <Avatar 
+                                                src={cliente.foto}
+                                                sx={{ 
+                                                  bgcolor: event.tipo === 'atendimento' ? '#ff9800' : '#9c27b0',
+                                                  width: 48,
+                                                  height: 48,
+                                                  border: '2px solid white',
+                                                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                                }}
+                                              >
+                                                {!cliente.temFoto && cliente.nome?.charAt(0)}
                                               </Avatar>
                                               <Box>
                                                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                                  {cliente?.nome || 'N/A'}
+                                                  {cliente.nome}
                                                 </Typography>
-                                                {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && cliente?.telefone && (
-                                                  <Typography variant="caption" color="textSecondary">
-                                                    {cliente.telefone}
-                                                  </Typography>
+                                                {cliente.telefone && (
+                                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                                    <PhoneIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                                                    <Typography variant="caption" color="textSecondary">
+                                                      {formatarTelefone(cliente.telefone)}
+                                                    </Typography>
+                                                  </Box>
+                                                )}
+                                                {cliente.email && (
+                                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <EmailIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                                                    <Typography variant="caption" color="textSecondary">
+                                                      {cliente.email}
+                                                    </Typography>
+                                                  </Box>
                                                 )}
                                               </Box>
                                             </Box>
                                           </Grid>
 
+                                          {/* Serviços */}
                                           <Grid item xs={12} sm={6} md={2}>
                                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                               {servicosLista.length} serviço(s)
@@ -1816,14 +1914,23 @@ function ModernAgendamentos() {
                                             <Typography variant="caption" color="textSecondary">
                                               {servicosLista.map(s => s.nome).join(', ')}
                                             </Typography>
+                                            <Typography variant="body2" sx={{ mt: 1, fontWeight: 600, color: '#9c27b0' }}>
+                                              R$ {event.valorTotal?.toFixed(2)}
+                                            </Typography>
                                           </Grid>
 
+                                          {/* Profissional */}
                                           {cargo !== 'cliente' && (
                                             <Grid item xs={12} sm={6} md={2}>
-                                              <Typography variant="body2">
+                                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                                 {profissional?.nome || 'N/A'}
                                               </Typography>
-                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                              {profissional?.especialidade && (
+                                                <Typography variant="caption" color="textSecondary">
+                                                  {profissional.especialidade}
+                                                </Typography>
+                                              )}
+                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
                                                 {getTipoIcon(event.tipo)}
                                                 <Typography variant="caption" color="textSecondary">
                                                   {getTipoLabel(event.tipo)}
@@ -1832,16 +1939,18 @@ function ModernAgendamentos() {
                                             </Grid>
                                           )}
 
+                                          {/* Status */}
                                           <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 3 : 2}>
                                             <Chip
                                               icon={getStatusIcon(event.status)}
                                               label={getStatusLabel(event.status)}
                                               size="small"
                                               color={getStatusColor(event.status)}
-                                              sx={{ fontWeight: 500 }}
+                                              sx={{ fontWeight: 500, width: '100%' }}
                                             />
                                           </Grid>
 
+                                          {/* Ações */}
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                                               {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
@@ -1870,45 +1979,49 @@ function ModernAgendamentos() {
                                               
                                               {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'pendente' && (
                                                 <>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleStatusChange(event.id, 'confirmado')}
-                                                    color="success"
-                                                    title="Confirmar"
-                                                  >
-                                                    <CheckIcon fontSize="small" />
-                                                  </IconButton>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleStatusChange(event.id, 'cancelado')}
-                                                    color="error"
-                                                    title="Cancelar"
-                                                  >
-                                                    <CancelIcon fontSize="small" />
-                                                  </IconButton>
+                                                  <Tooltip title="Confirmar">
+                                                    <IconButton 
+                                                      size="small" 
+                                                      onClick={() => handleStatusChange(event.id, 'confirmado')}
+                                                      color="success"
+                                                    >
+                                                      <CheckIcon fontSize="small" />
+                                                    </IconButton>
+                                                  </Tooltip>
+                                                  <Tooltip title="Cancelar">
+                                                    <IconButton 
+                                                      size="small" 
+                                                      onClick={() => handleStatusChange(event.id, 'cancelado')}
+                                                      color="error"
+                                                    >
+                                                      <CancelIcon fontSize="small" />
+                                                    </IconButton>
+                                                  </Tooltip>
                                                 </>
                                               )}
                                               
                                               {cargo !== 'cliente' && event.tipo === 'agendamento' && (
                                                 <>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleEdit(event)}
-                                                    color="primary"
-                                                    title="Editar"
-                                                  >
-                                                    <EditIcon fontSize="small" />
-                                                  </IconButton>
-                                                  
-                                                  {event.status !== 'finalizado' && event.status !== 'cancelado' && (
+                                                  <Tooltip title="Editar">
                                                     <IconButton 
                                                       size="small" 
-                                                      onClick={() => handleDelete(event.id, event.tipo)}
-                                                      color="error"
-                                                      title="Excluir"
+                                                      onClick={() => handleEdit(event)}
+                                                      color="primary"
                                                     >
-                                                      <DeleteIcon fontSize="small" />
+                                                      <EditIcon fontSize="small" />
                                                     </IconButton>
+                                                  </Tooltip>
+                                                  
+                                                  {event.status !== 'finalizado' && event.status !== 'cancelado' && (
+                                                    <Tooltip title="Excluir">
+                                                      <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleDelete(event.id, event.tipo)}
+                                                        color="error"
+                                                      >
+                                                        <DeleteIcon fontSize="small" />
+                                                      </IconButton>
+                                                    </Tooltip>
                                                   )}
                                                 </>
                                               )}
@@ -1929,9 +2042,9 @@ function ModernAgendamentos() {
                                         </Grid>
 
                                         {event.observacoes && (
-                                          <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #ccc' }}>
+                                          <Box sx={{ mt: 2, pl: 2, borderLeft: '2px solid #9c27b0' }}>
                                             <Typography variant="caption" color="textSecondary">
-                                              Obs: {event.observacoes}
+                                              <strong>Obs:</strong> {event.observacoes}
                                             </Typography>
                                           </Box>
                                         )}
@@ -1988,7 +2101,7 @@ function ModernAgendamentos() {
                       {day.events.length > 0 ? (
                         <Box>
                           {day.events.slice(0, 3).map(event => {
-                            const cliente = (clientes || []).find(c => c.id === event.clienteId);
+                            const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
                             return (
                               <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -2101,7 +2214,7 @@ function ModernAgendamentos() {
                             </Box>
                             
                             {day.events.slice(0, 2).map(event => {
-                              const cliente = (clientes || []).find(c => c.id === event.clienteId);
+                              const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
                               return (
                                 <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
@@ -2158,23 +2271,56 @@ function ModernAgendamentos() {
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {selectedDayDetails?.events.map(event => {
-              const cliente = (clientes || []).find(c => c.id === event.clienteId);
-              const profissional = (profissionais || []).find(p => p.id === event.profissionalId);
+              const cliente = getClienteData(event.clienteId);
+              const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
+
+              if (!cliente) return null;
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2 }}>
                   <Grid container spacing={2}>
+                    {/* Cliente com Foto */}
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                        {cliente?.nome}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar 
+                          src={cliente.foto}
+                          sx={{ 
+                            width: 56,
+                            height: 56,
+                            bgcolor: '#9c27b0'
+                          }}
+                        >
+                          {!cliente.temFoto && cliente.nome?.charAt(0)}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {cliente.nome}
+                          </Typography>
+                          {cliente.telefone && (
+                            <Typography variant="body2" color="textSecondary">
+                              📞 {formatarTelefone(cliente.telefone)}
+                            </Typography>
+                          )}
+                          {cliente.email && (
+                            <Typography variant="body2" color="textSecondary">
+                              ✉️ {cliente.email}
+                            </Typography>
+                          )}
+                          {cliente.cpf && (
+                            <Typography variant="body2" color="textSecondary">
+                              🆔 {formatarCPF(cliente.cpf)}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
                     </Grid>
+                    
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
                       <Typography variant="body1">{event.horario}</Typography>
                     </Grid>
+                    
                     <Grid item xs={12}>
                       <Typography variant="subtitle2" color="textSecondary">Serviços</Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -2191,12 +2337,14 @@ function ModernAgendamentos() {
                         Total: R$ {event.valorTotal?.toFixed(2)}
                       </Typography>
                     </Grid>
+                    
                     {cargo !== 'cliente' && (
                       <Grid item xs={12} sm={6}>
                         <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
                         <Typography variant="body1">{profissional?.nome}</Typography>
                       </Grid>
                     )}
+                    
                     <Grid item xs={12}>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         <Chip
@@ -2213,6 +2361,7 @@ function ModernAgendamentos() {
                         />
                       </Box>
                     </Grid>
+                    
                     {event.observacoes && (
                       <Grid item xs={12}>
                         <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
@@ -2220,6 +2369,7 @@ function ModernAgendamentos() {
                       </Grid>
                     )}
                   </Grid>
+                  
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                     {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
                       <Button
@@ -2284,7 +2434,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento - Apenas para admin/gerente/atendente */}
+      {/* Dialog de Agendamento */}
       {openDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
@@ -2407,13 +2557,16 @@ function ModernAgendamentos() {
                                         }}
                                       >
                                         <ListItemAvatar>
-                                          <Avatar sx={{ bgcolor: '#9c27b0' }}>
-                                            {cliente.nome?.charAt(0)}
+                                          <Avatar 
+                                            src={cliente.foto || cliente.avatar || cliente.photoURL}
+                                            sx={{ bgcolor: '#9c27b0' }}
+                                          >
+                                            {!(cliente.foto || cliente.avatar || cliente.photoURL) && cliente.nome?.charAt(0)}
                                           </Avatar>
                                         </ListItemAvatar>
                                         <ListItemText
                                           primary={
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {cliente.nome}
                                               </Typography>
@@ -2428,10 +2581,15 @@ function ModernAgendamentos() {
                                             </Box>
                                           }
                                           secondary={
-                                            <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+                                            <Box sx={{ display: 'flex', gap: 2, mt: 0.5, flexWrap: 'wrap' }}>
                                               {cliente.telefone && (
                                                 <Typography variant="caption">
-                                                  📞 {cliente.telefone}
+                                                  📞 {formatarTelefone(cliente.telefone)}
+                                                </Typography>
+                                              )}
+                                              {cliente.email && (
+                                                <Typography variant="caption">
+                                                  ✉️ {cliente.email}
                                                 </Typography>
                                               )}
                                               {cliente.dataNascimento && (
@@ -2462,8 +2620,16 @@ function ModernAgendamentos() {
                       // Cliente Selecionado
                       <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                          <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                            {getSelectedClientData()?.nome?.charAt(0)}
+                          <Avatar 
+                            src={getSelectedClientData()?.foto}
+                            sx={{ 
+                              bgcolor: '#9c27b0', 
+                              width: 56, 
+                              height: 56,
+                              border: '2px solid white'
+                            }}
+                          >
+                            {!getSelectedClientData()?.temFoto && getSelectedClientData()?.nome?.charAt(0)}
                           </Avatar>
                           <Box sx={{ flex: 1 }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -2477,7 +2643,12 @@ function ModernAgendamentos() {
                               )}
                               {getSelectedClientData()?.telefone && (
                                 <Typography variant="caption">
-                                  📞 {getSelectedClientData()?.telefone}
+                                  📞 {formatarTelefone(getSelectedClientData()?.telefone)}
+                                </Typography>
+                              )}
+                              {getSelectedClientData()?.email && (
+                                <Typography variant="caption">
+                                  ✉️ {getSelectedClientData()?.email}
                                 </Typography>
                               )}
                             </Box>
@@ -2752,7 +2923,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Relatórios - Apenas para admin/gerente/atendente */}
+      {/* Dialog de Relatórios */}
       {openRelatorioDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
         <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
