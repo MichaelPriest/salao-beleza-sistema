@@ -23,9 +23,9 @@ import {
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext'; // 🔥 IMPORTANTE: usar o AuthContext, não o AuthClienteContext
 import { 
   getAuth, 
-  signInWithEmailAndPassword, 
   signInWithPopup, 
   GoogleAuthProvider
 } from 'firebase/auth';
@@ -34,10 +34,11 @@ import { db } from '../services/firebase';
 
 function ModernLogin() {
   const navigate = useNavigate();
+  const { login } = useAuth(); // 🔥 Usar o hook do AuthContext
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
-  const [errorType, setErrorType] = useState('error'); // 'error', 'warning', 'info'
+  const [errorType, setErrorType] = useState('error');
   const [formData, setFormData] = useState({
     email: '',
     senha: '',
@@ -78,7 +79,7 @@ function ModernLogin() {
     return isValid;
   };
 
-  // Verificar se usuário existe no Firestore
+  // Verificar se usuário existe no Firestore (para Google Login)
   const verificarUsuarioFirestore = async (user) => {
     try {
       const userRef = doc(db, 'usuarios', user.uid);
@@ -139,83 +140,14 @@ function ModernLogin() {
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth, 
-        formData.email, 
-        formData.senha
-      );
-      
-      const user = userCredential.user;
-      
-      // Verificar se usuário existe no Firestore
-      const resultado = await verificarUsuarioFirestore(user);
-      
-      if (resultado.error) {
-        // Usuário não autorizado - fazer logout
-        await auth.signOut();
-        
-        setErrorType(resultado.type === 'not_found' ? 'error' : 'warning');
-        setError(resultado.message);
-        
-        if (resultado.type === 'not_found') {
-          setErrorDetails('Seu email está autenticado no Google, mas não possui cadastro no sistema.');
-        } else if (resultado.type === 'inactive') {
-          setErrorDetails('Seu acesso foi desativado. Entre em contato com o administrador.');
-        }
-        
-        setLoading(false);
-        return;
-      }
-      
-      // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(resultado.data));
-      
-      toast.success(`Bem-vindo, ${resultado.data.nome}!`);
+      // 🔥 Usar a função login do AuthContext
+      await login(formData.email, formData.senha);
       navigate('/');
     } catch (error) {
       console.error('Erro no login:', error);
       
-      // Mapear erros do Firebase Auth
-      const errorMap = {
-        'auth/user-not-found': {
-          message: 'Email não encontrado',
-          details: 'Verifique se o email está correto ou cadastre-se no sistema.'
-        },
-        'auth/wrong-password': {
-          message: 'Senha incorreta',
-          details: 'Verifique sua senha e tente novamente.'
-        },
-        'auth/invalid-email': {
-          message: 'Email inválido',
-          details: 'Digite um endereço de email válido.'
-        },
-        'auth/user-disabled': {
-          message: 'Usuário desabilitado',
-          details: 'Sua conta foi desativada. Contate o administrador.'
-        },
-        'auth/too-many-requests': {
-          message: 'Muitas tentativas',
-          details: 'Acesso temporariamente bloqueado por muitas tentativas. Tente novamente mais tarde.'
-        },
-        'auth/network-request-failed': {
-          message: 'Erro de conexão',
-          details: 'Verifique sua conexão com a internet e tente novamente.'
-        },
-        'auth/invalid-credential': {
-          message: 'Credenciais inválidas',
-          details: 'Email ou senha incorretos.'
-        }
-      };
-
-      const errorCode = error.code;
-      const errorInfo = errorMap[errorCode] || {
-        message: 'Erro ao fazer login',
-        details: 'Ocorreu um erro inesperado. Tente novamente mais tarde.'
-      };
-
       setErrorType('error');
-      setError(errorInfo.message);
-      setErrorDetails(errorInfo.details);
+      setError(error.message || 'Erro ao fazer login');
     } finally {
       setLoading(false);
     }
@@ -259,7 +191,6 @@ function ModernLogin() {
     } catch (error) {
       console.error('Erro no login com Google:', error);
       
-      // Mapear erros do Google
       if (error.code === 'auth/popup-closed-by-user') {
         setErrorType('info');
         setError('Login cancelado');
