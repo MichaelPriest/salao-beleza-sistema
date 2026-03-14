@@ -18,7 +18,7 @@ import PrivateRoute from './components/PrivateRoute';
 import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
-import ClientePrivateRoute from './components/ClientePrivateRoute'; // 🔥 NOVO: Rota privada para cliente
+import ClientePrivateRoute from './components/ClientePrivateRoute';
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -159,93 +159,46 @@ function App() {
                 <Route path="/manutencao" element={<Manutencao />} />
                 
                 {/* =========================================== */}
-                {/* ROTAS DO CLIENTE - PRIMEIRO! */}
+                {/* ROTAS DO CLIENTE */}
                 {/* =========================================== */}
                 
-                {/* Login do cliente - PÚBLICO */}
+                {/* Rotas públicas do cliente (sem proteção) */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
                     <ClienteLogin />
                   </AuthClienteProvider>
                 } />
                 
-                {/* Cadastro do cliente - PÚBLICO */}
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
                     <ClienteCadastro />
                   </AuthClienteProvider>
                 } />
                 
-                {/* Recuperar senha - PÚBLICO */}
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <ClienteRecuperarSenha />
                   </AuthClienteProvider>
                 } />
                 
-                {/* 🔥 ROTA PRIVADA DO CLIENTE - USA CLIENTE PRIVATE ROUTE */}
-                <Route path="/cliente/dashboard" element={
+                {/* Rotas protegidas do cliente - com layout compartilhado */}
+                <Route path="/cliente" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteDashboard />
-                      </ClienteLayout>
+                      <ClienteLayout />
                     </ClientePrivateRoute>
                   </AuthClienteProvider>
-                } />
-                
-                <Route path="/cliente/agendamentos" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteAgendamentos />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
-                
-                <Route path="/cliente/recompensas" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteRecompensas />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
-                
-                <Route path="/cliente/pontos" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClientePontos />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
-                
-                <Route path="/cliente/historico" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteHistorico />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
-                
-                <Route path="/cliente/perfil" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClientePerfil />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
+                }>
+                  <Route path="dashboard" element={<ClienteDashboard />} />
+                  <Route path="agendamentos" element={<ClienteAgendamentos />} />
+                  <Route path="recompensas" element={<ClienteRecompensas />} />
+                  <Route path="pontos" element={<ClientePontos />} />
+                  <Route path="historico" element={<ClienteHistorico />} />
+                  <Route path="perfil" element={<ClientePerfil />} />
+                </Route>
                 
                 {/* =========================================== */}
-                {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) - DEPOIS */}
+                {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) */}
                 {/* =========================================== */}
                 
                 {/* Login do sistema */}
