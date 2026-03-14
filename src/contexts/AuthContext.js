@@ -24,16 +24,16 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Buscar dados do usuário no Firestore
+          // Buscar dados do usuário no Firestore (coleção 'usuarios')
           const userRef = doc(db, 'usuarios', firebaseUser.uid);
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
             setUser({ id: firebaseUser.uid, ...userData });
-            localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...userData }));
+            localStorage.setItem('usuario', JSON.stringify({ id: firefirebaseUser.uid, ...userData }));
           } else {
-            // Tentar buscar por email
+            // Tentar buscar por email como fallback
             const usuarios = await firebaseService.query('usuarios', [
               { field: 'email', operator: '==', value: firebaseUser.email }
             ]);
@@ -44,7 +44,8 @@ export const AuthProvider = ({ children }) => {
               await setDoc(doc(db, 'usuarios', firebaseUser.uid), {
                 ...usuarioData,
                 uid: firebaseUser.uid,
-                migrado: true
+                migrado: true,
+                migradoEm: new Date().toISOString()
               });
               setUser({ id: firebaseUser.uid, ...usuarioData });
               localStorage.setItem('usuario', JSON.stringify({ id: firebaseUser.uid, ...usuarioData }));
@@ -83,6 +84,7 @@ export const AuthProvider = ({ children }) => {
 
       const userData = userSnap.data();
       
+      // Verificar se está ativo
       if (userData.status !== 'ativo') {
         await signOut(auth);
         throw new Error('Usuário inativo. Contate o administrador.');
@@ -95,6 +97,20 @@ export const AuthProvider = ({ children }) => {
       return usuarioCompleto;
     } catch (error) {
       console.error('Erro no login:', error);
+      
+      // Mapear erros comuns
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('Usuário não encontrado');
+      } else if (error.code === 'auth/wrong-password') {
+        throw new Error('Senha incorreta');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Email inválido');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Muitas tentativas. Tente novamente mais tarde');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Erro de conexão. Verifique sua internet');
+      }
+      
       throw error;
     }
   };
