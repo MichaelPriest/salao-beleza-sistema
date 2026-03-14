@@ -66,6 +66,40 @@ import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { ImprimirHistorico } from '../components/ImprimirHistorico';
 
+// 🔥 FUNÇÃO PARA OBTER DADOS DO CLIENTE DE FORMA SEGURA
+const getClienteData = (clienteId, clientes) => {
+  if (!clienteId || !clientes) return null;
+  
+  // Buscar cliente pelo ID (pode ser o uid do Firebase Auth ou o id do documento)
+  const cliente = clientes.find(c => 
+    c.id === clienteId || 
+    c.uid === clienteId || 
+    c.googleUid === clienteId
+  );
+  
+  if (!cliente) return null;
+  
+  // Retornar objeto padronizado com todos os campos necessários
+  return {
+    id: cliente.id || cliente.uid || cliente.googleUid,
+    nome: cliente.nome || cliente.displayName || 'Cliente',
+    telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
+    email: cliente.email || '',
+    cpf: cliente.cpf || '',
+    foto: cliente.foto || cliente.photoURL || cliente.avatar || null,
+    dataNascimento: cliente.dataNascimento || '',
+    genero: cliente.genero || '',
+    cep: cliente.cep || '',
+    logradouro: cliente.logradouro || '',
+    numero: cliente.numero || '',
+    complemento: cliente.complemento || '',
+    bairro: cliente.bairro || '',
+    cidade: cliente.cidade || '',
+    estado: cliente.estado || '',
+    status: cliente.status || 'Ativo'
+  };
+};
+
 const statusColors = {
   realizado: { color: '#4caf50', label: 'Realizado' },
   cancelado: { color: '#f44336', label: 'Cancelado' },
@@ -155,8 +189,14 @@ function HistoricoAtendimentos() {
 
   const getClienteNome = (clienteId) => {
     if (!clienteId) return 'Cliente não identificado';
-    const cliente = clientes.find(c => c.id === clienteId);
-    return cliente?.nome || 'Cliente não encontrado';
+    const clienteData = getClienteData(clienteId, clientes);
+    return clienteData?.nome || 'Cliente não encontrado';
+  };
+
+  const getClienteFoto = (clienteId) => {
+    if (!clienteId) return null;
+    const clienteData = getClienteData(clienteId, clientes);
+    return clienteData?.foto || null;
   };
 
   const getProfissionalNome = (profissionalId) => {
@@ -476,9 +516,22 @@ function HistoricoAtendimentos() {
                   label="Cliente"
                 >
                   <MenuItem value="todos">Todos</MenuItem>
-                  {clientes.map(c => (
-                    <MenuItem key={c.id} value={c.id}>{c.nome}</MenuItem>
-                  ))}
+                  {clientes.map(c => {
+                    const clienteData = getClienteData(c.id, clientes);
+                    return (
+                      <MenuItem key={c.id} value={c.id}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar 
+                            src={clienteData?.foto} 
+                            sx={{ width: 24, height: 24 }}
+                          >
+                            {!clienteData?.foto && clienteData?.nome?.charAt(0)}
+                          </Avatar>
+                          {clienteData?.nome}
+                        </Box>
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             </Grid>
@@ -493,7 +546,17 @@ function HistoricoAtendimentos() {
                 >
                   <MenuItem value="todos">Todos</MenuItem>
                   {profissionais.map(p => (
-                    <MenuItem key={p.id} value={p.id}>{p.nome}</MenuItem>
+                    <MenuItem key={p.id} value={p.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar 
+                          src={p.foto} 
+                          sx={{ width: 24, height: 24 }}
+                        >
+                          {!p.foto && p.nome?.charAt(0)}
+                        </Avatar>
+                        {p.nome}
+                      </Box>
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -567,6 +630,8 @@ function HistoricoAtendimentos() {
             <Timeline position="alternate">
               {paginatedAtendimentos.slice(0, 5).map((atendimento, index) => {
                 const status = atendimento.status === 'finalizado' ? 'realizado' : atendimento.status;
+                const clienteData = getClienteData(atendimento.clienteId, clientes);
+                
                 return (
                   <TimelineItem key={atendimento.id}>
                     <TimelineSeparator>
@@ -586,9 +651,17 @@ function HistoricoAtendimentos() {
                         <Typography variant="subtitle2">
                           {formatarDataFirebase(atendimento.data)}
                         </Typography>
-                        <Typography variant="body2">
-                          <strong>{getClienteNome(atendimento.clienteId)}</strong> - {getProfissionalNome(atendimento.profissionalId)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                          <Avatar 
+                            src={clienteData?.foto} 
+                            sx={{ width: 24, height: 24 }}
+                          >
+                            {!clienteData?.foto && clienteData?.nome?.charAt(0)}
+                          </Avatar>
+                          <Typography variant="body2">
+                            <strong>{clienteData?.nome}</strong> - {getProfissionalNome(atendimento.profissionalId)}
+                          </Typography>
+                        </Box>
                         <Chip
                           size="small"
                           label={statusColors[status]?.label || status}
@@ -627,6 +700,7 @@ function HistoricoAtendimentos() {
               <AnimatePresence>
                 {paginatedAtendimentos.map((atendimento, index) => {
                   const status = atendimento.status === 'finalizado' ? 'realizado' : atendimento.status;
+                  const clienteData = getClienteData(atendimento.clienteId, clientes);
                   
                   return (
                     <motion.tr
@@ -644,15 +718,36 @@ function HistoricoAtendimentos() {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
-                            <PersonIcon sx={{ fontSize: 16 }} />
+                          <Avatar 
+                            src={clienteData?.foto} 
+                            sx={{ width: 40, height: 40, bgcolor: '#9c27b0' }}
+                          >
+                            {!clienteData?.foto && clienteData?.nome?.charAt(0)}
                           </Avatar>
                           <Box>
-                            <Typography variant="body2">{getClienteNome(atendimento.clienteId)}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {clienteData?.nome}
+                            </Typography>
+                            {clienteData?.telefone && (
+                              <Typography variant="caption" color="textSecondary">
+                                {clienteData.telefone}
+                              </Typography>
+                            )}
                           </Box>
                         </Box>
                       </TableCell>
-                      <TableCell>{getProfissionalNome(atendimento.profissionalId)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar 
+                            src={profissionais.find(p => p.id === atendimento.profissionalId)?.foto} 
+                            sx={{ width: 32, height: 32 }}
+                          >
+                            {!profissionais.find(p => p.id === atendimento.profissionalId)?.foto && 
+                              getProfissionalNome(atendimento.profissionalId).charAt(0)}
+                          </Avatar>
+                          {getProfissionalNome(atendimento.profissionalId)}
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                           {getServicosNomes(atendimento).map((servico, i) => (
@@ -739,11 +834,20 @@ function HistoricoAtendimentos() {
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Avatar sx={{ width: 56, height: 56, bgcolor: '#9c27b0' }}>
-                        <PersonIcon />
+                      <Avatar 
+                        src={getClienteFoto(atendimentoSelecionado.clienteId)} 
+                        sx={{ width: 56, height: 56, bgcolor: '#9c27b0' }}
+                      >
+                        {!getClienteFoto(atendimentoSelecionado.clienteId) && 
+                          getClienteNome(atendimentoSelecionado.clienteId).charAt(0)}
                       </Avatar>
                       <Box>
                         <Typography variant="h6">{getClienteNome(atendimentoSelecionado.clienteId)}</Typography>
+                        {getClienteData(atendimentoSelecionado.clienteId, clientes)?.telefone && (
+                          <Typography variant="body2" color="textSecondary">
+                            {getClienteData(atendimentoSelecionado.clienteId, clientes).telefone}
+                          </Typography>
+                        )}
                       </Box>
                     </Box>
 
