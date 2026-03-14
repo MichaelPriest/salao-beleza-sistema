@@ -182,7 +182,8 @@ function ModernLogin() {
 
     try {
       await login(formData.email, formData.senha);
-      navigate('/');
+      // 🔥 REDIRECIONAR PARA DASHBOARD
+      navigate('/dashboard');
     } catch (error) {
       console.error('Erro no login:', error);
       
@@ -226,7 +227,8 @@ function ModernLogin() {
       localStorage.setItem('usuario', JSON.stringify(resultado.data));
       
       toast.success(`Bem-vindo, ${resultado.data.nome}!`);
-      navigate('/');
+      // 🔥 REDIRECIONAR PARA DASHBOARD
+      navigate('/dashboard');
     } catch (error) {
       console.error('Erro no login com Google:', error);
       
