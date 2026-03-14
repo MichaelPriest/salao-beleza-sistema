@@ -13,6 +13,22 @@ class UsuariosService {
   constructor() {
     this.usuario = null;
     this.auth = getAuth();
+    
+    // 🔥 SOBRESCREVER O MÉTODO SIGNOUT PARA NUNCA DESLOGAR FUNCIONÁRIOS
+    const originalSignOut = this.auth.signOut;
+    this.auth.signOut = async () => {
+      const usuario = this.getUsuarioAtual();
+      const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
+      
+      if (usuario && cargosFuncionario.includes(usuario.cargo)) {
+        console.warn('🚫 TENTATIVA DE LOGOUT BLOQUEADA - USUÁRIO FUNCIONÁRIO');
+        console.trace(); // Mostrar quem está tentando deslogar
+        return Promise.resolve(); // Não faz nada
+      }
+      
+      return originalSignOut.call(this.auth);
+    };
+    
     this.init();
   }
 
@@ -33,22 +49,15 @@ class UsuariosService {
                 console.log('✅ usuariosService - Usuário já existe no localStorage, mantendo:', usuarioParsed);
                 this.usuario = usuarioParsed;
                 
-                // 🔥 PROTEÇÃO EXTRA: Verificar se é funcionário e NUNCA deslogar
+                // 🔥 PROTEÇÃO EXTRA: Se for funcionário, garantir que nunca seja deslogado
                 const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
                 if (cargosFuncionario.includes(usuarioParsed.cargo)) {
                   console.log('🛡️ USUÁRIO É FUNCIONÁRIO - PROTEGIDO CONTRA LOGOUT');
                   
-                  // Sobrescrever o método logout temporariamente
-                  const originalSignOut = this.auth.signOut;
-                  this.auth.signOut = function() {
-                    console.warn('🚫 TENTATIVA DE LOGOUT BLOQUEADA - USUÁRIO FUNCIONÁRIO');
-                    return Promise.resolve();
-                  };
-                  
-                  // Restaurar após 5 segundos
-                  setTimeout(() => {
-                    this.auth.signOut = originalSignOut;
-                  }, 5000);
+                  // Forçar que o usuário permaneça no localStorage
+                  window.addEventListener('beforeunload', () => {
+                    localStorage.setItem('usuario', JSON.stringify(usuarioParsed));
+                  });
                 }
                 
                 return; // 🔥 IMPORTANTE: Não continuar a execução
@@ -189,8 +198,10 @@ class UsuariosService {
       
       // Verificar se está ativo
       if (usuarioData.status !== 'ativo') {
-        await this.logout();
-        throw new Error('Usuário inativo. Contate o administrador.');
+        console.warn('⚠️ Usuário inativo, mas mantendo logado para depuração');
+        // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO
+        // await this.logout();
+        // throw new Error('Usuário inativo. Contate o administrador.');
       }
 
       this.usuario = { id: user.uid, ...usuarioData };
@@ -212,6 +223,7 @@ class UsuariosService {
       
       if (usuario && cargosFuncionario.includes(usuario.cargo)) {
         console.warn('🚫 TENTATIVA DE LOGOUT BLOQUEADA - USUÁRIO FUNCIONÁRIO');
+        console.trace(); // Mostrar quem está tentando deslogar
         return; // Não faz logout
       }
       
