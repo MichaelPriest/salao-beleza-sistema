@@ -86,6 +86,7 @@ function FidelidadeHistorico() {
   
   const [loading, setLoading] = useState(true);
   const [cliente, setCliente] = useState(null);
+  const [fotoUrl, setFotoUrl] = useState(null);
   const [pontuacoes, setPontuacoes] = useState([]);
   const [resgates, setResgates] = useState([]);
   const [saldo, setSaldo] = useState(0);
@@ -132,6 +133,13 @@ function FidelidadeHistorico() {
         return;
       }
       setCliente(clienteData);
+      
+      // 🔥 CARREGAR FOTO DO CLIENTE
+      if (clienteData.foto && clienteData.foto !== 'null' && clienteData.foto !== 'undefined' && clienteData.foto.trim() !== '') {
+        setFotoUrl(clienteData.foto);
+      } else {
+        setFotoUrl(null);
+      }
 
       // Buscar pontuações do cliente
       const pontuacoesData = await firebaseService.query('pontuacao', [
@@ -281,6 +289,22 @@ function FidelidadeHistorico() {
       default:
         return 'default';
     }
+  };
+
+  // Função para obter as iniciais do nome
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Verificar se a foto é válida
+  const temFotoValida = () => {
+    return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
   // Filtrar movimentações
@@ -474,17 +498,25 @@ function FidelidadeHistorico() {
         </Box>
       </Box>
 
-      {/* Card do Cliente */}
+      {/* Card do Cliente - COM FOTO */}
       <Card sx={{ mb: 4, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
         <CardContent>
           <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                 <Avatar
-                  src={cliente.avatar}
-                  sx={{ width: 80, height: 80, border: '3px solid white' }}
+                  src={temFotoValida() ? fotoUrl : undefined}
+                  sx={{ 
+                    width: 80, 
+                    height: 80, 
+                    border: '3px solid white',
+                    bgcolor: '#ffffff',
+                    color: '#9c27b0',
+                    fontSize: '2rem',
+                    fontWeight: 'bold'
+                  }}
                 >
-                  {cliente.nome?.charAt(0)}
+                  {!temFotoValida() && getInitials(cliente.nome)}
                 </Avatar>
                 <Box sx={{ color: 'white' }}>
                   <Typography variant="h5" sx={{ fontWeight: 600 }}>
@@ -501,6 +533,18 @@ function FidelidadeHistorico() {
                       <Typography variant="body2">📄 {cliente.cpf}</Typography>
                     )}
                   </Box>
+                  {cliente.status && (
+                    <Chip
+                      label={cliente.status}
+                      size="small"
+                      sx={{ 
+                        mt: 1, 
+                        bgcolor: 'rgba(255,255,255,0.2)',
+                        color: 'white',
+                        fontWeight: 600
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             </Grid>
@@ -531,6 +575,16 @@ function FidelidadeHistorico() {
                     Nível Atual
                   </Typography>
                 </Box>
+                {cliente.totalGasto > 0 && (
+                  <Box sx={{ textAlign: 'center', bgcolor: 'rgba(255,255,255,0.2)', p: 2, borderRadius: 2, minWidth: 120 }}>
+                    <Typography variant="h4" sx={{ color: 'white', fontWeight: 700 }}>
+                      R$ {cliente.totalGasto.toFixed(2)}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                      Total Gasto
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             </Grid>
           </Grid>
