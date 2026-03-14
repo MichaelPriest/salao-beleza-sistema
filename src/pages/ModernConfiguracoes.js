@@ -1645,27 +1645,32 @@ function ModernConfiguracoes() {
                 </Card>
               </Grid>
 
-              {backup && (
-                <Grid item xs={12}>
-                  <Alert 
-                    severity="success"
-                    action={
-                      <Button color="inherit" size="small" onClick={handleBackup}>
-                        Novo Backup
-                      </Button>
-                    }
-                  >
-                    <strong>Último backup:</strong> {new Date(backup.dataBackup).toLocaleString('pt-BR')}
-                    {backup.dados && (
-                      <Typography variant="caption" display="block">
-                        Total de registros: {
-                          Object.values(backup.dados).reduce((acc, arr) => acc + arr.length, 0)
-                        }
-                      </Typography>
-                    )}
-                  </Alert>
-                </Grid>
-              )}
+                {backup && (
+                  <Grid item xs={12}>
+                    <Alert 
+                      severity="success"
+                      action={
+                        <Button color="inherit" size="small" onClick={handleBackup}>
+                          Novo Backup
+                        </Button>
+                      }
+                    >
+                      <strong>Último backup:</strong> {new Date(backup.dataBackup).toLocaleString('pt-BR')}
+                      {backup.dados && typeof backup.dados === 'object' && (
+                        <Typography variant="caption" display="block">
+                          Total de registros: {
+                            Object.values(backup.dados).reduce((acc, arr) => {
+                              if (Array.isArray(arr)) {
+                                return acc + arr.length;
+                              }
+                              return acc;
+                            }, 0)
+                          }
+                        </Typography>
+                      )}
+                    </Alert>
+                  </Grid>
+                )}
             </Grid>
           </TabPanel>
         </CardContent>
