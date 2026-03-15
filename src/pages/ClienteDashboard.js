@@ -65,6 +65,7 @@ function ClienteDashboard() {
   const [proximosAgendamentos, setProximosAgendamentos] = useState([]);
   const [historicoAtendimentos, setHistoricoAtendimentos] = useState([]);
   const [recompensasDisponiveis, setRecompensasDisponiveis] = useState([]);
+  const [resgatesRecentes, setResgatesRecentes] = useState([]);
 
   const niveis = {
     bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, proximo: 500 },
@@ -81,7 +82,7 @@ function ClienteDashboard() {
     }
   }, [cliente, authLoading]);
 
-  // 🔥 FUNÇÃO CORRIGIDA PARA CARREGAR DADOS COM FALLBACK
+  // 🔥 FUNÇÃO PARA CARREGAR DADOS COM FALLBACK
   const carregarDados = async () => {
     try {
       setLoading(true);
@@ -92,6 +93,7 @@ function ClienteDashboard() {
       
       console.log('🔍 DEBUG - Firebase Auth UID:', uid);
       console.log('🔍 DEBUG - ID do documento cliente:', clienteDocId);
+      console.log('🔍 DEBUG - Email do cliente:', cliente?.email);
 
       if (!uid && !clienteDocId) {
         console.error('❌ IDs não encontrados');
@@ -116,8 +118,8 @@ function ClienteDashboard() {
             { field: 'clienteId', operator: '==', value: id }
           ], 'data', 'desc');
           
-          todosAgendamentos = [...todosAgendamentos, ...resultados];
           console.log(`✅ Encontrados ${resultados.length} agendamentos para ID: ${id}`);
+          todosAgendamentos = [...todosAgendamentos, ...resultados];
         }
         
         // Remover duplicatas
@@ -142,21 +144,46 @@ function ClienteDashboard() {
         }
         
         const pontuacoesUnicas = Array.from(new Map(todasPontuacoes.map(item => [item.id, item])).values());
+        console.log('✅ Pontuações carregadas:', pontuacoesUnicas.length);
         setPontuacoes(pontuacoesUnicas || []);
       } catch (err) {
         console.error('Erro ao carregar pontuações:', err);
       }
 
-      // 🔥 CARREGAR RECOMPENSAS
+      // 🔥 CARREGAR RECOMPENSAS DISPONÍVEIS
       try {
         const recompensasData = await firebaseService.query('recompensas', [
           { field: 'ativo', operator: '==', value: true }
         ]);
         
-        // Filtrar por nível do cliente (já calculado depois)
-        setRecompensasDisponiveis(recompensasData?.slice(0, 5) || []);
+        // Ordenar por pontos necessários (menor para maior)
+        const recompensasOrdenadas = (recompensasData || []).sort((a, b) => 
+          (a.pontosNecessarios || 0) - (b.pontosNecessarios || 0)
+        );
+        
+        setRecompensasDisponiveis(recompensasOrdenadas.slice(0, 3));
+        console.log('✅ Recompensas disponíveis:', recompensasOrdenadas.length);
       } catch (err) {
         console.error('Erro ao carregar recompensas:', err);
+      }
+
+      // 🔥 CARREGAR RESGATES DO CLIENTE
+      try {
+        let todosResgates = [];
+        
+        for (const id of idsParaBuscar) {
+          const resultados = await firebaseService.query('resgates_fidelidade', [
+            { field: 'clienteId', operator: '==', value: id }
+          ], 'data', 'desc');
+          
+          todosResgates = [...todosResgates, ...resultados];
+        }
+        
+        const resgatesUnicos = Array.from(new Map(todosResgates.map(item => [item.id, item])).values());
+        setResgatesRecentes(resgatesUnicos.slice(0, 5));
+        console.log('✅ Resgates carregados:', resgatesUnicos.length);
+      } catch (err) {
+        console.error('Erro ao carregar resgates:', err);
       }
 
       // 🔥 CARREGAR ATENDIMENTOS - TENTAR TODOS OS IDs
@@ -173,6 +200,7 @@ function ClienteDashboard() {
         
         const atendimentosUnicos = Array.from(new Map(todosAtendimentos.map(item => [item.id, item])).values());
         setHistoricoAtendimentos(atendimentosUnicos?.slice(0, 5) || []);
+        console.log('✅ Atendimentos carregados:', atendimentosUnicos.length);
       } catch (err) {
         console.error('Erro ao carregar atendimentos:', err);
       }
@@ -210,14 +238,7 @@ function ClienteDashboard() {
       .sort((a, b) => a.data.localeCompare(b.data));
     setProximosAgendamentos(proximos.slice(0, 3));
 
-    // Filtrar recompensas por nível
-    const niveisOrdenados = ['bronze', 'prata', 'ouro', 'platina'];
-    const indexNivelCliente = niveisOrdenados.indexOf(nivelAtual);
-    
-    // Esta parte precisa ser ajustada quando as recompensas forem carregadas
-    // Por enquanto, mantemos como está
-
-  }, [pontuacoes, agendamentos, nivel]);
+  }, [pontuacoes, agendamentos]);
 
   const handleLogout = () => {
     logout();
@@ -259,8 +280,23 @@ function ClienteDashboard() {
     }
   };
 
+  const formatarDataHora = (data) => {
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return data;
+    }
+  };
+
   const getStatusColor = (status) => {
-    switch(status) {
+    switch(status?.toLowerCase()) {
       case 'confirmado': return 'success';
       case 'pendente': return 'warning';
       case 'cancelado': return 'error';
@@ -270,13 +306,35 @@ function ClienteDashboard() {
   };
 
   const getStatusLabel = (status) => {
-    switch(status) {
+    switch(status?.toLowerCase()) {
       case 'confirmado': return 'Confirmado';
       case 'pendente': return 'Pendente';
       case 'cancelado': return 'Cancelado';
       case 'finalizado': return 'Realizado';
       default: return status || 'Pendente';
     }
+  };
+
+  const getNivelInfo = () => {
+    return niveis[nivel] || niveis.bronze;
+  };
+
+  const getPontosProximoNivel = () => {
+    const info = getNivelInfo();
+    return info.proximo ? info.proximo - saldo : 0;
+  };
+
+  const getProgressoProximoNivel = () => {
+    const info = getNivelInfo();
+    if (!info.proximo) return 100;
+    return (saldo / info.proximo) * 100;
+  };
+
+  const getProximoNivelNome = () => {
+    if (nivel === 'bronze') return 'Prata';
+    if (nivel === 'prata') return 'Ouro';
+    if (nivel === 'ouro') return 'Platina';
+    return null;
   };
 
   if (authLoading) {
@@ -291,13 +349,10 @@ function ClienteDashboard() {
     return null;
   }
 
-  const progressoParaProximoNivel = niveis[nivel]?.proximo 
-    ? (saldo / niveis[nivel].proximo) * 100 
-    : 100;
-
-  const pontosFaltantes = niveis[nivel]?.proximo 
-    ? niveis[nivel].proximo - saldo 
-    : 0;
+  const nivelInfo = getNivelInfo();
+  const pontosFaltantes = getPontosProximoNivel();
+  const progresso = getProgressoProximoNivel();
+  const proximoNivel = getProximoNivelNome();
 
   return (
     <Box>
@@ -314,11 +369,11 @@ function ClienteDashboard() {
           <Avatar
             src={cliente.foto}
             sx={{ 
-              width: 56, 
-              height: 56,
+              width: 64, 
+              height: 64,
               bgcolor: '#9c27b0',
-              border: '2px solid white',
-              boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+              border: '3px solid white',
+              boxShadow: '0 4px 15px rgba(156,39,176,0.3)'
             }}
           >
             {!cliente.foto && getInitials(cliente.nome)}
@@ -328,7 +383,7 @@ function ClienteDashboard() {
               Olá, {cliente.nome?.split(' ')[0]}!
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              Bem-vindo(a) à sua área exclusiva
+              {cliente.email} • Cliente desde {formatarData(cliente.dataCadastro)}
             </Typography>
           </Box>
         </Box>
@@ -367,7 +422,11 @@ function ClienteDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
+            <Card sx={{ 
+              bgcolor: '#f3e5f5', 
+              height: '100%',
+              '&:hover': { boxShadow: 6 }
+            }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
@@ -380,6 +439,11 @@ function ClienteDashboard() {
                     <Typography variant="body2" color="textSecondary">
                       Próximos agendamentos
                     </Typography>
+                    {proximosAgendamentos.length > 0 && (
+                      <Typography variant="caption" color="textSecondary">
+                        Próximo: {formatarData(proximosAgendamentos[0]?.data)}
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
               </CardContent>
@@ -393,7 +457,11 @@ function ClienteDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card sx={{ bgcolor: '#fff3e0', height: '100%' }}>
+            <Card sx={{ 
+              bgcolor: '#fff3e0', 
+              height: '100%',
+              '&:hover': { boxShadow: 6 }
+            }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}>
@@ -405,6 +473,9 @@ function ClienteDashboard() {
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Pontos acumulados
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Nível {nivelInfo.nome}
                     </Typography>
                   </Box>
                 </Box>
@@ -419,7 +490,11 @@ function ClienteDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card sx={{ bgcolor: '#e8f5e8', height: '100%' }}>
+            <Card sx={{ 
+              bgcolor: '#e8f5e8', 
+              height: '100%',
+              '&:hover': { boxShadow: 6 }
+            }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
@@ -432,6 +507,9 @@ function ClienteDashboard() {
                     <Typography variant="body2" color="textSecondary">
                       Recompensas disponíveis
                     </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      A partir de {recompensasDisponiveis[0]?.pontosNecessarios || 0} pontos
+                    </Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -441,41 +519,51 @@ function ClienteDashboard() {
       </Grid>
 
       {/* Card de Fidelidade */}
-      <Card sx={{ mb: 4, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
+      <Card sx={{ 
+        mb: 4, 
+        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+        '&:hover': { boxShadow: 8 }
+      }}>
         <CardContent>
           <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, color: 'white' }}>
-                <TrophyIcon sx={{ fontSize: 48 }} />
+                <TrophyIcon sx={{ fontSize: 64 }} />
                 <Box>
                   <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                    Nível {nivel.toUpperCase()}
+                    Nível {nivelInfo.nome.toUpperCase()}
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
                     {saldo} pontos acumulados
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                    {resgatesRecentes.length} recompensa(s) resgatada(s)
                   </Typography>
                 </Box>
               </Box>
             </Grid>
             <Grid item xs={12} md={6}>
-              {niveis[nivel]?.proximo && (
+              {proximoNivel && (
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, color: 'white' }}>
-                    <Typography variant="body2">Progresso para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina']?.nome}</Typography>
+                    <Typography variant="body2">Progresso para Nível {proximoNivel}</Typography>
                     <Typography variant="body2">{pontosFaltantes} pontos faltam</Typography>
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={progressoParaProximoNivel}
+                    value={progresso}
                     sx={{
-                      height: 8,
-                      borderRadius: 4,
+                      height: 10,
+                      borderRadius: 5,
                       bgcolor: 'rgba(255,255,255,0.2)',
                       '& .MuiLinearProgress-bar': {
                         bgcolor: 'white',
                       },
                     }}
                   />
+                  <Typography variant="caption" sx={{ opacity: 0.8, mt: 1, display: 'block' }}>
+                    {Math.round(progresso)}% completo
+                  </Typography>
                 </Box>
               )}
             </Grid>
@@ -488,6 +576,7 @@ function ClienteDashboard() {
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
           <Tab label="Próximos Agendamentos" />
           <Tab label="Histórico" />
+          <Tab label="Resgates" />
         </Tabs>
       </Box>
 
@@ -507,8 +596,9 @@ function ClienteDashboard() {
                   </Box>
                 ) : proximosAgendamentos.length > 0 ? (
                   proximosAgendamentos.map((agendamento, index) => {
-                    // Buscar nome do serviço dos servicos array ou do campo servicoNome
-                    const servicoNome = agendamento.servicos?.[0]?.nome || agendamento.servicoNome || 'Serviço';
+                    const servicoNome = agendamento.servicos?.[0]?.nome || 
+                                        agendamento.servicoNome || 
+                                        'Serviço';
                     
                     return (
                       <Card key={agendamento.id || index} variant="outlined" sx={{ mb: 2, p: 2 }}>
@@ -570,7 +660,7 @@ function ClienteDashboard() {
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                  Recompensas Disponíveis
+                  Recompensas em Destaque
                 </Typography>
 
                 {loading ? (
@@ -593,14 +683,17 @@ function ClienteDashboard() {
                         <Chip
                           size="small"
                           label={`${recompensa.pontosNecessarios || 0} pontos`}
-                          sx={{ bgcolor: '#fff3e0', color: '#ff9800' }}
+                          sx={{ 
+                            bgcolor: saldo >= (recompensa.pontosNecessarios || 0) ? '#e8f5e8' : '#fff3e0',
+                            color: saldo >= (recompensa.pontosNecessarios || 0) ? '#4caf50' : '#ff9800'
+                          }}
                         />
                         <Button 
                           size="small" 
                           sx={{ color: '#9c27b0' }}
                           onClick={() => navigate('/cliente/recompensas')}
                         >
-                          Resgatar
+                          Ver
                         </Button>
                       </Box>
                     </Card>
@@ -647,14 +740,20 @@ function ClienteDashboard() {
                       <TableCell>Serviço</TableCell>
                       <TableCell>Profissional</TableCell>
                       <TableCell align="right">Valor</TableCell>
+                      <TableCell align="right">Pontos</TableCell>
                       <TableCell align="center">Status</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {historicoAtendimentos.map((atendimento, index) => {
-                      // Buscar nome do serviço dos servicos array ou do campo servicoNome
-                      const servicoNome = atendimento.servicos?.[0]?.nome || atendimento.servicoNome || 'Serviço';
-                      const profissionalNome = atendimento.profissionalNome || 'Profissional';
+                      const servicoNome = atendimento.servicos?.[0]?.nome || 
+                                         atendimento.servicoNome || 
+                                         'Serviço';
+                      const profissionalNome = atendimento.profissionalNome || 
+                                               atendimento.profissional?.nome || 
+                                               'Profissional';
+                      const pontosGanhos = atendimento.pontosGanhos || 
+                                          Math.floor((atendimento.valorTotal || 0) * 0.1);
                       
                       return (
                         <TableRow key={atendimento.id || index}>
@@ -663,6 +762,13 @@ function ClienteDashboard() {
                           <TableCell>{profissionalNome}</TableCell>
                           <TableCell align="right">
                             R$ {atendimento.valorTotal?.toFixed(2) || '0,00'}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              size="small"
+                              label={`+${pontosGanhos}`}
+                              sx={{ bgcolor: '#fff3e0', color: '#ff9800' }}
+                            />
                           </TableCell>
                           <TableCell align="center">
                             <Chip
@@ -683,6 +789,71 @@ function ClienteDashboard() {
                 <Typography variant="body1" color="textSecondary">
                   Nenhum histórico de atendimentos encontrado
                 </Typography>
+              </Paper>
+            )}
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={2}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
+              Histórico de Resgates
+            </Typography>
+
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : resgatesRecentes.length > 0 ? (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Data</TableCell>
+                      <TableCell>Recompensa</TableCell>
+                      <TableCell align="right">Pontos Gastos</TableCell>
+                      <TableCell align="center">Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {resgatesRecentes.map((resgate, index) => (
+                      <TableRow key={resgate.id || index}>
+                        <TableCell>{formatarDataHora(resgate.data)}</TableCell>
+                        <TableCell>{resgate.recompensaNome || 'Recompensa'}</TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            size="small"
+                            label={`-${resgate.pontosGastos || 0}`}
+                            sx={{ bgcolor: '#ffebee', color: '#f44336' }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            size="small"
+                            label={resgate.utilizado ? 'Utilizado' : 'Disponível'}
+                            color={resgate.utilizado ? 'default' : 'success'}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <GiftIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="body1" color="textSecondary">
+                  Você ainda não resgatou nenhuma recompensa
+                </Typography>
+                <Button
+                  variant="outlined"
+                  onClick={handleVerRecompensas}
+                  sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
+                >
+                  Ver Recompensas Disponíveis
+                </Button>
               </Paper>
             )}
           </CardContent>
