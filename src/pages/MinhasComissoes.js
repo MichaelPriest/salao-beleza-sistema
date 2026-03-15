@@ -124,6 +124,13 @@ const formatarMoeda = (valor) => {
 const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
   const [expanded, setExpanded] = useState(false);
 
+  const handleVerDetalhes = () => {
+    onDetalhes({
+      ...comissao,
+      tipo: 'comissao'
+    });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -212,7 +219,7 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
                   <Tooltip title="Ver Detalhes">
                     <IconButton
                       size="small"
-                      onClick={() => onDetalhes(comissao)}
+                      onClick={handleVerDetalhes}
                       sx={{ color: '#9c27b0' }}
                     >
                       <VisibilityIcon fontSize="small" />
@@ -335,14 +342,24 @@ const RelatorioComissoes = React.forwardRef(({
 
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Cabeçalho */}
+      {/* Cabeçalho com Logo */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
-          <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-          <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
-            {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
-          </Typography>
-        </Box>
+        {configuracoes?.salao?.logo ? (
+          <Box sx={{ mb: 2 }}>
+            <img 
+              src={configuracoes.salao.logo} 
+              alt={configuracoes.salao.nomeFantasia || 'Logo do Salão'}
+              style={{ maxHeight: '80px', maxWidth: '200px', objectFit: 'contain' }}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
+            <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+            <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+              {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
+            </Typography>
+          </Box>
+        )}
         
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
           Relatório de Comissões
@@ -359,6 +376,12 @@ const RelatorioComissoes = React.forwardRef(({
         <Typography variant="subtitle2" color="textSecondary">
           Emitido em: {new Date().toLocaleString('pt-BR')}
         </Typography>
+        
+        {configuracoes?.salao?.cnpj && (
+          <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+            CNPJ: {configuracoes.salao.cnpj}
+          </Typography>
+        )}
       </Box>
 
       {/* Resumo */}
@@ -402,7 +425,7 @@ const RelatorioComissoes = React.forwardRef(({
         <Grid container spacing={2}>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Total</Typography>
+              <Typography variant="body2" color="textSecondary">Total de Comissões</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 {dados.resumo.quantidade}
               </Typography>
@@ -410,7 +433,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Pagas</Typography>
+              <Typography variant="body2" color="textSecondary">Comissões Pagas</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
                 {dados.resumo.quantidadePaga}
               </Typography>
@@ -418,7 +441,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Pendentes</Typography>
+              <Typography variant="body2" color="textSecondary">Comissões Pendentes</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
                 {dados.resumo.quantidadePendente}
               </Typography>
@@ -426,7 +449,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Atendimentos</Typography>
+              <Typography variant="body2" color="textSecondary">Total de Atendimentos</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 {dados.atendimentos.length}
               </Typography>
@@ -434,6 +457,121 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
         </Grid>
       </Box>
+
+      {/* Atendimentos */}
+      {dados.atendimentos.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Atendimentos no Período
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Cliente</strong></TableCell>
+                  <TableCell><strong>Serviços</strong></TableCell>
+                  <TableCell align="right"><strong>Valor</strong></TableCell>
+                  <TableCell align="right"><strong>Comissão</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.atendimentos.slice(0, 20).map((atendimento, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatDate(atendimento.data)}</TableCell>
+                    <TableCell>{atendimento.cliente?.nome || '—'}</TableCell>
+                    <TableCell>
+                      {atendimento.servicos?.map(s => s.nome).join(', ')?.substring(0, 30) || '—'}
+                    </TableCell>
+                    <TableCell align="right">{formatarMoeda(atendimento.valorTotal)}</TableCell>
+                    <TableCell align="right">
+                      <strong>{formatarMoeda(atendimento.comissaoTotal)}</strong>
+                    </TableCell>
+                    <TableCell>
+                      {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
+
+      {/* Comissões Detalhadas */}
+      {dados.comissoes.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Detalhamento das Comissões
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Serviço</strong></TableCell>
+                  <TableCell align="right"><strong>%</strong></TableCell>
+                  <TableCell align="right"><strong>Valor Base</strong></TableCell>
+                  <TableCell align="right"><strong>Comissão</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Pagamento</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.comissoes.slice(0, 20).map((comissao, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatDate(comissao.data)}</TableCell>
+                    <TableCell>{comissao.servicoNome}</TableCell>
+                    <TableCell align="right">{comissao.percentual}%</TableCell>
+                    <TableCell align="right">{formatarMoeda(comissao.valorAtendimento)}</TableCell>
+                    <TableCell align="right">
+                      <strong>{formatarMoeda(comissao.valor)}</strong>
+                    </TableCell>
+                    <TableCell>{comissao.status}</TableCell>
+                    <TableCell>
+                      {comissao.dataPagamento ? formatDate(comissao.dataPagamento) : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
+
+      {/* Resumo por Serviço */}
+      {dados.resumo?.porServico && dados.resumo.porServico.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+            Resumo por Serviço
+          </Typography>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                  <TableCell><strong>Serviço</strong></TableCell>
+                  <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                  <TableCell align="right"><strong>Total</strong></TableCell>
+                  <TableCell align="right"><strong>% do Total</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.resumo.porServico.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.nome}</TableCell>
+                    <TableCell align="right">{item.quantidade}</TableCell>
+                    <TableCell align="right">{formatarMoeda(item.valor)}</TableCell>
+                    <TableCell align="right">
+                      {((item.valor / dados.resumo.totalPeriodo) * 100).toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Box>
+      )}
 
       {/* Rodapé */}
       <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
@@ -444,6 +582,12 @@ const RelatorioComissoes = React.forwardRef(({
           Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
           Período: {periodo}
         </Typography>
+        {configuracoes?.salao?.contato && (
+          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+            {configuracoes.salao.contato.telefone && `Tel: ${configuracoes.salao.contato.telefone} • `}
+            {configuracoes.salao.contato.email && `Email: ${configuracoes.salao.contato.email}`}
+          </Typography>
+        )}
       </Box>
     </Box>
   );
@@ -478,7 +622,7 @@ function MinhasComissoes() {
   
   // Dialogs
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
-  const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
+  const [itemSelecionado, setItemSelecionado] = useState(null);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [exportOptions, setExportOptions] = useState({
@@ -543,10 +687,11 @@ function MinhasComissoes() {
       
       console.log('🔄 Carregando dados de comissões...');
 
-      // Carregar configurações
+      // Carregar configurações primeiro
       const configuracoesData = await firebaseService.getAll('configuracoes');
       const configuracoesArray = Array.isArray(configuracoesData) ? configuracoesData : [];
       if (configuracoesArray.length > 0) {
+        console.log('Configurações carregadas:', configuracoesArray[0].salao?.nomeFantasia);
         setConfiguracoes(configuracoesArray[0]);
       }
       
@@ -577,7 +722,7 @@ function MinhasComissoes() {
       const isAdminUser = usuarioTipo === 'admin';
       setIsAdmin(isAdminUser);
 
-      // 🔥 CARREGAR PROFISSIONAIS
+      // Carregar profissionais
       const profissionaisData = await firebaseService.getAll('profissionais');
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
       console.log('Profissionais carregados:', profissionaisArray.length);
@@ -596,16 +741,16 @@ function MinhasComissoes() {
         tipo: usuarioTipo
       });
 
-      // 🔥 CARREGAR CLIENTES
+      // Carregar clientes
       const clientesData = await firebaseService.getAll('clientes');
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       console.log('Clientes carregados:', clientesArray.length);
       setClientes(clientesArray);
 
-      // 🔥 CARREGAR COMISSÕES
+      // Carregar comissões
       await carregarComissoes(isAdminUser ? null : profissionalId);
       
-      // 🔥 CARREGAR ATENDIMENTOS (DEPOIS DE TER CLIENTES E COMISSÕES)
+      // Carregar atendimentos (depois de ter clientes e comissões)
       await carregarAtendimentos(isAdminUser ? null : profissionalId);
 
       // Registrar acesso na auditoria
@@ -706,7 +851,6 @@ function MinhasComissoes() {
       
       if (profissionalId) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          // Verificar se o profissional participou do atendimento (pode estar em itensServico ou servicos)
           const temProfissional = 
             (a.itensServico && a.itensServico.some(item => item && item.profissionalId === profissionalId)) ||
             (a.servicos && a.servicos.some(s => s && s.profissionalId === profissionalId));
@@ -757,7 +901,7 @@ function MinhasComissoes() {
         
         return {
           ...atendimento,
-          cliente: cliente || { nome: 'Cliente não encontrado' },
+          cliente: cliente || { nome: 'Cliente não encontrado', foto: null },
           valorTotal: Number(atendimento.valorTotal) || 0,
           comissaoTotal: comissaoTotal,
           comissaoPaga: todasPagas,
@@ -897,16 +1041,17 @@ function MinhasComissoes() {
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+    setPage(0);
   };
 
-  const handleOpenDetalhes = (atendimento) => {
-    setAtendimentoSelecionado(atendimento);
+  const handleOpenDetalhes = (item) => {
+    setItemSelecionado(item);
     setOpenDetalhesDialog(true);
   };
 
   const handleCloseDetalhes = () => {
     setOpenDetalhesDialog(false);
-    setAtendimentoSelecionado(null);
+    setItemSelecionado(null);
   };
 
   const handleOpenRelatorio = () => {
@@ -925,25 +1070,29 @@ function MinhasComissoes() {
     }));
   };
 
-  // Função manual de impressão
+  // Função manual de impressão direta
   const handlePrint = () => {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
       
+      // Criar uma nova janela para impressão
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
         return;
       }
       
+      // Obter o conteúdo do relatório
       const content = relatorioRef.current;
       if (!content) {
         mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
         return;
       }
       
+      // Clonar o conteúdo para não afetar o original
       const contentClone = content.cloneNode(true);
       
+      // Coletar estilos da página
       const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
       let stylesHTML = '';
       styles.forEach(style => {
@@ -954,16 +1103,47 @@ function MinhasComissoes() {
         }
       });
       
+      // Criar o HTML para impressão com formatação otimizada
       const printHTML = `
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Relatório de Comissões</title>
+            <title>Relatório de Comissões - ${configuracoes?.salao?.nomeFantasia || 'Salão'}</title>
             ${stylesHTML}
             <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
+              @page {
+                size: A4;
+                margin: 2cm;
+              }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0;
+                padding: 20px;
+                background: white;
+              }
               @media print {
-                body { margin: 0; padding: 20px; }
+                body { 
+                  margin: 0; 
+                  padding: 0;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                .MuiPaper-root {
+                  box-shadow: none !important;
+                }
+                table {
+                  page-break-inside: avoid;
+                }
+                tr {
+                  page-break-inside: avoid;
+                  page-break-after: auto;
+                }
+                thead {
+                  display: table-header-group;
+                }
+                tfoot {
+                  display: table-footer-group;
+                }
               }
             </style>
           </head>
@@ -973,13 +1153,28 @@ function MinhasComissoes() {
         </html>
       `;
       
+      // Escrever o conteúdo na nova janela
       printWindow.document.write(printHTML);
       printWindow.document.close();
       
-      setTimeout(() => {
-        printWindow.print();
-        mostrarSnackbar('Impressão concluída!', 'success');
-      }, 500);
+      // Aguardar carregamento dos recursos e imprimir
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          mostrarSnackbar('Impressão enviada!', 'success');
+        }, 500);
+      };
+
+      // Registrar na auditoria
+      auditoriaService.registrar('imprimir_relatorio_comissoes', {
+        entidade: 'comissoes',
+        detalhes: 'Impressão de relatório de comissões',
+        dados: {
+          periodo: `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`,
+          profissional: profissional?.nome || 'Todos',
+          totalComissoes: comissoesFiltradas.length
+        }
+      });
       
     } catch (error) {
       console.error('Erro na impressão:', error);
@@ -997,8 +1192,8 @@ function MinhasComissoes() {
       
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
       
+      // Título com logo (simulado)
       doc.setFontSize(20);
       doc.setTextColor(156, 39, 176);
       doc.text(configuracoes?.salao?.nomeFantasia || 'Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
@@ -1047,11 +1242,6 @@ function MinhasComissoes() {
       }
       
       if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
-        if (yPos > pageHeight - 60) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.text('Atendimentos no Período', 14, yPos);
@@ -1080,11 +1270,6 @@ function MinhasComissoes() {
       }
       
       if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
-        if (yPos > pageHeight - 60) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.text('Detalhamento das Comissões', 14, yPos);
@@ -1619,9 +1804,7 @@ function MinhasComissoes() {
                   key={comissao.id}
                   comissao={comissao}
                   isAdmin={isAdmin}
-                  onDetalhes={(c) => {
-                    mostrarSnackbar('Detalhes da comissão em breve', 'info');
-                  }}
+                  onDetalhes={handleOpenDetalhes}
                 />
               ))
             )}
@@ -1878,7 +2061,7 @@ function MinhasComissoes() {
         </Box>
       </SwipeableDrawer>
 
-      {/* Dialog de Detalhes do Atendimento */}
+      {/* Dialog de Detalhes */}
       <Dialog 
         open={openDetalhesDialog} 
         onClose={handleCloseDetalhes}
@@ -1900,27 +2083,82 @@ function MinhasComissoes() {
             </IconButton>
           )}
           <Typography variant={isMobile ? "subtitle1" : "h6"}>
-            Detalhes do Atendimento
+            {itemSelecionado?.tipo === 'comissao' ? 'Detalhes da Comissão' : 'Detalhes do Atendimento'}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
-          {atendimentoSelecionado && (
+          {itemSelecionado && itemSelecionado.tipo === 'comissao' ? (
+            // Detalhes da Comissão
+            <Box>
+              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2 }}>
+                  {itemSelecionado.servicoNome}
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Data</Typography>
+                    <Typography variant="body2">{formatDate(itemSelecionado.data)}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Profissional</Typography>
+                    <Typography variant="body2">{itemSelecionado.profissionalNome || '—'}</Typography>
+                  </Grid>
+                  
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Valor Base</Typography>
+                    <Typography variant="body2">{formatarMoeda(itemSelecionado.valorAtendimento)}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Percentual</Typography>
+                    <Typography variant="body2">{itemSelecionado.percentual}%</Typography>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Divider sx={{ my: 1 }} />
+                  </Grid>
+                  
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Comissão</Typography>
+                    <Typography variant="h5" sx={{ color: '#4caf50' }}>
+                      {formatarMoeda(itemSelecionado.valor)}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Status</Typography>
+                    <Chip
+                      label={itemSelecionado.status}
+                      color={itemSelecionado.status === 'pago' ? 'success' : 'warning'}
+                    />
+                  </Grid>
+                  
+                  {itemSelecionado.dataPagamento && (
+                    <Grid item xs={12}>
+                      <Typography variant="caption" color="textSecondary">Data de Pagamento</Typography>
+                      <Typography variant="body2">{formatDate(itemSelecionado.dataPagamento)}</Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Paper>
+            </Box>
+          ) : itemSelecionado ? (
+            // Detalhes do Atendimento (código existente)
             <Box>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                       <Avatar 
-                        src={atendimentoSelecionado.cliente?.foto}
+                        src={itemSelecionado.cliente?.foto}
                         sx={{ width: 48, height: 48, bgcolor: '#9c27b0' }}
                       >
-                        {!atendimentoSelecionado.cliente?.foto && 
-                         (atendimentoSelecionado.cliente?.nome?.charAt(0) || 'C')}
+                        {!itemSelecionado.cliente?.foto && 
+                         (itemSelecionado.cliente?.nome?.charAt(0) || 'C')}
                       </Avatar>
                       <Box>
-                        <Typography variant="h6">{atendimentoSelecionado.cliente?.nome || 'Cliente'}</Typography>
+                        <Typography variant="h6">{itemSelecionado.cliente?.nome || 'Cliente'}</Typography>
                         <Typography variant="caption" color="textSecondary">
-                          {formatDate(atendimentoSelecionado.data)} {atendimentoSelecionado.horaInicio ? `às ${atendimentoSelecionado.horaInicio}` : ''}
+                          {formatDate(itemSelecionado.data)} {itemSelecionado.horaInicio ? `às ${itemSelecionado.horaInicio}` : ''}
                         </Typography>
                       </Box>
                     </Box>
@@ -1931,8 +2169,8 @@ function MinhasComissoes() {
                       Serviços Realizados
                     </Typography>
                     
-                    {(atendimentoSelecionado.servicos || atendimentoSelecionado.itensServico || []).map((servico, idx) => {
-                      const comissaoServico = atendimentoSelecionado.comissoes?.find(c => 
+                    {(itemSelecionado.servicos || itemSelecionado.itensServico || []).map((servico, idx) => {
+                      const comissaoServico = itemSelecionado.comissoes?.find(c => 
                         c.servicoId === (servico.servicoId || servico.id)
                       );
                       
@@ -1964,21 +2202,21 @@ function MinhasComissoes() {
                       <Grid item xs={4}>
                         <Typography variant="caption" color="textSecondary">Total</Typography>
                         <Typography variant="h6" color="primary">
-                          {formatarMoeda(atendimentoSelecionado.valorTotal)}
+                          {formatarMoeda(itemSelecionado.valorTotal)}
                         </Typography>
                       </Grid>
                       <Grid item xs={4}>
                         <Typography variant="caption" color="textSecondary">Sua Comissão</Typography>
                         <Typography variant="h6" color="#4caf50">
-                          {formatarMoeda(atendimentoSelecionado.comissaoTotal)}
+                          {formatarMoeda(itemSelecionado.comissaoTotal)}
                         </Typography>
                       </Grid>
                       <Grid item xs={4}>
                         <Typography variant="caption" color="textSecondary">Status</Typography>
                         <Chip
                           size="small"
-                          label={atendimentoSelecionado.comissaoPaga ? 'Pago' : 'Pendente'}
-                          color={atendimentoSelecionado.comissaoPaga ? 'success' : 'warning'}
+                          label={itemSelecionado.comissaoPaga ? 'Pago' : 'Pendente'}
+                          color={itemSelecionado.comissaoPaga ? 'success' : 'warning'}
                         />
                       </Grid>
                     </Grid>
@@ -1986,7 +2224,7 @@ function MinhasComissoes() {
                 </Grid>
               </Grid>
             </Box>
-          )}
+          ) : null}
         </DialogContent>
         <DialogActions sx={{ p: isMobile ? 2 : 3 }}>
           <Button onClick={handleCloseDetalhes} fullWidth={isMobile}>
