@@ -17,7 +17,7 @@ class AuditoriaService {
   }
 
   // 🔥 FUNÇÃO AUXILIAR PARA OBTER USUÁRIO
-  obterUsuario() {
+  obterUsuario() { // 🔥 CORRIGIDO: obterUsuario (não o brerUsuario)
     try {
       const usuarioStr = localStorage.getItem('usuario');
       if (usuarioStr) {
@@ -33,7 +33,7 @@ class AuditoriaService {
   async registrar(acao, dados = {}) {
     try {
       const ip = await this.obterIp();
-      const usuario = this.obrerUsuario();
+      const usuario = this.obterUsuario(); // 🔥 CORRIGIDO
       
       const agora = new Date().toISOString();
 
