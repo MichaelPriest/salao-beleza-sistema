@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
 
 const AuthContext = createContext({});
 
@@ -74,15 +75,15 @@ export const AuthProvider = ({ children }) => {
               localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
             } else {
               console.log('❌ AuthContext - Usuário não encontrado no sistema');
-              // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO
-              // await signOut(auth);
-              
-              // Apenas mostra erro mas mantém logado?
               toast.error('Usuário não encontrado no sistema');
             }
           }
         } catch (error) {
           console.error('❌ AuthContext - Erro ao buscar usuário:', error);
+          await auditoriaService.registrarErro(error, { 
+            contexto: 'onAuthStateChanged',
+            usuarioId: firebaseUser?.uid 
+          });
         }
       } else {
         console.log('👋 AuthContext - Usuário deslogado');
@@ -94,6 +95,18 @@ export const AuthProvider = ({ children }) => {
 
     return () => unsubscribe();
   }, []);
+
+  // 🔥 FUNÇÃO PARA OBTER IP DO USUÁRIO
+  const obterIp = async () => {
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      return data.ip;
+    } catch (error) {
+      console.warn('Não foi possível obter IP:', error);
+      return '127.0.0.1';
+    }
+  };
 
   const login = async (email, senha) => {
     try {
@@ -134,6 +147,9 @@ export const AuthProvider = ({ children }) => {
           setUser(usuarioCompleto);
           localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
           
+          // 🔥 REGISTRAR LOGIN NA AUDITORIA
+          await auditoriaService.registrarLogin(usuarioCompleto);
+          
           return usuarioCompleto;
         } else {
           throw new Error('Usuário não encontrado no sistema');
@@ -145,6 +161,13 @@ export const AuthProvider = ({ children }) => {
       
       // Verificar se está ativo
       if (userData.status !== 'ativo') {
+        // 🔥 REGISTRAR TENTATIVA DE LOGIN DE USUÁRIO INATIVO
+        await auditoriaService.registrarAlerta(
+          `Tentativa de login de usuário inativo: ${email}`,
+          'alto',
+          { usuarioId: firebaseUser.uid, email }
+        );
+        
         await signOut(auth);
         throw new Error('Usuário inativo. Contate o administrador.');
       }
@@ -158,9 +181,18 @@ export const AuthProvider = ({ children }) => {
       setUser(usuarioCompleto);
       localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
       
+      // 🔥 REGISTRAR LOGIN NA AUDITORIA
+      await auditoriaService.registrarLogin(usuarioCompleto);
+      
       return usuarioCompleto;
     } catch (error) {
       console.error('❌ Erro no login:', error);
+      
+      // 🔥 REGISTRAR ERRO DE LOGIN NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: 'login',
+        email 
+      });
       
       // Mapear erros comuns
       if (error.code === 'auth/user-not-found') {
@@ -182,12 +214,25 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       const auth = getAuth();
+      
+      // 🔥 REGISTRAR LOGOUT NA AUDITORIA (antes de deslogar)
+      if (user) {
+        await auditoriaService.registrarLogout(user);
+      }
+      
       await signOut(auth);
       setUser(null);
       localStorage.removeItem('usuario');
       toast.success('Logout realizado com sucesso!');
     } catch (error) {
       console.error('Erro no logout:', error);
+      
+      // 🔥 REGISTRAR ERRO DE LOGOUT
+      await auditoriaService.registrarErro(error, { 
+        acao: 'logout',
+        usuarioId: user?.id 
+      });
+      
       throw error;
     }
   };
