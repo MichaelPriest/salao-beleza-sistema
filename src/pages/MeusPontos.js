@@ -25,14 +25,16 @@ import {
   Fab,
   Skeleton,
   Badge,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
-  Collapse,
-  Pagination,
-  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -65,7 +67,6 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReactToPrint } from 'react-to-print';
-import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
@@ -200,57 +201,8 @@ const MovimentacaoMobileCard = ({ item }) => {
   );
 };
 
-// Componente de Card de Recompensa Mobile
-const RecompensaMobileCard = ({ recompensa, onResgatar }) => {
-  return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-    >
-      <Card 
-        sx={{ 
-          mb: 1.5,
-          cursor: 'pointer',
-          border: '1px solid',
-          borderColor: 'divider',
-        }}
-        onClick={() => onResgatar(recompensa)}
-      >
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: '#9c27b0' }}>
-              <GiftIcon />
-            </Avatar>
-            
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {recompensa.nome}
-              </Typography>
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                <Chip
-                  size="small"
-                  label={recompensa.tipo}
-                  sx={{ height: 20, fontSize: '0.65rem' }}
-                />
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <StarIcon sx={{ fontSize: 12, color: '#ff9800' }} />
-                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                    {recompensa.pontosNecessarios} pontos
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-};
-
 // Componente de Impressão
-const ImprimirPontos = React.forwardRef(({ cliente, nivel, saldo, movimentacoes, periodo }, ref) => {
+const ImprimirPontos = React.forwardRef(({ cliente, nivel, saldo, movimentacoes }, ref) => {
   return (
     <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minHeight: '100vh' }}>
       {/* Cabeçalho */}
@@ -404,7 +356,6 @@ function MeusPontos() {
 
       await carregarDadosCliente(user.clienteId);
 
-      // Registrar acesso na auditoria
       await auditoriaService.registrar('acesso_meus_pontos', {
         entidade: 'fidelidade',
         entidadeId: user.clienteId,
