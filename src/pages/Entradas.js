@@ -43,8 +43,8 @@ import {
   TableHead,
   TableRow,
   Divider,
-  Fab, // Adicionado Fab
-  Zoom, // Adicionado Zoom
+  Fab,
+  Zoom,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -65,9 +65,11 @@ import {
   MoreVert as MoreVertIcon,
   Timeline as TimelineIcon,
   TrendingUp as TrendingUpIcon,
-  PictureAsPdf as PdfIcon,
+  PictureAsPdf as PictureAsPdfIcon, // Corrigido: PictureAsPdf em vez de PictureAsPdfIcon
   Share as ShareIcon,
   Download as DownloadIcon,
+  Delete as DeleteIcon, // Adicionado DeleteIcon
+  Edit as EditIcon, // Adicionado EditIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
