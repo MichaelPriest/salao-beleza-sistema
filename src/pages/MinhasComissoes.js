@@ -108,6 +108,18 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   }
 };
 
+// 🔥 FUNÇÃO PARA FORMATAR MOEDA - ADICIONADA
+const formatarMoeda = (valor) => {
+  try {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor || 0);
+  } catch {
+    return `R$ ${(valor || 0).toFixed(2)}`;
+  }
+};
+
 // Componente de Card de Comissão Mobile
 const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
   const [expanded, setExpanded] = useState(false);
@@ -296,11 +308,16 @@ const RelatorioComissoes = React.forwardRef(({
   configuracoes,
   tipo = 'completo' 
 }, ref) => {
+  // 🔥 FUNÇÃO DENTRO DO COMPONENTE DE IMPRESSÃO
   const formatarMoeda = (valor) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor || 0);
+    try {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(valor || 0);
+    } catch {
+      return `R$ ${(valor || 0).toFixed(2)}`;
+    }
   };
 
   return (
@@ -825,17 +842,6 @@ function MinhasComissoes() {
       case 'pendente':
       default:
         return <Chip icon={<PendingIcon />} label="Pendente" size="small" color="warning" variant="outlined" />;
-    }
-  };
-
-  const formatarMoeda = (valor) => {
-    try {
-      return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      }).format(valor || 0);
-    } catch {
-      return `R$ ${(valor || 0).toFixed(2)}`;
     }
   };
 
@@ -1565,7 +1571,6 @@ function MinhasComissoes() {
                   comissao={comissao}
                   isAdmin={isAdmin}
                   onDetalhes={(c) => {
-                    // Implementar visualização de detalhes da comissão
                     mostrarSnackbar('Detalhes da comissão em breve', 'info');
                   }}
                 />
