@@ -25,6 +25,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Grid, // 🔥 IMPORTANTE: ADICIONAR ESTA IMPORTAÇÃO
 } from '@mui/material';
 import {
   Email as EmailIcon,
