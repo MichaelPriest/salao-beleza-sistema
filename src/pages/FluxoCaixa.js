@@ -64,6 +64,9 @@ import {
   Store as StoreIcon,
   Person as PersonIcon,
   Visibility as VisibilityIcon,
+  AttachMoney as MoneyIcon,
+  Assignment as AssignmentIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -81,7 +84,6 @@ import {
   Legend,
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, isValid } from 'date-fns';
@@ -110,23 +112,40 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
 const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
   const isReceita = transacao.tipo === 'receita' || transacao.tipo === 'credito';
   const isDespesa = transacao.tipo === 'despesa' || transacao.tipo === 'debito';
+  const isComissao = transacao.origem === 'comissao';
   
   const getIcon = () => {
+    if (isComissao) return <PeopleIcon sx={{ color: '#9c27b0' }} />;
     if (isReceita) return <TrendingUpIcon sx={{ color: '#4caf50' }} />;
     if (isDespesa) return <TrendingDownIcon sx={{ color: '#f44336' }} />;
     return <ReceiptIcon sx={{ color: '#ff9800' }} />;
   };
 
   const getColor = () => {
+    if (isComissao) return '#9c27b0';
     if (isReceita) return '#4caf50';
     if (isDespesa) return '#f44336';
     return '#ff9800';
   };
 
   const getTipoLabel = () => {
+    if (isComissao) return 'Comissão';
     if (isReceita) return 'Receita';
     if (isDespesa) return 'Despesa';
     return transacao.tipo;
+  };
+
+  const getOrigemIcon = () => {
+    switch(transacao.origem) {
+      case 'atendimento':
+        return <AssignmentIcon sx={{ fontSize: 14 }} />;
+      case 'comissao':
+        return <PeopleIcon sx={{ fontSize: 14 }} />;
+      case 'compra':
+        return <StoreIcon sx={{ fontSize: 14 }} />;
+      default:
+        return null;
+    }
   };
 
   return (
@@ -205,9 +224,18 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
                     sx={{ height: 20, fontSize: '0.65rem' }}
                   />
                 )}
+
+                {transacao.origem && (
+                  <Chip
+                    size="small"
+                    label={transacao.origem}
+                    icon={getOrigemIcon()}
+                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  />
+                )}
                 
                 <Typography variant="caption" color="text.secondary">
-                  {formatDate(transacao.data)}
+                  {formatDate(transacao.dataObj)}
                 </Typography>
               </Box>
 
@@ -231,10 +259,10 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
 function FluxoCaixa() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [transacoes, setTransacoes] = useState([]);
+  const [comissoes, setComissoes] = useState([]);
   const [contasPagar, setContasPagar] = useState([]);
   const [contasReceber, setContasReceber] = useState([]);
   const [caixa, setCaixa] = useState(null);
@@ -248,6 +276,7 @@ function FluxoCaixa() {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroOrigem, setFiltroOrigem] = useState('todos');
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [openDetalheDialog, setOpenDetalheDialog] = useState(false);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
@@ -273,21 +302,47 @@ function FluxoCaixa() {
     try {
       setLoading(true);
       
+      console.log('🔄 Carregando dados do fluxo de caixa...');
+
       // Buscar dados de todas as fontes
-      const [transacoesData, contasPagarData, contasReceberData, caixaData] = await Promise.all([
-        firebaseService.getAll('transacoes').catch(() => []),
-        firebaseService.getAll('contas_pagar').catch(() => []),
-        firebaseService.getAll('contas_receber').catch(() => []),
-        firebaseService.getAll('caixa').catch(() => []),
+      const [
+        transacoesData, 
+        comissoesData, 
+        contasPagarData, 
+        contasReceberData, 
+        caixaData
+      ] = await Promise.all([
+        firebaseService.getAll('transacoes').catch(err => {
+          console.error('Erro ao buscar transacoes:', err);
+          return [];
+        }),
+        firebaseService.getAll('comissoes').catch(err => {
+          console.error('Erro ao buscar comissoes:', err);
+          return [];
+        }),
+        firebaseService.getAll('contas_pagar').catch(err => {
+          console.error('Erro ao buscar contas_pagar:', err);
+          return [];
+        }),
+        firebaseService.getAll('contas_receber').catch(err => {
+          console.error('Erro ao buscar contas_receber:', err);
+          return [];
+        }),
+        firebaseService.getAll('caixa').catch(err => {
+          console.error('Erro ao buscar caixa:', err);
+          return [];
+        }),
       ]);
       
       console.log('📊 Dados carregados:', {
         transacoes: transacoesData?.length || 0,
+        comissoes: comissoesData?.length || 0,
         contasPagar: contasPagarData?.length || 0,
         contasReceber: contasReceberData?.length || 0
       });
 
       setTransacoes(transacoesData || []);
+      setComissoes(comissoesData || []);
       setContasPagar(contasPagarData || []);
       setContasReceber(contasReceberData || []);
       
@@ -306,6 +361,7 @@ function FluxoCaixa() {
           periodoInicio: dataInicio,
           periodoFim: dataFim,
           totalTransacoes: transacoesData?.length || 0,
+          totalComissoes: comissoesData?.length || 0,
           totalContasPagar: contasPagarData?.length || 0,
           totalContasReceber: contasReceberData?.length || 0
         }
@@ -335,7 +391,33 @@ function FluxoCaixa() {
         ...t,
         id: `trans-${t.id}`,
         tipoOriginal: 'transacao',
-        dataObj: t.data ? new Date(t.data) : new Date(0),
+        dataObj: t.data ? new Date(t.data) : 
+                 t.dataPagamento ? new Date(t.dataPagamento) : 
+                 t.createdAt?.toDate?.() || new Date(0),
+        valor: Number(t.valor) || 0,
+      });
+    });
+
+    // Adicionar comissões (podem ser consideradas como despesas ou transferências)
+    comissoes.forEach(c => {
+      combinadas.push({
+        id: `comissao-${c.id}`,
+        tipo: 'despesa', // Comissão é uma despesa para o estabelecimento
+        descricao: `Comissão: ${c.servicoNome || 'Serviço'} - ${c.profissionalNome || ''}`,
+        valor: Number(c.valor) || 0,
+        data: c.dataPagamento || c.dataRegistro || c.createdAt?.toDate?.() || new Date(),
+        categoria: 'Comissões',
+        formaPagamento: 'transferencia',
+        status: c.status || 'pago',
+        observacoes: `Comissão de ${c.percentual}% para ${c.profissionalNome}`,
+        origem: 'comissao',
+        profissionalId: c.profissionalId,
+        profissionalNome: c.profissionalNome,
+        atendimentoId: c.atendimentoId,
+        agendamentoId: c.agendamentoId,
+        dataObj: c.dataPagamento ? new Date(c.dataPagamento) : 
+                 c.dataRegistro ? new Date(c.dataRegistro) : 
+                 c.createdAt?.toDate?.() || new Date(0),
       });
     });
 
@@ -345,17 +427,18 @@ function FluxoCaixa() {
         id: `pagar-${c.id}`,
         tipo: 'despesa',
         descricao: c.descricao || `Conta a pagar`,
-        valor: c.valor || 0,
-        data: c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
+        valor: Number(c.valor) || 0,
+        data: c.dataPagamento || c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
         categoria: c.categoria || 'Fornecedor',
         formaPagamento: c.formaPagamento,
         status: c.status || 'pendente',
         observacoes: c.observacoes,
         fornecedorId: c.fornecedorId,
         origem: c.origem || 'manual',
-        dataObj: c.dataVencimento ? new Date(c.dataVencimento) : 
-                c.dataCriacao ? new Date(c.dataCriacao) : 
-                c.createdAt?.toDate?.() || new Date(0),
+        dataObj: c.dataPagamento ? new Date(c.dataPagamento) : 
+                 c.dataVencimento ? new Date(c.dataVencimento) : 
+                 c.dataCriacao ? new Date(c.dataCriacao) : 
+                 c.createdAt?.toDate?.() || new Date(0),
       });
     });
 
@@ -365,21 +448,25 @@ function FluxoCaixa() {
         id: `receber-${c.id}`,
         tipo: 'receita',
         descricao: c.descricao || `Conta a receber`,
-        valor: c.valor || 0,
-        data: c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
+        valor: Number(c.valor) || 0,
+        data: c.dataRecebimento || c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
         categoria: c.categoria || 'Outros',
         formaPagamento: c.formaPagamento,
         status: c.status || 'pendente',
         observacoes: c.observacoes,
         clienteId: c.clienteId,
-        dataObj: c.dataVencimento ? new Date(c.dataVencimento) : 
-                c.dataCriacao ? new Date(c.dataCriacao) : 
-                c.createdAt?.toDate?.() || new Date(0),
+        origem: c.origem || 'manual',
+        dataObj: c.dataRecebimento ? new Date(c.dataRecebimento) : 
+                 c.dataVencimento ? new Date(c.dataVencimento) : 
+                 c.dataCriacao ? new Date(c.dataCriacao) : 
+                 c.createdAt?.toDate?.() || new Date(0),
       });
     });
 
+    console.log('🔄 Total de transações combinadas:', combinadas.length);
+
     return combinadas;
-  }, [transacoes, contasPagar, contasReceber]);
+  }, [transacoes, comissoes, contasPagar, contasReceber]);
 
   // Filtrar transações por período e outros filtros
   const transacoesFiltradas = useMemo(() => {
@@ -398,7 +485,8 @@ function FluxoCaixa() {
         t.descricao?.toLowerCase().includes(termo) ||
         t.categoria?.toLowerCase().includes(termo) ||
         t.formaPagamento?.toLowerCase().includes(termo) ||
-        t.observacoes?.toLowerCase().includes(termo)
+        t.observacoes?.toLowerCase().includes(termo) ||
+        t.profissionalNome?.toLowerCase().includes(termo)
       );
     }
 
@@ -417,8 +505,13 @@ function FluxoCaixa() {
       resultados = resultados.filter(t => t.status === filtroStatus);
     }
 
+    // Aplicar filtro por origem
+    if (filtroOrigem !== 'todos') {
+      resultados = resultados.filter(t => t.origem === filtroOrigem);
+    }
+
     return resultados;
-  }, [todasTransacoes, dataInicio, dataFim, filtro, filtroTipo, filtroCategoria, filtroStatus]);
+  }, [todasTransacoes, dataInicio, dataFim, filtro, filtroTipo, filtroCategoria, filtroStatus, filtroOrigem]);
 
   // Calcular totais
   const totais = useMemo(() => {
@@ -428,6 +521,10 @@ function FluxoCaixa() {
 
     const despesas = transacoesFiltradas
       .filter(t => t.tipo === 'despesa' && (t.status === 'pago' || !t.status))
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+
+    const comissoesTotal = transacoesFiltradas
+      .filter(t => t.origem === 'comissao' && (t.status === 'pago' || !t.status))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
     const saldo = receitas - despesas;
@@ -444,6 +541,7 @@ function FluxoCaixa() {
     console.log('💰 Totais calculados:', {
       receitas,
       despesas,
+      comissoes: comissoesTotal,
       saldo,
       receitasPendentes,
       despesasPendentes,
@@ -453,6 +551,7 @@ function FluxoCaixa() {
     return {
       receitas,
       despesas,
+      comissoes: comissoesTotal,
       saldo,
       receitasPendentes,
       despesasPendentes,
@@ -553,6 +652,15 @@ function FluxoCaixa() {
     return ['todos', ...Array.from(cats)];
   }, [todasTransacoes]);
 
+  // Origens únicas para filtro
+  const origensUnicas = useMemo(() => {
+    const origens = new Set();
+    todasTransacoes.forEach(t => {
+      if (t.origem) origens.add(t.origem);
+    });
+    return ['todos', ...Array.from(origens)];
+  }, [todasTransacoes]);
+
   // Status únicos para filtro
   const statusUnicos = useMemo(() => {
     const stats = new Set();
@@ -606,7 +714,7 @@ function FluxoCaixa() {
       
       // Resumo
       doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 40, 'F');
+      doc.rect(20, yPos, 170, 50, 'F');
       
       doc.setFont('helvetica', 'bold');
       doc.text('Receitas:', 25, yPos + 10);
@@ -628,33 +736,41 @@ function FluxoCaixa() {
       doc.setFont('helvetica', 'normal');
       doc.text(String(totais.totalTransacoes), 70, yPos + 25);
       
+      if (totais.comissoes > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Comissões:', 100, yPos + 25);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`R$ ${totais.comissoes.toFixed(2)}`, 130, yPos + 25);
+      }
+      
       if (totais.receitasPendentes > 0) {
         doc.setFont('helvetica', 'bold');
-        doc.text('Receitas Pendentes:', 100, yPos + 25);
+        doc.text('Receitas Pendentes:', 25, yPos + 40);
         doc.setFont('helvetica', 'normal');
-        doc.text(`R$ ${totais.receitasPendentes.toFixed(2)}`, 145, yPos + 25);
+        doc.text(`R$ ${totais.receitasPendentes.toFixed(2)}`, 70, yPos + 40);
       }
       
       if (totais.despesasPendentes > 0) {
         doc.setFont('helvetica', 'bold');
-        doc.text('Despesas Pendentes:', 25, yPos + 35);
+        doc.text('Despesas Pendentes:', 100, yPos + 40);
         doc.setFont('helvetica', 'normal');
-        doc.text(`R$ ${totais.despesasPendentes.toFixed(2)}`, 70, yPos + 35);
+        doc.text(`R$ ${totais.despesasPendentes.toFixed(2)}`, 145, yPos + 40);
       }
       
-      yPos += 55;
+      yPos += 70;
 
       // Tabela de transações
-      const tableColumn = ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Status'];
+      const tableColumn = ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Origem', 'Status'];
       const tableRows = [];
       
       transacoesPaginadas.slice(0, 50).forEach(t => {
         const row = [
           formatDate(t.dataObj),
-          t.descricao || '—',
+          (t.descricao || '').substring(0, 40),
           t.categoria || '—',
           `R$ ${Number(t.valor || 0).toFixed(2)}`,
           t.tipo === 'receita' ? 'Receita' : 'Despesa',
+          t.origem || '—',
           t.status || 'pago',
         ];
         tableRows.push(row);
@@ -671,16 +787,17 @@ function FluxoCaixa() {
           fontStyle: 'bold',
         },
         styles: {
-          fontSize: 8,
-          cellPadding: 2,
+          fontSize: 7,
+          cellPadding: 1,
         },
         columnStyles: {
-          0: { cellWidth: 25 },
+          0: { cellWidth: 20 },
           1: { cellWidth: 50 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 30, halign: 'right' },
-          4: { cellWidth: 20 },
-          5: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 25, halign: 'right' },
+          4: { cellWidth: 18 },
+          5: { cellWidth: 18 },
+          6: { cellWidth: 18 },
         },
       });
       
@@ -730,11 +847,12 @@ function FluxoCaixa() {
         'Forma de Pagamento': t.formaPagamento || '',
         Valor: Number(t.valor || 0).toFixed(2),
         Tipo: t.tipo === 'receita' ? 'Receita' : 'Despesa',
+        Origem: t.origem || '',
         Status: t.status || 'pago',
       }));
 
       // Criar CSV
-      const headers = ['Data', 'Descrição', 'Categoria', 'Forma de Pagamento', 'Valor', 'Tipo', 'Status'];
+      const headers = ['Data', 'Descrição', 'Categoria', 'Forma de Pagamento', 'Valor', 'Tipo', 'Origem', 'Status'];
       const csvContent = [
         headers.join(','),
         ...dadosExport.map(row => Object.values(row).map(val => `"${val}"`).join(','))
@@ -924,13 +1042,13 @@ function FluxoCaixa() {
           onClick={() => setOpenFilterDrawer(true)}
           sx={{ 
             mx: 1,
-            color: filtroTipo !== 'todos' || filtroCategoria !== 'todos' || filtroStatus !== 'todos' ? '#9c27b0' : 'text.secondary'
+            color: filtroTipo !== 'todos' || filtroCategoria !== 'todos' || filtroStatus !== 'todos' || filtroOrigem !== 'todos' ? '#9c27b0' : 'text.secondary'
           }}
         >
           <Badge 
             variant="dot" 
             color="primary"
-            invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos'}
+            invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos' && filtroOrigem === 'todos'}
           >
             <FilterIcon />
           </Badge>
@@ -1270,6 +1388,24 @@ function FluxoCaixa() {
           </Box>
 
           <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Origem
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3, maxHeight: 150, overflow: 'auto' }}>
+            {origensUnicas.map((origem) => (
+              <Button
+                key={origem}
+                fullWidth
+                variant={filtroOrigem === origem ? 'contained' : 'outlined'}
+                onClick={() => setFiltroOrigem(origem)}
+                sx={{ justifyContent: 'flex-start' }}
+              >
+                <AssignmentIcon sx={{ mr: 1, fontSize: 18 }} />
+                {origem === 'todos' ? 'Todas as origens' : origem}
+              </Button>
+            ))}
+          </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
             Categoria
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 150, overflow: 'auto', mb: 3 }}>
@@ -1327,7 +1463,8 @@ function FluxoCaixa() {
         {transacaoSelecionada && (
           <>
             <DialogTitle sx={{ 
-              bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336', 
+              bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : 
+                       transacaoSelecionada.origem === 'comissao' ? '#9c27b0' : '#f44336', 
               color: 'white',
               display: 'flex',
               alignItems: 'center',
@@ -1347,7 +1484,11 @@ function FluxoCaixa() {
               <Grid container spacing={2}>
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
-                    <Typography variant="h6" sx={{ color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336', mb: 2 }}>
+                    <Typography variant="h6" sx={{ 
+                      color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : 
+                             transacaoSelecionada.origem === 'comissao' ? '#9c27b0' : '#f44336', 
+                      mb: 2 
+                    }}>
                       {transacaoSelecionada.descricao || 'Sem descrição'}
                     </Typography>
                     
@@ -1377,7 +1518,8 @@ function FluxoCaixa() {
                           variant="h5" 
                           sx={{ 
                             fontWeight: 700,
-                            color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336'
+                            color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : 
+                                   transacaoSelecionada.origem === 'comissao' ? '#9c27b0' : '#f44336'
                           }}
                         >
                           R$ {Number(transacaoSelecionada.valor || 0).toFixed(2)}
@@ -1405,6 +1547,11 @@ function FluxoCaixa() {
                         <Typography variant="body2">{transacaoSelecionada.formaPagamento || '—'}</Typography>
                       </Grid>
 
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">Origem</Typography>
+                        <Typography variant="body2">{transacaoSelecionada.origem || '—'}</Typography>
+                      </Grid>
+
                       {transacaoSelecionada.observacoes && (
                         <Grid item xs={12}>
                           <Typography variant="caption" color="textSecondary">Observações</Typography>
@@ -1412,10 +1559,17 @@ function FluxoCaixa() {
                         </Grid>
                       )}
 
-                      {transacaoSelecionada.fornecedorId && (
+                      {transacaoSelecionada.profissionalNome && (
                         <Grid item xs={12}>
-                          <Typography variant="caption" color="textSecondary">Fornecedor ID</Typography>
-                          <Typography variant="body2">{transacaoSelecionada.fornecedorId}</Typography>
+                          <Typography variant="caption" color="textSecondary">Profissional</Typography>
+                          <Typography variant="body2">{transacaoSelecionada.profissionalNome}</Typography>
+                        </Grid>
+                      )}
+
+                      {transacaoSelecionada.atendimentoId && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="textSecondary">Atendimento ID</Typography>
+                          <Typography variant="body2">{transacaoSelecionada.atendimentoId}</Typography>
                         </Grid>
                       )}
 
@@ -1423,6 +1577,13 @@ function FluxoCaixa() {
                         <Grid item xs={12}>
                           <Typography variant="caption" color="textSecondary">Cliente ID</Typography>
                           <Typography variant="body2">{transacaoSelecionada.clienteId}</Typography>
+                        </Grid>
+                      )}
+
+                      {transacaoSelecionada.fornecedorId && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="textSecondary">Fornecedor ID</Typography>
+                          <Typography variant="body2">{transacaoSelecionada.fornecedorId}</Typography>
                         </Grid>
                       )}
                     </Grid>
@@ -1516,6 +1677,9 @@ function FluxoCaixa() {
                   Despesas: R$ {totais.despesas.toFixed(2)}
                 </Typography>
                 <Typography variant="body2">
+                  Comissões: R$ {totais.comissoes.toFixed(2)}
+                </Typography>
+                <Typography variant="body2">
                   Saldo: R$ {totais.saldo.toFixed(2)}
                 </Typography>
               </Alert>
@@ -1574,7 +1738,7 @@ function FluxoCaixa() {
                 <Badge 
                   variant="dot" 
                   color="primary"
-                  invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos'}
+                  invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos' && filtroOrigem === 'todos'}
                 >
                   <FilterIcon />
                 </Badge>
