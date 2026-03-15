@@ -61,7 +61,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
+import { auditoriaService } from '../services/auditoriaService';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
@@ -261,11 +261,15 @@ function ContasPagar() {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
       
-      // 🔥 REGISTRAR ERRO NA AUDITORIA
-      await auditoriaService.registrarErro(error, { 
-        acao: 'carregar_contas_pagar',
-        detalhes: 'Erro ao carregar dados de contas a pagar'
-      });
+      // Registrar erro na auditoria
+      try {
+        await auditoriaService.registrarErro(error, { 
+          acao: 'carregar_contas_pagar',
+          detalhes: 'Erro ao carregar dados de contas a pagar'
+        });
+      } catch (auditError) {
+        console.error('Erro ao registrar auditoria:', auditError);
+      }
     } finally {
       setLoading(false);
     }
@@ -370,7 +374,7 @@ function ContasPagar() {
         updatedAt: new Date().toISOString(),
       });
 
-      // 🔥 REGISTRAR NA AUDITORIA
+      // Registrar na auditoria
       await auditoriaService.registrarAtualizacao(
         'comissoes',
         comissaoId,
@@ -380,12 +384,11 @@ function ContasPagar() {
       );
 
       mostrarSnackbar('✅ Comissão paga com sucesso!');
-      await carregarDados(); // Recarregar dados
     } catch (error) {
       console.error('Erro ao pagar comissão:', error);
       mostrarSnackbar('Erro ao pagar comissão', 'error');
       
-      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: 'pagar_comissao',
         comissaoId
@@ -405,7 +408,7 @@ function ContasPagar() {
         updatedAt: new Date().toISOString(),
       });
 
-      // 🔥 REGISTRAR NA AUDITORIA
+      // Registrar na auditoria
       await auditoriaService.registrarAtualizacao(
         'compras',
         compraId,
@@ -415,12 +418,11 @@ function ContasPagar() {
       );
 
       mostrarSnackbar('✅ Compra paga com sucesso!');
-      await carregarDados(); // Recarregar dados
     } catch (error) {
       console.error('Erro ao pagar compra:', error);
       mostrarSnackbar('Erro ao pagar compra', 'error');
       
-      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: 'pagar_compra',
         compraId
@@ -435,7 +437,7 @@ function ContasPagar() {
         return;
       }
 
-      // 🔥 REGISTRAR AÇÃO NA AUDITORIA
+      // Registrar ação na auditoria
       await auditoriaService.registrar('pagamento_conta', {
         entidade: 'contas_pagar',
         entidadeId: contaSelecionada.id,
@@ -499,7 +501,7 @@ function ContasPagar() {
       console.error('Erro ao registrar pagamento:', error);
       mostrarSnackbar('Erro ao registrar pagamento', 'error');
       
-      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: 'registrar_pagamento',
         contaId: contaSelecionada?.id
@@ -549,7 +551,7 @@ function ContasPagar() {
         
         await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
         
-        // 🔥 REGISTRAR ATUALIZAÇÃO NA AUDITORIA
+        // Registrar atualização na auditoria
         await auditoriaService.registrarAtualizacao(
           'contas_pagar',
           contaEditando.id,
@@ -563,7 +565,7 @@ function ContasPagar() {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
         const novaConta = await firebaseService.add('contas_pagar', dadosParaSalvar);
         
-        // 🔥 REGISTRAR CRIAÇÃO NA AUDITORIA
+        // Registrar criação na auditoria
         await auditoriaService.registrarCriacao(
           'contas_pagar',
           novaConta.id,
@@ -580,7 +582,7 @@ function ContasPagar() {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
       
-      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: contaEditando ? 'atualizar_conta_pagar' : 'criar_conta_pagar',
         dados: formData
