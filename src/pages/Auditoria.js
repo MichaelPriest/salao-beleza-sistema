@@ -1,5 +1,5 @@
 // src/pages/Auditoria.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -68,6 +68,7 @@ import { toast } from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 
 const acoesColors = {
   login: { color: '#4caf50', icon: <LoginIcon />, label: 'Login' },
@@ -78,6 +79,7 @@ const acoesColors = {
   visualizar: { color: '#9c27b0', icon: <VisibilityIcon />, label: 'Visualização' },
   erro: { color: '#f44336', icon: <ErrorIcon />, label: 'Erro' },
   alerta: { color: '#ff9800', icon: <WarningIcon />, label: 'Alerta' },
+  acesso_negado: { color: '#f44336', icon: <LockIcon />, label: 'Acesso Negado' },
 };
 
 const entidadesLabels = {
@@ -92,6 +94,8 @@ const entidadesLabels = {
   compras: 'Compras',
   fornecedores: 'Fornecedores',
   configuracoes: 'Configurações',
+  notificacoes: 'Notificações',
+  auditoria: 'Auditoria',
 };
 
 function Auditoria() {
@@ -256,12 +260,35 @@ function Auditoria() {
     }
   };
 
+  // Função para limpar logs antigos (opcional - para administradores)
+  const handleLimparLogsAntigos = async () => {
+    if (!window.confirm('Tem certeza que deseja limpar logs com mais de 90 dias? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+
+    try {
+      const noventaDiasAtras = subDays(new Date(), 90).toISOString();
+      const logsAntigos = logs.filter(log => log.data < noventaDiasAtras);
+      
+      for (const log of logsAntigos) {
+        await firebaseService.delete('auditoria', log.id);
+      }
+      
+      toast.success(`${logsAntigos.length} logs antigos removidos!`);
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao limpar logs:', error);
+      toast.error('Erro ao limpar logs');
+    }
+  };
+
   // Filtrar logs
   const logsFiltrados = logs.filter(log => {
     const matchesTexto = filtro === '' || 
       (log.usuario && log.usuario.toLowerCase().includes(filtro.toLowerCase())) ||
       (log.detalhes && log.detalhes.toLowerCase().includes(filtro.toLowerCase())) ||
-      (log.ip && log.ip.includes(filtro));
+      (log.ip && log.ip.includes(filtro)) ||
+      (log.entidadeId && log.entidadeId.includes(filtro));
 
     const matchesAcao = filtroAcao === 'todos' || log.acao === filtroAcao;
     const matchesUsuario = filtroUsuario === 'todos' || log.usuario === filtroUsuario;
@@ -282,7 +309,7 @@ function Auditoria() {
       matchesPeriodo = log.data >= trintaDiasAtras;
     } else if (filtroPeriodo === 'personalizado') {
       matchesPeriodo = log.data >= new Date(dataInicio).toISOString() && 
-                       log.data <= new Date(dataFim).toISOString();
+                       log.data <= new Date(dataFim + 'T23:59:59').toISOString();
     }
 
     return matchesTexto && matchesAcao && matchesUsuario && matchesEntidade && matchesPeriodo;
@@ -344,6 +371,14 @@ function Auditoria() {
             onClick={handleExportCSV}
           >
             CSV
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            onClick={handleLimparLogsAntigos}
+          >
+            Limpar Antigos
           </Button>
           <Button
             variant="contained"
@@ -443,7 +478,7 @@ function Auditoria() {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Buscar por usuário, IP ou detalhes..."
+                placeholder="Buscar por usuário, IP, ID ou detalhes..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
                 InputProps={{
@@ -777,7 +812,7 @@ function Auditoria() {
                 {logSelecionado.dados && (
                   <Grid item xs={12}>
                     <Typography variant="caption" color="textSecondary">Dados da Operação</Typography>
-                    <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#f5f5f5', overflow: 'auto' }}>
+                    <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#f5f5f5', overflow: 'auto', maxHeight: 300 }}>
                       <pre style={{ margin: 0, fontSize: '0.75rem' }}>
                         {JSON.stringify(logSelecionado.dados, null, 2)}
                       </pre>
