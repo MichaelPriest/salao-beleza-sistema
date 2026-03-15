@@ -199,6 +199,7 @@ function App() {
                   <Route path="pontos" element={<ClientePontos />} />
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
+                  <Route path="notificacoes" element={<ClienteNotificacoes />} /> {/* NOVA ROTA */}
                 </Route>
                 
                 {/* =========================================== */}
