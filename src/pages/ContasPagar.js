@@ -1,4 +1,4 @@
-// src/pages/ContasPagar.js
+// src/pages/ContasReceber.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -56,13 +56,9 @@ import {
   Payment as PaymentIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
+  AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
-  Percent as PercentIcon,
-  Cancel as CancelIcon,
-  ShoppingCart as ShoppingCartIcon,
-  Store as StoreIcon,
   Person as PersonIcon,
-  ReceiptLong as ReceiptLongIcon,
   Info as InfoIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
@@ -80,7 +76,7 @@ import { auditoriaService } from '../services/auditoriaService';
 import { useReactToPrint } from 'react-to-print';
 
 // Componente de Impressão
-const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, config, fornecedores, profissionais }, ref) => {
+const RelatorioContasReceber = React.forwardRef(({ contas, filtros, estatisticas, config, clientes }, ref) => {
   const logo = config?.salao?.logo || '';
   const empresa = config?.salao || {
     nome: 'Sistema de Gestão',
@@ -88,14 +84,9 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
     endereco: {}
   };
 
-  const getFornecedorNome = (fornecedorId) => {
-    const fornecedor = fornecedores.find(f => f.id === fornecedorId);
-    return fornecedor?.nome || 'Não informado';
-  };
-
-  const getProfissionalNome = (profissionalId) => {
-    const profissional = profissionais.find(p => p.id === profissionalId);
-    return profissional?.nome || 'Não informado';
+  const getClienteNome = (clienteId) => {
+    const cliente = clientes.find(c => c.id === clienteId);
+    return cliente?.nome || 'Não informado';
   };
 
   return (
@@ -123,7 +114,7 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
           </Typography>
         )}
         <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
-          Relatório de Contas a Pagar
+          Relatório de Contas a Receber
         </Typography>
         
         {/* Informações da empresa */}
@@ -156,8 +147,8 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
         <Grid container spacing={2}>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2">Total a Pagar</Typography>
-              <Typography variant="h6" sx={{ color: '#f44336' }}>
+              <Typography variant="body2">Total a Receber</Typography>
+              <Typography variant="h6" sx={{ color: '#4caf50' }}>
                 R$ {estatisticas.valorTotal.toFixed(2)}
               </Typography>
             </Paper>
@@ -180,29 +171,9 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#e8f5e9', textAlign: 'center' }}>
-              <Typography variant="body2">Pagas</Typography>
+              <Typography variant="body2">Recebidas</Typography>
               <Typography variant="h6" sx={{ color: '#4caf50' }}>
-                {estatisticas.pagas}
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        {/* Resumo por origem */}
-        <Grid container spacing={2} sx={{ mt: 2 }}>
-          <Grid item xs={6}>
-            <Paper sx={{ p: 2, bgcolor: '#f3e5f5', textAlign: 'center' }}>
-              <Typography variant="body2">Comissões a Pagar</Typography>
-              <Typography variant="h6" sx={{ color: '#9c27b0' }}>
-                R$ {estatisticas.comissoesPendentes.toFixed(2)}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6}>
-            <Paper sx={{ p: 2, bgcolor: '#fff3e0', textAlign: 'center' }}>
-              <Typography variant="body2">Compras a Pagar</Typography>
-              <Typography variant="h6" sx={{ color: '#ff9800' }}>
-                R$ {estatisticas.comprasPendentes.toFixed(2)}
+                {estatisticas.recebidas}
               </Typography>
             </Paper>
           </Grid>
@@ -217,11 +188,11 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
         <thead>
           <tr style={{ backgroundColor: '#9c27b0', color: 'white' }}>
             <th style={{ padding: 10, textAlign: 'left' }}>Descrição</th>
-            <th style={{ padding: 10, textAlign: 'left' }}>Origem</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Cliente</th>
             <th style={{ padding: 10, textAlign: 'left' }}>Vencimento</th>
             <th style={{ padding: 10, textAlign: 'right' }}>Valor</th>
             <th style={{ padding: 10, textAlign: 'left' }}>Status</th>
-            <th style={{ padding: 10, textAlign: 'left' }}>Detalhes</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Forma</th>
           </tr>
         </thead>
         <tbody>
@@ -237,38 +208,23 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
                 borderBottom: '1px solid #ddd',
                 backgroundColor: isVencida ? '#ffebee20' : 'white'
               }}>
-                <td style={{ padding: 8 }}>
-                  {conta.descricao}
-                  {conta.origem === 'comissao' && conta.profissionalNome && (
-                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                      {conta.profissionalNome}
-                    </div>
-                  )}
-                  {conta.origem === 'compra' && conta.numeroPedido && (
-                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                      Pedido: {conta.numeroPedido}
-                    </div>
-                  )}
-                </td>
-                <td style={{ padding: 8 }}>
-                  {conta.origem === 'manual' ? 'Manual' :
-                   conta.origem === 'comissao' ? 'Comissão' : 'Compra'}
-                </td>
+                <td style={{ padding: 8 }}>{conta.descricao}</td>
+                <td style={{ padding: 8 }}>{getClienteNome(conta.clienteId)}</td>
                 <td style={{ padding: 8 }}>
                   {conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '-'}
                   {isVencida && <span style={{ color: '#f44336', marginLeft: 8 }}>(Vencida)</span>}
                 </td>
-                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#f44336' }}>
+                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#4caf50' }}>
                   R$ {Number(conta.valor).toFixed(2)}
                 </td>
                 <td style={{ padding: 8 }}>
                   <span style={{
                     backgroundColor: 
-                      conta.status === 'pago' ? '#4caf5020' :
+                      conta.status === 'recebido' ? '#4caf5020' :
                       conta.status === 'pendente' ? '#ff980020' :
                       conta.status === 'atrasado' ? '#f4433620' : '#f5f5f5',
                     color:
-                      conta.status === 'pago' ? '#4caf50' :
+                      conta.status === 'recebido' ? '#4caf50' :
                       conta.status === 'pendente' ? '#ff9800' :
                       conta.status === 'atrasado' ? '#f44336' : '#666',
                     padding: '4px 8px',
@@ -276,21 +232,18 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
                     fontSize: '0.8rem',
                     fontWeight: 600
                   }}>
-                    {conta.status === 'pago' ? 'Pago' :
+                    {conta.status === 'recebido' ? 'Recebido' :
                      conta.status === 'pendente' ? 'Pendente' :
                      conta.status === 'atrasado' ? 'Atrasado' : conta.status}
                   </span>
                 </td>
                 <td style={{ padding: 8 }}>
-                  {conta.origem === 'comissao' && conta.servicoNome && (
-                    <div>{conta.servicoNome} ({conta.percentual}%)</div>
-                  )}
-                  {conta.origem === 'compra' && conta.fornecedorId && (
-                    <div>{getFornecedorNome(conta.fornecedorId)}</div>
-                  )}
-                  {conta.origem === 'manual' && conta.fornecedorId && (
-                    <div>{getFornecedorNome(conta.fornecedorId)}</div>
-                  )}
+                  {conta.formaPagamento === 'dinheiro' ? '💵 Dinheiro' :
+                   conta.formaPagamento === 'cartao_credito' ? '💳 Cartão Crédito' :
+                   conta.formaPagamento === 'cartao_debito' ? '💳 Cartão Débito' :
+                   conta.formaPagamento === 'pix' ? '⚡ PIX' :
+                   conta.formaPagamento === 'transferencia' ? '🔄 Transferência' :
+                   conta.formaPagamento || '-'}
                 </td>
               </tr>
             );
@@ -310,17 +263,9 @@ const RelatorioContasPagar = React.forwardRef(({ contas, filtros, estatisticas, 
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
-  pago: { color: '#4caf50', label: 'Pago', icon: <CheckCircleIcon /> },
+  recebido: { color: '#4caf50', label: 'Recebido', icon: <CheckCircleIcon /> },
   atrasado: { color: '#f44336', label: 'Atrasado', icon: <WarningIcon /> },
   cancelado: { color: '#9e9e9e', label: 'Cancelado', icon: <CancelIcon /> },
-  concluida: { color: '#4caf50', label: 'Concluída', icon: <CheckCircleIcon /> },
-  cancelada: { color: '#f44336', label: 'Cancelada', icon: <CancelIcon /> },
-};
-
-const origemColors = {
-  manual: { color: '#757575', label: 'Manual', icon: <ReceiptIcon /> },
-  comissao: { color: '#9c27b0', label: 'Comissão', icon: <PercentIcon /> },
-  compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
 };
 
 const formasPagamento = [
@@ -328,9 +273,7 @@ const formasPagamento = [
   { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
   { value: 'cartao_debito', label: 'Cartão de Débito', icon: '💳' },
   { value: 'pix', label: 'PIX', icon: '⚡' },
-  { value: 'boleto', label: 'Boleto', icon: '📄' },
   { value: 'transferencia', label: 'Transferência', icon: '🔄' },
-  { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
 ];
 
 const formatarDataISO = (data) => {
@@ -339,25 +282,20 @@ const formatarDataISO = (data) => {
   return d.toISOString().split('T')[0];
 };
 
-function ContasPagar() {
+function ContasReceber() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const printRef = useRef();
 
   const [loading, setLoading] = useState(true);
   const [contas, setContas] = useState([]);
-  const [contasManuais, setContasManuais] = useState([]);
-  const [comissoes, setComissoes] = useState([]);
-  const [compras, setCompras] = useState([]);
-  const [fornecedores, setFornecedores] = useState([]);
-  const [profissionais, setProfissionais] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [caixa, setCaixa] = useState(null);
   const [config, setConfig] = useState(null);
   
   // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
-  const [filtroOrigem, setFiltroOrigem] = useState('todas');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   
   // Paginação
@@ -366,7 +304,7 @@ function ContasPagar() {
   
   // Dialogs
   const [openDialog, setOpenDialog] = useState(false);
-  const [openPagamentoDialog, setOpenPagamentoDialog] = useState(false);
+  const [openRecebimentoDialog, setOpenRecebimentoDialog] = useState(false);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [contaEditando, setContaEditando] = useState(null);
   const [contaSelecionada, setContaSelecionada] = useState(null);
@@ -382,21 +320,13 @@ function ContasPagar() {
   const [formData, setFormData] = useState({
     descricao: '',
     valor: '',
-    dataVencimento: new Date().toISOString().split('T')[0],
-    categoria: 'Fornecedor',
-    fornecedorId: '',
-    profissionalId: '',
-    atendimentoId: '',
-    percentual: '',
-    formaPagamento: 'boleto',
+    dataVencimento: formatarDataISO(new Date()),
+    categoria: 'Serviços',
+    clienteId: '',
+    formaPagamento: 'dinheiro',
     observacoes: '',
     status: 'pendente',
-    recorrente: false,
     parcelas: 1,
-    origem: 'manual',
-    origemId: '',
-    itens: [],
-    numeroPedido: '',
   });
 
   useEffect(() => {
@@ -407,98 +337,19 @@ function ContasPagar() {
     try {
       setLoading(true);
       
-      const [
-        contasData,
-        comissoesData,
-        comprasData,
-        fornecedoresData,
-        profissionaisData,
-        caixaData,
-        configData
-      ] = await Promise.all([
-        firebaseService.getAll('contas_pagar').catch(() => []),
-        firebaseService.getAll('comissoes').catch(() => []),
-        firebaseService.getAll('compras').catch(() => []),
-        firebaseService.getAll('fornecedores').catch(() => []),
-        firebaseService.getAll('profissionais').catch(() => []),
+      const [contasData, clientesData, caixaData, configData] = await Promise.all([
+        firebaseService.getAll('contas_receber').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
         firebaseService.getAll('configuracoes').catch(() => []),
       ]);
       
-      // Garantir que todos os dados são arrays
       const contasArray = Array.isArray(contasData) ? contasData : [];
-      const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
-      const comprasArray = Array.isArray(comprasData) ? comprasData : [];
-      const fornecedoresArray = Array.isArray(fornecedoresData) ? fornecedoresData : [];
-      const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       
-      setContasManuais(contasArray);
-      setComissoes(comissoesArray);
-      setCompras(comprasArray);
-      setFornecedores(fornecedoresArray);
-      setProfissionais(profissionaisArray);
+      setContas(contasArray);
+      setClientes(clientesArray);
       setConfig(configData?.[0] || null);
-      
-      // Converter comissões para contas a pagar
-      const contasComissoes = comissoesArray
-        .filter(c => c.status !== 'pago' && c.status !== 'cancelado')
-        .map(comissao => ({
-          id: `comissao_${comissao.id}`,
-          origem: 'comissao',
-          origemId: comissao.id,
-          descricao: `Comissão - ${comissao.servicoNome || 'Serviço'}`,
-          valor: comissao.valor || 0,
-          dataVencimento: comissao.data || comissao.dataRegistro?.split('T')[0],
-          categoria: 'Comissões',
-          formaPagamento: 'credito_loja',
-          status: comissao.status === 'atrasado' ? 'atrasado' : 'pendente',
-          profissionalId: comissao.profissionalId,
-          profissionalNome: comissao.profissionalNome,
-          atendimentoId: comissao.atendimentoId,
-          servicoId: comissao.servicoId,
-          servicoNome: comissao.servicoNome,
-          percentual: comissao.percentual,
-          valorAtendimento: comissao.valorAtendimento,
-          observacoes: `Comissão de ${comissao.percentual}% sobre atendimento de R$ ${comissao.valorAtendimento}`,
-          dataCriacao: comissao.createdAt,
-        }));
-
-      // Converter compras para contas a pagar
-      const contasCompras = comprasArray
-        .filter(c => c.status !== 'pago' && c.status !== 'cancelada')
-        .map(compra => ({
-          id: `compra_${compra.id}`,
-          origem: 'compra',
-          origemId: compra.id,
-          descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
-          valor: compra.valorTotal || 0,
-          dataVencimento: compra.dataCompra,
-          categoria: 'Compras',
-          formaPagamento: compra.formaPagamento || 'pix',
-          status: compra.status === 'atrasado' ? 'atrasado' : 'pendente',
-          fornecedorId: compra.fornecedorId,
-          numeroPedido: compra.numeroPedido,
-          prazoEntrega: compra.prazoEntrega,
-          itens: compra.itens || [],
-          observacoes: compra.observacoes,
-          dataCriacao: compra.createdAt,
-        }));
-
-      // Combinar todas as contas
-      const todasContas = [
-        ...contasArray.map(c => ({ ...c, origem: 'manual' })),
-        ...contasComissoes,
-        ...contasCompras
-      ];
-
-      // Ordenar por data de vencimento (mais próximas primeiro)
-      todasContas.sort((a, b) => {
-        const dataA = new Date(a.dataVencimento || a.dataCriacao);
-        const dataB = new Date(b.dataVencimento || b.dataCriacao);
-        return dataA - dataB;
-      });
-
-      setContas(todasContas);
       
       // Pega o caixa atual (último caixa aberto)
       const caixaAtual = caixaData?.length > 0 
@@ -513,8 +364,8 @@ function ContasPagar() {
       toast.error('Erro ao carregar dados');
       
       await auditoriaService.registrarErro(error, { 
-        acao: 'carregar_contas_pagar',
-        detalhes: 'Erro ao carregar dados de contas a pagar'
+        acao: 'carregar_contas_receber',
+        detalhes: 'Erro ao carregar dados de contas a receber'
       });
     } finally {
       setLoading(false);
@@ -523,7 +374,7 @@ function ContasPagar() {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `contas_pagar_${new Date().toISOString().split('T')[0]}`,
+    documentTitle: `contas_receber_${new Date().toISOString().split('T')[0]}`,
     onBeforeGetContent: () => {
       toast.loading('Preparando impressão...', { id: 'print' });
     },
@@ -538,21 +389,17 @@ function ContasPagar() {
 
   const handleExportCSV = () => {
     try {
-      const headers = ['Descrição', 'Origem', 'Vencimento', 'Valor', 'Status', 'Fornecedor/Profissional'];
+      const headers = ['Descrição', 'Cliente', 'Vencimento', 'Valor', 'Status', 'Forma de Pagamento'];
       const data = contasFiltradas.map(conta => {
-        const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
-        const profissional = profissionais.find(p => p.id === conta.profissionalId);
-        const detalhe = conta.origem === 'comissao' ? profissional?.nome :
-                       conta.origem === 'compra' ? fornecedor?.nome :
-                       fornecedor?.nome || '';
+        const cliente = clientes.find(c => c.id === conta.clienteId);
         
         return [
           conta.descricao,
-          conta.origem === 'manual' ? 'Manual' : conta.origem === 'comissao' ? 'Comissão' : 'Compra',
+          cliente?.nome || '',
           conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '',
           `R$ ${Number(conta.valor).toFixed(2)}`,
           statusColors[conta.status]?.label || conta.status,
-          detalhe
+          formasPagamento.find(f => f.value === conta.formaPagamento)?.label || conta.formaPagamento
         ];
       });
 
@@ -563,7 +410,7 @@ function ContasPagar() {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `contas_pagar_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `contas_receber_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       
       mostrarSnackbar('Planilha exportada com sucesso!');
@@ -583,48 +430,31 @@ function ContasPagar() {
 
   // ========== FUNÇÕES DE DIÁLOGO ==========
   const handleOpenDialog = (conta = null) => {
-    if (conta && conta.origem === 'manual') {
+    if (conta) {
       setContaEditando(conta);
       setFormData({
         descricao: conta.descricao || '',
         valor: conta.valor || '',
         dataVencimento: conta.dataVencimento || formatarDataISO(new Date()),
-        categoria: conta.categoria || 'Fornecedor',
-        fornecedorId: conta.fornecedorId || '',
-        profissionalId: conta.profissionalId || '',
-        percentual: conta.percentual || '',
-        formaPagamento: conta.formaPagamento || 'boleto',
+        categoria: conta.categoria || 'Serviços',
+        clienteId: conta.clienteId || '',
+        formaPagamento: conta.formaPagamento || 'dinheiro',
         observacoes: conta.observacoes || '',
         status: conta.status || 'pendente',
-        recorrente: conta.recorrente || false,
         parcelas: conta.parcelas || 1,
-        origem: 'manual',
-        origemId: '',
-        itens: [],
-        numeroPedido: '',
       });
-    } else if (conta) {
-      mostrarSnackbar('Esta conta não pode ser editada diretamente', 'warning');
-      return;
     } else {
       setContaEditando(null);
       setFormData({
         descricao: '',
         valor: '',
         dataVencimento: formatarDataISO(new Date()),
-        categoria: 'Fornecedor',
-        fornecedorId: '',
-        profissionalId: '',
-        percentual: '',
-        formaPagamento: 'boleto',
+        categoria: 'Serviços',
+        clienteId: '',
+        formaPagamento: 'dinheiro',
         observacoes: '',
         status: 'pendente',
-        recorrente: false,
         parcelas: 1,
-        origem: 'manual',
-        origemId: '',
-        itens: [],
-        numeroPedido: '',
       });
     }
     setOpenDialog(true);
@@ -635,13 +465,13 @@ function ContasPagar() {
     setContaEditando(null);
   };
 
-  const handleOpenPagamento = (conta) => {
+  const handleOpenRecebimento = (conta) => {
     setContaSelecionada(conta);
-    setOpenPagamentoDialog(true);
+    setOpenRecebimentoDialog(true);
   };
 
-  const handleClosePagamento = () => {
-    setOpenPagamentoDialog(false);
+  const handleCloseRecebimento = () => {
+    setOpenRecebimentoDialog(false);
     setContaSelecionada(null);
   };
 
@@ -658,165 +488,9 @@ function ContasPagar() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-
-    // Se selecionar uma compra, carregar os itens (se necessário)
-    if (name === 'compraId' && value) {
-      const compra = compras.find(c => c.id === value);
-      if (compra) {
-        setFormData(prev => ({
-          ...prev,
-          fornecedorId: compra.fornecedorId,
-          itens: (compra.itens || []).map(item => ({
-            ...item,
-            quantidadeConferida: 0,
-            lote: '',
-            dataValidade: '',
-          })),
-          valorTotal: Number(compra.valorTotal) || 0,
-        }));
-      }
-    }
   };
 
-  // ========== FUNÇÕES DE PAGAMENTO ==========
-  const handlePagarComissao = async (comissaoId) => {
-    try {
-      const comissaoAntiga = comissoes.find(c => c.id === comissaoId);
-      
-      await firebaseService.update('comissoes', comissaoId, {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      await auditoriaService.registrarAtualizacao(
-        'comissoes',
-        comissaoId,
-        comissaoAntiga,
-        { status: 'pago', dataPagamento: new Date().toISOString() },
-        'Pagamento de comissão'
-      );
-
-      mostrarSnackbar('✅ Comissão paga com sucesso!');
-    } catch (error) {
-      console.error('Erro ao pagar comissão:', error);
-      mostrarSnackbar('Erro ao pagar comissão', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: 'pagar_comissao',
-        comissaoId
-      });
-    }
-  };
-
-  const handlePagarCompra = async (compraId) => {
-    try {
-      const compraAntiga = compras.find(c => c.id === compraId);
-      
-      await firebaseService.update('compras', compraId, {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      await auditoriaService.registrarAtualizacao(
-        'compras',
-        compraId,
-        compraAntiga,
-        { status: 'pago', dataPagamento: new Date().toISOString() },
-        'Pagamento de compra'
-      );
-
-      mostrarSnackbar('✅ Compra paga com sucesso!');
-    } catch (error) {
-      console.error('Erro ao pagar compra:', error);
-      mostrarSnackbar('Erro ao pagar compra', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: 'pagar_compra',
-        compraId
-      });
-    }
-  };
-
-  const handleRegistrarPagamento = async () => {
-    try {
-      if (!contaSelecionada || !contaSelecionada.id) {
-        mostrarSnackbar('Conta inválida', 'error');
-        return;
-      }
-
-      await auditoriaService.registrar('pagamento_conta', {
-        entidade: 'contas_pagar',
-        entidadeId: contaSelecionada.id,
-        detalhes: `Pagamento de conta: ${contaSelecionada.descricao}`,
-        dados: {
-          valor: contaSelecionada.valor,
-          origem: contaSelecionada.origem
-        }
-      });
-
-      if (contaSelecionada.origem === 'comissao' && contaSelecionada.origemId) {
-        await handlePagarComissao(contaSelecionada.origemId);
-        handleClosePagamento();
-        await carregarDados();
-        return;
-      }
-
-      if (contaSelecionada.origem === 'compra' && contaSelecionada.origemId) {
-        await handlePagarCompra(contaSelecionada.origemId);
-        handleClosePagamento();
-        await carregarDados();
-        return;
-      }
-
-      // Para contas manuais
-      const dadosConta = {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await firebaseService.update('contas_pagar', contaSelecionada.id, dadosConta);
-
-      // Atualizar caixa se estiver aberto
-      if (caixa && caixa.status === 'aberto' && caixa.id) {
-        const novoSaldo = (caixa.saldoAtual || 0) - Number(contaSelecionada.valor);
-        
-        const novaMovimentacao = {
-          id: Date.now().toString(),
-          tipo: 'despesa',
-          valor: Number(contaSelecionada.valor),
-          descricao: `Pagamento: ${contaSelecionada.descricao}`,
-          data: new Date().toISOString(),
-          contaId: contaSelecionada.id,
-          origem: contaSelecionada.origem,
-        };
-        
-        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
-        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-        
-        await firebaseService.update('caixa', caixa.id, {
-          saldoAtual: Number(novoSaldo),
-          movimentacoes: novasMovimentacoes,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      mostrarSnackbar('Pagamento registrado com sucesso!');
-      await carregarDados();
-      handleClosePagamento();
-    } catch (error) {
-      console.error('Erro ao registrar pagamento:', error);
-      mostrarSnackbar('Erro ao registrar pagamento', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: 'registrar_pagamento',
-        contaId: contaSelecionada?.id
-      });
-    }
-  };
-
+  // ========== FUNÇÕES DE CRUD ==========
   const handleSalvar = async () => {
     try {
       if (!formData.descricao?.trim()) {
@@ -835,13 +509,11 @@ function ContasPagar() {
         valor: Number(valorNumerico),
         dataVencimento: String(formData.dataVencimento),
         categoria: String(formData.categoria),
-        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        clienteId: formData.clienteId ? String(formData.clienteId) : null,
         formaPagamento: String(formData.formaPagamento),
         observacoes: formData.observacoes ? String(formData.observacoes) : null,
         status: String(formData.status),
-        recorrente: Boolean(formData.recorrente),
         parcelas: Number(formData.parcelas) || 1,
-        origem: 'manual',
         updatedAt: new Date().toISOString(),
       };
 
@@ -854,40 +526,119 @@ function ContasPagar() {
       if (contaEditando) {
         const contaAntiga = { ...contaEditando };
         
-        await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
+        await firebaseService.update('contas_receber', contaEditando.id, dadosParaSalvar);
         
         await auditoriaService.registrarAtualizacao(
-          'contas_pagar',
+          'contas_receber',
           contaEditando.id,
           contaAntiga,
           dadosParaSalvar,
-          `Atualização de conta: ${formData.descricao}`
+          `Atualização de conta a receber: ${formData.descricao}`
         );
+        
+        const contasAtualizadas = contas.map(c => 
+          c.id === contaEditando.id ? { ...c, ...dadosParaSalvar, id: contaEditando.id } : c
+        );
+        setContas(contasAtualizadas);
         
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        const novaConta = await firebaseService.add('contas_pagar', dadosParaSalvar);
+        const novoId = await firebaseService.add('contas_receber', dadosParaSalvar);
         
         await auditoriaService.registrarCriacao(
-          'contas_pagar',
-          novaConta.id,
+          'contas_receber',
+          novoId,
           dadosParaSalvar,
-          `Criação de conta: ${formData.descricao}`
+          `Criação de conta a receber: ${formData.descricao}`
         );
+        
+        setContas([...contas, { ...dadosParaSalvar, id: novoId }]);
         
         mostrarSnackbar('Conta registrada com sucesso!');
       }
 
-      await carregarDados();
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
       
       await auditoriaService.registrarErro(error, { 
-        acao: contaEditando ? 'atualizar_conta_pagar' : 'criar_conta_pagar',
+        acao: contaEditando ? 'atualizar_conta_receber' : 'criar_conta_receber',
         dados: formData
+      });
+    }
+  };
+
+  const handleRegistrarRecebimento = async () => {
+    try {
+      if (!contaSelecionada || !contaSelecionada.id) {
+        mostrarSnackbar('Conta inválida', 'error');
+        return;
+      }
+
+      await auditoriaService.registrar('recebimento', {
+        entidade: 'contas_receber',
+        entidadeId: contaSelecionada.id,
+        detalhes: `Recebimento de conta: ${contaSelecionada.descricao}`,
+        dados: {
+          valor: contaSelecionada.valor,
+          formaPagamento: contaSelecionada.formaPagamento
+        }
+      });
+
+      const dadosConta = {
+        status: 'recebido',
+        dataRecebimento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await firebaseService.update('contas_receber', contaSelecionada.id, dadosConta);
+
+      const contasAtualizadas = contas.map(c => 
+        c.id === contaSelecionada.id ? { ...c, ...dadosConta } : c
+      );
+      setContas(contasAtualizadas);
+
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const novoSaldo = (caixa.saldoAtual || 0) + Number(contaSelecionada.valor);
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: 'receita',
+          valor: Number(contaSelecionada.valor),
+          descricao: `Recebimento: ${contaSelecionada.descricao}`,
+          data: new Date().toISOString(),
+          contaId: contaSelecionada.id,
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        const dadosCaixa = {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        };
+        
+        await firebaseService.update('caixa', caixa.id, dadosCaixa);
+        
+        setCaixa({ 
+          ...caixa, 
+          saldoAtual: novoSaldo, 
+          movimentacoes: novasMovimentacoes 
+        });
+      }
+
+      mostrarSnackbar('Recebimento registrado com sucesso!');
+      handleCloseRecebimento();
+    } catch (error) {
+      console.error('Erro ao registrar recebimento:', error);
+      mostrarSnackbar('Erro ao registrar recebimento', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'registrar_recebimento',
+        contaId: contaSelecionada?.id
       });
     }
   };
@@ -899,55 +650,39 @@ function ContasPagar() {
       hoje.setHours(0, 0, 0, 0);
       
       for (const conta of contas) {
-        if (conta.status === 'pendente' && conta.dataVencimento) {
+        if (conta.status === 'pendente') {
           const vencimento = new Date(conta.dataVencimento);
           vencimento.setHours(0, 0, 0, 0);
           
           if (vencimento < hoje) {
             try {
-              if (conta.origem === 'comissao' && conta.origemId) {
-                await firebaseService.update('comissoes', conta.origemId, {
-                  status: 'atrasado',
-                  updatedAt: new Date().toISOString(),
-                });
-              } else if (conta.origem === 'compra' && conta.origemId) {
-                await firebaseService.update('compras', conta.origemId, {
-                  status: 'atrasado',
-                  updatedAt: new Date().toISOString(),
-                });
-              } else if (conta.origem === 'manual') {
-                await firebaseService.update('contas_pagar', conta.id, {
-                  status: 'atrasado',
-                  updatedAt: new Date().toISOString(),
-                });
-              }
+              await firebaseService.update('contas_receber', conta.id, {
+                status: 'atrasado',
+                updatedAt: new Date().toISOString(),
+              });
+              
+              setContas(prev => prev.map(c => 
+                c.id === conta.id ? { ...c, status: 'atrasado' } : c
+              ));
             } catch (error) {
               console.error('Erro ao atualizar conta atrasada:', error);
             }
           }
         }
       }
-      
-      if (contas.length > 0) {
-        await carregarDados();
-      }
     };
 
-    verificarEAtualizarAtrasadas();
-    const interval = setInterval(verificarEAtualizarAtrasadas, 60 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [contas.length]);
+    if (contas.length > 0) {
+      verificarEAtualizarAtrasadas();
+    }
+  }, [contas]);
 
   // Filtrar contas
   const contasFiltradas = contas.filter(conta => {
     const matchesTexto = filtro === '' || 
-      conta.descricao?.toLowerCase().includes(filtro.toLowerCase()) ||
-      conta.profissionalNome?.toLowerCase().includes(filtro.toLowerCase()) ||
-      conta.servicoNome?.toLowerCase().includes(filtro.toLowerCase()) ||
-      conta.numeroPedido?.toLowerCase().includes(filtro.toLowerCase());
+      conta.descricao?.toLowerCase().includes(filtro.toLowerCase());
 
     const matchesStatus = filtroStatus === 'todos' || conta.status === filtroStatus;
-    const matchesOrigem = filtroOrigem === 'todas' || conta.origem === filtroOrigem;
 
     let matchesPeriodo = true;
     if (filtroPeriodo === 'hoje' && conta.dataVencimento) {
@@ -963,7 +698,7 @@ function ContasPagar() {
       matchesPeriodo = dataVenc < new Date() && conta.status === 'pendente';
     }
 
-    return matchesTexto && matchesStatus && matchesOrigem && matchesPeriodo;
+    return matchesTexto && matchesStatus && matchesPeriodo;
   });
 
   // Ordenar por data de vencimento
@@ -990,18 +725,12 @@ function ContasPagar() {
 
   // Estatísticas
   const stats = {
-    total: contas.filter(c => c.status !== 'pago').length,
-    valorTotal: contas
-      .filter(c => c.status !== 'pago')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
+    total: contas.length,
     pendentes: contas.filter(c => c.status === 'pendente').length,
     atrasadas: contas.filter(c => c.status === 'atrasado').length,
-    pagas: contas.filter(c => c.status === 'pago').length,
-    comissoesPendentes: contas
-      .filter(c => c.origem === 'comissao' && c.status !== 'pago')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
-    comprasPendentes: contas
-      .filter(c => c.origem === 'compra' && c.status !== 'pago')
+    recebidas: contas.filter(c => c.status === 'recebido').length,
+    valorTotal: contas
+      .filter(c => c.status !== 'recebido')
       .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
   };
 
@@ -1022,9 +751,7 @@ function ContasPagar() {
       <List sx={{ p: 0 }}>
         <AnimatePresence>
           {paginatedContas.map((conta, index) => {
-            const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
-            const profissional = profissionais.find(p => p.id === conta.profissionalId) || 
-                               { nome: conta.profissionalNome };
+            const cliente = clientes.find(c => c.id === conta.clienteId);
             
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
@@ -1046,7 +773,7 @@ function ContasPagar() {
                     mb: 2,
                     borderLeft: '4px solid',
                     borderLeftColor: 
-                      conta.status === 'pago' ? '#4caf50' :
+                      conta.status === 'recebido' ? '#4caf50' :
                       conta.status === 'atrasado' ? '#f44336' :
                       conta.status === 'pendente' ? '#ff9800' : '#9c27b0',
                     bgcolor: isVencida ? '#ffebee20' : 'white',
@@ -1056,19 +783,15 @@ function ContasPagar() {
                     {/* Header */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ 
-                          bgcolor: origemColors[conta.origem]?.color || '#757575',
-                          width: 32,
-                          height: 32
-                        }}>
-                          {origemColors[conta.origem]?.icon}
+                        <Avatar sx={{ bgcolor: '#4caf50', width: 32, height: 32 }}>
+                          <MoneyIcon sx={{ fontSize: 16 }} />
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {conta.descricao}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {origemColors[conta.origem]?.label}
+                            {cliente?.nome || 'Cliente não informado'}
                           </Typography>
                         </Box>
                       </Box>
@@ -1099,41 +822,18 @@ function ContasPagar() {
                           <Typography variant="caption" color="textSecondary">
                             Valor
                           </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#f44336' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
                             R$ {Number(conta.valor).toFixed(2)}
                           </Typography>
                         </Grid>
-
-                        {conta.origem === 'comissao' && profissional && (
-                          <Grid item xs={12}>
-                            <Typography variant="caption" color="textSecondary">
-                              Profissional
-                            </Typography>
-                            <Typography variant="body2">
-                              {profissional.nome} • {conta.servicoNome} ({conta.percentual}%)
-                            </Typography>
-                          </Grid>
-                        )}
-
-                        {conta.origem === 'compra' && fornecedor && (
-                          <Grid item xs={12}>
-                            <Typography variant="caption" color="textSecondary">
-                              Fornecedor
-                            </Typography>
-                            <Typography variant="body2">
-                              {fornecedor.nome} • Pedido: {conta.numeroPedido}
-                            </Typography>
-                          </Grid>
-                        )}
-
-                        {conta.origem === 'manual' && fornecedor && (
-                          <Grid item xs={12}>
-                            <Typography variant="caption" color="textSecondary">
-                              Fornecedor
-                            </Typography>
-                            <Typography variant="body2">{fornecedor.nome}</Typography>
-                          </Grid>
-                        )}
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="textSecondary">
+                            Forma de Pagamento
+                          </Typography>
+                          <Typography variant="body2">
+                            {formasPagamento.find(f => f.value === conta.formaPagamento)?.label || conta.formaPagamento}
+                          </Typography>
+                        </Grid>
                       </Grid>
                     </Box>
 
@@ -1149,11 +849,11 @@ function ContasPagar() {
                         </IconButton>
                       </Tooltip>
 
-                      {conta.status !== 'pago' && conta.status !== 'cancelado' && (
-                        <Tooltip title="Registrar Pagamento">
+                      {conta.status !== 'recebido' && (
+                        <Tooltip title="Registrar Recebimento">
                           <IconButton
                             size="small"
-                            onClick={() => handleOpenPagamento(conta)}
+                            onClick={() => handleOpenRecebimento(conta)}
                             sx={{ color: '#4caf50' }}
                           >
                             <PaymentIcon />
@@ -1161,17 +861,15 @@ function ContasPagar() {
                         </Tooltip>
                       )}
 
-                      {conta.origem === 'manual' && (
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(conta)}
-                            sx={{ color: '#2196f3' }}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                      <Tooltip title="Editar">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenDialog(conta)}
+                          sx={{ color: '#2196f3' }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
 
                     {isVencida && (
@@ -1224,7 +922,7 @@ function ContasPagar() {
             <TextField
               fullWidth
               size="small"
-              placeholder="Buscar..."
+              placeholder="Buscar por descrição..."
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
             />
@@ -1244,22 +942,6 @@ function ContasPagar() {
                     {statusColors[status].label}
                   </MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Origem</InputLabel>
-              <Select
-                value={filtroOrigem}
-                onChange={(e) => setFiltroOrigem(e.target.value)}
-                label="Origem"
-              >
-                <MenuItem value="todas">Todas</MenuItem>
-                <MenuItem value="manual">Manual</MenuItem>
-                <MenuItem value="comissao">Comissão</MenuItem>
-                <MenuItem value="compra">Compra</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -1287,7 +969,6 @@ function ContasPagar() {
               onClick={() => {
                 setFilterDrawerOpen(false);
                 setFiltroStatus('todos');
-                setFiltroOrigem('todas');
                 setFiltroPeriodo('todos');
                 setFiltro('');
               }}
@@ -1322,7 +1003,7 @@ function ContasPagar() {
     <Box>
       {/* Componente oculto para impressão */}
       <Box sx={{ display: 'none' }}>
-        <RelatorioContasPagar
+        <RelatorioContasReceber
           ref={printRef}
           contas={contasOrdenadas}
           filtros={{
@@ -1332,8 +1013,7 @@ function ContasPagar() {
           }}
           estatisticas={stats}
           config={config}
-          fornecedores={fornecedores}
-          profissionais={profissionais}
+          clientes={clientes}
         />
       </Box>
 
@@ -1342,10 +1022,10 @@ function ContasPagar() {
         <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: 'white', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #f0f0f0' }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', flex: 1 }}>
-              Contas a Pagar
+              Contas a Receber
             </Typography>
             <IconButton onClick={() => setFilterDrawerOpen(true)}>
-              <Badge badgeContent={filtroStatus !== 'todos' || filtroOrigem !== 'todas' || filtro ? 1 : 0} color="secondary">
+              <Badge badgeContent={filtroStatus !== 'todos' || filtroPeriodo !== 'todos' || filtro ? 1 : 0} color="secondary">
                 <FilterIcon />
               </Badge>
             </IconButton>
@@ -1358,7 +1038,7 @@ function ContasPagar() {
           <Box sx={{ p: 2, display: 'flex', gap: 1, overflowX: 'auto' }}>
             <Paper sx={{ p: 1.5, minWidth: 100, textAlign: 'center' }}>
               <Typography variant="caption">Total</Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#f44336' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#4caf50' }}>
                 R$ {stats.valorTotal.toFixed(2)}
               </Typography>
             </Paper>
@@ -1371,24 +1051,8 @@ function ContasPagar() {
               <Typography variant="subtitle2">{stats.atrasadas}</Typography>
             </Paper>
             <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#e8f5e9' }}>
-              <Typography variant="caption">Pagas</Typography>
-              <Typography variant="subtitle2">{stats.pagas}</Typography>
-            </Paper>
-          </Box>
-
-          {/* Cards de resumo por origem */}
-          <Box sx={{ px: 2, pb: 2, display: 'flex', gap: 1, overflowX: 'auto' }}>
-            <Paper sx={{ p: 1.5, minWidth: 120, textAlign: 'center', bgcolor: '#f3e5f5' }}>
-              <Typography variant="caption">Comissões</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#9c27b0' }}>
-                R$ {stats.comissoesPendentes.toFixed(2)}
-              </Typography>
-            </Paper>
-            <Paper sx={{ p: 1.5, minWidth: 120, textAlign: 'center', bgcolor: '#fff3e0' }}>
-              <Typography variant="caption">Compras</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#ff9800' }}>
-                R$ {stats.comprasPendentes.toFixed(2)}
-              </Typography>
+              <Typography variant="caption">Recebidas</Typography>
+              <Typography variant="subtitle2">{stats.recebidas}</Typography>
             </Paper>
           </Box>
         </Box>
@@ -1399,10 +1063,10 @@ function ContasPagar() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              Contas a Pagar
+              Contas a Receber
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              Gerencie todas as contas, despesas, comissões e compras do salão
+              Gerencie todas as contas e recebimentos do salão
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
@@ -1434,181 +1098,113 @@ function ContasPagar() {
 
       {/* Cards de Estatísticas Desktop */}
       {!isMobile && (
-        <>
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary">Total a Pagar</Typography>
-                  <Typography variant="h4" sx={{ color: '#f44336' }}>
-                    R$ {stats.valorTotal.toFixed(2)}
-                  </Typography>
-                  <Typography variant="caption">{stats.total} contas</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ bgcolor: '#fff3e0' }}>
-                <CardContent>
-                  <Typography color="textSecondary">Pendentes</Typography>
-                  <Typography variant="h4" sx={{ color: '#ff9800' }}>
-                    {stats.pendentes}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ bgcolor: '#ffebee' }}>
-                <CardContent>
-                  <Typography color="textSecondary">Atrasadas</Typography>
-                  <Typography variant="h4" sx={{ color: '#f44336' }}>
-                    {stats.atrasadas}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card sx={{ bgcolor: '#e8f5e9' }}>
-                <CardContent>
-                  <Typography color="textSecondary">Pagas</Typography>
-                  <Typography variant="h4" sx={{ color: '#4caf50' }}>
-                    {stats.pagas}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary">Total a Receber</Typography>
+                <Typography variant="h4" sx={{ color: '#4caf50' }}>
+                  R$ {stats.valorTotal.toFixed(2)}
+                </Typography>
+              </CardContent>
+            </Card>
           </Grid>
-
-          {/* Cards de Resumo por Origem */}
-          <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ bgcolor: '#f3e5f5' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                      <PercentIcon />
-                    </Avatar>
-                    <Box>
-                      <Typography variant="subtitle2">Comissões a Pagar</Typography>
-                      <Typography variant="h5" sx={{ color: '#9c27b0' }}>
-                        R$ {stats.comissoesPendentes.toFixed(2)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ bgcolor: '#fff3e0' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
-                      <ShoppingCartIcon />
-                    </Avatar>
-                    <Box>
-                      <Typography variant="subtitle2">Compras a Pagar</Typography>
-                      <Typography variant="h5" sx={{ color: '#ff9800' }}>
-                        R$ {stats.comprasPendentes.toFixed(2)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{ bgcolor: '#fff3e0' }}>
+              <CardContent>
+                <Typography color="textSecondary">Pendentes</Typography>
+                <Typography variant="h4" sx={{ color: '#ff9800' }}>
+                  {stats.pendentes}
+                </Typography>
+              </CardContent>
+            </Card>
           </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{ bgcolor: '#ffebee' }}>
+              <CardContent>
+                <Typography color="textSecondary">Atrasadas</Typography>
+                <Typography variant="h4" sx={{ color: '#f44336' }}>
+                  {stats.atrasadas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{ bgcolor: '#e8f5e9' }}>
+              <CardContent>
+                <Typography color="textSecondary">Recebidas</Typography>
+                <Typography variant="h4" sx={{ color: '#4caf50' }}>
+                  {stats.recebidas}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
 
-          {/* Filtros Desktop */}
-          <Card sx={{ mb: 4 }}>
-            <CardContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Buscar..."
-                    value={filtro}
-                    onChange={(e) => setFiltro(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                      endAdornment: filtro && (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => setFiltro('')}>
-                            <ClearIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                      value={filtroStatus}
-                      onChange={(e) => setFiltroStatus(e.target.value)}
-                      label="Status"
-                    >
-                      <MenuItem value="todos">Todos</MenuItem>
-                      {Object.keys(statusColors).map(status => (
-                        <MenuItem key={status} value={status}>
-                          {statusColors[status].label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Origem</InputLabel>
-                    <Select
-                      value={filtroOrigem}
-                      onChange={(e) => setFiltroOrigem(e.target.value)}
-                      label="Origem"
-                    >
-                      <MenuItem value="todas">Todas</MenuItem>
-                      <MenuItem value="manual">Manual</MenuItem>
-                      <MenuItem value="comissao">Comissão</MenuItem>
-                      <MenuItem value="compra">Compra</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Período</InputLabel>
-                    <Select
-                      value={filtroPeriodo}
-                      onChange={(e) => setFiltroPeriodo(e.target.value)}
-                      label="Período"
-                    >
-                      <MenuItem value="todos">Todos</MenuItem>
-                      <MenuItem value="hoje">Vencem Hoje</MenuItem>
-                      <MenuItem value="semana">Próximos 7 dias</MenuItem>
-                      <MenuItem value="vencidas">Vencidas</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => {
-                      setFiltroStatus('todos');
-                      setFiltroOrigem('todas');
-                      setFiltroPeriodo('todos');
-                      setFiltro('');
-                    }}
-                  >
-                    Limpar
-                  </Button>
-                </Grid>
+      {/* Filtros Desktop */}
+      {!isMobile && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Buscar por descrição..."
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: filtro && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setFiltro('')}>
+                          <ClearIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
               </Grid>
-            </CardContent>
-          </Card>
-        </>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filtroStatus}
+                    onChange={(e) => setFiltroStatus(e.target.value)}
+                    label="Status"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    {Object.keys(statusColors).map(status => (
+                      <MenuItem key={status} value={status}>
+                        {statusColors[status].label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Período</InputLabel>
+                  <Select
+                    value={filtroPeriodo}
+                    onChange={(e) => setFiltroPeriodo(e.target.value)}
+                    label="Período"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    <MenuItem value="hoje">Vencem Hoje</MenuItem>
+                    <MenuItem value="semana">Próximos 7 dias</MenuItem>
+                    <MenuItem value="vencidas">Vencidas</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       )}
 
       {/* Conteúdo principal */}
@@ -1622,7 +1218,7 @@ function ContasPagar() {
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                     <TableCell><strong>Descrição</strong></TableCell>
-                    <TableCell><strong>Origem</strong></TableCell>
+                    <TableCell><strong>Cliente</strong></TableCell>
                     <TableCell><strong>Vencimento</strong></TableCell>
                     <TableCell align="right"><strong>Valor</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
@@ -1631,9 +1227,7 @@ function ContasPagar() {
                 </TableHead>
                 <TableBody>
                   {paginatedContas.map((conta, index) => {
-                    const fornecedor = fornecedores.find(f => f.id === conta.fornecedorId);
-                    const profissional = profissionais.find(p => p.id === conta.profissionalId) || 
-                                       { nome: conta.profissionalNome };
+                    const cliente = clientes.find(c => c.id === conta.clienteId);
                     
                     const hoje = new Date();
                     hoje.setHours(0, 0, 0, 0);
@@ -1643,48 +1237,14 @@ function ContasPagar() {
 
                     return (
                       <TableRow key={conta.id} hover>
+                        <TableCell>{conta.descricao}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar sx={{ 
-                              bgcolor: origemColors[conta.origem]?.color || '#757575',
-                              width: 32,
-                              height: 32
-                            }}>
-                              {origemColors[conta.origem]?.icon}
+                            <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
+                              <PersonIcon sx={{ fontSize: 14 }} />
                             </Avatar>
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {conta.descricao}
-                              </Typography>
-                              {conta.origem === 'comissao' && profissional && (
-                                <Typography variant="caption" color="textSecondary">
-                                  {profissional.nome} • {conta.servicoNome} ({conta.percentual}%)
-                                </Typography>
-                              )}
-                              {conta.origem === 'compra' && fornecedor && (
-                                <Typography variant="caption" color="textSecondary">
-                                  {fornecedor.nome} • Pedido: {conta.numeroPedido}
-                                </Typography>
-                              )}
-                              {conta.origem === 'manual' && fornecedor && (
-                                <Typography variant="caption" color="textSecondary">
-                                  {fornecedor.nome}
-                                </Typography>
-                              )}
-                            </Box>
+                            {cliente?.nome || '—'}
                           </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={origemColors[conta.origem]?.icon}
-                            label={origemColors[conta.origem]?.label}
-                            size="small"
-                            sx={{
-                              bgcolor: `${origemColors[conta.origem]?.color}20`,
-                              color: origemColors[conta.origem]?.color,
-                              fontWeight: 500,
-                            }}
-                          />
                         </TableCell>
                         <TableCell>
                           <Box>
@@ -1700,7 +1260,7 @@ function ContasPagar() {
                           </Box>
                         </TableCell>
                         <TableCell align="right">
-                          <Typography fontWeight={600} color="#f44336">
+                          <Typography fontWeight={600} color="#4caf50">
                             R$ {Number(conta.valor).toFixed(2)}
                           </Typography>
                         </TableCell>
@@ -1717,6 +1277,17 @@ function ContasPagar() {
                         </TableCell>
                         <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            {conta.status !== 'recebido' && (
+                              <Tooltip title="Registrar Recebimento">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenRecebimento(conta)}
+                                  sx={{ color: '#4caf50' }}
+                                >
+                                  <PaymentIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             <Tooltip title="Ver Detalhes">
                               <IconButton
                                 size="small"
@@ -1726,30 +1297,15 @@ function ContasPagar() {
                                 <InfoIcon />
                               </IconButton>
                             </Tooltip>
-                            
-                            {conta.status !== 'pago' && conta.status !== 'cancelado' && (
-                              <Tooltip title="Registrar Pagamento">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenPagamento(conta)}
-                                  sx={{ color: '#4caf50' }}
-                                >
-                                  <PaymentIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            
-                            {conta.origem === 'manual' && (
-                              <Tooltip title="Editar">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenDialog(conta)}
-                                  sx={{ color: '#2196f3' }}
-                                >
-                                  <EditIcon />
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                            <Tooltip title="Editar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDialog(conta)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -1765,7 +1321,7 @@ function ContasPagar() {
       {/* Paginação Desktop */}
       {!isMobile && (
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
+          rowsPerPageOptions={[5, 10, 25]}
           component="div"
           count={contasOrdenadas.length}
           rowsPerPage={rowsPerPage}
@@ -1816,10 +1372,10 @@ function ContasPagar() {
       {/* Drawer de filtros mobile */}
       {renderFilterDrawer()}
 
-      {/* Dialog de Nova Conta Manual */}
+      {/* Dialog de Nova Conta */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          {contaEditando ? 'Editar Conta Manual' : 'Nova Conta a Pagar'}
+          {contaEditando ? 'Editar Conta' : 'Nova Conta a Receber'}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -1834,7 +1390,6 @@ function ContasPagar() {
                 required
               />
             </Grid>
-            
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -1850,7 +1405,6 @@ function ContasPagar() {
                 }}
               />
             </Grid>
-            
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -1863,7 +1417,6 @@ function ContasPagar() {
                 size="small"
               />
             </Grid>
-            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Categoria</InputLabel>
@@ -1873,35 +1426,30 @@ function ContasPagar() {
                   onChange={handleInputChange}
                   label="Categoria"
                 >
-                  <MenuItem value="Fornecedor">Fornecedor</MenuItem>
-                  <MenuItem value="Aluguel">Aluguel</MenuItem>
-                  <MenuItem value="Água">Água</MenuItem>
-                  <MenuItem value="Luz">Luz</MenuItem>
-                  <MenuItem value="Telefone">Telefone</MenuItem>
-                  <MenuItem value="Salários">Salários</MenuItem>
-                  <MenuItem value="Impostos">Impostos</MenuItem>
+                  <MenuItem value="Serviços">Serviços</MenuItem>
+                  <MenuItem value="Produtos">Produtos</MenuItem>
+                  <MenuItem value="Pacotes">Pacotes</MenuItem>
+                  <MenuItem value="Comissões">Comissões</MenuItem>
                   <MenuItem value="Outros">Outros</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
-                <InputLabel>Fornecedor</InputLabel>
+                <InputLabel>Cliente</InputLabel>
                 <Select
-                  name="fornecedorId"
-                  value={formData.fornecedorId}
+                  name="clienteId"
+                  value={formData.clienteId}
                   onChange={handleInputChange}
-                  label="Fornecedor"
+                  label="Cliente"
                 >
                   <MenuItem value="">Nenhum</MenuItem>
-                  {fornecedores.map(f => (
-                    <MenuItem key={f.id} value={f.id}>{f.nome}</MenuItem>
+                  {clientes.map(c => (
+                    <MenuItem key={c.id} value={c.id}>{c.nome}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
-            
             <Grid item xs={12}>
               <FormControl fullWidth size="small">
                 <InputLabel>Forma de Pagamento</InputLabel>
@@ -1919,7 +1467,6 @@ function ContasPagar() {
                 </Select>
               </FormControl>
             </Grid>
-            
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -1946,59 +1493,41 @@ function ContasPagar() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Pagamento */}
-      <Dialog open={openPagamentoDialog} onClose={handleClosePagamento} maxWidth="xs" fullWidth>
+      {/* Dialog de Recebimento */}
+      <Dialog open={openRecebimentoDialog} onClose={handleCloseRecebimento} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
-          Confirmar Pagamento
+          Confirmar Recebimento
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Deseja registrar o pagamento de:
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Deseja registrar o recebimento de:
             </Alert>
             <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Avatar sx={{ 
-                  bgcolor: origemColors[contaSelecionada?.origem]?.color || '#757575',
-                  width: 32,
-                  height: 32
-                }}>
-                  {origemColors[contaSelecionada?.origem]?.icon}
-                </Avatar>
-                <Typography variant="subtitle2">{contaSelecionada?.descricao}</Typography>
-              </Box>
-              
-              <Typography variant="h5" color="primary" sx={{ mt: 2, fontWeight: 600 }}>
+              <Typography variant="subtitle2">{contaSelecionada?.descricao}</Typography>
+              <Typography variant="h5" color="primary" sx={{ mt: 1, fontWeight: 600 }}>
                 R$ {Number(contaSelecionada?.valor).toFixed(2)}
               </Typography>
-              
-              {contaSelecionada?.origem === 'comissao' && (
-                <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-                  Profissional: {contaSelecionada?.profissionalNome}
-                </Typography>
-              )}
-              
-              {contaSelecionada?.origem === 'compra' && (
-                <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-                  Pedido: {contaSelecionada?.numeroPedido}
-                </Typography>
-              )}
-              
               <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-                Vencimento: {contaSelecionada?.dataVencimento && new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
+                Vencimento: {contaSelecionada && new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
               </Typography>
+              {contaSelecionada && (
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  Cliente: {clientes.find(c => c.id === contaSelecionada.clienteId)?.nome || '—'}
+                </Typography>
+              )}
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClosePagamento}>Cancelar</Button>
+          <Button onClick={handleCloseRecebimento}>Cancelar</Button>
           <Button
-            onClick={handleRegistrarPagamento}
+            onClick={handleRegistrarRecebimento}
             variant="contained"
             color="success"
             startIcon={<CheckCircleIcon />}
           >
-            Confirmar Pagamento
+            Confirmar Recebimento
           </Button>
         </DialogActions>
       </Dialog>
@@ -2017,14 +1546,12 @@ function ContasPagar() {
                   <Typography variant="body2">{contaSelecionada.descricao}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="textSecondary">Origem</Typography>
-                  <Typography variant="body2">
-                    {origemColors[contaSelecionada.origem]?.label}
-                  </Typography>
+                  <Typography variant="caption" color="textSecondary">Categoria</Typography>
+                  <Typography variant="body2">{contaSelecionada.categoria}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Valor</Typography>
-                  <Typography variant="body2" sx={{ color: '#f44336', fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 600 }}>
                     R$ {Number(contaSelecionada.valor).toFixed(2)}
                   </Typography>
                 </Grid>
@@ -2034,48 +1561,18 @@ function ContasPagar() {
                     {contaSelecionada.dataVencimento ? new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR') : '—'}
                   </Typography>
                 </Grid>
-
-                {contaSelecionada.origem === 'comissao' && (
-                  <>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="textSecondary">Profissional</Typography>
-                      <Typography variant="body2">{contaSelecionada.profissionalNome}</Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="textSecondary">Serviço</Typography>
-                      <Typography variant="body2">
-                        {contaSelecionada.servicoNome} ({contaSelecionada.percentual}% de R$ {contaSelecionada.valorAtendimento})
-                      </Typography>
-                    </Grid>
-                  </>
-                )}
-
-                {contaSelecionada.origem === 'compra' && (
-                  <>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="textSecondary">Fornecedor</Typography>
-                      <Typography variant="body2">
-                        {fornecedores.find(f => f.id === contaSelecionada.fornecedorId)?.nome || 'Não informado'}
-                      </Typography>
-                    </Grid>
-                    {contaSelecionada.numeroPedido && (
-                      <Grid item xs={12}>
-                        <Typography variant="caption" color="textSecondary">Pedido</Typography>
-                        <Typography variant="body2">{contaSelecionada.numeroPedido}</Typography>
-                      </Grid>
-                    )}
-                  </>
-                )}
-
-                {contaSelecionada.origem === 'manual' && contaSelecionada.fornecedorId && (
-                  <Grid item xs={12}>
-                    <Typography variant="caption" color="textSecondary">Fornecedor</Typography>
-                    <Typography variant="body2">
-                      {fornecedores.find(f => f.id === contaSelecionada.fornecedorId)?.nome}
-                    </Typography>
-                  </Grid>
-                )}
-
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="textSecondary">Cliente</Typography>
+                  <Typography variant="body2">
+                    {clientes.find(c => c.id === contaSelecionada.clienteId)?.nome || 'Não informado'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="textSecondary">Forma de Pagamento</Typography>
+                  <Typography variant="body2">
+                    {formasPagamento.find(f => f.value === contaSelecionada.formaPagamento)?.label || contaSelecionada.formaPagamento}
+                  </Typography>
+                </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Status</Typography>
                   <Chip
@@ -2088,16 +1585,14 @@ function ContasPagar() {
                     }}
                   />
                 </Grid>
-
-                {contaSelecionada.dataPagamento && (
+                {contaSelecionada.dataRecebimento && (
                   <Grid item xs={6}>
-                    <Typography variant="caption" color="textSecondary">Pago em</Typography>
+                    <Typography variant="caption" color="textSecondary">Recebido em</Typography>
                     <Typography variant="body2">
-                      {new Date(contaSelecionada.dataPagamento).toLocaleDateString('pt-BR')}
+                      {new Date(contaSelecionada.dataRecebimento).toLocaleDateString('pt-BR')}
                     </Typography>
                   </Grid>
                 )}
-
                 {contaSelecionada.observacoes && (
                   <Grid item xs={12}>
                     <Typography variant="caption" color="textSecondary">Observações</Typography>
@@ -2110,17 +1605,17 @@ function ContasPagar() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetalhes}>Fechar</Button>
-          {contaSelecionada?.status !== 'pago' && contaSelecionada?.status !== 'cancelado' && (
+          {contaSelecionada?.status !== 'recebido' && (
             <Button
               onClick={() => {
                 handleCloseDetalhes();
-                handleOpenPagamento(contaSelecionada);
+                handleOpenRecebimento(contaSelecionada);
               }}
               variant="contained"
               color="success"
               startIcon={<PaymentIcon />}
             >
-              Pagar
+              Receber
             </Button>
           )}
         </DialogActions>
@@ -2141,4 +1636,4 @@ function ContasPagar() {
   );
 }
 
-export default ContasPagar;
+export default ContasReceber;
