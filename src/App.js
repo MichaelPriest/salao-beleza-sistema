@@ -72,6 +72,7 @@ import ClienteRecompensas from './pages/ClienteRecompensas';
 import ClientePontos from './pages/ClientePontos';
 import ClienteHistorico from './pages/ClienteHistorico';
 import ClientePerfil from './pages/ClientePerfil';
+import ClienteNotificacoes from './pages/ClienteNotificacoes';
 
 // Página de Teste
 import TesteAPI from './pages/TesteAPI';
