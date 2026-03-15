@@ -1,5 +1,5 @@
 // src/pages/ClienteLogin.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -25,7 +25,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid, // 🔥 IMPORTANTE: ADICIONAR ESTA IMPORTAÇÃO
+  Grid,
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -52,7 +52,7 @@ function ClienteLogin() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { login, loginComGoogle, loading } = useAuthCliente();
+  const { login, loginComGoogle, completarCadastroGoogle, loading, isAuthenticated } = useAuthCliente();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -80,6 +80,14 @@ function ClienteLogin() {
   const [loadingComplementar, setLoadingComplementar] = useState(false);
   const [cpfError, setCpfError] = useState('');
 
+  // 🔥 REDIRECIONAR SE JÁ ESTIVER AUTENTICADO
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('✅ Cliente já autenticado, redirecionando para dashboard');
+      navigate('/cliente/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -95,17 +103,18 @@ function ClienteLogin() {
       return;
     }
 
-    const success = await login(formData.email, formData.senha);
-    if (success) {
-      navigate('/cliente/dashboard');
+    const result = await login(formData.email, formData.senha);
+    if (result?.success) {
+      // O redirecionamento será feito pelo useEffect
     }
   };
 
   // 🔥 FUNÇÃO PARA BUSCAR ENDEREÇO PELO CEP
   const buscarCep = async (cep) => {
-    if (cep.length === 8) {
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length === 8) {
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
         const data = await response.json();
         
         if (!data.erro) {
@@ -140,19 +149,20 @@ function ClienteLogin() {
     }
   };
 
-  // 🔥 LOGIN COM GOOGLE - AGORA COM VERIFICAÇÃO POR CPF
+  // 🔥 LOGIN COM GOOGLE
   const handleGoogleLogin = async () => {
     try {
       const result = await loginComGoogle();
       
       // Se o login foi bem-sucedido e o cliente já existe
-      if (result && result.success) {
-        navigate('/cliente/dashboard');
+      if (result?.success) {
+        // O redirecionamento será feito pelo useEffect
         return;
       }
       
       // Se o usuário do Google não tem cadastro completo, abrir modal
-      if (result && result.needCompletion) {
+      if (result?.needCompletion) {
+        console.log('📝 Abrindo modal de cadastro complementar');
         setGoogleUserData(result.userData);
         setOpenCadastroComplementar(true);
       }
@@ -171,79 +181,18 @@ function ClienteLogin() {
       return;
     }
 
-    // Verificar se CPF já está cadastrado
     try {
       setLoadingComplementar(true);
       
-      // Buscar cliente por CPF
-      const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: dadosComplementares.cpf }
-      ]);
-
-      if (clientesPorCpf && clientesPorCpf.length > 0) {
-        // CPF já cadastrado - vincular conta Google ao cliente existente
-        const clienteExistente = clientesPorCpf[0];
-        
-        // Atualizar o cliente com o UID do Google
-        await firebaseService.update('clientes', clienteExistente.id, {
-          googleUid: googleUserData.uid,
-          foto: googleUserData.foto || clienteExistente.foto,
-          ultimoAcesso: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-
-        // Salvar no localStorage
-        const clienteCompleto = {
-          ...clienteExistente,
-          googleUid: googleUserData.uid,
-          foto: googleUserData.foto || clienteExistente.foto
-        };
-        
-        localStorage.setItem('cliente', JSON.stringify(clienteCompleto));
-        
+      const result = await completarCadastroGoogle(dadosComplementares);
+      
+      if (result?.success) {
+        console.log('✅ Cadastro completado com sucesso');
         setOpenCadastroComplementar(false);
-        navigate('/cliente/dashboard');
-        return;
+        // O redirecionamento será feito pelo useEffect
+      } else {
+        setError('Erro ao completar cadastro. Tente novamente.');
       }
-
-      // Se não encontrou CPF, criar novo cliente com todos os dados
-      const novoCliente = {
-        id: googleUserData.uid,
-        nome: googleUserData.nome,
-        email: googleUserData.email,
-        foto: googleUserData.foto,
-        cpf: dadosComplementares.cpf,
-        telefone: dadosComplementares.telefone,
-        dataNascimento: dadosComplementares.dataNascimento,
-        genero: dadosComplementares.genero,
-        cep: dadosComplementares.cep,
-        logradouro: dadosComplementares.logradouro,
-        numero: dadosComplementares.numero,
-        complemento: dadosComplementares.complemento,
-        bairro: dadosComplementares.bairro,
-        cidade: dadosComplementares.cidade,
-        estado: dadosComplementares.estado,
-        googleUid: googleUserData.uid,
-        dataCadastro: new Date().toISOString().split('T')[0],
-        ultimaVisita: null,
-        totalGasto: 0,
-        status: 'Regular',
-        preferencias: {
-          notificacoes: true,
-          profissionalPreferido: '',
-          servicosPreferidos: []
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await firebaseService.set('clientes', googleUserData.uid, novoCliente);
-      
-      // Salvar no localStorage
-      localStorage.setItem('cliente', JSON.stringify(novoCliente));
-      
-      setOpenCadastroComplementar(false);
-      navigate('/cliente/dashboard');
       
     } catch (error) {
       console.error('Erro ao completar cadastro:', error);
@@ -258,8 +207,11 @@ function ClienteLogin() {
     setDadosComplementares(prev => ({ ...prev, [name]: value }));
     
     // Se for CEP, buscar endereço
-    if (name === 'cep' && value.length === 8) {
-      buscarCep(value);
+    if (name === 'cep') {
+      const cepLimpo = value.replace(/\D/g, '');
+      if (cepLimpo.length === 8) {
+        buscarCep(cepLimpo);
+      }
     }
   };
 
@@ -488,6 +440,7 @@ function ClienteLogin() {
                 error={!!cpfError}
                 helperText={cpfError || 'Digite apenas números'}
                 size="small"
+                required
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
