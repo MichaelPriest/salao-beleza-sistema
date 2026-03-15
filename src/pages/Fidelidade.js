@@ -81,8 +81,36 @@ import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { auditoriaService } from '../services/auditoriaService';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns'; // Adicionado isValid
 import { ptBR } from 'date-fns/locale';
+
+// Função utilitária para formatar data com segurança
+const formatDate = (date, formatString = 'dd/MM/yyyy') => {
+  if (!date) return '—';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (!isValid(dateObj)) return '—';
+    return format(dateObj, formatString, { locale: ptBR });
+  } catch (error) {
+    console.warn('Erro ao formatar data:', error);
+    return '—';
+  }
+};
+
+// Função para formatar data com hora
+const formatDateTime = (date) => {
+  if (!date) return '—';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (!isValid(dateObj)) return '—';
+    return format(dateObj, 'dd/MM/yyyy HH:mm', { locale: ptBR });
+  } catch (error) {
+    console.warn('Erro ao formatar data/hora:', error);
+    return '—';
+  }
+};
 
 // Configuração dos níveis de fidelidade
 const niveis = {
@@ -381,7 +409,7 @@ const HistoricoItem = ({ item }) => {
               {item.motivo || item.recompensaNome}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {item.data ? format(new Date(item.data), 'dd/MM/yyyy HH:mm') : '-'}
+              {formatDateTime(item.data)}
             </Typography>
           </>
         }
