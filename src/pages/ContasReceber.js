@@ -66,6 +66,7 @@ import {
   Close as CloseIcon,
   Today as TodayIcon,
   DateRange as DateRangeIcon,
+  Cancel as CancelIcon, // 🔥 IMPORTANTE: Adicionar esta importação
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
