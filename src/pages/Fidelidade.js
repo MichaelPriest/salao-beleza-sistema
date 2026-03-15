@@ -44,8 +44,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Collapse,
-  Menu,
-  MenuItem,
+  Snackbar,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -75,9 +74,9 @@ import {
   Visibility as VisibilityIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-hot-toast';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -419,6 +418,7 @@ function Fidelidade() {
   const [openRecompensaDialog, setOpenRecompensaDialog] = useState(false);
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [openDetalhesCliente, setOpenDetalhesCliente] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [pontosForm, setPontosForm] = useState({
     quantidade: '',
     motivo: '',
@@ -459,6 +459,14 @@ function Fidelidade() {
       carregarDados();
     }
   }, [loadingClientes, pontuacao, resgates, configuracoes]);
+
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   const carregarDados = useCallback(async () => {
     try {
@@ -533,7 +541,7 @@ function Fidelidade() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       if (!error.message.includes('permissions')) {
-        toast.error('Erro ao carregar dados de fidelidade');
+        mostrarSnackbar('Erro ao carregar dados de fidelidade', 'error');
       }
       
       await auditoriaService.registrarErro(error, { 
@@ -549,12 +557,12 @@ function Fidelidade() {
     try {
       if (!selectedCliente) return;
       if (!pontosForm.quantidade || pontosForm.quantidade <= 0) {
-        toast.error('Quantidade inválida');
+        mostrarSnackbar('Quantidade inválida', 'error');
         return;
       }
 
       if (!isAdmin) {
-        toast.error('Apenas administradores podem gerenciar pontos manualmente');
+        mostrarSnackbar('Apenas administradores podem gerenciar pontos manualmente', 'error');
         return;
       }
 
@@ -562,7 +570,7 @@ function Fidelidade() {
       
       // Validar saldo para débito
       if (pontosForm.tipo === 'debito' && selectedCliente.saldo < quantidade) {
-        toast.error('Saldo insuficiente');
+        mostrarSnackbar('Saldo insuficiente', 'error');
         return;
       }
 
@@ -601,7 +609,7 @@ function Fidelidade() {
         }
       );
       
-      toast.success(
+      mostrarSnackbar(
         pontosForm.tipo === 'credito' 
           ? `${quantidade} pontos adicionados!` 
           : `${quantidade} pontos removidos!`
@@ -615,7 +623,7 @@ function Fidelidade() {
       
     } catch (error) {
       console.error('Erro ao adicionar pontos:', error);
-      toast.error('Erro ao processar pontos');
+      mostrarSnackbar('Erro ao processar pontos', 'error');
       
       await auditoriaService.registrarErro(error, { 
         acao: 'gerenciar_pontos',
@@ -630,13 +638,13 @@ function Fidelidade() {
       if (!selectedCliente) return;
       
       if (selectedCliente.saldo < recompensa.pontos) {
-        toast.error('Saldo insuficiente');
+        mostrarSnackbar('Saldo insuficiente', 'error');
         return;
       }
 
       // Validar se pode resgatar (apenas admin ou cliente pode resgatar para si mesmo)
       if (!isAdmin) {
-        toast.error('Apenas administradores podem realizar resgates');
+        mostrarSnackbar('Apenas administradores podem realizar resgates', 'error');
         return;
       }
 
@@ -685,7 +693,7 @@ function Fidelidade() {
         }
       });
 
-      toast.success(`Recompensa "${recompensa.nome}" resgatada!`);
+      mostrarSnackbar(`Recompensa "${recompensa.nome}" resgatada!`);
       setOpenRecompensaDialog(false);
       
       // Recarregar dados
@@ -693,7 +701,7 @@ function Fidelidade() {
       
     } catch (error) {
       console.error('Erro ao resgatar recompensa:', error);
-      toast.error('Erro ao resgatar recompensa');
+      mostrarSnackbar('Erro ao resgatar recompensa', 'error');
       
       await auditoriaService.registrarErro(error, { 
         acao: 'resgatar_recompensa',
@@ -706,7 +714,7 @@ function Fidelidade() {
   const handleConfigChange = async () => {
     try {
       if (!isAdmin) {
-        toast.error('Apenas administradores podem alterar configurações');
+        mostrarSnackbar('Apenas administradores podem alterar configurações', 'error');
         return;
       }
 
@@ -726,10 +734,10 @@ function Fidelidade() {
         'Atualização das configurações de fidelidade'
       );
 
-      toast.success('Configurações salvas!');
+      mostrarSnackbar('Configurações salvas!');
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
-      toast.error('Erro ao salvar configurações');
+      mostrarSnackbar('Erro ao salvar configurações', 'error');
       
       await auditoriaService.registrarErro(error, { 
         acao: 'salvar_config_fidelidade',
@@ -827,7 +835,7 @@ function Fidelidade() {
           <Zoom in={true}>
             <Fab
               size={isMobile ? "medium" : "large"}
-              onClick={() => handleConfigChange()}
+              onClick={handleConfigChange}
               sx={{ 
                 bgcolor: '#9c27b0',
                 '&:hover': { bgcolor: '#7b1fa2' },
@@ -1005,7 +1013,7 @@ function Fidelidade() {
                 isAdmin={isAdmin}
                 onResgatar={() => {
                   if (!selectedCliente) {
-                    toast.error('Selecione um cliente primeiro');
+                    mostrarSnackbar('Selecione um cliente primeiro', 'warning');
                     return;
                   }
                   handleResgatarRecompensa(recompensa);
