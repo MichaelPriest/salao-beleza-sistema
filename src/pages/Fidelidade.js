@@ -63,6 +63,7 @@ import { toast } from 'react-hot-toast';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
+import { auditoriaService } from '../services/auditoriaService';
 
 // Configuração dos níveis de fidelidade
 const niveis = {
@@ -105,34 +106,6 @@ const recompensasPadrao = [
   { id: 'produto_brinde', nome: 'Produto Brinde', pontos: 400, tipo: 'produto', valor: 0 },
   { id: 'cortesia_aniversario', nome: 'Cortesia de Aniversário', pontos: 0, tipo: 'especial', valor: 0 },
 ];
-
-// Regras de segurança para o Firebase (adicione no Firebase Console)
-/*
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Regras para fidelidade
-    match /pontuacao/{document} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.usuarioId || 
-         request.auth.token.isAdmin == true);
-    }
-    
-    match /resgates_fidelidade/{document} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.usuarioId || 
-         request.auth.token.isAdmin == true);
-    }
-    
-    match /config_fidelidade/{document} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.isAdmin == true;
-    }
-  }
-}
-*/
 
 function Fidelidade() {
   const [loading, setLoading] = useState(true);
@@ -206,8 +179,8 @@ function Fidelidade() {
         else if (saldo >= 500) nivel = 'prata';
         
         const proximoNivel = nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina';
-        const pontosFaltantes = Math.max(0, niveis[proximoNivel].minimo - saldo);
-        const progresso = Math.min((saldo / niveis[proximoNivel].minimo) * 100, 100);
+        const pontosFaltantes = Math.max(0, niveis[proximoNivel]?.minimo - saldo);
+        const progresso = Math.min((saldo / (niveis[proximoNivel]?.minimo || 1)) * 100, 100);
         
         // Histórico do cliente
         const historicoCliente = [
@@ -249,6 +222,12 @@ function Fidelidade() {
       if (!error.message.includes('permissions')) {
         toast.error('Erro ao carregar dados de fidelidade');
       }
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_fidelidade',
+        detalhes: 'Erro ao carregar dados de fidelidade'
+      });
     } finally {
       setLoading(false);
     }
@@ -281,6 +260,23 @@ function Fidelidade() {
       };
 
       await firebaseService.add('pontuacao', novaPontuacao);
+
+      // Registrar na auditoria
+      await auditoriaService.registrar(
+        pontosForm.tipo === 'credito' ? 'credito_pontos' : 'debito_pontos',
+        {
+          entidade: 'pontuacao',
+          entidadeId: selectedCliente.id,
+          detalhes: `${pontosForm.tipo === 'credito' ? 'Adição' : 'Remoção'} de ${pontosForm.quantidade} pontos para ${selectedCliente.nome}`,
+          dados: {
+            clienteId: selectedCliente.id,
+            clienteNome: selectedCliente.nome,
+            quantidade: parseInt(pontosForm.quantidade),
+            motivo: pontosForm.motivo,
+            tipo: pontosForm.tipo
+          }
+        }
+      );
       
       toast.success(
         pontosForm.tipo === 'credito' 
@@ -299,6 +295,13 @@ function Fidelidade() {
     } catch (error) {
       console.error('Erro ao adicionar pontos:', error);
       toast.error('Erro ao processar pontos');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'gerenciar_pontos',
+        clienteId: selectedCliente?.id,
+        dados: pontosForm
+      });
     }
   };
 
@@ -341,6 +344,19 @@ function Fidelidade() {
       };
       await firebaseService.add('pontuacao', debito);
 
+      // Registrar na auditoria
+      await auditoriaService.registrar('resgate_recompensa', {
+        entidade: 'resgates_fidelidade',
+        detalhes: `Resgate de ${recompensa.nome} por ${selectedCliente.nome}`,
+        dados: {
+          clienteId: selectedCliente.id,
+          clienteNome: selectedCliente.nome,
+          recompensaId: recompensa.id,
+          recompensaNome: recompensa.nome,
+          pontosGastos: recompensa.pontos
+        }
+      });
+
       toast.success(`Recompensa "${recompensa.nome}" resgatada!`);
       setOpenRecompensaDialog(false);
       
@@ -352,6 +368,13 @@ function Fidelidade() {
     } catch (error) {
       console.error('Erro ao resgatar recompensa:', error);
       toast.error('Erro ao resgatar recompensa');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'resgatar_recompensa',
+        clienteId: selectedCliente?.id,
+        recompensaId: recompensa?.id
+      });
     }
   };
 
@@ -362,15 +385,33 @@ function Fidelidade() {
         return;
       }
 
+      const configAntiga = configuracoes && configuracoes.length > 0 ? configuracoes[0] : {};
+
       if (configuracoes && configuracoes.length > 0) {
         await firebaseService.update('config_fidelidade', configuracoes[0].id, config);
       } else {
         await firebaseService.add('config_fidelidade', config);
       }
+
+      // Registrar na auditoria
+      await auditoriaService.registrarAtualizacao(
+        'config_fidelidade',
+        configuracoes?.[0]?.id || 'nova',
+        configAntiga,
+        config,
+        'Atualização das configurações de fidelidade'
+      );
+
       toast.success('Configurações salvas!');
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
       toast.error('Erro ao salvar configurações');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'salvar_config_fidelidade',
+        dados: config
+      });
     }
   };
 
@@ -525,7 +566,7 @@ function Fidelidade() {
                     <TableRow key={cliente.id} hover>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Avatar src={cliente.foto} sx={{ bgcolor: niveis[cliente.nivel].cor }}>
+                          <Avatar src={cliente.foto} sx={{ bgcolor: niveis[cliente.nivel]?.cor || '#9c27b0' }}>
                             {cliente.nome?.charAt(0)}
                           </Avatar>
                           <Box>
@@ -539,10 +580,10 @@ function Fidelidade() {
                       
                       <TableCell>
                         <Chip
-                          label={cliente.nivel.toUpperCase()}
+                          label={cliente.nivel?.toUpperCase()}
                           sx={{
-                            bgcolor: `${niveis[cliente.nivel].cor}20`,
-                            color: niveis[cliente.nivel].cor,
+                            bgcolor: niveis[cliente.nivel] ? `${niveis[cliente.nivel].cor}20` : '#f5f5f5',
+                            color: niveis[cliente.nivel]?.cor || '#9c27b0',
                             fontWeight: 600,
                           }}
                         />
@@ -561,18 +602,18 @@ function Fidelidade() {
                               Próximo: {cliente.proximoNivel}
                             </Typography>
                             <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                              {cliente.progresso.toFixed(0)}%
+                              {cliente.progresso?.toFixed(0) || 0}%
                             </Typography>
                           </Box>
                           <LinearProgress
                             variant="determinate"
-                            value={cliente.progresso}
+                            value={cliente.progresso || 0}
                             sx={{
                               height: 8,
                               borderRadius: 4,
                               bgcolor: '#e0e0e0',
                               '& .MuiLinearProgress-bar': {
-                                bgcolor: niveis[cliente.proximoNivel].cor,
+                                bgcolor: niveis[cliente.proximoNivel]?.cor || '#9c27b0',
                               },
                             }}
                           />
