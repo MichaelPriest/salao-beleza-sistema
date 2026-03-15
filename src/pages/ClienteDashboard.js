@@ -86,16 +86,25 @@ function ClienteDashboard() {
       setLoading(true);
       setError(null);
 
+      // 🔥 IMPORTANTE: Usar o UID do Firebase para filtrar
+      const uid = firebaseUser?.uid;
+      
       console.log('🔍 DEBUG - Cliente logado:', cliente);
-      console.log('🔍 DEBUG - ID do cliente:', cliente.id);
-      console.log('🔍 DEBUG - Firebase Auth UID:', firebaseUser?.uid);
+      console.log('🔍 DEBUG - ID do documento cliente:', cliente.id);
+      console.log('🔍 DEBUG - Firebase Auth UID:', uid);
 
-      // 🔥 CARREGAR AGENDAMENTOS DO CLIENTE
+      if (!uid) {
+        console.error('❌ UID do Firebase não encontrado');
+        setError('Erro de autenticação. Faça login novamente.');
+        return;
+      }
+
+      // 🔥 CARREGAR AGENDAMENTOS DO CLIENTE - USAR UID
       try {
-        console.log('📌 Buscando agendamentos para clienteId:', cliente.id);
+        console.log('📌 Buscando agendamentos para Firebase UID:', uid);
         
         const agendamentosData = await firebaseService.query('agendamentos', [
-          { field: 'clienteId', operator: '==', value: cliente.id }
+          { field: 'clienteId', operator: '==', value: uid } // Usar UID
         ], 'data', 'desc');
         
         console.log('✅ Agendamentos encontrados:', agendamentosData?.length || 0);
@@ -104,10 +113,10 @@ function ClienteDashboard() {
         console.error('❌ Erro ao carregar agendamentos:', err);
       }
 
-      // 🔥 CARREGAR PONTUAÇÕES
+      // 🔥 CARREGAR PONTUAÇÕES - USAR UID
       try {
         const pontuacoesData = await firebaseService.query('pontuacao', [
-          { field: 'clienteId', operator: '==', value: cliente.id }
+          { field: 'clienteId', operator: '==', value: uid } // Usar UID
         ], 'data', 'desc');
         
         setPontuacoes(pontuacoesData || []);
@@ -135,10 +144,10 @@ function ClienteDashboard() {
         console.error('Erro ao carregar recompensas:', err);
       }
 
-      // 🔥 CARREGAR ATENDIMENTOS
+      // 🔥 CARREGAR ATENDIMENTOS - USAR UID
       try {
         const atendimentosData = await firebaseService.query('atendimentos', [
-          { field: 'clienteId', operator: '==', value: cliente.id }
+          { field: 'clienteId', operator: '==', value: uid } // Usar UID
         ], 'data', 'desc');
         
         setHistoricoAtendimentos(atendimentosData?.slice(0, 5) || []);
