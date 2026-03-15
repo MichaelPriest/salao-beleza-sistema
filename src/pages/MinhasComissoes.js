@@ -1,5 +1,5 @@
 // src/pages/MinhasComissoes.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Card,
@@ -7,12 +7,6 @@ import {
   Typography,
   Grid,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   LinearProgress,
   Avatar,
@@ -44,9 +38,23 @@ import {
   FormControlLabel,
   FormLabel,
   Checkbox,
+  useMediaQuery,
+  useTheme,
+  BottomNavigation,
+  BottomNavigationAction,
+  SwipeableDrawer,
+  Zoom,
+  Fab,
+  Skeleton,
+  Collapse,
+  Pagination,
+  Stack,
 } from '@mui/material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
+import { format, isValid, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Importações para PDF e Excel
 import jsPDF from 'jspdf';
@@ -79,6 +87,205 @@ import PeopleIcon from '@mui/icons-material/People';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ShareIcon from '@mui/icons-material/Share';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+
+// Função utilitária para formatar data com segurança
+const formatDate = (date, formatString = 'dd/MM/yyyy') => {
+  if (!date) return '—';
+  
+  try {
+    const dateObj = date?.toDate ? date.toDate() : new Date(date);
+    if (!isValid(dateObj)) return '—';
+    return format(dateObj, formatString, { locale: ptBR });
+  } catch (error) {
+    console.warn('Erro ao formatar data:', error);
+    return '—';
+  }
+};
+
+// Componente de Card de Comissão Mobile
+const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -100 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+    >
+      <Card 
+        sx={{ 
+          mb: 1.5, 
+          borderRadius: 2,
+          border: '1px solid',
+          borderColor: 'divider',
+          cursor: 'pointer',
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar 
+              sx={{ 
+                bgcolor: comissao.status === 'pago' ? '#4caf50' : 
+                         comissao.status === 'cancelado' ? '#f44336' : '#ff9800',
+                width: 48,
+                height: 48,
+              }}
+            >
+              {comissao.status === 'pago' ? <CheckCircleIcon /> : 
+               comissao.status === 'cancelado' ? <WarningIcon /> : <PendingIcon />}
+            </Avatar>
+            
+            <Box sx={{ flex: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {comissao.servicoNome || 'Serviço'}
+                </Typography>
+                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {isAdmin && comissao.profissionalNome && (
+                  <Chip
+                    size="small"
+                    icon={<PersonIcon sx={{ fontSize: 12 }} />}
+                    label={comissao.profissionalNome}
+                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  />
+                )}
+                
+                <Chip
+                  size="small"
+                  label={`${comissao.percentual}%`}
+                  sx={{ height: 20, fontSize: '0.65rem', bgcolor: '#f3e5f5' }}
+                />
+                
+                <Chip
+                  size="small"
+                  label={comissao.status}
+                  color={comissao.status === 'pago' ? 'success' : 
+                         comissao.status === 'cancelado' ? 'error' : 'warning'}
+                  sx={{ height: 20, fontSize: '0.65rem' }}
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {formatDate(comissao.dataRegistro || comissao.createdAt || comissao.data)}
+                </Typography>
+                <Typography variant="subtitle2" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                  {formatarMoeda(comissao.valor)}
+                </Typography>
+              </Box>
+
+              <Collapse in={expanded}>
+                <Box sx={{ 
+                  mt: 2, 
+                  pt: 2, 
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  display: 'flex',
+                  gap: 1,
+                  justifyContent: 'flex-end'
+                }} onClick={(e) => e.stopPropagation()}>
+                  <Tooltip title="Ver Detalhes">
+                    <IconButton
+                      size="small"
+                      onClick={() => onDetalhes(comissao)}
+                      sx={{ color: '#9c27b0' }}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Collapse>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
+// Componente de Card de Atendimento Mobile
+const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -100 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+    >
+      <Card 
+        sx={{ 
+          mb: 1.5, 
+          borderRadius: 2,
+          border: '1px solid',
+          borderColor: 'divider',
+          cursor: 'pointer',
+        }}
+        onClick={() => onDetalhes(atendimento)}
+      >
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar 
+              src={atendimento.cliente?.foto}
+              sx={{ 
+                bgcolor: '#9c27b0',
+                width: 48,
+                height: 48,
+              }}
+            >
+              {!atendimento.cliente?.foto && (atendimento.cliente?.nome?.charAt(0) || 'C')}
+            </Avatar>
+            
+            <Box sx={{ flex: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {atendimento.cliente?.nome || 'Cliente'}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
+                  color={atendimento.comissaoPaga ? 'success' : 'warning'}
+                  sx={{ height: 20, fontSize: '0.65rem' }}
+                />
+              </Box>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <EventIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDate(atendimento.data)} {atendimento.horaInicio}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {atendimento.servicos?.map(s => s.nome).join(', ')?.substring(0, 30)}
+                  {(atendimento.servicos?.map(s => s.nome).join(', ')?.length || 0) > 30 ? '...' : ''}
+                </Typography>
+                <Typography variant="subtitle2" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                  {formatarMoeda(atendimento.comissaoTotal)}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
 
 // Componente para impressão
 const RelatorioComissoes = React.forwardRef(({ 
@@ -96,31 +303,16 @@ const RelatorioComissoes = React.forwardRef(({
     }).format(valor || 0);
   };
 
-  const formatarData = (data) => {
-    if (!data) return '';
-    return new Date(data).toLocaleDateString('pt-BR');
-  };
-
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Cabeçalho com Logo */}
+      {/* Cabeçalho */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        {configuracoes?.salao?.logo ? (
-          <Box sx={{ mb: 2 }}>
-            <img 
-              src={configuracoes.salao.logo} 
-              alt={configuracoes.salao.nomeFantasia || 'Logo do Salão'}
-              style={{ maxHeight: '80px', maxWidth: '200px', objectFit: 'contain' }}
-            />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
-            <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-            <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
-              {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
-            </Typography>
-          </Box>
-        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
+          <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+          <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+            {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
+          </Typography>
+        </Box>
         
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
           Relatório de Comissões
@@ -137,36 +329,7 @@ const RelatorioComissoes = React.forwardRef(({
         <Typography variant="subtitle2" color="textSecondary">
           Emitido em: {new Date().toLocaleString('pt-BR')}
         </Typography>
-        
-        {configuracoes?.salao?.cnpj && (
-          <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-            CNPJ: {configuracoes.salao.cnpj}
-          </Typography>
-        )}
       </Box>
-
-      {/* Informações do Profissional (quando selecionado) */}
-      {profissional?.id && profissional.id !== 'todos' && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-            Informações do Profissional
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-                <Typography variant="body2" color="textSecondary">Nome</Typography>
-                <Typography variant="body1">{profissional.nome}</Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={6}>
-              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-                <Typography variant="body2" color="textSecondary">Período</Typography>
-                <Typography variant="body1">{periodo}</Typography>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Box>
-      )}
 
       {/* Resumo */}
       <Box sx={{ mb: 4 }}>
@@ -201,7 +364,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Grid>
       </Box>
 
-      {/* Estatísticas Adicionais */}
+      {/* Estatísticas */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
           Estatísticas
@@ -209,7 +372,7 @@ const RelatorioComissoes = React.forwardRef(({
         <Grid container spacing={2}>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Total de Comissões</Typography>
+              <Typography variant="body2" color="textSecondary">Total</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 {dados.resumo.quantidade}
               </Typography>
@@ -217,7 +380,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Comissões Pagas</Typography>
+              <Typography variant="body2" color="textSecondary">Pagas</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
                 {dados.resumo.quantidadePaga}
               </Typography>
@@ -225,7 +388,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Comissões Pendentes</Typography>
+              <Typography variant="body2" color="textSecondary">Pendentes</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
                 {dados.resumo.quantidadePendente}
               </Typography>
@@ -233,7 +396,7 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
           <Grid item xs={3}>
             <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Total de Atendimentos</Typography>
+              <Typography variant="body2" color="textSecondary">Atendimentos</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 {dados.atendimentos.length}
               </Typography>
@@ -241,123 +404,6 @@ const RelatorioComissoes = React.forwardRef(({
           </Grid>
         </Grid>
       </Box>
-
-      {/* Atendimentos */}
-      {tipo !== 'apenas_comissoes' && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-            Atendimentos no Período
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Cliente</strong></TableCell>
-                  <TableCell><strong>Serviços</strong></TableCell>
-                  <TableCell align="right"><strong>Valor</strong></TableCell>
-                  <TableCell align="right"><strong>Comissão</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dados.atendimentos.map((atendimento, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{formatarData(atendimento.data)}</TableCell>
-                    <TableCell>{atendimento.cliente?.nome || '—'}</TableCell>
-                    <TableCell>
-                      {atendimento.servicos?.map(s => s.nome).join(', ')}
-                    </TableCell>
-                    <TableCell align="right">{formatarMoeda(atendimento.valorTotal)}</TableCell>
-                    <TableCell align="right">
-                      <strong>{formatarMoeda(atendimento.comissaoTotal)}</strong>
-                    </TableCell>
-                    <TableCell>
-                      {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
-
-      {/* Comissões Detalhadas */}
-      {tipo !== 'apenas_atendimentos' && (
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-            Detalhamento das Comissões
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Serviço</strong></TableCell>
-                  <TableCell align="right"><strong>%</strong></TableCell>
-                  <TableCell align="right"><strong>Valor Base</strong></TableCell>
-                  <TableCell align="right"><strong>Comissão</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
-                  <TableCell><strong>Pagamento</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dados.comissoes.map((comissao, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{formatarData(comissao.data)}</TableCell>
-                    <TableCell>{comissao.servicoNome}</TableCell>
-                    <TableCell align="right">{comissao.percentual}%</TableCell>
-                    <TableCell align="right">{formatarMoeda(comissao.valorAtendimento)}</TableCell>
-                    <TableCell align="right">
-                      <strong>{formatarMoeda(comissao.valor)}</strong>
-                    </TableCell>
-                    <TableCell>
-                      {comissao.status}
-                    </TableCell>
-                    <TableCell>
-                      {comissao.dataPagamento ? formatarData(comissao.dataPagamento) : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
-
-      {/* Resumo por Serviço */}
-      {tipo !== 'apenas_atendimentos' && dados.resumo?.porServico && dados.resumo.porServico.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-            Resumo por Serviço
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Serviço</strong></TableCell>
-                  <TableCell align="right"><strong>Quantidade</strong></TableCell>
-                  <TableCell align="right"><strong>Total</strong></TableCell>
-                  <TableCell align="right"><strong>% do Total</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dados.resumo.porServico.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.nome}</TableCell>
-                    <TableCell align="right">{item.quantidade}</TableCell>
-                    <TableCell align="right">{formatarMoeda(item.valor)}</TableCell>
-                    <TableCell align="right">
-                      {((item.valor / dados.resumo.totalPeriodo) * 100).toFixed(1)}%
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
 
       {/* Rodapé */}
       <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
@@ -368,18 +414,15 @@ const RelatorioComissoes = React.forwardRef(({
           Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
           Período: {periodo}
         </Typography>
-        {configuracoes?.salao?.contato && (
-          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-            {configuracoes.salao.contato.telefone && `Tel: ${configuracoes.salao.contato.telefone} • `}
-            {configuracoes.salao.contato.email && `Email: ${configuracoes.salao.contato.email}`}
-          </Typography>
-        )}
       </Box>
     </Box>
   );
 });
 
 function MinhasComissoes() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const [loading, setLoading] = useState(true);
   const [comissoes, setComissoes] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
@@ -401,12 +444,13 @@ function MinhasComissoes() {
   
   // Paginação
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(isMobile ? 5 : 10);
   
   // Dialogs
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [exportOptions, setExportOptions] = useState({
     tipo: 'completo',
     incluirResumo: true,
@@ -415,74 +459,10 @@ function MinhasComissoes() {
     incluirServicos: true,
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [bottomNavValue, setBottomNavValue] = useState(0);
 
   // Refs para impressão
   const relatorioRef = useRef(null);
-  
-  // Função manual de impressão
-  const handlePrint = () => {
-    try {
-      mostrarSnackbar('Preparando impressão...', 'info');
-      
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
-        return;
-      }
-      
-      const content = relatorioRef.current;
-      if (!content) {
-        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
-        return;
-      }
-      
-      // Clonar o conteúdo para não afetar o original
-      const contentClone = content.cloneNode(true);
-      
-      // Criar o HTML para impressão
-      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-      let stylesHTML = '';
-      styles.forEach(style => {
-        if (style.tagName === 'STYLE') {
-          stylesHTML += style.outerHTML;
-        } else if (style.tagName === 'LINK') {
-          stylesHTML += style.outerHTML;
-        }
-      });
-      
-      const printHTML = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Relatório de Comissões</title>
-            ${stylesHTML}
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              @media print {
-                body { margin: 0; padding: 20px; }
-              }
-            </style>
-          </head>
-          <body>
-            ${contentClone.outerHTML}
-          </body>
-        </html>
-      `;
-      
-      printWindow.document.write(printHTML);
-      printWindow.document.close();
-      
-      // Aguardar carregamento e imprimir
-      setTimeout(() => {
-        printWindow.print();
-        mostrarSnackbar('Impressão concluída!', 'success');
-      }, 500);
-      
-    } catch (error) {
-      console.error('Erro na impressão:', error);
-      mostrarSnackbar('Erro ao imprimir', 'error');
-    }
-  };
 
   const meses = [
     { value: 1, label: 'Janeiro' },
@@ -512,7 +492,6 @@ function MinhasComissoes() {
     }
   }, [profissional, filtroMes, filtroAno, filtroStatus, filtroProfissional]);
 
-  // Recalcular resumo quando comissões mudarem
   useEffect(() => {
     if (comissoes.length > 0) {
       calcularResumo();
@@ -520,19 +499,26 @@ function MinhasComissoes() {
     }
   }, [comissoes]);
 
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
       
-      // Buscar configurações do salão
+      console.log('🔄 Carregando dados de comissões...');
+
       const configuracoesData = await firebaseService.getAll('configuracoes');
       const configuracoesArray = Array.isArray(configuracoesData) ? configuracoesData : [];
       if (configuracoesArray.length > 0) {
         setConfiguracoes(configuracoesArray[0]);
-        console.log('Configurações carregadas:', configuracoesArray[0]);
       }
       
-      // Buscar dados do usuário atual do localStorage
       let usuarioLogado = null;
       let profissionalId = null;
       let profissionalNome = '';
@@ -542,17 +528,12 @@ function MinhasComissoes() {
         const usuarioStr = localStorage.getItem('usuario');
         if (usuarioStr) {
           usuarioLogado = JSON.parse(usuarioStr);
-          console.log('Usuário logado:', usuarioLogado);
-          
-          // Verificar se é admin pelo cargo
           usuarioTipo = usuarioLogado?.cargo || 'profissional';
           
-          // Se for admin, pode ter profissionalId ou não
           if (usuarioTipo === 'admin') {
             profissionalId = usuarioLogado?.profissionalId || null;
             profissionalNome = usuarioLogado?.nome || 'Administrador';
           } else {
-            // Se for profissional, usa o profissionalId
             profissionalId = usuarioLogado?.profissionalId;
             profissionalNome = usuarioLogado?.nome;
           }
@@ -561,19 +542,14 @@ function MinhasComissoes() {
         console.warn('Erro ao parsear usuário:', e);
       }
 
-      // Verificar se é admin
       const isAdminUser = usuarioTipo === 'admin';
       setIsAdmin(isAdminUser);
 
-      // Carregar todos os profissionais
       const profissionaisData = await firebaseService.getAll('profissionais');
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
-      console.log('Profissionais carregados:', profissionaisArray);
       setProfissionais(profissionaisArray);
 
-      // Se não for admin e não tiver profissionalId, usar um padrão
       if (!isAdminUser && !profissionalId) {
-        // Buscar o primeiro profissional da lista como fallback
         if (profissionaisArray.length > 0) {
           profissionalId = profissionaisArray[0].id;
           profissionalNome = profissionaisArray[0].nome;
@@ -586,25 +562,32 @@ function MinhasComissoes() {
         tipo: usuarioTipo
       });
 
-      console.log('Profissional configurado:', { id: profissionalId, nome: profissionalNome, tipo: usuarioTipo });
-
-      // Carregar clientes
       const clientesData = await firebaseService.getAll('clientes');
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
-      console.log('Clientes carregados:', clientesArray);
       setClientes(clientesArray);
 
-      // Carregar comissões
       await carregarComissoes(isAdminUser ? null : profissionalId);
-      
-      // Carregar atendimentos
       await carregarAtendimentos(isAdminUser ? null : profissionalId);
 
-      console.log('✅ Dados carregados do Firebase');
+      // Registrar acesso na auditoria
+      await auditoriaService.registrar('acesso_minhas_comissoes', {
+        entidade: 'comissoes',
+        detalhes: `Acesso à página de comissões - ${isAdminUser ? 'Admin' : 'Profissional'}`,
+        dados: {
+          profissionalId: profissionalId,
+          isAdmin: isAdminUser
+        }
+      });
+
+      console.log('✅ Dados carregados com sucesso');
 
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('❌ Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_minhas_comissoes'
+      });
     } finally {
       setLoading(false);
     }
@@ -613,35 +596,23 @@ function MinhasComissoes() {
   const carregarComissoes = async (profissionalId) => {
     try {
       const comissoesData = await firebaseService.getAll('comissoes');
-      
-      // Garantir que é array
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       
-      console.log('Todas as comissões:', comissoesArray);
-      
-      // Filtrar comissões
       let comissoesFiltradas = comissoesArray;
       
-      // Se não for admin, filtrar por profissional
       if (profissionalId) {
         comissoesFiltradas = comissoesArray.filter(c => 
           c && c.profissionalId === profissionalId
         );
-      } 
-      // Se for admin e tiver filtro de profissional selecionado
-      else if (isAdmin && filtroProfissional !== 'todos') {
+      } else if (isAdmin && filtroProfissional !== 'todos') {
         comissoesFiltradas = comissoesArray.filter(c => 
           c && c.profissionalId === filtroProfissional
         );
       }
 
-      console.log('Comissões filtradas:', comissoesFiltradas);
-
-      // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         comissoesFiltradas = comissoesFiltradas.filter(c => {
           if (!c) return false;
-          // Usar a data da comissão (pode ser dataRegistro, createdAt ou data)
           const dataStr = c.dataRegistro || c.createdAt || c.data;
           if (!dataStr) return false;
           const data = new Date(dataStr);
@@ -649,24 +620,21 @@ function MinhasComissoes() {
         });
       }
 
-      // Filtrar por status
       if (filtroStatus !== 'todos') {
         comissoesFiltradas = comissoesFiltradas.filter(c => c && c.status === filtroStatus);
       }
 
-      // Ordenar por data (mais recentes primeiro)
       comissoesFiltradas.sort((a, b) => {
         const dataA = new Date(a?.dataRegistro || a?.createdAt || a?.data || 0);
         const dataB = new Date(b?.dataRegistro || b?.createdAt || b?.data || 0);
         return dataB - dataA;
       });
 
-      // Formatar dados
       comissoesFiltradas = comissoesFiltradas.map(c => ({
         ...c,
         id: c.id,
         data: c.dataRegistro || c.createdAt || c.data,
-        dataFormatada: formatarData(c.dataRegistro || c.createdAt || c.data),
+        dataFormatada: formatDate(c.dataRegistro || c.createdAt || c.data),
         valor: Number(c.valor) || 0,
         valorAtendimento: Number(c.valorAtendimento) || 0,
         percentual: Number(c.percentual) || 0,
@@ -674,7 +642,6 @@ function MinhasComissoes() {
         status: c.status || 'pendente'
       }));
 
-      console.log('Comissões processadas:', comissoesFiltradas);
       setComissoes(comissoesFiltradas);
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
@@ -685,19 +652,12 @@ function MinhasComissoes() {
   const carregarAtendimentos = async (profissionalId) => {
     try {
       const atendimentosData = await firebaseService.getAll('atendimentos');
-      
-      // Garantir que é array
       const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
       
-      console.log('Todos os atendimentos:', atendimentosArray);
-      
-      // Filtrar atendimentos finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => a && a.status === 'finalizado');
       
-      // Se não for admin, filtrar por profissional
       if (profissionalId) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          // Verificar se o profissional participou do atendimento
           const temProfissional = a.itensServico?.some(
             item => item && item.profissionalId === profissionalId
           ) || a.servicos?.some(
@@ -705,9 +665,7 @@ function MinhasComissoes() {
           );
           return temProfissional;
         });
-      } 
-      // Se for admin e tiver filtro de profissional selecionado
-      else if (isAdmin && filtroProfissional !== 'todos') {
+      } else if (isAdmin && filtroProfissional !== 'todos') {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
           const temProfissional = a.itensServico?.some(
             item => item && item.profissionalId === filtroProfissional
@@ -718,9 +676,6 @@ function MinhasComissoes() {
         });
       }
 
-      console.log('Atendimentos filtrados:', atendimentosFiltrados);
-
-      // Filtrar por mês/ano
       if (filtroMes && filtroAno) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
           if (!a || !a.data) return false;
@@ -729,25 +684,17 @@ function MinhasComissoes() {
         });
       }
 
-      // Enriquecer atendimentos com dados do cliente e comissões
       const atendimentosProcessados = atendimentosFiltrados.map(atendimento => {
-        // Buscar cliente
         const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
-        
-        // Buscar todas as comissões deste atendimento
         const comissoesDoAtendimento = comissoes.filter(c => 
           c && c.atendimentoId === atendimento.id
         );
         
-        // Se for profissional específico, filtrar as comissões dele
         const comissoesDoProfissional = profissionalId 
           ? comissoesDoAtendimento.filter(c => c.profissionalId === profissionalId)
           : comissoesDoAtendimento;
         
-        // Calcular comissão total
         const comissaoTotal = comissoesDoProfissional.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-        
-        // Verificar se todas as comissões estão pagas
         const todasPagas = comissoesDoProfissional.length > 0 && 
                           comissoesDoProfissional.every(c => c.status === 'pago');
         
@@ -761,10 +708,7 @@ function MinhasComissoes() {
         };
       });
 
-      // Ordenar por data (mais recentes primeiro)
       atendimentosProcessados.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-      console.log('Atendimentos processados:', atendimentosProcessados);
       setAtendimentos(atendimentosProcessados);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
@@ -774,7 +718,6 @@ function MinhasComissoes() {
 
   const calcularResumo = () => {
     try {
-      // Calcular totais do período
       const totalPeriodo = comissoes
         .filter(c => c && c.status !== 'cancelado')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
@@ -791,7 +734,6 @@ function MinhasComissoes() {
         .filter(c => c && c.status === 'cancelado')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
 
-      // Agrupar por serviço
       const porServico = {};
       comissoes.forEach(c => {
         if (c && c.status !== 'cancelado' && c.servicoNome) {
@@ -823,12 +765,6 @@ function MinhasComissoes() {
         quantidadeCancelada: comissoes.filter(c => c && c.status === 'cancelado').length,
       });
 
-      console.log('Resumo calculado:', {
-        totalPeriodo,
-        aReceber,
-        recebido,
-        quantidade: comissoes.length
-      });
     } catch (error) {
       console.error('Erro ao calcular resumo:', error);
     }
@@ -836,13 +772,11 @@ function MinhasComissoes() {
 
   const calcularEstatisticas = () => {
     try {
-      // Calcular média por atendimento
       const comissoesPagas = comissoes.filter(c => c && c.status === 'pago');
       const mediaPorAtendimento = comissoesPagas.length > 0
         ? comissoesPagas.reduce((acc, c) => acc + (Number(c.valor) || 0), 0) / comissoesPagas.length
         : 0;
 
-      // Agrupar por mês
       const porMes = [];
       const mesesDados = {};
 
@@ -882,7 +816,6 @@ function MinhasComissoes() {
     }
   };
 
-  // Função para renderizar chip de status
   const renderStatusChip = (status) => {
     switch(status) {
       case 'pago':
@@ -903,15 +836,6 @@ function MinhasComissoes() {
       }).format(valor || 0);
     } catch {
       return `R$ ${(valor || 0).toFixed(2)}`;
-    }
-  };
-
-  const formatarData = (data) => {
-    if (!data) return '';
-    try {
-      return new Date(data).toLocaleDateString('pt-BR');
-    } catch {
-      return String(data);
     }
   };
 
@@ -945,16 +869,73 @@ function MinhasComissoes() {
     }));
   };
 
-  const handleSnackbarClose = () => {
-    setSnackbar({ ...snackbar, open: false });
+  // Função manual de impressão
+  const handlePrint = () => {
+    try {
+      mostrarSnackbar('Preparando impressão...', 'info');
+      
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
+        return;
+      }
+      
+      const content = relatorioRef.current;
+      if (!content) {
+        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
+        return;
+      }
+      
+      const contentClone = content.cloneNode(true);
+      
+      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+      let stylesHTML = '';
+      styles.forEach(style => {
+        if (style.tagName === 'STYLE') {
+          stylesHTML += style.outerHTML;
+        } else if (style.tagName === 'LINK') {
+          stylesHTML += style.outerHTML;
+        }
+      });
+      
+      const printHTML = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Relatório de Comissões</title>
+            ${stylesHTML}
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              @media print {
+                body { margin: 0; padding: 20px; }
+              }
+            </style>
+          </head>
+          <body>
+            ${contentClone.outerHTML}
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+        printWindow.print();
+        mostrarSnackbar('Impressão concluída!', 'success');
+      }, 500);
+      
+    } catch (error) {
+      console.error('Erro na impressão:', error);
+      mostrarSnackbar('Erro ao imprimir', 'error');
+      
+      auditoriaService.registrarErro(error, { 
+        acao: 'imprimir_relatorio_comissoes'
+      });
+    }
   };
 
-  const mostrarSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  // Função para exportar PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
       
@@ -962,33 +943,26 @@ function MinhasComissoes() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
-      // Título com logo (simulado)
       doc.setFontSize(20);
-      doc.setTextColor(156, 39, 176); // Roxo
+      doc.setTextColor(156, 39, 176);
       doc.text(configuracoes?.salao?.nomeFantasia || 'Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
       
-      // Subtítulo
       doc.setFontSize(16);
       doc.setTextColor(0, 0, 0);
       doc.text('Relatório de Comissões', pageWidth / 2, 30, { align: 'center' });
       
-      // Informações do profissional
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
       const profissionalNome = profissional?.nome || 'Todos os Profissionais';
       doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 40, { align: 'center' });
       
-      // Período
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`;
       doc.setFontSize(10);
       doc.text(`Período: ${periodo}`, pageWidth / 2, 48, { align: 'center' });
-      
-      // Data de emissão
       doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 56, { align: 'center' });
       
       let yPos = 65;
       
-      // Resumo
       if (exportOptions.incluirResumo && resumo) {
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
@@ -1016,9 +990,7 @@ function MinhasComissoes() {
         yPos = doc.lastAutoTable.finalY + 10;
       }
       
-      // Atendimentos
       if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
-        // Verificar se precisa de nova página
         if (yPos > pageHeight - 60) {
           doc.addPage();
           yPos = 20;
@@ -1029,10 +1001,10 @@ function MinhasComissoes() {
         doc.text('Atendimentos no Período', 14, yPos);
         yPos += 8;
         
-        const atendimentosData = atendimentosFiltrados.map(a => [
-          formatarData(a.data),
+        const atendimentosData = atendimentosFiltrados.slice(0, 20).map(a => [
+          formatDate(a.data),
           a.cliente?.nome || '—',
-          a.servicos?.map(s => s.nome).join(', ') || '—',
+          a.servicos?.map(s => s.nome).join(', ')?.substring(0, 30) || '—',
           formatarMoeda(a.valorTotal),
           formatarMoeda(a.comissaoTotal),
           a.comissaoPaga ? 'Pago' : 'Pendente'
@@ -1046,22 +1018,12 @@ function MinhasComissoes() {
           headStyles: { fillColor: [156, 39, 176] },
           margin: { left: 14, right: 14 },
           styles: { fontSize: 8 },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 50 },
-            3: { cellWidth: 25, halign: 'right' },
-            4: { cellWidth: 25, halign: 'right' },
-            5: { cellWidth: 20, halign: 'center' },
-          },
         });
         
         yPos = doc.lastAutoTable.finalY + 10;
       }
       
-      // Comissões
       if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
-        // Verificar se precisa de nova página
         if (yPos > pageHeight - 60) {
           doc.addPage();
           yPos = 20;
@@ -1072,14 +1034,14 @@ function MinhasComissoes() {
         doc.text('Detalhamento das Comissões', 14, yPos);
         yPos += 8;
         
-        const comissoesData = comissoesFiltradas.map(c => [
-          formatarData(c.data),
+        const comissoesData = comissoesFiltradas.slice(0, 20).map(c => [
+          formatDate(c.data),
           c.servicoNome,
           `${c.percentual}%`,
           formatarMoeda(c.valorAtendimento),
           formatarMoeda(c.valor),
           c.status,
-          c.dataPagamento ? formatarData(c.dataPagamento) : '—'
+          c.dataPagamento ? formatDate(c.dataPagamento) : '—'
         ]);
         
         autoTable(doc, {
@@ -1090,73 +1052,42 @@ function MinhasComissoes() {
           headStyles: { fillColor: [156, 39, 176] },
           margin: { left: 14, right: 14 },
           styles: { fontSize: 8 },
-          columnStyles: {
-            0: { cellWidth: 22 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 15, halign: 'right' },
-            3: { cellWidth: 22, halign: 'right' },
-            4: { cellWidth: 22, halign: 'right' },
-            5: { cellWidth: 20, halign: 'center' },
-            6: { cellWidth: 22, halign: 'center' },
-          },
-        });
-        
-        yPos = doc.lastAutoTable.finalY + 10;
-      }
-      
-      // Resumo por Serviço
-      if (exportOptions.incluirServicos && resumo?.porServico && resumo.porServico.length > 0) {
-        // Verificar se precisa de nova página
-        if (yPos > pageHeight - 60) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        doc.setFontSize(14);
-        doc.setTextColor(0, 0, 0);
-        doc.text('Resumo por Serviço', 14, yPos);
-        yPos += 8;
-        
-        const servicosData = resumo.porServico.map(item => [
-          item.nome,
-          item.quantidade.toString(),
-          formatarMoeda(item.valor),
-          `${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`
-        ]);
-        
-        autoTable(doc, {
-          startY: yPos,
-          head: [['Serviço', 'Qtd', 'Total', '%']],
-          body: servicosData,
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176] },
-          margin: { left: 14, right: 14 },
         });
       }
       
-      // Salvar PDF
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.pdf`;
       doc.save(fileName);
+
+      await auditoriaService.registrar('exportar_pdf_comissoes', {
+        entidade: 'comissoes',
+        detalhes: 'Exportação de relatório de comissões em PDF',
+        dados: {
+          periodo,
+          profissional: profissionalNome,
+          totalComissoes: comissoesFiltradas.length
+        }
+      });
       
       mostrarSnackbar('PDF gerado com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'exportar_pdf_comissoes'
+      });
     }
   };
 
-  // Função para exportar Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
       
-      // Criar workbook
       const wb = XLSX.utils.book_new();
-      
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
+      const profissionalNome = profissional?.nome || 'Todos os Profissionais';
       
-      // Aba de Resumo
       if (exportOptions.incluirResumo && resumo) {
         const resumoData = [
           ['Resumo do Período'],
@@ -1178,12 +1109,11 @@ function MinhasComissoes() {
         XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
       }
       
-      // Aba de Atendimentos
       if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
         const atendimentosData = [
           ['Data', 'Hora', 'Cliente', 'Serviços', 'Valor Total', 'Comissão Total', 'Status'],
           ...atendimentosFiltrados.map(a => [
-            formatarData(a.data),
+            formatDate(a.data),
             a.horaInicio || '--:--',
             a.cliente?.nome || '—',
             a.servicos?.map(s => s.nome).join(', ') || '—',
@@ -1197,18 +1127,17 @@ function MinhasComissoes() {
         XLSX.utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
       }
       
-      // Aba de Comissões
       if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
         const comissoesData = [
           ['Data', 'Serviço', 'Percentual', 'Valor Base', 'Comissão', 'Status', 'Data Pagamento'],
           ...comissoesFiltradas.map(c => [
-            formatarData(c.data),
+            formatDate(c.data),
             c.servicoNome,
             c.percentual,
             c.valorAtendimento,
             c.valor,
             c.status,
-            c.dataPagamento ? formatarData(c.dataPagamento) : ''
+            c.dataPagamento ? formatDate(c.dataPagamento) : ''
           ])
         ];
         
@@ -1216,7 +1145,6 @@ function MinhasComissoes() {
         XLSX.utils.book_append_sheet(wb, wsComissoes, 'Comissões');
       }
       
-      // Aba de Resumo por Serviço
       if (exportOptions.incluirServicos && resumo?.porServico && resumo.porServico.length > 0) {
         const servicosData = [
           ['Serviço', 'Quantidade', 'Total', '% do Total'],
@@ -1232,11 +1160,10 @@ function MinhasComissoes() {
         XLSX.utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
       }
       
-      // Informações do relatório
       const infoData = [
         ['Informações do Relatório'],
         [''],
-        ['Profissional', profissional?.nome || 'Todos os Profissionais'],
+        ['Profissional', profissionalNome],
         ['Período', periodo],
         ['Data de Emissão', new Date().toLocaleString('pt-BR')],
         ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
@@ -1245,53 +1172,107 @@ function MinhasComissoes() {
       const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
       XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
       
-      // Salvar arquivo
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.xlsx`;
       XLSX.writeFile(wb, fileName);
+
+      await auditoriaService.registrar('exportar_excel_comissoes', {
+        entidade: 'comissoes',
+        detalhes: 'Exportação de relatório de comissões em Excel',
+        dados: {
+          periodo,
+          profissional: profissionalNome,
+          totalComissoes: comissoesFiltradas.length
+        }
+      });
       
       mostrarSnackbar('Planilha gerada com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar Excel:', error);
       mostrarSnackbar('Erro ao gerar planilha', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'exportar_excel_comissoes'
+      });
     }
   };
 
-  // Filtrar comissões por busca
-  const comissoesFiltradas = comissoes.filter(c => {
-    if (!filtroBusca || !c) return true;
-    
-    const termo = filtroBusca.toLowerCase();
-    return (
-      (c.servicoNome && c.servicoNome.toLowerCase().includes(termo)) ||
-      (c.profissionalNome && c.profissionalNome.toLowerCase().includes(termo)) ||
-      (c.atendimentoId && c.atendimentoId.toLowerCase().includes(termo))
-    );
-  });
+  const comissoesFiltradas = useMemo(() => {
+    return comissoes.filter(c => {
+      if (!filtroBusca || !c) return true;
+      
+      const termo = filtroBusca.toLowerCase();
+      return (
+        (c.servicoNome && c.servicoNome.toLowerCase().includes(termo)) ||
+        (c.profissionalNome && c.profissionalNome.toLowerCase().includes(termo)) ||
+        (c.atendimentoId && c.atendimentoId.toLowerCase().includes(termo))
+      );
+    });
+  }, [comissoes, filtroBusca]);
 
-  // Filtrar atendimentos por busca
-  const atendimentosFiltrados = atendimentos.filter(a => {
-    if (!filtroBusca || !a) return true;
-    
-    const termo = filtroBusca.toLowerCase();
-    return (
-      (a.cliente?.nome && a.cliente.nome.toLowerCase().includes(termo)) ||
-      (a.id && a.id.toLowerCase().includes(termo)) ||
-      (a.servicos && a.servicos.some(s => s && s.nome && s.nome.toLowerCase().includes(termo)))
-    );
-  });
+  const atendimentosFiltrados = useMemo(() => {
+    return atendimentos.filter(a => {
+      if (!filtroBusca || !a) return true;
+      
+      const termo = filtroBusca.toLowerCase();
+      return (
+        (a.cliente?.nome && a.cliente.nome.toLowerCase().includes(termo)) ||
+        (a.id && a.id.toLowerCase().includes(termo)) ||
+        (a.servicos && a.servicos.some(s => s && s.nome && s.nome.toLowerCase().includes(termo)))
+      );
+    });
+  }, [atendimentos, filtroBusca]);
+
+  // Paginação
+  const paginatedComissoes = comissoesFiltradas.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const paginatedAtendimentos = atendimentosFiltrados.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   if (loading) {
     return (
-      <Box sx={{ width: '100%' }}>
-        <LinearProgress />
+      <Box sx={{ p: isMobile ? 2 : 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Skeleton variant="text" width={200} height={40} />
+          <Skeleton variant="circular" width={40} height={40} />
+        </Box>
+        
+        <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: 3 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <Grid item xs={12} sm={6} md={3} key={i}>
+              <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 2 }} />
+            </Grid>
+          ))}
+        </Grid>
+
+        <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 2, mb: 2 }} />
+        
+        <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 2, mb: 2 }} />
+        
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} variant="rectangular" height={isMobile ? 120 : 60} sx={{ borderRadius: 2, mb: 2 }} />
+        ))}
       </Box>
     );
   }
 
   if (!profissional && !isAdmin) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: isMobile ? 2 : 3 }}>
         <Alert severity="warning">
           Você não está vinculado a um perfil de profissional.
           Entre em contato com o administrador.
@@ -1301,64 +1282,70 @@ function MinhasComissoes() {
   }
 
   return (
-    <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+    <Box sx={{ 
+      p: isMobile ? 2 : 3,
+      pb: isMobile ? 10 : 3,
+      minHeight: '100vh',
+      bgcolor: '#f5f5f5'
+    }}>
+      {/* Cabeçalho Mobile */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3
+      }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            {isAdmin ? 'Gerenciar Comissões' : 'Minhas Comissões'}
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            sx={{ 
+              fontWeight: 700, 
+              color: '#9c27b0',
+              fontSize: isMobile ? '1.5rem' : '2.125rem'
+            }}
+          >
+            {isAdmin ? 'Comissões' : 'Minhas Comissões'}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            {isAdmin 
-              ? 'Visualize todas as comissões dos profissionais' 
-              : profissional?.nome ? `Olá, ${profissional.nome}! Acompanhe suas comissões e rendimentos` : 'Carregando...'}
+            {profissional?.nome || 'Carregando...'}
           </Typography>
         </Box>
         
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrint}
-          >
-            Imprimir Relatório
-          </Button>
-          
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
+        <Zoom in={true}>
+          <Fab
+            size="small"
             onClick={handleOpenRelatorio}
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            sx={{ 
+              bgcolor: '#4caf50',
+              '&:hover': { bgcolor: '#388e3c' },
+            }}
           >
-            Exportar
-          </Button>
-        </Box>
+            <PrintIcon />
+          </Fab>
+        </Zoom>
       </Box>
 
-      {/* Cards de Resumo */}
+      {/* Cards de Resumo Mobile */}
       {resumo && (
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
+        <Grid container spacing={1.5} sx={{ mb: 4 }}>
+          <Grid item xs={6} sm={6} md={3}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
               <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
-                      <AttachMoneyIcon />
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar sx={{ bgcolor: '#9c27b0', width: 32, height: 32 }}>
+                      <AttachMoneyIcon sx={{ fontSize: 18 }} />
                     </Avatar>
                     <Box>
-                      <Typography color="textSecondary" variant="caption">
-                        Total do Período
-                      </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                        {formatarMoeda(resumo.totalPeriodo)}
-                      </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        {resumo.quantidade} comissões
+                        Total
+                      </Typography>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#4caf50', fontSize: '0.9rem' }}>
+                        {formatarMoeda(resumo.totalPeriodo)}
                       </Typography>
                     </Box>
                   </Box>
@@ -1367,27 +1354,24 @@ function MinhasComissoes() {
             </motion.div>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={6} sm={6} md={3}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
               <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}>
-                      <PendingIcon />
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar sx={{ bgcolor: '#ff9800', width: 32, height: 32 }}>
+                      <PendingIcon sx={{ fontSize: 18 }} />
                     </Avatar>
                     <Box>
-                      <Typography color="textSecondary" variant="caption">
+                      <Typography variant="caption" color="textSecondary">
                         A Receber
                       </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#ff9800', fontSize: '0.9rem' }}>
                         {formatarMoeda(resumo.aReceber)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {resumo.quantidadePendente} pendentes
                       </Typography>
                     </Box>
                   </Box>
@@ -1396,27 +1380,24 @@ function MinhasComissoes() {
             </motion.div>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={6} sm={6} md={3}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
               <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                      <CheckCircleIcon />
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar sx={{ bgcolor: '#4caf50', width: 32, height: 32 }}>
+                      <CheckCircleIcon sx={{ fontSize: 18 }} />
                     </Avatar>
                     <Box>
-                      <Typography color="textSecondary" variant="caption">
+                      <Typography variant="caption" color="textSecondary">
                         Recebido
                       </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#4caf50', fontSize: '0.9rem' }}>
                         {formatarMoeda(resumo.recebido)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {resumo.quantidadePaga} pagas
                       </Typography>
                     </Box>
                   </Box>
@@ -1425,27 +1406,24 @@ function MinhasComissoes() {
             </motion.div>
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={6} sm={6} md={3}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
               <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: '#2196f3', width: 56, height: 56 }}>
-                      <TimelineIcon />
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar sx={{ bgcolor: '#2196f3', width: 32, height: 32 }}>
+                      <TimelineIcon sx={{ fontSize: 18 }} />
                     </Avatar>
                     <Box>
-                      <Typography color="textSecondary" variant="caption">
-                        Média por Comissão
-                      </Typography>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                        {formatarMoeda(estatisticas?.mediaPorAtendimento || 0)}
-                      </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        {atendimentos.length} atendimentos
+                        Média
+                      </Typography>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2196f3', fontSize: '0.9rem' }}>
+                        {formatarMoeda(estatisticas?.mediaPorAtendimento || 0)}
                       </Typography>
                     </Box>
                   </Box>
@@ -1456,35 +1434,266 @@ function MinhasComissoes() {
         </Grid>
       )}
 
-      {/* Filtros */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={2}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Buscar..."
-                value={filtroBusca}
-                onChange={(e) => setFiltroBusca(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  endAdornment: filtroBusca && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setFiltroBusca('')}>
-                        <ClearIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
+      {/* Barra de Pesquisa e Filtros */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 0.5,
+          mb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Buscar..."
+          value={filtroBusca}
+          onChange={(e) => setFiltroBusca(e.target.value)}
+          variant="standard"
+          InputProps={{
+            disableUnderline: true,
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: 'text.secondary', ml: 1 }} />
+              </InputAdornment>
+            ),
+            endAdornment: filtroBusca && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setFiltroBusca('')}>
+                  <ClearIcon />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ ml: 1 }}
+        />
+        
+        <IconButton 
+          onClick={() => setOpenFilterDrawer(true)}
+          sx={{ 
+            mx: 1,
+            color: filtroMes !== new Date().getMonth() + 1 || 
+                   filtroAno !== new Date().getFullYear() || 
+                   filtroStatus !== 'todos' || 
+                   (isAdmin && filtroProfissional !== 'todos') ? '#9c27b0' : 'text.secondary'
+          }}
+        >
+          <Badge 
+            variant="dot" 
+            color="primary"
+            invisible={filtroMes === new Date().getMonth() + 1 && 
+                       filtroAno === new Date().getFullYear() && 
+                       filtroStatus === 'todos' && 
+                       (!isAdmin || filtroProfissional === 'todos')}
+          >
+            <FilterListIcon />
+          </Badge>
+        </IconButton>
 
-            <Grid item xs={12} md={isAdmin ? 1 : 2}>
+        <IconButton onClick={() => {
+          setFiltroBusca('');
+          setFiltroMes(new Date().getMonth() + 1);
+          setFiltroAno(new Date().getFullYear());
+          setFiltroStatus('todos');
+          if (isAdmin) setFiltroProfissional('todos');
+          carregarDados();
+        }} sx={{ color: 'text.secondary' }}>
+          <RefreshIcon />
+        </IconButton>
+      </Paper>
+
+      {/* Tabs Mobile */}
+      <Paper sx={{ mb: 2, borderRadius: 2 }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          variant="fullWidth"
+          sx={{
+            '& .MuiTab-root': {
+              minHeight: 48,
+              fontSize: isMobile ? '0.7rem' : '0.875rem',
+            }
+          }}
+        >
+          <Tab 
+            icon={<PercentIcon sx={{ fontSize: isMobile ? 18 : 24 }} />} 
+            label="Comissões" 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={
+              <Badge badgeContent={atendimentos.length} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: '0.6rem', height: 16, minWidth: 16 } }}>
+                <EventIcon sx={{ fontSize: isMobile ? 18 : 24 }} />
+              </Badge>
+            } 
+            label="Atendimentos" 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<PieChartIcon sx={{ fontSize: isMobile ? 18 : 24 }} />} 
+            label="Serviços" 
+            iconPosition="start"
+          />
+        </Tabs>
+      </Paper>
+
+      {/* Conteúdo das Tabs */}
+      <AnimatePresence mode="wait">
+        {/* Tab Comissões */}
+        {tabValue === 0 && (
+          <motion.div
+            key="comissoes"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            {paginatedComissoes.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="body1" color="textSecondary">
+                  Nenhuma comissão encontrada
+                </Typography>
+              </Paper>
+            ) : (
+              paginatedComissoes.map((comissao) => (
+                <ComissaoMobileCard
+                  key={comissao.id}
+                  comissao={comissao}
+                  isAdmin={isAdmin}
+                  onDetalhes={(c) => {
+                    // Implementar visualização de detalhes da comissão
+                    mostrarSnackbar('Detalhes da comissão em breve', 'info');
+                  }}
+                />
+              ))
+            )}
+          </motion.div>
+        )}
+
+        {/* Tab Atendimentos */}
+        {tabValue === 1 && (
+          <motion.div
+            key="atendimentos"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            {paginatedAtendimentos.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="body1" color="textSecondary">
+                  Nenhum atendimento encontrado
+                </Typography>
+              </Paper>
+            ) : (
+              paginatedAtendimentos.map((atendimento) => (
+                <AtendimentoMobileCard
+                  key={atendimento.id}
+                  atendimento={atendimento}
+                  onDetalhes={handleOpenDetalhes}
+                />
+              ))
+            )}
+          </motion.div>
+        )}
+
+        {/* Tab Resumo por Serviço */}
+        {tabValue === 2 && resumo?.porServico && (
+          <motion.div
+            key="servicos"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+                  Comissões por Serviço
+                </Typography>
+                
+                {resumo.porServico.map((item, index) => (
+                  <Box key={index} sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2">{item.nome}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                        {formatarMoeda(item.valor)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.quantidade} atendimento(s)
+                      </Typography>
+                      <Chip
+                        label={`${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`}
+                        size="small"
+                        sx={{ height: 20, fontSize: '0.65rem' }}
+                      />
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(item.valor / resumo.totalPeriodo) * 100}
+                      sx={{ mt: 0.5, height: 4, borderRadius: 2 }}
+                    />
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Paginação */}
+      {((tabValue === 0 && comissoesFiltradas.length > rowsPerPage) ||
+        (tabValue === 1 && atendimentosFiltrados.length > rowsPerPage)) && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Stack spacing={2}>
+            <Pagination
+              count={Math.ceil(
+                (tabValue === 0 ? comissoesFiltradas.length : atendimentosFiltrados.length) / rowsPerPage
+              )}
+              page={page + 1}
+              onChange={(e, v) => setPage(v - 1)}
+              color="primary"
+              size={isMobile ? "small" : "large"}
+            />
+          </Stack>
+        </Box>
+      )}
+
+      {/* Drawer de Filtros */}
+      <SwipeableDrawer
+        anchor="bottom"
+        open={openFilterDrawer}
+        onClose={() => setOpenFilterDrawer(false)}
+        onOpen={() => setOpenFilterDrawer(true)}
+        disableSwipeToOpen={false}
+        PaperProps={{
+          sx: {
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxHeight: '80vh',
+          }
+        }}
+      >
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Filtros
+            </Typography>
+            <IconButton onClick={() => setOpenFilterDrawer(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Período
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Mês</InputLabel>
                 <Select
@@ -1500,8 +1709,7 @@ function MinhasComissoes() {
                 </Select>
               </FormControl>
             </Grid>
-
-            <Grid item xs={12} md={isAdmin ? 1 : 2}>
+            <Grid item xs={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Ano</InputLabel>
                 <Select
@@ -1517,512 +1725,254 @@ function MinhasComissoes() {
                 </Select>
               </FormControl>
             </Grid>
-
-            {isAdmin && (
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Profissional</InputLabel>
-                  <Select
-                    value={filtroProfissional}
-                    label="Profissional"
-                    onChange={(e) => setFiltroProfissional(e.target.value)}
-                  >
-                    <MenuItem value="todos">Todos</MenuItem>
-                    {profissionais.map(prof => (
-                      <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            )}
-
-            <Grid item xs={12} md={isAdmin ? 2 : 2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={filtroStatus}
-                  label="Status"
-                  onChange={(e) => setFiltroStatus(e.target.value)}
-                >
-                  <MenuItem value="todos">Todos</MenuItem>
-                  <MenuItem value="pendente">Pendente</MenuItem>
-                  <MenuItem value="pago">Pago</MenuItem>
-                  <MenuItem value="cancelado">Cancelado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={isAdmin ? 2 : 4}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={() => {
-                    setFiltroBusca('');
-                    setFiltroMes(new Date().getMonth() + 1);
-                    setFiltroAno(new Date().getFullYear());
-                    setFiltroStatus('todos');
-                    if (isAdmin) setFiltroProfissional('todos');
-                    carregarDados();
-                  }}
-                >
-                  Limpar
-                </Button>
-                
-                <Button
-                  variant="contained"
-                  startIcon={<PictureAsPdfIcon />}
-                  onClick={handleOpenRelatorio}
-                  color="error"
-                >
-                  PDF
-                </Button>
-                
-                <Button
-                  variant="contained"
-                  startIcon={<TableChartIcon />}
-                  onClick={handleOpenRelatorio}
-                  color="success"
-                >
-                  Excel
-                </Button>
-              </Box>
-            </Grid>
           </Grid>
-        </CardContent>
-      </Card>
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab label="Comissões" icon={<PercentIcon />} iconPosition="start" />
-          <Tab 
-            label={
-              <Badge badgeContent={atendimentos.length} color="primary">
-                Atendimentos
-              </Badge>
-            } 
-            icon={<EventIcon />} 
-            iconPosition="start" 
-          />
-          <Tab label="Resumo por Serviço" icon={<PieChartIcon />} iconPosition="start" />
-        </Tabs>
-      </Box>
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Status
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
+            <Button
+              fullWidth
+              variant={filtroStatus === 'todos' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroStatus('todos')}
+              sx={{ justifyContent: 'flex-start' }}
+            >
+              Todos
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroStatus === 'pendente' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroStatus('pendente')}
+              sx={{ 
+                justifyContent: 'flex-start',
+                color: filtroStatus === 'pendente' ? 'white' : '#ff9800',
+                borderColor: '#ff9800',
+                bgcolor: filtroStatus === 'pendente' ? '#ff9800' : 'transparent',
+              }}
+            >
+              <PendingIcon sx={{ mr: 1, fontSize: 18 }} />
+              Pendente
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroStatus === 'pago' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroStatus('pago')}
+              sx={{ 
+                justifyContent: 'flex-start',
+                color: filtroStatus === 'pago' ? 'white' : '#4caf50',
+                borderColor: '#4caf50',
+                bgcolor: filtroStatus === 'pago' ? '#4caf50' : 'transparent',
+              }}
+            >
+              <CheckCircleIcon sx={{ mr: 1, fontSize: 18 }} />
+              Pago
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroStatus === 'cancelado' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroStatus('cancelado')}
+              sx={{ 
+                justifyContent: 'flex-start',
+                color: filtroStatus === 'cancelado' ? 'white' : '#f44336',
+                borderColor: '#f44336',
+                bgcolor: filtroStatus === 'cancelado' ? '#f44336' : 'transparent',
+              }}
+            >
+              <WarningIcon sx={{ mr: 1, fontSize: 18 }} />
+              Cancelado
+            </Button>
+          </Box>
 
-      {/* Tab de Comissões */}
-      {tabValue === 0 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Detalhamento das Comissões
-            </Typography>
+          {isAdmin && (
+            <>
+              <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+                Profissional
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3, maxHeight: 150, overflow: 'auto' }}>
+                <Button
+                  fullWidth
+                  variant={filtroProfissional === 'todos' ? 'contained' : 'outlined'}
+                  onClick={() => setFiltroProfissional('todos')}
+                  sx={{ justifyContent: 'flex-start' }}
+                >
+                  Todos os profissionais
+                </Button>
+                {profissionais.map(prof => (
+                  <Button
+                    key={prof.id}
+                    fullWidth
+                    variant={filtroProfissional === prof.id ? 'contained' : 'outlined'}
+                    onClick={() => setFiltroProfissional(prof.id)}
+                    sx={{ justifyContent: 'flex-start' }}
+                  >
+                    <PersonIcon sx={{ mr: 1, fontSize: 18 }} />
+                    {prof.nome}
+                  </Button>
+                ))}
+              </Box>
+            </>
+          )}
 
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell><strong>Data</strong></TableCell>
-                    {isAdmin && <TableCell><strong>Profissional</strong></TableCell>}
-                    <TableCell><strong>Serviço</strong></TableCell>
-                    <TableCell align="right"><strong>%</strong></TableCell>
-                    <TableCell align="right"><strong>Valor Base</strong></TableCell>
-                    <TableCell align="right"><strong>Comissão</strong></TableCell>
-                    <TableCell><strong>Status</strong></TableCell>
-                    <TableCell><strong>Pagamento</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {comissoesFiltradas.length > 0 ? (
-                    comissoesFiltradas.map((comissao) => (
-                      <TableRow key={comissao.id} hover>
-                        <TableCell>
-                          {formatarData(comissao.dataRegistro || comissao.createdAt || comissao.data)}
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            {comissao.profissionalNome || '—'}
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ReceiptLongIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
-                            {comissao.servicoNome}
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Chip
-                            label={`${comissao.percentual}%`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ bgcolor: '#f3e5f5' }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatarMoeda(comissao.valorAtendimento)}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography fontWeight={600} color="#4caf50">
-                            {formatarMoeda(comissao.valor)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {renderStatusChip(comissao.status)}
-                        </TableCell>
-                        <TableCell>
-                          {comissao.dataPagamento ? (
-                            <Tooltip title={`Pago em ${formatarData(comissao.dataPagamento)}`}>
-                              <Chip
-                                icon={<CheckCircleIcon />}
-                                label="Pago"
-                                size="small"
-                                color="success"
-                                variant="outlined"
-                              />
-                            </Tooltip>
-                          ) : (
-                            <Chip
-                              icon={<PendingIcon />}
-                              label="Aguardando"
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={isAdmin ? 8 : 7} align="center" sx={{ py: 4 }}>
-                        <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography color="textSecondary">
-                          Nenhuma comissão encontrada para o período
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tab de Atendimentos */}
-      {tabValue === 1 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Atendimentos Realizados
-            </Typography>
-
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell><strong>Data</strong></TableCell>
-                    <TableCell><strong>Hora</strong></TableCell>
-                    <TableCell><strong>Cliente</strong></TableCell>
-                    <TableCell><strong>Serviços</strong></TableCell>
-                    <TableCell align="right"><strong>Valor</strong></TableCell>
-                    <TableCell align="right"><strong>Comissão</strong></TableCell>
-                    <TableCell><strong>Ações</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {atendimentosFiltrados.length > 0 ? (
-                    atendimentosFiltrados.map((atendimento) => (
-                      <TableRow key={atendimento.id} hover>
-                        <TableCell>{formatarData(atendimento.data)}</TableCell>
-                        <TableCell>
-                          {atendimento.horaInicio || '--:--'}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
-                            {atendimento.cliente?.nome || '—'}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          {atendimento.servicos?.map(s => s.nome).join(', ') || 
-                           atendimento.itensServico?.map(i => i.nome).join(', ')}
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatarMoeda(atendimento.valorTotal)}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography fontWeight={600} color="#4caf50">
-                            {formatarMoeda(atendimento.comissaoTotal)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title="Ver detalhes">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDetalhes(atendimento)}
-                              sx={{ color: '#9c27b0' }}
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography color="textSecondary">
-                          Nenhum atendimento encontrado para o período
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tab de Resumo por Serviço */}
-      {tabValue === 2 && resumo?.porServico && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Comissões por Serviço
-            </Typography>
-
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell><strong>Serviço</strong></TableCell>
-                    <TableCell align="right"><strong>Quantidade</strong></TableCell>
-                    <TableCell align="right"><strong>Total</strong></TableCell>
-                    <TableCell align="right"><strong>% do Total</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {resumo.porServico.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{item.nome}</TableCell>
-                      <TableCell align="right">{item.quantidade}</TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight={600} color="#4caf50">
-                          {formatarMoeda(item.valor)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Chip
-                          label={`${((item.valor / resumo.totalPeriodo) * 100).toFixed(1)}%`}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Histórico Mensal */}
-      {estatisticas && estatisticas.porMes.length > 0 && (
-        <Card sx={{ mt: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Histórico dos Últimos Meses
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Período</TableCell>
-                    <TableCell align="right">Comissões</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {estatisticas.porMes.map((mes, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        {meses.find(m => m.value === mes.mes)?.label} / {mes.ano}
-                      </TableCell>
-                      <TableCell align="right">{mes.quantidade}</TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight={600} color="#4caf50">
-                          {formatarMoeda(mes.total)}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => setOpenFilterDrawer(false)}
+            sx={{ bgcolor: '#9c27b0', mt: 2 }}
+          >
+            Aplicar Filtros
+          </Button>
+        </Box>
+      </SwipeableDrawer>
 
       {/* Dialog de Detalhes do Atendimento */}
-      <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          Detalhes do Atendimento
+      <Dialog 
+        open={openDetalhesDialog} 
+        onClose={handleCloseDetalhes}
+        fullScreen={isMobile}
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#9c27b0', 
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          p: isMobile ? 2 : 3,
+        }}>
+          {isMobile && (
+            <IconButton edge="start" color="inherit" onClick={handleCloseDetalhes}>
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          <Typography variant={isMobile ? "subtitle1" : "h6"}>
+            Detalhes do Atendimento
+          </Typography>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           {atendimentoSelecionado && (
-            <Box sx={{ mt: 2 }}>
+            <Box>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Data e Hora
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {formatarData(atendimentoSelecionado.data)} às {atendimentoSelecionado.horaInicio}
-                  </Typography>
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Cliente
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {atendimentoSelecionado.cliente?.nome || '—'}
-                  </Typography>
-                </Grid>
+                  <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      <Avatar 
+                        src={atendimentoSelecionado.cliente?.foto}
+                        sx={{ width: 48, height: 48, bgcolor: '#9c27b0' }}
+                      >
+                        {!atendimentoSelecionado.cliente?.foto && 
+                         (atendimentoSelecionado.cliente?.nome?.charAt(0) || 'C')}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6">{atendimentoSelecionado.cliente?.nome || 'Cliente'}</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {formatDate(atendimentoSelecionado.data)} às {atendimentoSelecionado.horaInicio}
+                        </Typography>
+                      </Box>
+                    </Box>
 
-                <Grid item xs={12}>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="h6" gutterBottom>
-                    Serviços Realizados
-                  </Typography>
-                  
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Serviço</TableCell>
-                          <TableCell align="right">Valor</TableCell>
-                          <TableCell align="right">Comissão %</TableCell>
-                          <TableCell align="right">Sua Comissão</TableCell>
-                          <TableCell>Status</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {(atendimentoSelecionado.servicos || atendimentoSelecionado.itensServico || []).map((servico, idx) => {
-                          // Buscar a comissão específica para este serviço
-                          const comissaoServico = atendimentoSelecionado.comissoes?.find(c => 
-                            c.servicoId === (servico.servicoId || servico.id)
-                          );
-                          
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{servico.nome}</TableCell>
-                              <TableCell align="right">
-                                R$ {(servico.preco || servico.valor || 0).toFixed(2)}
-                              </TableCell>
-                              <TableCell align="right">
-                                {servico.comissao || comissaoServico?.percentual || 0}%
-                              </TableCell>
-                              <TableCell align="right">
-                                <Typography color="#4caf50" fontWeight={600}>
-                                  R$ {(comissaoServico?.valor || 0).toFixed(2)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                {comissaoServico && (
-                                  <Chip
-                                    size="small"
-                                    label={comissaoServico.status}
-                                    color={comissaoServico.status === 'pago' ? 'success' : 'warning'}
-                                  />
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Grid>
+                    <Divider sx={{ my: 2 }} />
 
-                <Grid item xs={12}>
-                  <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Resumo do Atendimento
+                    <Typography variant="subtitle2" gutterBottom>
+                      Serviços Realizados
                     </Typography>
+                    
+                    {(atendimentoSelecionado.servicos || atendimentoSelecionado.itensServico || []).map((servico, idx) => {
+                      const comissaoServico = atendimentoSelecionado.comissoes?.find(c => 
+                        c.servicoId === (servico.servicoId || servico.id)
+                      );
+                      
+                      return (
+                        <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="body2">{servico.nome}</Typography>
+                          <Box sx={{ textAlign: 'right' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                              R$ {(comissaoServico?.valor || 0).toFixed(2)}
+                            </Typography>
+                            {comissaoServico && (
+                              <Chip
+                                size="small"
+                                label={comissaoServico.status}
+                                color={comissaoServico.status === 'pago' ? 'success' : 'warning'}
+                                sx={{ height: 20, fontSize: '0.65rem' }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
                     <Grid container spacing={2}>
                       <Grid item xs={4}>
-                        <Typography variant="body2" color="textSecondary">
-                          Total do Atendimento
-                        </Typography>
+                        <Typography variant="caption" color="textSecondary">Total</Typography>
                         <Typography variant="h6" color="primary">
                           {formatarMoeda(atendimentoSelecionado.valorTotal)}
                         </Typography>
                       </Grid>
                       <Grid item xs={4}>
-                        <Typography variant="body2" color="textSecondary">
-                          Sua Comissão Total
-                        </Typography>
+                        <Typography variant="caption" color="textSecondary">Sua Comissão</Typography>
                         <Typography variant="h6" color="#4caf50">
                           {formatarMoeda(atendimentoSelecionado.comissaoTotal)}
                         </Typography>
                       </Grid>
                       <Grid item xs={4}>
-                        <Typography variant="body2" color="textSecondary">
-                          Status das Comissões
-                        </Typography>
-                        {atendimentoSelecionado.comissoes?.map((c, idx) => (
-                          <Chip
-                            key={idx}
-                            size="small"
-                            label={c.status}
-                            color={c.status === 'pago' ? 'success' : 'warning'}
-                            sx={{ mr: 0.5, mb: 0.5 }}
-                          />
-                        ))}
-                        {(!atendimentoSelecionado.comissoes || atendimentoSelecionado.comissoes.length === 0) && (
-                          <Typography variant="body2" color="textSecondary">
-                            Nenhuma comissão registrada
-                          </Typography>
-                        )}
+                        <Typography variant="caption" color="textSecondary">Status</Typography>
+                        <Chip
+                          size="small"
+                          label={atendimentoSelecionado.comissaoPaga ? 'Pago' : 'Pendente'}
+                          color={atendimentoSelecionado.comissaoPaga ? 'success' : 'warning'}
+                        />
                       </Grid>
                     </Grid>
-                  </Box>
+                  </Paper>
                 </Grid>
               </Grid>
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDetalhes}>Fechar</Button>
+        <DialogActions sx={{ p: isMobile ? 2 : 3 }}>
+          <Button onClick={handleCloseDetalhes} fullWidth={isMobile}>
+            Fechar
+          </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Exportação/Relatório */}
-      <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="md" fullWidth>
+      {/* Dialog de Exportação */}
+      <Dialog 
+        open={openRelatorioDialog} 
+        onClose={handleCloseRelatorio}
+        fullScreen={isMobile}
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          Exportar Relatório
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DownloadIcon />
+            <Typography variant="h6">Exportar Relatório</Typography>
+          </Box>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="h6" gutterBottom>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
               Opções de Exportação
             </Typography>
             
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
                 <Card variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PictureAsPdfIcon color="error" /> PDF
                   </Typography>
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
-                    Exportar como documento PDF formatado
+                  <Typography variant="caption" color="textSecondary" gutterBottom display="block">
+                    Exportar como documento PDF
                   </Typography>
+                  
                   <FormControl component="fieldset" sx={{ mt: 1 }}>
-                    <FormLabel component="legend">Incluir no PDF:</FormLabel>
+                    <FormLabel component="legend" sx={{ fontSize: '0.8rem' }}>Incluir:</FormLabel>
                     <FormControlLabel
                       control={
                         <Checkbox 
@@ -2032,7 +1982,7 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Resumo"
+                      label={<Typography variant="caption">Resumo</Typography>}
                     />
                     <FormControlLabel
                       control={
@@ -2043,7 +1993,7 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Atendimentos"
+                      label={<Typography variant="caption">Atendimentos</Typography>}
                     />
                     <FormControlLabel
                       control={
@@ -2054,46 +2004,36 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Comissões"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox 
-                          checked={exportOptions.incluirServicos}
-                          onChange={handleExportOptionChange}
-                          name="incluirServicos"
-                          size="small"
-                        />
-                      }
-                      label="Resumo por Serviço"
+                      label={<Typography variant="caption">Comissões</Typography>}
                     />
                   </FormControl>
+                  
                   <Button
                     fullWidth
                     variant="contained"
                     color="error"
+                    size="small"
                     startIcon={<PictureAsPdfIcon />}
-                    onClick={() => {
-                      handleExportPDF();
-                    }}
+                    onClick={handleExportPDF}
                     sx={{ mt: 2 }}
-                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
+                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes}
                   >
                     Gerar PDF
                   </Button>
                 </Card>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} sm={6}>
                 <Card variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <TableChartIcon color="success" /> Excel
                   </Typography>
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                  <Typography variant="caption" color="textSecondary" gutterBottom display="block">
                     Exportar como planilha Excel
                   </Typography>
+                  
                   <FormControl component="fieldset" sx={{ mt: 1 }}>
-                    <FormLabel component="legend">Incluir no Excel:</FormLabel>
+                    <FormLabel component="legend" sx={{ fontSize: '0.8rem' }}>Incluir:</FormLabel>
                     <FormControlLabel
                       control={
                         <Checkbox 
@@ -2103,7 +2043,7 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Resumo"
+                      label={<Typography variant="caption">Resumo</Typography>}
                     />
                     <FormControlLabel
                       control={
@@ -2114,7 +2054,7 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Atendimentos"
+                      label={<Typography variant="caption">Atendimentos</Typography>}
                     />
                     <FormControlLabel
                       control={
@@ -2125,30 +2065,19 @@ function MinhasComissoes() {
                           size="small"
                         />
                       }
-                      label="Comissões"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox 
-                          checked={exportOptions.incluirServicos}
-                          onChange={handleExportOptionChange}
-                          name="incluirServicos"
-                          size="small"
-                        />
-                      }
-                      label="Resumo por Serviço"
+                      label={<Typography variant="caption">Comissões</Typography>}
                     />
                   </FormControl>
+                  
                   <Button
                     fullWidth
                     variant="contained"
                     color="success"
+                    size="small"
                     startIcon={<TableChartIcon />}
-                    onClick={() => {
-                      handleExportExcel();
-                    }}
+                    onClick={handleExportExcel}
                     sx={{ mt: 2 }}
-                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes && !exportOptions.incluirServicos}
+                    disabled={!exportOptions.incluirResumo && !exportOptions.incluirAtendimentos && !exportOptions.incluirComissoes}
                   >
                     Gerar Excel
                   </Button>
@@ -2157,15 +2086,16 @@ function MinhasComissoes() {
 
               <Grid item xs={12}>
                 <Card variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-                  <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PrintIcon /> Impressão
                   </Typography>
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                  <Typography variant="caption" color="textSecondary" gutterBottom display="block">
                     Imprimir relatório diretamente
                   </Typography>
                   <Button
                     fullWidth
                     variant="outlined"
+                    size="small"
                     startIcon={<PrintIcon />}
                     onClick={() => {
                       handleCloseRelatorio();
@@ -2177,6 +2107,20 @@ function MinhasComissoes() {
                 </Card>
               </Grid>
             </Grid>
+
+            <Box sx={{ mt: 3 }}>
+              <Alert severity="info">
+                <Typography variant="caption" display="block">
+                  Período: {meses.find(m => m.value === filtroMes)?.label} / {filtroAno}
+                </Typography>
+                <Typography variant="caption" display="block">
+                  Total de comissões: {comissoesFiltradas.length}
+                </Typography>
+                <Typography variant="caption" display="block">
+                  Total de atendimentos: {atendimentosFiltrados.length}
+                </Typography>
+              </Alert>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -2201,14 +2145,78 @@ function MinhasComissoes() {
         />
       </Box>
 
-      {/* Snackbar para notificações */}
+      {/* Bottom Navigation Mobile */}
+      {isMobile && (
+        <Paper
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            borderRadius: 0,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            zIndex: 1000,
+          }}
+          elevation={3}
+        >
+          <BottomNavigation
+            value={bottomNavValue}
+            onChange={(event, newValue) => {
+              setBottomNavValue(newValue);
+              switch(newValue) {
+                case 0:
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  break;
+                case 1:
+                  setOpenFilterDrawer(true);
+                  break;
+                case 2:
+                  handleOpenRelatorio();
+                  break;
+                default:
+                  break;
+              }
+            }}
+            showLabels
+            sx={{
+              '& .MuiBottomNavigationAction-root.Mui-selected': {
+                color: '#9c27b0',
+              },
+            }}
+          >
+            <BottomNavigationAction label="Início" icon={<AttachMoneyIcon />} />
+            <BottomNavigationAction 
+              label="Filtros" 
+              icon={
+                <Badge 
+                  variant="dot" 
+                  color="primary"
+                  invisible={filtroMes === new Date().getMonth() + 1 && 
+                             filtroAno === new Date().getFullYear() && 
+                             filtroStatus === 'todos' && 
+                             (!isAdmin || filtroProfissional === 'todos')}
+                >
+                  <FilterListIcon />
+                </Badge>
+              } 
+            />
+            <BottomNavigationAction label="Exportar" icon={<DownloadIcon />} />
+          </BottomNavigation>
+        </Paper>
+      )}
+
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ 
+          vertical: isMobile ? 'top' : 'bottom', 
+          horizontal: 'center' 
+        }}
       >
-        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
       </Snackbar>
