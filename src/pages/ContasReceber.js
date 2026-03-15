@@ -1,5 +1,5 @@
 // src/pages/ContasReceber.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -32,6 +32,20 @@ import {
   LinearProgress,
   TablePagination,
   Avatar,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  BottomNavigation,
+  BottomNavigationAction,
+  SwipeableDrawer,
+  Fab,
+  Zoom,
+  useMediaQuery,
+  useTheme,
+  Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,39 +59,268 @@ import {
   AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
   Person as PersonIcon,
+  Info as InfoIcon,
+  Print as PrintIcon,
+  Download as DownloadIcon,
+  FilterList as FilterIcon,
+  Close as CloseIcon,
+  Today as TodayIcon,
+  DateRange as DateRangeIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { auditoriaService } from '../services/auditoriaService';
+import { useReactToPrint } from 'react-to-print';
+
+// Componente de Impressão
+const RelatorioContasReceber = React.forwardRef(({ contas, filtros, estatisticas, config, clientes }, ref) => {
+  const logo = config?.salao?.logo || '';
+  const empresa = config?.salao || {
+    nome: 'Sistema de Gestão',
+    cnpj: '',
+    endereco: {}
+  };
+
+  const getClienteNome = (clienteId) => {
+    const cliente = clientes.find(c => c.id === clienteId);
+    return cliente?.nome || 'Não informado';
+  };
+
+  return (
+    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Cabeçalho */}
+      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        {logo && (
+          <img 
+            src={logo} 
+            alt="Logo" 
+            style={{ 
+              maxHeight: 80, 
+              maxWidth: 200, 
+              marginBottom: 10,
+              objectFit: 'contain'
+            }} 
+          />
+        )}
+        <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+          {empresa.nome || 'Sistema de Gestão'}
+        </Typography>
+        {empresa.nomeFantasia && (
+          <Typography variant="h5" sx={{ color: '#666', mb: 1 }}>
+            {empresa.nomeFantasia}
+          </Typography>
+        )}
+        <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
+          Relatório de Contas a Receber
+        </Typography>
+        
+        {/* Informações da empresa */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2, fontSize: '0.9rem' }}>
+          {empresa.cnpj && (
+            <Typography variant="body2" color="textSecondary">
+              CNPJ: {empresa.cnpj}
+            </Typography>
+          )}
+          {empresa.endereco?.cidade && empresa.endereco?.estado && (
+            <Typography variant="body2" color="textSecondary">
+              {empresa.endereco.cidade}/{empresa.endereco.estado}
+            </Typography>
+          )}
+        </Box>
+
+        <Typography variant="subtitle1" color="textSecondary">
+          Período: {filtros.periodo}
+        </Typography>
+        <Typography variant="subtitle2" color="textSecondary">
+          Emitido em: {new Date().toLocaleString('pt-BR')}
+        </Typography>
+      </Box>
+
+      {/* Estatísticas */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+          Resumo Financeiro
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2">Total a Receber</Typography>
+              <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                R$ {estatisticas.valorTotal.toFixed(2)}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#fff3e0', textAlign: 'center' }}>
+              <Typography variant="body2">Pendentes</Typography>
+              <Typography variant="h6" sx={{ color: '#ff9800' }}>
+                {estatisticas.pendentes}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#ffebee', textAlign: 'center' }}>
+              <Typography variant="body2">Atrasadas</Typography>
+              <Typography variant="h6" sx={{ color: '#f44336' }}>
+                {estatisticas.atrasadas}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#e8f5e9', textAlign: 'center' }}>
+              <Typography variant="body2">Recebidas</Typography>
+              <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                {estatisticas.recebidas}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Tabela de Contas */}
+      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+        Lista de Contas
+      </Typography>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#9c27b0', color: 'white' }}>
+            <th style={{ padding: 10, textAlign: 'left' }}>Descrição</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Cliente</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Vencimento</th>
+            <th style={{ padding: 10, textAlign: 'right' }}>Valor</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Status</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Forma</th>
+          </tr>
+        </thead>
+        <tbody>
+          {contas.slice(0, 100).map((conta, index) => {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const vencimento = conta.dataVencimento ? new Date(conta.dataVencimento) : null;
+            if (vencimento) vencimento.setHours(0, 0, 0, 0);
+            const isVencida = vencimento && vencimento < hoje && conta.status === 'pendente';
+
+            return (
+              <tr key={index} style={{ 
+                borderBottom: '1px solid #ddd',
+                backgroundColor: isVencida ? '#ffebee20' : 'white'
+              }}>
+                <td style={{ padding: 8 }}>{conta.descricao}</td>
+                <td style={{ padding: 8 }}>{getClienteNome(conta.clienteId)}</td>
+                <td style={{ padding: 8 }}>
+                  {conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '-'}
+                  {isVencida && <span style={{ color: '#f44336', marginLeft: 8 }}>(Vencida)</span>}
+                </td>
+                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#4caf50' }}>
+                  R$ {Number(conta.valor).toFixed(2)}
+                </td>
+                <td style={{ padding: 8 }}>
+                  <span style={{
+                    backgroundColor: 
+                      conta.status === 'recebido' ? '#4caf5020' :
+                      conta.status === 'pendente' ? '#ff980020' :
+                      conta.status === 'atrasado' ? '#f4433620' : '#f5f5f5',
+                    color:
+                      conta.status === 'recebido' ? '#4caf50' :
+                      conta.status === 'pendente' ? '#ff9800' :
+                      conta.status === 'atrasado' ? '#f44336' : '#666',
+                    padding: '4px 8px',
+                    borderRadius: 16,
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}>
+                    {conta.status === 'recebido' ? 'Recebido' :
+                     conta.status === 'pendente' ? 'Pendente' :
+                     conta.status === 'atrasado' ? 'Atrasado' : conta.status}
+                  </span>
+                </td>
+                <td style={{ padding: 8 }}>
+                  {conta.formaPagamento === 'dinheiro' ? '💵 Dinheiro' :
+                   conta.formaPagamento === 'cartao_credito' ? '💳 Cartão Crédito' :
+                   conta.formaPagamento === 'cartao_debito' ? '💳 Cartão Débito' :
+                   conta.formaPagamento === 'pix' ? '⚡ PIX' :
+                   conta.formaPagamento === 'transferencia' ? '🔄 Transferência' :
+                   conta.formaPagamento || '-'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Rodapé */}
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
+        <Typography variant="caption">
+          Relatório gerado automaticamente pelo sistema • Documento não fiscal
+        </Typography>
+      </Box>
+    </Box>
+  );
+});
 
 const statusColors = {
-  pendente: { color: '#ff9800', label: 'Pendente' },
-  recebido: { color: '#4caf50', label: 'Recebido' },
-  atrasado: { color: '#f44336', label: 'Atrasado' },
-  cancelado: { color: '#9e9e9e', label: 'Cancelado' },
+  pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
+  recebido: { color: '#4caf50', label: 'Recebido', icon: <CheckCircleIcon /> },
+  atrasado: { color: '#f44336', label: 'Atrasado', icon: <WarningIcon /> },
+  cancelado: { color: '#9e9e9e', label: 'Cancelado', icon: <CancelIcon /> },
+};
+
+const formasPagamento = [
+  { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
+  { value: 'cartao_debito', label: 'Cartão de Débito', icon: '💳' },
+  { value: 'pix', label: 'PIX', icon: '⚡' },
+  { value: 'transferencia', label: 'Transferência', icon: '🔄' },
+];
+
+const formatarDataISO = (data) => {
+  if (!data) return '';
+  const d = new Date(data);
+  return d.toISOString().split('T')[0];
 };
 
 function ContasReceber() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const printRef = useRef();
+
   const [loading, setLoading] = useState(true);
   const [contas, setContas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [caixa, setCaixa] = useState(null);
+  const [config, setConfig] = useState(null);
+  
+  // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
+  
+  // Paginação
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  // Dialogs
   const [openDialog, setOpenDialog] = useState(false);
   const [openRecebimentoDialog, setOpenRecebimentoDialog] = useState(false);
+  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [contaEditando, setContaEditando] = useState(null);
   const [contaSelecionada, setContaSelecionada] = useState(null);
+  
+  // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Mobile states
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [bottomNavValue, setBottomNavValue] = useState(0);
+
+  // Formulário
   const [formData, setFormData] = useState({
     descricao: '',
     valor: '',
-    dataVencimento: new Date().toISOString().split('T')[0],
+    dataVencimento: formatarDataISO(new Date()),
     categoria: 'Serviços',
     clienteId: '',
     formaPagamento: 'dinheiro',
@@ -94,14 +337,19 @@ function ContasReceber() {
     try {
       setLoading(true);
       
-      const [contasData, clientesData, caixaData] = await Promise.all([
+      const [contasData, clientesData, caixaData, configData] = await Promise.all([
         firebaseService.getAll('contas_receber').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
+        firebaseService.getAll('configuracoes').catch(() => []),
       ]);
       
-      setContas(contasData || []);
-      setClientes(clientesData || []);
+      const contasArray = Array.isArray(contasData) ? contasData : [];
+      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
+      
+      setContas(contasArray);
+      setClientes(clientesArray);
+      setConfig(configData?.[0] || null);
       
       // Pega o caixa atual (último caixa aberto)
       const caixaAtual = caixaData?.length > 0 
@@ -115,13 +363,60 @@ function ContasReceber() {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
       
-      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: 'carregar_contas_receber',
         detalhes: 'Erro ao carregar dados de contas a receber'
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `contas_receber_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando impressão...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Impressão enviada!', { id: 'print' });
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir', { id: 'print' });
+    }
+  });
+
+  const handleExportCSV = () => {
+    try {
+      const headers = ['Descrição', 'Cliente', 'Vencimento', 'Valor', 'Status', 'Forma de Pagamento'];
+      const data = contasFiltradas.map(conta => {
+        const cliente = clientes.find(c => c.id === conta.clienteId);
+        
+        return [
+          conta.descricao,
+          cliente?.nome || '',
+          conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '',
+          `R$ ${Number(conta.valor).toFixed(2)}`,
+          statusColors[conta.status]?.label || conta.status,
+          formasPagamento.find(f => f.value === conta.formaPagamento)?.label || conta.formaPagamento
+        ];
+      });
+
+      const csvContent = [headers, ...data]
+        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `contas_receber_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      
+      mostrarSnackbar('Planilha exportada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      mostrarSnackbar('Erro ao exportar', 'error');
     }
   };
 
@@ -133,13 +428,14 @@ function ContasReceber() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  // ========== FUNÇÕES DE DIÁLOGO ==========
   const handleOpenDialog = (conta = null) => {
     if (conta) {
       setContaEditando(conta);
       setFormData({
         descricao: conta.descricao || '',
         valor: conta.valor || '',
-        dataVencimento: conta.dataVencimento || new Date().toISOString().split('T')[0],
+        dataVencimento: conta.dataVencimento || formatarDataISO(new Date()),
         categoria: conta.categoria || 'Serviços',
         clienteId: conta.clienteId || '',
         formaPagamento: conta.formaPagamento || 'dinheiro',
@@ -152,7 +448,7 @@ function ContasReceber() {
       setFormData({
         descricao: '',
         valor: '',
-        dataVencimento: new Date().toISOString().split('T')[0],
+        dataVencimento: formatarDataISO(new Date()),
         categoria: 'Serviços',
         clienteId: '',
         formaPagamento: 'dinheiro',
@@ -179,11 +475,22 @@ function ContasReceber() {
     setContaSelecionada(null);
   };
 
+  const handleOpenDetalhes = (conta) => {
+    setContaSelecionada(conta);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setContaSelecionada(null);
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ========== FUNÇÕES DE CRUD ==========
   const handleSalvar = async () => {
     try {
       if (!formData.descricao?.trim()) {
@@ -197,7 +504,6 @@ function ContasReceber() {
         return;
       }
 
-      // Preparar dados para salvar
       const dadosParaSalvar = {
         descricao: String(formData.descricao).trim(),
         valor: Number(valorNumerico),
@@ -211,7 +517,6 @@ function ContasReceber() {
         updatedAt: new Date().toISOString(),
       };
 
-      // Remover campos undefined
       Object.keys(dadosParaSalvar).forEach(key => {
         if (dadosParaSalvar[key] === undefined) {
           delete dadosParaSalvar[key];
@@ -219,12 +524,10 @@ function ContasReceber() {
       });
 
       if (contaEditando) {
-        // Buscar dados antigos para auditoria
         const contaAntiga = { ...contaEditando };
         
         await firebaseService.update('contas_receber', contaEditando.id, dadosParaSalvar);
         
-        // Registrar atualização na auditoria
         await auditoriaService.registrarAtualizacao(
           'contas_receber',
           contaEditando.id,
@@ -233,7 +536,6 @@ function ContasReceber() {
           `Atualização de conta a receber: ${formData.descricao}`
         );
         
-        // Atualizar estado local
         const contasAtualizadas = contas.map(c => 
           c.id === contaEditando.id ? { ...c, ...dadosParaSalvar, id: contaEditando.id } : c
         );
@@ -242,10 +544,8 @@ function ContasReceber() {
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        
         const novoId = await firebaseService.add('contas_receber', dadosParaSalvar);
         
-        // Registrar criação na auditoria
         await auditoriaService.registrarCriacao(
           'contas_receber',
           novoId,
@@ -263,7 +563,6 @@ function ContasReceber() {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
       
-      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: contaEditando ? 'atualizar_conta_receber' : 'criar_conta_receber',
         dados: formData
@@ -278,7 +577,6 @@ function ContasReceber() {
         return;
       }
 
-      // Registrar ação na auditoria
       await auditoriaService.registrar('recebimento', {
         entidade: 'contas_receber',
         entidadeId: contaSelecionada.id,
@@ -289,7 +587,6 @@ function ContasReceber() {
         }
       });
 
-      // Atualizar status da conta
       const dadosConta = {
         status: 'recebido',
         dataRecebimento: new Date().toISOString(),
@@ -298,13 +595,11 @@ function ContasReceber() {
 
       await firebaseService.update('contas_receber', contaSelecionada.id, dadosConta);
 
-      // Atualizar estado local das contas
       const contasAtualizadas = contas.map(c => 
         c.id === contaSelecionada.id ? { ...c, ...dadosConta } : c
       );
       setContas(contasAtualizadas);
 
-      // Atualizar caixa se estiver aberto
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const novoSaldo = (caixa.saldoAtual || 0) + Number(contaSelecionada.valor);
         
@@ -341,7 +636,6 @@ function ContasReceber() {
       console.error('Erro ao registrar recebimento:', error);
       mostrarSnackbar('Erro ao registrar recebimento', 'error');
       
-      // Registrar erro na auditoria
       await auditoriaService.registrarErro(error, { 
         acao: 'registrar_recebimento',
         contaId: contaSelecionada?.id
@@ -367,7 +661,6 @@ function ContasReceber() {
                 updatedAt: new Date().toISOString(),
               });
               
-              // Atualizar estado local
               setContas(prev => prev.map(c => 
                 c.id === conta.id ? { ...c, status: 'atrasado' } : c
               ));
@@ -392,15 +685,15 @@ function ContasReceber() {
     const matchesStatus = filtroStatus === 'todos' || conta.status === filtroStatus;
 
     let matchesPeriodo = true;
-    if (filtroPeriodo === 'hoje') {
+    if (filtroPeriodo === 'hoje' && conta.dataVencimento) {
       const hoje = new Date().toISOString().split('T')[0];
       matchesPeriodo = conta.dataVencimento === hoje;
-    } else if (filtroPeriodo === 'semana') {
+    } else if (filtroPeriodo === 'semana' && conta.dataVencimento) {
       const dataVenc = new Date(conta.dataVencimento);
       const umaSemana = new Date();
       umaSemana.setDate(umaSemana.getDate() + 7);
       matchesPeriodo = dataVenc <= umaSemana && dataVenc >= new Date();
-    } else if (filtroPeriodo === 'vencidas') {
+    } else if (filtroPeriodo === 'vencidas' && conta.dataVencimento) {
       const dataVenc = new Date(conta.dataVencimento);
       matchesPeriodo = dataVenc < new Date() && conta.status === 'pendente';
     }
@@ -408,8 +701,15 @@ function ContasReceber() {
     return matchesTexto && matchesStatus && matchesPeriodo;
   });
 
+  // Ordenar por data de vencimento
+  const contasOrdenadas = [...contasFiltradas].sort((a, b) => {
+    const dataA = new Date(a.dataVencimento || a.dataCriacao);
+    const dataB = new Date(b.dataVencimento || b.dataCriacao);
+    return dataA - dataB;
+  });
+
   // Paginação
-  const paginatedContas = contasFiltradas.slice(
+  const paginatedContas = contasOrdenadas.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
@@ -434,6 +734,263 @@ function ContasReceber() {
       .reduce((acc, c) => acc + (Number(c.valor) || 0), 0),
   };
 
+  // Renderização mobile
+  const renderMobileList = () => {
+    if (paginatedContas.length === 0) {
+      return (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+          <Typography variant="body1" color="textSecondary">
+            Nenhuma conta encontrada
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <List sx={{ p: 0 }}>
+        <AnimatePresence>
+          {paginatedContas.map((conta, index) => {
+            const cliente = clientes.find(c => c.id === conta.clienteId);
+            
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const vencimento = conta.dataVencimento ? new Date(conta.dataVencimento) : null;
+            if (vencimento) vencimento.setHours(0, 0, 0, 0);
+            const isVencida = vencimento && vencimento < hoje && conta.status === 'pendente';
+
+            return (
+              <motion.div
+                key={conta.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    mb: 2,
+                    borderLeft: '4px solid',
+                    borderLeftColor: 
+                      conta.status === 'recebido' ? '#4caf50' :
+                      conta.status === 'atrasado' ? '#f44336' :
+                      conta.status === 'pendente' ? '#ff9800' : '#9c27b0',
+                    bgcolor: isVencida ? '#ffebee20' : 'white',
+                  }}
+                >
+                  <CardContent sx={{ p: 2 }}>
+                    {/* Header */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar sx={{ bgcolor: '#4caf50', width: 32, height: 32 }}>
+                          <MoneyIcon sx={{ fontSize: 16 }} />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {conta.descricao}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {cliente?.nome || 'Cliente não informado'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Chip
+                        label={statusColors[conta.status]?.label}
+                        size="small"
+                        sx={{
+                          bgcolor: `${statusColors[conta.status]?.color}20`,
+                          color: statusColors[conta.status]?.color,
+                          fontWeight: 500,
+                          height: 24,
+                        }}
+                      />
+                    </Box>
+
+                    {/* Detalhes */}
+                    <Box sx={{ mt: 2 }}>
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="textSecondary">
+                            Vencimento
+                          </Typography>
+                          <Typography variant="body2">
+                            {conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="textSecondary">
+                            Valor
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                            R$ {Number(conta.valor).toFixed(2)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="textSecondary">
+                            Forma de Pagamento
+                          </Typography>
+                          <Typography variant="body2">
+                            {formasPagamento.find(f => f.value === conta.formaPagamento)?.label || conta.formaPagamento}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Ações */}
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 2 }}>
+                      <Tooltip title="Detalhes">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenDetalhes(conta)}
+                          sx={{ color: '#9c27b0' }}
+                        >
+                          <InfoIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      {conta.status !== 'recebido' && (
+                        <Tooltip title="Registrar Recebimento">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenRecebimento(conta)}
+                            sx={{ color: '#4caf50' }}
+                          >
+                            <PaymentIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+
+                      <Tooltip title="Editar">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenDialog(conta)}
+                          sx={{ color: '#2196f3' }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+
+                    {isVencida && (
+                      <Box sx={{ mt: 1 }}>
+                        <Chip
+                          size="small"
+                          label="Vencida"
+                          color="error"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </List>
+    );
+  };
+
+  const renderFilterDrawer = () => (
+    <SwipeableDrawer
+      anchor="bottom"
+      open={filterDrawerOpen}
+      onClose={() => setFilterDrawerOpen(false)}
+      onOpen={() => {}}
+      disableSwipeToOpen
+      PaperProps={{
+        sx: {
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          maxHeight: '80vh',
+        }
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Filtrar Contas
+          </Typography>
+          <IconButton onClick={() => setFilterDrawerOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar por descrição..."
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                label="Status"
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                {Object.keys(statusColors).map(status => (
+                  <MenuItem key={status} value={status}>
+                    {statusColors[status].label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Período</InputLabel>
+              <Select
+                value={filtroPeriodo}
+                onChange={(e) => setFiltroPeriodo(e.target.value)}
+                label="Período"
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="hoje">Vencem Hoje</MenuItem>
+                <MenuItem value="semana">Próximos 7 dias</MenuItem>
+                <MenuItem value="vencidas">Vencidas</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={6}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => {
+                setFilterDrawerOpen(false);
+                setFiltroStatus('todos');
+                setFiltroPeriodo('todos');
+                setFiltro('');
+              }}
+            >
+              Limpar
+            </Button>
+          </Grid>
+          <Grid item xs={6}>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => setFilterDrawerOpen(false)}
+              sx={{ bgcolor: '#9c27b0' }}
+            >
+              Aplicar
+            </Button>
+          </Grid>
+        </Grid>
+      </Box>
+    </SwipeableDrawer>
+  );
+
   if (loading) {
     return (
       <Box sx={{ width: '100%' }}>
@@ -444,292 +1001,329 @@ function ContasReceber() {
 
   return (
     <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            Contas a Receber
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Gerencie todas as contas e recebimentos do salão
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-        >
-          Nova Conta
-        </Button>
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <RelatorioContasReceber
+          ref={printRef}
+          contas={contasOrdenadas}
+          filtros={{
+            periodo: filtroPeriodo === 'hoje' ? 'Hoje' :
+                     filtroPeriodo === 'semana' ? 'Próximos 7 dias' :
+                     filtroPeriodo === 'vencidas' ? 'Vencidas' : 'Todos'
+          }}
+          estatisticas={stats}
+          config={config}
+          clientes={clientes}
+        />
       </Box>
 
-      {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+      {/* Header Mobile */}
+      {isMobile && (
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: 'white', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #f0f0f0' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', flex: 1 }}>
+              Contas a Receber
+            </Typography>
+            <IconButton onClick={() => setFilterDrawerOpen(true)}>
+              <Badge badgeContent={filtroStatus !== 'todos' || filtroPeriodo !== 'todos' || filtro ? 1 : 0} color="secondary">
+                <FilterIcon />
+              </Badge>
+            </IconButton>
+            <IconButton onClick={carregarDados}>
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+
+          {/* Cards de estatísticas mobile */}
+          <Box sx={{ p: 2, display: 'flex', gap: 1, overflowX: 'auto' }}>
+            <Paper sx={{ p: 1.5, minWidth: 100, textAlign: 'center' }}>
+              <Typography variant="caption">Total</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                R$ {stats.valorTotal.toFixed(2)}
+              </Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#fff3e0' }}>
+              <Typography variant="caption">Pendentes</Typography>
+              <Typography variant="subtitle2">{stats.pendentes}</Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#ffebee' }}>
+              <Typography variant="caption">Atrasadas</Typography>
+              <Typography variant="subtitle2">{stats.atrasadas}</Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#e8f5e9' }}>
+              <Typography variant="caption">Recebidas</Typography>
+              <Typography variant="subtitle2">{stats.recebidas}</Typography>
+            </Paper>
+          </Box>
+        </Box>
+      )}
+
+      {/* Header Desktop */}
+      {!isMobile && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              Contas a Receber
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Gerencie todas as contas e recebimentos do salão
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrint}
+            >
+              Imprimir
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+            >
+              Exportar
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            >
+              Nova Conta
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Cards de Estatísticas Desktop */}
+      {!isMobile && (
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Total a Receber
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                <Typography color="textSecondary">Total a Receber</Typography>
+                <Typography variant="h4" sx={{ color: '#4caf50' }}>
                   R$ {stats.valorTotal.toFixed(2)}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Pendentes
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                <Typography color="textSecondary">Pendentes</Typography>
+                <Typography variant="h4" sx={{ color: '#ff9800' }}>
                   {stats.pendentes}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#ffebee' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Atrasadas
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                <Typography color="textSecondary">Atrasadas</Typography>
+                <Typography variant="h4" sx={{ color: '#f44336' }}>
                   {stats.atrasadas}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Recebidas
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                <Typography color="textSecondary">Recebidas</Typography>
+                <Typography variant="h4" sx={{ color: '#4caf50' }}>
                   {stats.recebidas}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      {/* Filtros */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Buscar contas..."
-                value={filtro}
-                onChange={(e) => setFiltro(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  endAdornment: filtro && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setFiltro('')}>
-                        <ClearIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={filtroStatus}
-                  onChange={(e) => setFiltroStatus(e.target.value)}
-                  label="Status"
-                >
-                  <MenuItem value="todos">Todos</MenuItem>
-                  {Object.keys(statusColors).map(status => (
-                    <MenuItem key={status} value={status}>
-                      {statusColors[status].label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Período</InputLabel>
-                <Select
-                  value={filtroPeriodo}
-                  onChange={(e) => setFiltroPeriodo(e.target.value)}
-                  label="Período"
-                >
-                  <MenuItem value="todos">Todos</MenuItem>
-                  <MenuItem value="hoje">Vencem Hoje</MenuItem>
-                  <MenuItem value="semana">Próximos 7 dias</MenuItem>
-                  <MenuItem value="vencidas">Vencidas</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={carregarDados}
-              >
-                Atualizar
-              </Button>
-            </Grid>
           </Grid>
+        </Grid>
+      )}
+
+      {/* Filtros Desktop */}
+      {!isMobile && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Buscar por descrição..."
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: filtro && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setFiltro('')}>
+                          <ClearIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filtroStatus}
+                    onChange={(e) => setFiltroStatus(e.target.value)}
+                    label="Status"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    {Object.keys(statusColors).map(status => (
+                      <MenuItem key={status} value={status}>
+                        {statusColors[status].label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Período</InputLabel>
+                  <Select
+                    value={filtroPeriodo}
+                    onChange={(e) => setFiltroPeriodo(e.target.value)}
+                    label="Período"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    <MenuItem value="hoje">Vencem Hoje</MenuItem>
+                    <MenuItem value="semana">Próximos 7 dias</MenuItem>
+                    <MenuItem value="vencidas">Vencidas</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Conteúdo principal */}
+      <Card>
+        <CardContent sx={{ p: isMobile ? 1 : 3 }}>
+          {isMobile ? (
+            renderMobileList()
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableCell><strong>Descrição</strong></TableCell>
+                    <TableCell><strong>Cliente</strong></TableCell>
+                    <TableCell><strong>Vencimento</strong></TableCell>
+                    <TableCell align="right"><strong>Valor</strong></TableCell>
+                    <TableCell><strong>Status</strong></TableCell>
+                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedContas.map((conta, index) => {
+                    const cliente = clientes.find(c => c.id === conta.clienteId);
+                    
+                    const hoje = new Date();
+                    hoje.setHours(0, 0, 0, 0);
+                    const vencimento = conta.dataVencimento ? new Date(conta.dataVencimento) : null;
+                    if (vencimento) vencimento.setHours(0, 0, 0, 0);
+                    const isVencida = vencimento && vencimento < hoje && conta.status === 'pendente';
+
+                    return (
+                      <TableRow key={conta.id} hover>
+                        <TableCell>{conta.descricao}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
+                              <PersonIcon sx={{ fontSize: 14 }} />
+                            </Avatar>
+                            {cliente?.nome || '—'}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Box>
+                            {conta.dataVencimento ? new Date(conta.dataVencimento).toLocaleDateString('pt-BR') : '—'}
+                            {isVencida && (
+                              <Chip
+                                size="small"
+                                label="Vencida"
+                                color="error"
+                                sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight={600} color="#4caf50">
+                            R$ {Number(conta.valor).toFixed(2)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={statusColors[conta.status]?.label}
+                            size="small"
+                            sx={{
+                              bgcolor: `${statusColors[conta.status]?.color}20`,
+                              color: statusColors[conta.status]?.color,
+                              fontWeight: 500,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            {conta.status !== 'recebido' && (
+                              <Tooltip title="Registrar Recebimento">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenRecebimento(conta)}
+                                  sx={{ color: '#4caf50' }}
+                                >
+                                  <PaymentIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            <Tooltip title="Ver Detalhes">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDetalhes(conta)}
+                                sx={{ color: '#9c27b0' }}
+                              >
+                                <InfoIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Editar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDialog(conta)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
-      {/* Tabela */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell><strong>Descrição</strong></TableCell>
-                <TableCell><strong>Cliente</strong></TableCell>
-                <TableCell><strong>Vencimento</strong></TableCell>
-                <TableCell align="right"><strong>Valor</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
-                <TableCell align="center"><strong>Ações</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <AnimatePresence>
-                {paginatedContas.map((conta, index) => {
-                  const cliente = clientes.find(c => c.id === conta.clienteId);
-                  const hoje = new Date();
-                  hoje.setHours(0, 0, 0, 0);
-                  const vencimento = new Date(conta.dataVencimento);
-                  vencimento.setHours(0, 0, 0, 0);
-                  const isVencida = vencimento < hoje && conta.status === 'pendente';
-                  
-                  return (
-                    <motion.tr
-                      key={conta.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      style={{
-                        backgroundColor: isVencida ? '#ffebee20' : 'white',
-                      }}
-                    >
-                      <TableCell>{conta.descricao}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
-                            <PersonIcon sx={{ fontSize: 14 }} />
-                          </Avatar>
-                          {cliente?.nome || '—'}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(conta.dataVencimento).toLocaleDateString('pt-BR')}
-                        {isVencida && (
-                          <Chip
-                            size="small"
-                            label="Vencida"
-                            color="error"
-                            sx={{ ml: 1, height: 20 }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight={600} color="#4caf50">
-                          R$ {Number(conta.valor).toFixed(2)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={statusColors[conta.status]?.label}
-                          size="small"
-                          sx={{
-                            bgcolor: `${statusColors[conta.status]?.color}20`,
-                            color: statusColors[conta.status]?.color,
-                            fontWeight: 500,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                          {conta.status !== 'recebido' && (
-                            <Tooltip title="Registrar Recebimento">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenRecebimento(conta)}
-                                sx={{ color: '#4caf50' }}
-                              >
-                                <PaymentIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title="Editar">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDialog(conta)}
-                              sx={{ color: '#2196f3' }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-
-              {paginatedContas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
-                    <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                    <Typography variant="body1" color="textSecondary">
-                      Nenhuma conta encontrada
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {/* Paginação Desktop */}
+      {!isMobile && (
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={contasFiltradas.length}
+          count={contasOrdenadas.length}
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
@@ -737,7 +1331,46 @@ function ContasReceber() {
           labelRowsPerPage="Itens por página"
           labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
         />
-      </Card>
+      )}
+
+      {/* Bottom Navigation Mobile */}
+      {isMobile && (
+        <Paper sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10 }} elevation={3}>
+          <BottomNavigation
+            value={bottomNavValue}
+            onChange={(event, newValue) => setBottomNavValue(newValue)}
+            showLabels
+          >
+            <BottomNavigationAction label="Lista" icon={<ReceiptIcon />} />
+            <BottomNavigationAction 
+              label="Imprimir" 
+              icon={<PrintIcon />} 
+              onClick={handlePrint}
+            />
+            <BottomNavigationAction 
+              label="Exportar" 
+              icon={<DownloadIcon />}
+              onClick={handleExportCSV}
+            />
+          </BottomNavigation>
+        </Paper>
+      )}
+
+      {/* FAB para filtros mobile */}
+      {isMobile && (
+        <Zoom in={!filterDrawerOpen}>
+          <Fab
+            color="primary"
+            sx={{ position: 'fixed', bottom: 80, right: 16 }}
+            onClick={() => setFilterDrawerOpen(true)}
+          >
+            <FilterIcon />
+          </Fab>
+        </Zoom>
+      )}
+
+      {/* Drawer de filtros mobile */}
+      {renderFilterDrawer()}
 
       {/* Dialog de Nova Conta */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -826,11 +1459,11 @@ function ContasReceber() {
                   onChange={handleInputChange}
                   label="Forma de Pagamento"
                 >
-                  <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                  <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
-                  <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
-                  <MenuItem value="pix">PIX</MenuItem>
-                  <MenuItem value="transferencia">Transferência</MenuItem>
+                  {formasPagamento.map(fp => (
+                    <MenuItem key={fp.value} value={fp.value}>
+                      {fp.icon} {fp.label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -899,6 +1532,96 @@ function ContasReceber() {
         </DialogActions>
       </Dialog>
 
+      {/* Dialog de Detalhes */}
+      <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Detalhes da Conta
+        </DialogTitle>
+        <DialogContent>
+          {contaSelecionada && (
+            <Box sx={{ mt: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Descrição</Typography>
+                  <Typography variant="body2">{contaSelecionada.descricao}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Categoria</Typography>
+                  <Typography variant="body2">{contaSelecionada.categoria}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Valor</Typography>
+                  <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                    R$ {Number(contaSelecionada.valor).toFixed(2)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Vencimento</Typography>
+                  <Typography variant="body2">
+                    {contaSelecionada.dataVencimento ? new Date(contaSelecionada.dataVencimento).toLocaleDateString('pt-BR') : '—'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="textSecondary">Cliente</Typography>
+                  <Typography variant="body2">
+                    {clientes.find(c => c.id === contaSelecionada.clienteId)?.nome || 'Não informado'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="textSecondary">Forma de Pagamento</Typography>
+                  <Typography variant="body2">
+                    {formasPagamento.find(f => f.value === contaSelecionada.formaPagamento)?.label || contaSelecionada.formaPagamento}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Status</Typography>
+                  <Chip
+                    label={statusColors[contaSelecionada.status]?.label}
+                    size="small"
+                    sx={{
+                      bgcolor: `${statusColors[contaSelecionada.status]?.color}20`,
+                      color: statusColors[contaSelecionada.status]?.color,
+                      mt: 0.5,
+                    }}
+                  />
+                </Grid>
+                {contaSelecionada.dataRecebimento && (
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Recebido em</Typography>
+                    <Typography variant="body2">
+                      {new Date(contaSelecionada.dataRecebimento).toLocaleDateString('pt-BR')}
+                    </Typography>
+                  </Grid>
+                )}
+                {contaSelecionada.observacoes && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="textSecondary">Observações</Typography>
+                    <Typography variant="body2">{contaSelecionada.observacoes}</Typography>
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetalhes}>Fechar</Button>
+          {contaSelecionada?.status !== 'recebido' && (
+            <Button
+              onClick={() => {
+                handleCloseDetalhes();
+                handleOpenRecebimento(contaSelecionada);
+              }}
+              variant="contained"
+              color="success"
+              startIcon={<PaymentIcon />}
+            >
+              Receber
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
       <Snackbar 
         open={snackbar.open} 
         autoHideDuration={6000} 
