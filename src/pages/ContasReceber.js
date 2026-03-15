@@ -49,6 +49,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente' },
@@ -113,6 +114,12 @@ function ContasReceber() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_contas_receber',
+        detalhes: 'Erro ao carregar dados de contas a receber'
+      });
     } finally {
       setLoading(false);
     }
@@ -212,7 +219,19 @@ function ContasReceber() {
       });
 
       if (contaEditando) {
+        // Buscar dados antigos para auditoria
+        const contaAntiga = { ...contaEditando };
+        
         await firebaseService.update('contas_receber', contaEditando.id, dadosParaSalvar);
+        
+        // Registrar atualização na auditoria
+        await auditoriaService.registrarAtualizacao(
+          'contas_receber',
+          contaEditando.id,
+          contaAntiga,
+          dadosParaSalvar,
+          `Atualização de conta a receber: ${formData.descricao}`
+        );
         
         // Atualizar estado local
         const contasAtualizadas = contas.map(c => 
@@ -225,6 +244,15 @@ function ContasReceber() {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
         
         const novoId = await firebaseService.add('contas_receber', dadosParaSalvar);
+        
+        // Registrar criação na auditoria
+        await auditoriaService.registrarCriacao(
+          'contas_receber',
+          novoId,
+          dadosParaSalvar,
+          `Criação de conta a receber: ${formData.descricao}`
+        );
+        
         setContas([...contas, { ...dadosParaSalvar, id: novoId }]);
         
         mostrarSnackbar('Conta registrada com sucesso!');
@@ -234,6 +262,12 @@ function ContasReceber() {
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: contaEditando ? 'atualizar_conta_receber' : 'criar_conta_receber',
+        dados: formData
+      });
     }
   };
 
@@ -243,6 +277,17 @@ function ContasReceber() {
         mostrarSnackbar('Conta inválida', 'error');
         return;
       }
+
+      // Registrar ação na auditoria
+      await auditoriaService.registrar('recebimento', {
+        entidade: 'contas_receber',
+        entidadeId: contaSelecionada.id,
+        detalhes: `Recebimento de conta: ${contaSelecionada.descricao}`,
+        dados: {
+          valor: contaSelecionada.valor,
+          formaPagamento: contaSelecionada.formaPagamento
+        }
+      });
 
       // Atualizar status da conta
       const dadosConta = {
@@ -295,6 +340,12 @@ function ContasReceber() {
     } catch (error) {
       console.error('Erro ao registrar recebimento:', error);
       mostrarSnackbar('Erro ao registrar recebimento', 'error');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'registrar_recebimento',
+        contaId: contaSelecionada?.id
+      });
     }
   };
 
@@ -593,6 +644,9 @@ function ContasReceber() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: index * 0.05 }}
+                      style={{
+                        backgroundColor: isVencida ? '#ffebee20' : 'white',
+                      }}
                     >
                       <TableCell>{conta.descricao}</TableCell>
                       <TableCell>
