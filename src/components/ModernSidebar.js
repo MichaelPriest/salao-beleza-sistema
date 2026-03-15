@@ -156,7 +156,7 @@ const menuGroups = [
       { 
         text: 'Dashboard', 
         icon: <DashboardIcon />, 
-        path: '/', 
+        path: '/dashboard', 
         permission: 'visualizar_dashboard',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos podem ver
       },
