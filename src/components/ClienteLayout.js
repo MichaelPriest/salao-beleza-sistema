@@ -53,6 +53,7 @@ const menuItems = [
   { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
+  { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' }, // NOVO
 ];
 
 function ClienteLayout() {
