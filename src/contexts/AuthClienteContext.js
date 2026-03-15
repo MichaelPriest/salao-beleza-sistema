@@ -38,21 +38,21 @@ export const AuthClienteProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(null);
-  const [pendingGoogleUser, setPendingGoogleUser] = useState(null); // 🔥 NOVO: usuário Google pendente de cadastro
+  const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
-  // 🔥 OUVIR MUDANÇAS NO ESTADO DE AUTENTICAÇÃO DO FIREBASE
   useEffect(() => {
     // 🔥 VERIFICAÇÃO CRÍTICA: Só ativar se estiver na área do cliente
     const path = window.location.pathname;
     if (!path.startsWith('/cliente')) {
       console.log('🚫 AuthClienteProvider - Ignorando inicialização fora da área do cliente');
       setLoading(false);
-      return; // Não inicializar fora da área do cliente
+      return;
     }
 
     console.log('✅ AuthClienteProvider - Inicializando na área do cliente');
     
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('📢 AuthClienteProvider - onAuthStateChanged:', user?.uid);
       setFirebaseUser(user);
       
       if (user) {
@@ -60,14 +60,18 @@ export const AuthClienteProvider = ({ children }) => {
         await carregarClientePorUid(user.uid);
       } else {
         // Usuário não está logado no Firebase Auth
+        console.log('👤 AuthClienteProvider - Nenhum usuário no Firebase Auth');
+        
+        // 🔥 TENTAR CARREGAR DO LOCALSTORAGE
         const clienteSalvo = localStorage.getItem('cliente');
         if (clienteSalvo) {
           try {
             const clienteData = JSON.parse(clienteSalvo);
+            console.log('✅ AuthClienteProvider - Cliente carregado do localStorage:', clienteData);
             setCliente(clienteData);
             setIsAuthenticated(true);
           } catch (error) {
-            console.error('Erro ao carregar cliente:', error);
+            console.error('Erro ao carregar cliente do localStorage:', error);
             localStorage.removeItem('cliente');
           }
         }
@@ -80,23 +84,24 @@ export const AuthClienteProvider = ({ children }) => {
 
   const carregarClientePorUid = async (uid) => {
     try {
+      console.log('🔍 AuthClienteProvider - Buscando cliente por UID:', uid);
+      
       // Buscar cliente pelo UID (ID do documento)
       const clienteData = await firebaseService.getById('clientes', uid);
 
       if (clienteData) {
+        console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
         setCliente(clienteData);
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
-        console.log('❌ Cliente não encontrado para o UID:', uid);
-        console.log('🚫 AuthClienteProvider - Usuário não é cliente');
-        // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO - apenas limpar estado
+        console.log('❌ AuthClienteProvider - Cliente não encontrado para o UID:', uid);
         setCliente(null);
         setIsAuthenticated(false);
         localStorage.removeItem('cliente');
       }
     } catch (error) {
-      console.error('Erro ao carregar cliente:', error);
+      console.error('❌ AuthClienteProvider - Erro ao carregar cliente:', error);
     } finally {
       setLoading(false);
     }
@@ -107,18 +112,24 @@ export const AuthClienteProvider = ({ children }) => {
     try {
       setLoading(true);
       
+      console.log('🔐 AuthClienteProvider - Tentando login com email:', email);
+      
       // 1. Autenticar no Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, senha);
       const user = userCredential.user;
+      console.log('✅ AuthClienteProvider - Usuário autenticado:', user.uid);
       
       // 2. Buscar dados do cliente no Firestore usando o UID
       const clienteData = await firebaseService.getById('clientes', user.uid);
       
       if (!clienteData) {
+        console.error('❌ AuthClienteProvider - Dados do cliente não encontrados para UID:', user.uid);
         toast.error('Dados do cliente não encontrados');
         await signOut(auth);
         return false;
       }
+
+      console.log('✅ AuthClienteProvider - Dados do cliente carregados:', clienteData);
 
       // 3. Salvar no estado e localStorage
       setCliente(clienteData);
@@ -129,7 +140,7 @@ export const AuthClienteProvider = ({ children }) => {
       return { success: true, data: clienteData };
       
     } catch (error) {
-      console.error('Erro no login:', error);
+      console.error('❌ AuthClienteProvider - Erro no login:', error);
       
       if (error.code === 'auth/user-not-found') {
         toast.error('Usuário não encontrado');
@@ -146,27 +157,31 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
-  // 🔥 LOGIN COM GOOGLE - VERSÃO ATUALIZADA COM FLUXO DE CADASTRO
+  // LOGIN COM GOOGLE
   const loginComGoogle = async () => {
     try {
       setLoading(true);
       
+      console.log('🔐 AuthClienteProvider - Tentando login com Google');
+      
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+      console.log('✅ AuthClienteProvider - Usuário Google autenticado:', user.uid);
       
       // Verificar se o cliente já existe no Firestore (pelo UID)
       let clienteData = await firebaseService.getById('clientes', user.uid);
 
       if (clienteData) {
-        // Cliente já existe - login normal
+        console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
         setCliente(clienteData);
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
         toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
         return { success: true, data: clienteData };
       } else {
-        // Cliente não existe - verificar se já existe por CPF? Não temos CPF ainda
-        // Então precisamos de cadastro complementar
+        console.log('⚠️ AuthClienteProvider - Cliente não encontrado, precisa completar cadastro');
+        
+        // Cliente não existe - precisa completar cadastro
         const userData = {
           uid: user.uid,
           nome: user.displayName || 'Cliente Google',
@@ -186,7 +201,7 @@ export const AuthClienteProvider = ({ children }) => {
       }
       
     } catch (error) {
-      console.error('Erro no login com Google:', error);
+      console.error('❌ AuthClienteProvider - Erro no login com Google:', error);
       
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Login cancelado');
@@ -202,15 +217,18 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
-  // 🔥 COMPLETAR CADASTRO APÓS LOGIN GOOGLE
+  // COMPLETAR CADASTRO APÓS LOGIN GOOGLE
   const completarCadastroGoogle = async (dadosComplementares) => {
     try {
       setLoading(true);
       
       if (!pendingGoogleUser) {
+        console.error('❌ AuthClienteProvider - Nenhum usuário pendente');
         toast.error('Nenhum usuário pendente para completar cadastro');
-        return false;
+        return { success: false };
       }
+
+      console.log('📝 AuthClienteProvider - Completando cadastro para:', pendingGoogleUser.email);
 
       // Verificar se CPF já está cadastrado (evitar duplicatas)
       const cpfLimpo = removerMascaraCPF(dadosComplementares.cpf);
@@ -219,6 +237,8 @@ export const AuthClienteProvider = ({ children }) => {
       ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
+        console.log('🔄 AuthClienteProvider - CPF já cadastrado, vinculando conta Google');
+        
         // CPF já cadastrado - vincular conta Google ao cliente existente
         const clienteExistente = clientesPorCpf[0];
         
@@ -236,16 +256,20 @@ export const AuthClienteProvider = ({ children }) => {
           foto: pendingGoogleUser.foto || clienteExistente.foto
         };
         
+        console.log('✅ AuthClienteProvider - Cliente atualizado com Google UID:', clienteCompleto);
+        
         setCliente(clienteCompleto);
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteCompleto));
         setPendingGoogleUser(null);
         
-        toast.success(`Bem-vindo(a), ${clienteCompleto.nome}!`);
+        toast.success(`Bem-vindo(a) de volta, ${clienteCompleto.nome}!`);
         return { success: true, data: clienteCompleto };
       }
 
       // Se não encontrou CPF, criar novo cliente com todos os dados
+      console.log('🆕 AuthClienteProvider - Criando novo cliente');
+      
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
@@ -267,7 +291,7 @@ export const AuthClienteProvider = ({ children }) => {
         estado: dadosComplementares.estado,
         googleUid: pendingGoogleUser.uid,
         dataCadastro: hoje,
-        ultimaVisita: null,
+        ultimaVisita: new Date().toISOString(),
         totalGasto: 0,
         status: 'Regular',
         preferencias: {
@@ -279,7 +303,10 @@ export const AuthClienteProvider = ({ children }) => {
         updatedAt: agora
       };
 
+      // 🔥 USAR set EM VEZ DE add PARA GARANTIR O ID CORRETO
       await firebaseService.set('clientes', pendingGoogleUser.uid, novoCliente);
+      
+      console.log('✅ AuthClienteProvider - Novo cliente criado:', novoCliente);
       
       setCliente(novoCliente);
       setIsAuthenticated(true);
@@ -290,18 +317,20 @@ export const AuthClienteProvider = ({ children }) => {
       return { success: true, data: novoCliente };
       
     } catch (error) {
-      console.error('Erro ao completar cadastro:', error);
-      toast.error('Erro ao completar cadastro');
+      console.error('❌ AuthClienteProvider - Erro ao completar cadastro:', error);
+      toast.error('Erro ao completar cadastro: ' + error.message);
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // CADASTRO
+  // CADASTRO NORMAL (sem Google)
   const cadastrar = async (dadosCliente) => {
     try {
       setLoading(true);
+
+      console.log('📝 AuthClienteProvider - Cadastrando novo cliente:', dadosCliente.email);
 
       // Verificar se CPF já existe (evitar duplicatas)
       const cpfLimpo = removerMascaraCPF(dadosCliente.cpf);
@@ -334,6 +363,7 @@ export const AuthClienteProvider = ({ children }) => {
       }
 
       const user = userCredential.user;
+      console.log('✅ AuthClienteProvider - Usuário criado no Firebase Auth:', user.uid);
 
       // 2. Criar documento do cliente com o UID do Firebase Auth
       const agora = new Date().toISOString();
@@ -374,11 +404,13 @@ export const AuthClienteProvider = ({ children }) => {
       // 3. Salvar no Firestore usando o UID como ID do documento
       await firebaseService.set('clientes', user.uid, novoCliente);
       
+      console.log('✅ AuthClienteProvider - Cliente salvo no Firestore');
+      
       toast.success('Cadastro realizado com sucesso! Faça o login.');
       return true;
 
     } catch (error) {
-      console.error('Erro no cadastro:', error);
+      console.error('❌ AuthClienteProvider - Erro no cadastro:', error);
       toast.error('Erro ao realizar cadastro');
       return false;
     } finally {
@@ -388,9 +420,10 @@ export const AuthClienteProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('👋 AuthClienteProvider - Fazendo logout');
       await signOut(auth);
     } catch (error) {
-      console.error('Erro ao fazer logout do Google:', error);
+      console.error('Erro ao fazer logout:', error);
     } finally {
       setCliente(null);
       setIsAuthenticated(false);
@@ -403,6 +436,8 @@ export const AuthClienteProvider = ({ children }) => {
   const atualizarCliente = async (dadosAtualizados) => {
     try {
       if (!cliente?.id) return false;
+
+      console.log('📝 AuthClienteProvider - Atualizando cliente:', cliente.id);
 
       await firebaseService.update('clientes', cliente.id, {
         ...dadosAtualizados,
@@ -429,10 +464,10 @@ export const AuthClienteProvider = ({ children }) => {
       loading,
       isAuthenticated,
       firebaseUser,
-      pendingGoogleUser, // 🔥 EXPOR PARA O COMPONENTE DE LOGIN
+      pendingGoogleUser,
       login,
       loginComGoogle,
-      completarCadastroGoogle, // 🔥 NOVA FUNÇÃO
+      completarCadastroGoogle,
       cadastrar,
       logout,
       atualizarCliente
