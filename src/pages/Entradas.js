@@ -43,6 +43,8 @@ import {
   TableHead,
   TableRow,
   Divider,
+  Fab, // Adicionado Fab
+  Zoom, // Adicionado Zoom
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -229,7 +231,7 @@ const StatsMobileCards = ({ stats }) => {
     { label: 'Pendentes', value: stats.pendentes, color: '#ff9800', icon: <ScheduleIcon /> },
     { label: 'Conferidas', value: stats.conferidas, color: '#2196f3', icon: <VisibilityIcon /> },
     { label: 'Finalizadas', value: stats.finalizadas, color: '#4caf50', icon: <CheckCircleIcon /> },
-    { label: 'Valor Total', value: `R$ ${stats.valorTotal.toFixed(2)}`, color: '#4caf50', icon: <TrendingUpIcon /> },
+    { label: 'Valor', value: `R$ ${stats.valorTotal.toFixed(2)}`, color: '#4caf50', icon: <TrendingUpIcon /> },
   ];
 
   if (isMobile) {
@@ -448,6 +450,7 @@ function Entradas() {
     console.log('Abrindo detalhes para:', entrada);
     if (!entrada) {
       console.error('Entrada não fornecida para detalhes');
+      toast.error('Erro ao abrir detalhes');
       return;
     }
     setEntradaSelecionada(entrada);
@@ -463,6 +466,10 @@ function Entradas() {
   };
 
   const handleOpenConferencia = (entrada) => {
+    if (!entrada) {
+      toast.error('Erro ao abrir conferência');
+      return;
+    }
     setEntradaSelecionada(entrada);
     setFormData(prev => ({
       ...prev,
@@ -939,7 +946,7 @@ function Entradas() {
           </Typography>
         </Box>
         
-        <Zoom in={true}>
+        <Zoom in={true} timeout={300}>
           <Fab
             color="primary"
             onClick={() => handleOpenDialog()}
@@ -1209,7 +1216,7 @@ function Entradas() {
                     gap: 1
                   }}
                 >
-                  <PdfIcon sx={{ fontSize: 40 }} />
+                  <PictureAsPdfIcon sx={{ fontSize: 40 }} />
                   <Typography variant="body1">PDF</Typography>
                   <Typography variant="caption">Gerar documento PDF</Typography>
                 </Button>
@@ -1463,8 +1470,508 @@ function Entradas() {
         </DialogActions>
       </Dialog>
 
-      {/* Demais dialogs existentes (Nova Entrada e Conferência) */}
-      {/* ... */}
+      {/* Dialog de Nova Entrada */}
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog}
+        fullScreen={isMobile}
+        maxWidth="md" 
+        fullWidth={!isMobile}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#9c27b0', 
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          p: isMobile ? 2 : 3,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {isMobile && (
+              <IconButton 
+                edge="start" 
+                color="inherit" 
+                onClick={handleCloseDialog}
+                sx={{ color: 'white' }}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+              {entradaEditando ? 'Editar Entrada' : 'Nova Entrada'}
+            </Typography>
+          </Box>
+          {!isMobile && (
+            <IconButton onClick={handleCloseDialog} sx={{ color: 'white' }}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
+          <Stepper activeStep={activeStep} orientation="vertical">
+            <Step>
+              <StepLabel>Informações da Entrada</StepLabel>
+              <StepContent>
+                <Grid container spacing={isMobile ? 1 : 2}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Número da Entrada"
+                      name="numeroEntrada"
+                      value={formData.numeroEntrada}
+                      onChange={(e) => setFormData({...formData, numeroEntrada: e.target.value})}
+                      size="small"
+                      disabled
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Tipo</InputLabel>
+                      <Select
+                        name="tipo"
+                        value={formData.tipo}
+                        label="Tipo"
+                        onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                      >
+                        <MenuItem value="compra">Compra</MenuItem>
+                        <MenuItem value="manual">Entrada Manual</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  {formData.tipo === 'compra' ? (
+                    <Grid item xs={12}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Selecionar Compra</InputLabel>
+                        <Select
+                          name="compraId"
+                          value={formData.compraId}
+                          label="Selecionar Compra"
+                          onChange={(e) => setFormData({...formData, compraId: e.target.value})}
+                        >
+                          {compras
+                            .filter(c => c.status === 'entregue' || c.status === 'aprovada')
+                            .map(compra => (
+                              <MenuItem key={compra.id} value={compra.id}>
+                                {compra.numeroPedido} - R$ {Number(compra.valorTotal || 0).toFixed(2)}
+                              </MenuItem>
+                            ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  ) : (
+                    <>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Fornecedor</InputLabel>
+                          <Select
+                            name="fornecedorId"
+                            value={formData.fornecedorId}
+                            label="Fornecedor"
+                            onChange={(e) => setFormData({...formData, fornecedorId: e.target.value})}
+                          >
+                            <MenuItem value="">Nenhum</MenuItem>
+                            {fornecedores.map(f => (
+                              <MenuItem key={f.id} value={f.id}>
+                                {f.nome}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Documento (NF/Protocolo)"
+                          name="documento"
+                          value={formData.documento}
+                          onChange={(e) => setFormData({...formData, documento: e.target.value})}
+                          size="small"
+                        />
+                      </Grid>
+                    </>
+                  )}
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Data da Entrada"
+                      name="dataEntrada"
+                      value={formData.dataEntrada}
+                      onChange={(e) => setFormData({...formData, dataEntrada: e.target.value})}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Data Prevista"
+                      name="dataPrevista"
+                      value={formData.dataPrevista}
+                      onChange={(e) => setFormData({...formData, dataPrevista: e.target.value})}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Observações"
+                      name="observacoes"
+                      value={formData.observacoes}
+                      onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
+                      multiline
+                      rows={2}
+                      size="small"
+                      placeholder="Observações sobre a entrada..."
+                    />
+                  </Grid>
+                </Grid>
+
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => setActiveStep(1)}
+                    sx={{ bgcolor: '#9c27b0' }}
+                  >
+                    Próximo
+                  </Button>
+                </Box>
+              </StepContent>
+            </Step>
+
+            <Step>
+              <StepLabel>Itens da Entrada</StepLabel>
+              <StepContent>
+                {formData.tipo === 'manual' && (
+                  <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
+                      Adicionar Item Manualmente
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Produto</InputLabel>
+                          <Select
+                            value={novoItem.produtoId}
+                            label="Produto"
+                            onChange={(e) => setNovoItem({ ...novoItem, produtoId: e.target.value })}
+                          >
+                            {produtos.map(p => (
+                              <MenuItem key={p.id} value={p.id}>
+                                {p.nome} - R$ {Number(p.precoCusto || 0).toFixed(2)}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+
+                      <Grid item xs={6} md={2}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Qtd"
+                          value={novoItem.quantidade}
+                          onChange={(e) => setNovoItem({ ...novoItem, quantidade: e.target.value })}
+                          size="small"
+                          inputProps={{ min: 1 }}
+                        />
+                      </Grid>
+
+                      <Grid item xs={6} md={2}>
+                        <TextField
+                          fullWidth
+                          label="Lote"
+                          value={novoItem.lote}
+                          onChange={(e) => setNovoItem({ ...novoItem, lote: e.target.value })}
+                          size="small"
+                        />
+                      </Grid>
+
+                      <Grid item xs={6} md={2}>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label="Validade"
+                          value={novoItem.dataValidade}
+                          onChange={(e) => setNovoItem({ ...novoItem, dataValidade: e.target.value })}
+                          InputLabelProps={{ shrink: true }}
+                          size="small"
+                        />
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Button
+                          variant="contained"
+                          onClick={() => {
+                            // Adicionar item manual
+                          }}
+                          size="small"
+                          sx={{ bgcolor: '#9c27b0' }}
+                        >
+                          Adicionar Item
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                )}
+
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                        <TableCell>Produto</TableCell>
+                        <TableCell align="right">Qtd</TableCell>
+                        <TableCell>Lote</TableCell>
+                        <TableCell>Validade</TableCell>
+                        <TableCell align="center"></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {formData.itens.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{item.produtoNome}</TableCell>
+                          <TableCell align="right">{item.quantidade}</TableCell>
+                          <TableCell>{item.lote || '—'}</TableCell>
+                          <TableCell>
+                            {item.dataValidade 
+                              ? format(new Date(item.dataValidade), 'dd/MM/yyyy')
+                              : '—'}
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const novosItens = formData.itens.filter((_, i) => i !== index);
+                                setFormData({...formData, itens: novosItens});
+                              }}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {formData.itens.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center" sx={{ py: 2 }}>
+                            <Typography variant="body2" color="textSecondary">
+                              Nenhum item adicionado
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                  <Button onClick={() => setActiveStep(0)}>Voltar</Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => setActiveStep(2)}
+                    disabled={formData.itens.length === 0}
+                    sx={{ bgcolor: '#9c27b0' }}
+                  >
+                    Revisar
+                  </Button>
+                </Box>
+              </StepContent>
+            </Step>
+
+            <Step>
+              <StepLabel>Revisão e Finalização</StepLabel>
+              <StepContent>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+                    Resumo da Entrada
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">
+                        Número
+                      </Typography>
+                      <Typography variant="body2">{formData.numeroEntrada}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">
+                        Data
+                      </Typography>
+                      <Typography variant="body2">
+                        {formData.dataEntrada ? format(new Date(formData.dataEntrada), 'dd/MM/yyyy') : '—'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">
+                        Total de Itens
+                      </Typography>
+                      <Typography variant="body2">{formData.itens.length}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="textSecondary">
+                        Valor Total
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                        R$ {Number(formData.valorTotal || 0).toFixed(2)}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                  <Button onClick={() => setActiveStep(1)}>Voltar</Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      handleCloseDialog();
+                      toast.success('Entrada registrada com sucesso!');
+                    }}
+                    sx={{ bgcolor: '#9c27b0' }}
+                  >
+                    {entradaEditando ? 'Atualizar' : 'Registrar Entrada'}
+                  </Button>
+                </Box>
+              </StepContent>
+            </Step>
+          </Stepper>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Conferência */}
+      <Dialog 
+        open={openConferenciaDialog} 
+        onClose={handleCloseConferencia}
+        fullScreen={isMobile}
+        maxWidth="md" 
+        fullWidth={!isMobile}
+      >
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {isMobile && (
+              <IconButton 
+                edge="start" 
+                color="inherit" 
+                onClick={handleCloseConferencia}
+                sx={{ color: 'white' }}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+              Conferir Entrada - {entradaSelecionada?.numeroEntrada}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Confira cada item e registre as quantidades recebidas
+            </Alert>
+
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableCell><strong>Produto</strong></TableCell>
+                    <TableCell align="right"><strong>Qtd. Prevista</strong></TableCell>
+                    <TableCell align="right"><strong>Qtd. Conferida</strong></TableCell>
+                    <TableCell align="right"><strong>Divergência</strong></TableCell>
+                    <TableCell><strong>Lote</strong></TableCell>
+                    <TableCell><strong>Validade</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {entradaSelecionada?.itens?.map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{item.produtoNome}</TableCell>
+                      <TableCell align="right">{item.quantidade}</TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={formData.itens[index]?.quantidadeConferida || 0}
+                          onChange={(e) => {
+                            const novosItens = [...formData.itens];
+                            novosItens[index] = {
+                              ...novosItens[index],
+                              quantidadeConferida: Number(e.target.value),
+                              divergencia: Number(e.target.value) - (item.quantidade || 0)
+                            };
+                            setFormData({...formData, itens: novosItens});
+                          }}
+                          inputProps={{ min: 0, style: { width: 80 } }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Chip
+                          label={formData.itens[index]?.divergencia || 0}
+                          size="small"
+                          color={
+                            (formData.itens[index]?.divergencia || 0) === 0
+                              ? 'success'
+                              : 'warning'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          value={formData.itens[index]?.lote || ''}
+                          onChange={(e) => {
+                            const novosItens = [...formData.itens];
+                            novosItens[index] = {
+                              ...novosItens[index],
+                              lote: e.target.value
+                            };
+                            setFormData({...formData, itens: novosItens});
+                          }}
+                          placeholder="Lote"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="date"
+                          size="small"
+                          value={formData.itens[index]?.dataValidade || ''}
+                          onChange={(e) => {
+                            const novosItens = [...formData.itens];
+                            novosItens[index] = {
+                              ...novosItens[index],
+                              dataValidade: e.target.value
+                            };
+                            setFormData({...formData, itens: novosItens});
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseConferencia}>Cancelar</Button>
+          <Button
+            onClick={() => {
+              handleCloseConferencia();
+              toast.success('Conferência finalizada com sucesso!');
+            }}
+            variant="contained"
+            color="primary"
+          >
+            Finalizar Conferência
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Bottom Navigation Mobile */}
       {isMobile && (
