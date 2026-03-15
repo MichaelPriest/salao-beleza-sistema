@@ -217,7 +217,7 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
-  // COMPLETAR CADASTRO APÓS LOGIN GOOGLE
+  // 🔥 COMPLETAR CADASTRO APÓS LOGIN GOOGLE - CORRIGIDO PARA SALVAR CPF COM MÁSCARA
   const completarCadastroGoogle = async (dadosComplementares) => {
     try {
       setLoading(true);
@@ -230,10 +230,15 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Completando cadastro para:', pendingGoogleUser.email);
 
-      // Verificar se CPF já está cadastrado (evitar duplicatas)
-      const cpfLimpo = removerMascaraCPF(dadosComplementares.cpf);
+      // 🔥 IMPORTANTE: Manter o CPF com a máscara (já vem formatado do input)
+      const cpfFormatado = dadosComplementares.cpf; // Ex: "331.200.588-40"
+      
+      // Para busca, precisamos do CPF sem máscara
+      const cpfLimpo = removerMascaraCPF(cpfFormatado);
+
+      // Verificar se CPF já está cadastrado (usando o CPF com máscara para consistência)
       const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: cpfLimpo }
+        { field: 'cpf', operator: '==', value: cpfFormatado }
       ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
@@ -273,12 +278,13 @@ export const AuthClienteProvider = ({ children }) => {
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
+      // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {
         id: pendingGoogleUser.uid,
         nome: pendingGoogleUser.nome,
         email: pendingGoogleUser.email,
         foto: pendingGoogleUser.foto,
-        cpf: cpfLimpo,
+        cpf: cpfFormatado, // Salva com máscara (ex: "331.200.588-40")
         telefone: dadosComplementares.telefone,
         dataNascimento: dadosComplementares.dataNascimento,
         genero: dadosComplementares.genero,
@@ -332,10 +338,12 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Cadastrando novo cliente:', dadosCliente.email);
 
-      // Verificar se CPF já existe (evitar duplicatas)
-      const cpfLimpo = removerMascaraCPF(dadosCliente.cpf);
+      // 🔥 IMPORTANTE: CPF já deve vir formatado do formulário
+      const cpfFormatado = dadosCliente.cpf; // Ex: "331.200.588-40"
+      
+      // Para busca, usamos o CPF formatado para consistência
       const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: cpfLimpo }
+        { field: 'cpf', operator: '==', value: cpfFormatado }
       ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
@@ -369,12 +377,13 @@ export const AuthClienteProvider = ({ children }) => {
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
+      // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {
         id: user.uid,
         nome: dadosCliente.nome,
         email: dadosCliente.email,
         telefone: dadosCliente.telefone,
-        cpf: cpfLimpo,
+        cpf: cpfFormatado, // Salva com máscara (ex: "331.200.588-40")
         dataNascimento: dadosCliente.dataNascimento || null,
         genero: dadosCliente.genero || null,
         cep: dadosCliente.cep || null,
@@ -404,7 +413,7 @@ export const AuthClienteProvider = ({ children }) => {
       // 3. Salvar no Firestore usando o UID como ID do documento
       await firebaseService.set('clientes', user.uid, novoCliente);
       
-      console.log('✅ AuthClienteProvider - Cliente salvo no Firestore');
+      console.log('✅ AuthClienteProvider - Cliente salvo no Firestore com CPF:', cpfFormatado);
       
       toast.success('Cadastro realizado com sucesso! Faça o login.');
       return true;
