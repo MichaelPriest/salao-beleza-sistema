@@ -45,6 +45,7 @@ import {
   ListItemSecondaryAction,
   Collapse,
   Snackbar,
+  Badge, // Adicionado Badge
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
