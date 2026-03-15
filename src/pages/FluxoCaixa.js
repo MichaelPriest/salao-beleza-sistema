@@ -8,21 +8,15 @@ import {
   Grid,
   Button,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
+  Paper,
+  IconButton,
+  Tooltip,
   Alert,
   Snackbar,
   InputAdornment,
   LinearProgress,
   Avatar,
-  IconButton,
-  Tooltip,
-  Paper,
+  Chip,
   useMediaQuery,
   useTheme,
   BottomNavigation,
@@ -32,12 +26,6 @@ import {
   Fab,
   Skeleton,
   Divider,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
-  Collapse,
   Badge,
   Dialog,
   DialogTitle,
@@ -47,6 +35,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Pagination,
   Stack,
 } from '@mui/material';
@@ -62,17 +56,14 @@ import {
   ArrowBack as ArrowBackIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  CalendarToday as CalendarIcon,
   PictureAsPdf as PictureAsPdfIcon,
-  Share as ShareIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  Remove as RemoveIcon,
+  CalendarToday as CalendarIcon,
+  Receipt as ReceiptIcon,
+  Payment as PaymentIcon,
   Category as CategoryIcon,
-  Assessment as AssessmentIcon,
-  Timeline as TimelineIcon,
+  Store as StoreIcon,
+  Person as PersonIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -90,7 +81,7 @@ import {
   Legend,
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, isValid } from 'date-fns';
@@ -105,7 +96,8 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   if (!date) return '—';
   
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Handle Firestore Timestamp
+    const dateObj = date?.toDate ? date.toDate() : new Date(date);
     if (!isValid(dateObj)) return '—';
     return format(dateObj, formatString, { locale: ptBR });
   } catch (error) {
@@ -114,8 +106,29 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   }
 };
 
-// Componente de Card de Movimentação Mobile
+// Componente de Card de Transação Mobile
 const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
+  const isReceita = transacao.tipo === 'receita' || transacao.tipo === 'credito';
+  const isDespesa = transacao.tipo === 'despesa' || transacao.tipo === 'debito';
+  
+  const getIcon = () => {
+    if (isReceita) return <TrendingUpIcon sx={{ color: '#4caf50' }} />;
+    if (isDespesa) return <TrendingDownIcon sx={{ color: '#f44336' }} />;
+    return <ReceiptIcon sx={{ color: '#ff9800' }} />;
+  };
+
+  const getColor = () => {
+    if (isReceita) return '#4caf50';
+    if (isDespesa) return '#f44336';
+    return '#ff9800';
+  };
+
+  const getTipoLabel = () => {
+    if (isReceita) return 'Receita';
+    if (isDespesa) return 'Despesa';
+    return transacao.tipo;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -130,6 +143,9 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
           border: '1px solid',
           borderColor: 'divider',
           cursor: 'pointer',
+          '&:hover': {
+            boxShadow: 3,
+          },
         }}
         onClick={() => onDetalhes(transacao)}
       >
@@ -137,12 +153,13 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Avatar 
               sx={{ 
-                bgcolor: transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
+                bgcolor: `${getColor()}20`,
+                color: getColor(),
                 width: 48,
                 height: 48,
               }}
             >
-              {transacao.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}
+              {getIcon()}
             </Avatar>
             
             <Box sx={{ flex: 1 }}>
@@ -154,23 +171,32 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
                   variant="subtitle2" 
                   sx={{ 
                     fontWeight: 700,
-                    color: transacao.tipo === 'receita' ? '#4caf50' : '#f44336'
+                    color: getColor()
                   }}
                 >
-                  {transacao.tipo === 'receita' ? '+' : '-'} R$ {Number(transacao.valor || 0).toFixed(2)}
+                  {isReceita ? '+' : '-'} R$ {Number(transacao.valor || 0).toFixed(2)}
                 </Typography>
               </Box>
               
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Chip
                   size="small"
-                  label={transacao.categoria || 'Sem categoria'}
+                  label={getTipoLabel()}
                   sx={{ 
                     height: 20, 
                     fontSize: '0.65rem',
-                    bgcolor: '#f5f5f5',
+                    bgcolor: `${getColor()}20`,
+                    color: getColor(),
                   }}
                 />
+                
+                {transacao.categoria && (
+                  <Chip
+                    size="small"
+                    label={transacao.categoria}
+                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  />
+                )}
                 
                 {transacao.formaPagamento && (
                   <Chip
@@ -184,6 +210,15 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
                   {formatDate(transacao.data)}
                 </Typography>
               </Box>
+
+              {transacao.status && transacao.status !== 'pago' && transacao.status !== 'recebido' && (
+                <Chip
+                  size="small"
+                  label={transacao.status}
+                  color="warning"
+                  sx={{ mt: 0.5, height: 20, fontSize: '0.65rem' }}
+                />
+              )}
             </Box>
           </Box>
         </CardContent>
@@ -196,10 +231,12 @@ const TransacaoMobileCard = ({ transacao, onDetalhes }) => {
 function FluxoCaixa() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [transacoes, setTransacoes] = useState([]);
+  const [contasPagar, setContasPagar] = useState([]);
+  const [contasReceber, setContasReceber] = useState([]);
   const [caixa, setCaixa] = useState(null);
   const [dataInicio, setDataInicio] = useState(
     format(new Date(new Date().setDate(1)), 'yyyy-MM-dd')
@@ -210,6 +247,7 @@ function FluxoCaixa() {
   const [filtro, setFiltro] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [openDetalheDialog, setOpenDetalheDialog] = useState(false);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
@@ -235,12 +273,23 @@ function FluxoCaixa() {
     try {
       setLoading(true);
       
-      const [transacoesData, caixaData] = await Promise.all([
+      // Buscar dados de todas as fontes
+      const [transacoesData, contasPagarData, contasReceberData, caixaData] = await Promise.all([
         firebaseService.getAll('transacoes').catch(() => []),
+        firebaseService.getAll('contas_pagar').catch(() => []),
+        firebaseService.getAll('contas_receber').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
       ]);
       
+      console.log('📊 Dados carregados:', {
+        transacoes: transacoesData?.length || 0,
+        contasPagar: contasPagarData?.length || 0,
+        contasReceber: contasReceberData?.length || 0
+      });
+
       setTransacoes(transacoesData || []);
+      setContasPagar(contasPagarData || []);
+      setContasReceber(contasReceberData || []);
       
       // Pega o caixa atual (último caixa aberto)
       const caixaAtual = caixaData?.length > 0 
@@ -256,13 +305,15 @@ function FluxoCaixa() {
         dados: {
           periodoInicio: dataInicio,
           periodoFim: dataFim,
-          totalTransacoes: transacoesData?.length || 0
+          totalTransacoes: transacoesData?.length || 0,
+          totalContasPagar: contasPagarData?.length || 0,
+          totalContasReceber: contasReceberData?.length || 0
         }
       });
       
-      mostrarSnackbar('Dados carregados!');
+      mostrarSnackbar('Dados carregados com sucesso!');
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('❌ Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados', 'error');
       
       await auditoriaService.registrarErro(error, { 
@@ -274,15 +325,70 @@ function FluxoCaixa() {
     }
   };
 
+  // Combinar todas as transações
+  const todasTransacoes = useMemo(() => {
+    const combinadas = [];
+
+    // Adicionar transações normais
+    transacoes.forEach(t => {
+      combinadas.push({
+        ...t,
+        id: `trans-${t.id}`,
+        tipoOriginal: 'transacao',
+        dataObj: t.data ? new Date(t.data) : new Date(0),
+      });
+    });
+
+    // Adicionar contas a pagar (despesas)
+    contasPagar.forEach(c => {
+      combinadas.push({
+        id: `pagar-${c.id}`,
+        tipo: 'despesa',
+        descricao: c.descricao || `Conta a pagar`,
+        valor: c.valor || 0,
+        data: c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
+        categoria: c.categoria || 'Fornecedor',
+        formaPagamento: c.formaPagamento,
+        status: c.status || 'pendente',
+        observacoes: c.observacoes,
+        fornecedorId: c.fornecedorId,
+        origem: c.origem || 'manual',
+        dataObj: c.dataVencimento ? new Date(c.dataVencimento) : 
+                c.dataCriacao ? new Date(c.dataCriacao) : 
+                c.createdAt?.toDate?.() || new Date(0),
+      });
+    });
+
+    // Adicionar contas a receber (receitas)
+    contasReceber.forEach(c => {
+      combinadas.push({
+        id: `receber-${c.id}`,
+        tipo: 'receita',
+        descricao: c.descricao || `Conta a receber`,
+        valor: c.valor || 0,
+        data: c.dataVencimento || c.dataCriacao || c.createdAt?.toDate?.() || new Date(),
+        categoria: c.categoria || 'Outros',
+        formaPagamento: c.formaPagamento,
+        status: c.status || 'pendente',
+        observacoes: c.observacoes,
+        clienteId: c.clienteId,
+        dataObj: c.dataVencimento ? new Date(c.dataVencimento) : 
+                c.dataCriacao ? new Date(c.dataCriacao) : 
+                c.createdAt?.toDate?.() || new Date(0),
+      });
+    });
+
+    return combinadas;
+  }, [transacoes, contasPagar, contasReceber]);
+
   // Filtrar transações por período e outros filtros
   const transacoesFiltradas = useMemo(() => {
-    let resultados = transacoes.filter(t => {
-      if (!t.data) return false;
-      const data = new Date(t.data);
+    let resultados = todasTransacoes.filter(t => {
+      if (!t.dataObj || isNaN(t.dataObj.getTime())) return false;
       const inicio = new Date(dataInicio);
       const fim = new Date(dataFim);
       fim.setHours(23, 59, 59, 999);
-      return data >= inicio && data <= fim;
+      return t.dataObj >= inicio && t.dataObj <= fim;
     });
 
     // Aplicar filtro de texto
@@ -291,7 +397,8 @@ function FluxoCaixa() {
       resultados = resultados.filter(t => 
         t.descricao?.toLowerCase().includes(termo) ||
         t.categoria?.toLowerCase().includes(termo) ||
-        t.formaPagamento?.toLowerCase().includes(termo)
+        t.formaPagamento?.toLowerCase().includes(termo) ||
+        t.observacoes?.toLowerCase().includes(termo)
       );
     }
 
@@ -305,30 +412,43 @@ function FluxoCaixa() {
       resultados = resultados.filter(t => t.categoria === filtroCategoria);
     }
 
+    // Aplicar filtro por status
+    if (filtroStatus !== 'todos') {
+      resultados = resultados.filter(t => t.status === filtroStatus);
+    }
+
     return resultados;
-  }, [transacoes, dataInicio, dataFim, filtro, filtroTipo, filtroCategoria]);
+  }, [todasTransacoes, dataInicio, dataFim, filtro, filtroTipo, filtroCategoria, filtroStatus]);
 
   // Calcular totais
   const totais = useMemo(() => {
     const receitas = transacoesFiltradas
-      .filter(t => t.tipo === 'receita' && t.status === 'pago')
+      .filter(t => t.tipo === 'receita' && (t.status === 'pago' || t.status === 'recebido' || !t.status))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
     const despesas = transacoesFiltradas
-      .filter(t => t.tipo === 'despesa' && t.status === 'pago')
+      .filter(t => t.tipo === 'despesa' && (t.status === 'pago' || !t.status))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
     const saldo = receitas - despesas;
 
-    // Receitas pendentes
+    // Pendentes
     const receitasPendentes = transacoesFiltradas
       .filter(t => t.tipo === 'receita' && t.status === 'pendente')
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
-    // Despesas pendentes
     const despesasPendentes = transacoesFiltradas
       .filter(t => t.tipo === 'despesa' && t.status === 'pendente')
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+
+    console.log('💰 Totais calculados:', {
+      receitas,
+      despesas,
+      saldo,
+      receitasPendentes,
+      despesasPendentes,
+      totalTransacoes: transacoesFiltradas.length
+    });
 
     return {
       receitas,
@@ -348,14 +468,18 @@ function FluxoCaixa() {
     dataFinal.setHours(23, 59, 59, 999);
 
     while (dataAtual <= dataFinal) {
-      const diaStr = dataAtual.toISOString().split('T')[0];
+      const diaStr = format(dataAtual, 'yyyy-MM-dd');
       
       const receitasDia = transacoesFiltradas
-        .filter(t => t.tipo === 'receita' && t.status === 'pago' && t.data?.startsWith(diaStr))
+        .filter(t => t.tipo === 'receita' && 
+               (t.status === 'pago' || t.status === 'recebido' || !t.status) &&
+               format(t.dataObj, 'yyyy-MM-dd') === diaStr)
         .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
         
       const despesasDia = transacoesFiltradas
-        .filter(t => t.tipo === 'despesa' && t.status === 'pago' && t.data?.startsWith(diaStr))
+        .filter(t => t.tipo === 'despesa' && 
+               (t.status === 'pago' || !t.status) &&
+               format(t.dataObj, 'yyyy-MM-dd') === diaStr)
         .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
       dados.push({
@@ -377,7 +501,7 @@ function FluxoCaixa() {
     const categorias = {};
     
     transacoesFiltradas
-      .filter(t => t.status === 'pago')
+      .filter(t => t.status === 'pago' || t.status === 'recebido' || !t.status)
       .forEach(t => {
         const cat = t.categoria || 'Outros';
         if (!categorias[cat]) {
@@ -391,12 +515,12 @@ function FluxoCaixa() {
       .sort((a, b) => b.value - a.value);
   }, [transacoesFiltradas]);
 
-  // Dados para gráfico de barras por categoria
+  // Dados para gráfico de barras por categoria (receitas vs despesas)
   const dadosGraficoBarras = useMemo(() => {
     const categorias = {};
     
     transacoesFiltradas
-      .filter(t => t.status === 'pago')
+      .filter(t => t.status === 'pago' || t.status === 'recebido' || !t.status)
       .forEach(t => {
         const cat = t.categoria || 'Outros';
         if (!categorias[cat]) {
@@ -404,7 +528,7 @@ function FluxoCaixa() {
         }
         if (t.tipo === 'receita') {
           categorias[cat].receitas += Number(t.valor) || 0;
-        } else {
+        } else if (t.tipo === 'despesa') {
           categorias[cat].despesas += Number(t.valor) || 0;
         }
       });
@@ -423,16 +547,24 @@ function FluxoCaixa() {
   // Categorias únicas para filtro
   const categoriasUnicas = useMemo(() => {
     const cats = new Set();
-    transacoes.forEach(t => {
+    todasTransacoes.forEach(t => {
       if (t.categoria) cats.add(t.categoria);
     });
     return ['todos', ...Array.from(cats)];
-  }, [transacoes]);
+  }, [todasTransacoes]);
+
+  // Status únicos para filtro
+  const statusUnicos = useMemo(() => {
+    const stats = new Set();
+    todasTransacoes.forEach(t => {
+      if (t.status) stats.add(t.status);
+    });
+    return ['todos', ...Array.from(stats)];
+  }, [todasTransacoes]);
 
   // Paginação
   const transacoesPaginadas = transacoesFiltradas
-    .filter(t => t.status === 'pago')
-    .sort((a, b) => new Date(b.data) - new Date(a.data));
+    .sort((a, b) => b.dataObj - a.dataObj);
   
   const totalPages = Math.ceil(transacoesPaginadas.length / itemsPerPage);
   const transacoesPaginaAtual = transacoesPaginadas.slice(
@@ -496,19 +628,34 @@ function FluxoCaixa() {
       doc.setFont('helvetica', 'normal');
       doc.text(String(totais.totalTransacoes), 70, yPos + 25);
       
+      if (totais.receitasPendentes > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Receitas Pendentes:', 100, yPos + 25);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`R$ ${totais.receitasPendentes.toFixed(2)}`, 145, yPos + 25);
+      }
+      
+      if (totais.despesasPendentes > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Despesas Pendentes:', 25, yPos + 35);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`R$ ${totais.despesasPendentes.toFixed(2)}`, 70, yPos + 35);
+      }
+      
       yPos += 55;
 
       // Tabela de transações
-      const tableColumn = ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo'];
+      const tableColumn = ['Data', 'Descrição', 'Categoria', 'Valor', 'Tipo', 'Status'];
       const tableRows = [];
       
-      transacoesPaginadas.slice(0, 30).forEach(t => {
+      transacoesPaginadas.slice(0, 50).forEach(t => {
         const row = [
-          formatDate(t.data),
+          formatDate(t.dataObj),
           t.descricao || '—',
           t.categoria || '—',
           `R$ ${Number(t.valor || 0).toFixed(2)}`,
           t.tipo === 'receita' ? 'Receita' : 'Despesa',
+          t.status || 'pago',
         ];
         tableRows.push(row);
       });
@@ -532,7 +679,8 @@ function FluxoCaixa() {
           1: { cellWidth: 50 },
           2: { cellWidth: 30 },
           3: { cellWidth: 30, halign: 'right' },
-          4: { cellWidth: 25 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 20 },
         },
       });
       
@@ -576,7 +724,7 @@ function FluxoCaixa() {
     try {
       // Criar dados para exportação
       const dadosExport = transacoesPaginadas.map(t => ({
-        Data: formatDate(t.data),
+        Data: formatDate(t.dataObj),
         Descrição: t.descricao || '',
         Categoria: t.categoria || '',
         'Forma de Pagamento': t.formaPagamento || '',
@@ -679,7 +827,7 @@ function FluxoCaixa() {
             Fluxo de Caixa
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Acompanhe as movimentações financeiras
+            {totais.totalTransacoes} transações no período
           </Typography>
         </Box>
         
@@ -776,13 +924,13 @@ function FluxoCaixa() {
           onClick={() => setOpenFilterDrawer(true)}
           sx={{ 
             mx: 1,
-            color: filtroTipo !== 'todos' || filtroCategoria !== 'todos' ? '#9c27b0' : 'text.secondary'
+            color: filtroTipo !== 'todos' || filtroCategoria !== 'todos' || filtroStatus !== 'todos' ? '#9c27b0' : 'text.secondary'
           }}
         >
           <Badge 
             variant="dot" 
             color="primary"
-            invisible={filtroTipo === 'todos' && filtroCategoria === 'todos'}
+            invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos'}
           >
             <FilterIcon />
           </Badge>
@@ -950,7 +1098,7 @@ function FluxoCaixa() {
             <Card>
               <CardContent sx={{ p: isMobile ? 1 : 2 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, px: 1 }}>
-                  Distribuição
+                  Distribuição por Categoria
                 </Typography>
                 <Box sx={{ height: isMobile ? 250 : 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -989,7 +1137,7 @@ function FluxoCaixa() {
         <Card sx={{ mb: 4 }}>
           <CardContent sx={{ p: isMobile ? 1 : 2 }}>
             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, px: 1 }}>
-              Categorias (Receitas vs Despesas)
+              Receitas vs Despesas por Categoria
             </Typography>
             <Box sx={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -1124,16 +1272,8 @@ function FluxoCaixa() {
           <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
             Categoria
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 200, overflow: 'auto' }}>
-            <Button
-              fullWidth
-              variant={filtroCategoria === 'todos' ? 'contained' : 'outlined'}
-              onClick={() => setFiltroCategoria('todos')}
-              sx={{ justifyContent: 'flex-start' }}
-            >
-              Todas as categorias
-            </Button>
-            {categoriasUnicas.filter(c => c !== 'todos').map((cat) => (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 150, overflow: 'auto', mb: 3 }}>
+            {categoriasUnicas.map((cat) => (
               <Button
                 key={cat}
                 fullWidth
@@ -1142,7 +1282,25 @@ function FluxoCaixa() {
                 sx={{ justifyContent: 'flex-start' }}
               >
                 <CategoryIcon sx={{ mr: 1, fontSize: 18 }} />
-                {cat}
+                {cat === 'todos' ? 'Todas as categorias' : cat}
+              </Button>
+            ))}
+          </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Status
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 150, overflow: 'auto' }}>
+            {statusUnicos.map((status) => (
+              <Button
+                key={status}
+                fullWidth
+                variant={filtroStatus === status ? 'contained' : 'outlined'}
+                onClick={() => setFiltroStatus(status)}
+                sx={{ justifyContent: 'flex-start' }}
+              >
+                <PaymentIcon sx={{ mr: 1, fontSize: 18 }} />
+                {status === 'todos' ? 'Todos os status' : status}
               </Button>
             ))}
           </Box>
@@ -1190,13 +1348,13 @@ function FluxoCaixa() {
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
                     <Typography variant="h6" sx={{ color: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336', mb: 2 }}>
-                      {transacaoSelecionada.descricao}
+                      {transacaoSelecionada.descricao || 'Sem descrição'}
                     </Typography>
                     
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
                         <Typography variant="caption" color="textSecondary">Data</Typography>
-                        <Typography variant="body2">{formatDate(transacaoSelecionada.data)}</Typography>
+                        <Typography variant="body2">{formatDate(transacaoSelecionada.dataObj)}</Typography>
                       </Grid>
                       <Grid item xs={6}>
                         <Typography variant="caption" color="textSecondary">Tipo</Typography>
@@ -1232,7 +1390,7 @@ function FluxoCaixa() {
                           <Chip
                             size="small"
                             label={transacaoSelecionada.status || 'pago'}
-                            color={transacaoSelecionada.status === 'pago' ? 'success' : 'warning'}
+                            color={transacaoSelecionada.status === 'pendente' ? 'warning' : 'success'}
                           />
                         </Box>
                       </Grid>
@@ -1254,17 +1412,17 @@ function FluxoCaixa() {
                         </Grid>
                       )}
 
-                      {transacaoSelecionada.clienteNome && (
+                      {transacaoSelecionada.fornecedorId && (
                         <Grid item xs={12}>
-                          <Typography variant="caption" color="textSecondary">Cliente</Typography>
-                          <Typography variant="body2">{transacaoSelecionada.clienteNome}</Typography>
+                          <Typography variant="caption" color="textSecondary">Fornecedor ID</Typography>
+                          <Typography variant="body2">{transacaoSelecionada.fornecedorId}</Typography>
                         </Grid>
                       )}
 
-                      {transacaoSelecionada.usuarioNome && (
+                      {transacaoSelecionada.clienteId && (
                         <Grid item xs={12}>
-                          <Typography variant="caption" color="textSecondary">Responsável</Typography>
-                          <Typography variant="body2">{transacaoSelecionada.usuarioNome}</Typography>
+                          <Typography variant="caption" color="textSecondary">Cliente ID</Typography>
+                          <Typography variant="body2">{transacaoSelecionada.clienteId}</Typography>
                         </Grid>
                       )}
                     </Grid>
@@ -1351,6 +1509,15 @@ function FluxoCaixa() {
                 <Typography variant="body2">
                   Total de transações: {totais.totalTransacoes}
                 </Typography>
+                <Typography variant="body2">
+                  Receitas: R$ {totais.receitas.toFixed(2)}
+                </Typography>
+                <Typography variant="body2">
+                  Despesas: R$ {totais.despesas.toFixed(2)}
+                </Typography>
+                <Typography variant="body2">
+                  Saldo: R$ {totais.saldo.toFixed(2)}
+                </Typography>
               </Alert>
             </Box>
           </Box>
@@ -1407,7 +1574,7 @@ function FluxoCaixa() {
                 <Badge 
                   variant="dot" 
                   color="primary"
-                  invisible={filtroTipo === 'todos' && filtroCategoria === 'todos'}
+                  invisible={filtroTipo === 'todos' && filtroCategoria === 'todos' && filtroStatus === 'todos'}
                 >
                   <FilterIcon />
                 </Badge>
