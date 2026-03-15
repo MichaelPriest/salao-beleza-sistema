@@ -31,18 +31,18 @@ import {
   BottomNavigation,
   BottomNavigationAction,
   Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  Fab,
-  Zoom,
   Badge,
   Skeleton,
   useMediaQuery,
   useTheme,
   SwipeableDrawer,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -63,7 +63,9 @@ import {
   MoreVert as MoreVertIcon,
   Timeline as TimelineIcon,
   TrendingUp as TrendingUpIcon,
-  Warning as WarningIcon,
+  PictureAsPdf as PdfIcon,
+  Share as ShareIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -71,9 +73,14 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 // Componente de Card Mobile Otimizado
 const EntradaMobileCard = ({ entrada, fornecedor, onDetalhes, onConferir, onPrint }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const statusColors = {
     pendente: { color: '#ff9800', bg: '#fff3e0', label: 'Pendente' },
     conferido: { color: '#2196f3', bg: '#e3f2fd', label: 'Conferido' },
@@ -96,7 +103,12 @@ const EntradaMobileCard = ({ entrada, fornecedor, onDetalhes, onConferir, onPrin
           borderColor: 'divider',
           position: 'relative',
           overflow: 'visible',
+          cursor: 'pointer',
+          '&:hover': {
+            boxShadow: 3,
+          },
         }}
+        onClick={() => onDetalhes(entrada)}
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           {/* Header do Card */}
@@ -159,7 +171,7 @@ const EntradaMobileCard = ({ entrada, fornecedor, onDetalhes, onConferir, onPrin
             </Typography>
           </Box>
 
-          {/* Ações */}
+          {/* Ações - Parar propagação do clique para não abrir detalhes */}
           <Box sx={{ 
             display: 'flex', 
             justifyContent: 'flex-end',
@@ -168,32 +180,38 @@ const EntradaMobileCard = ({ entrada, fornecedor, onDetalhes, onConferir, onPrin
             borderColor: 'divider',
             pt: 1.5,
             mt: 0.5
-          }}>
-            <IconButton 
-              size="small" 
-              onClick={() => onDetalhes(entrada)}
-              sx={{ color: '#9c27b0' }}
-            >
-              <VisibilityIcon fontSize="small" />
-            </IconButton>
+          }} onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="Ver Detalhes">
+              <IconButton 
+                size="small" 
+                onClick={() => onDetalhes(entrada)}
+                sx={{ color: '#9c27b0' }}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
 
             {entrada.status === 'pendente' && (
-              <IconButton
-                size="small"
-                onClick={() => onConferir(entrada)}
-                sx={{ color: '#2196f3' }}
-              >
-                <QrCodeIcon fontSize="small" />
-              </IconButton>
+              <Tooltip title="Conferir Entrada">
+                <IconButton
+                  size="small"
+                  onClick={() => onConferir(entrada)}
+                  sx={{ color: '#2196f3' }}
+                >
+                  <QrCodeIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
 
-            <IconButton
-              size="small"
-              onClick={() => onPrint(entrada)}
-              sx={{ color: '#4caf50' }}
-            >
-              <PrintIcon fontSize="small" />
-            </IconButton>
+            <Tooltip title="Imprimir">
+              <IconButton
+                size="small"
+                onClick={() => onPrint(entrada)}
+                sx={{ color: '#4caf50' }}
+              >
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
         </CardContent>
       </Card>
@@ -298,6 +316,7 @@ function Entradas() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [openConferenciaDialog, setOpenConferenciaDialog] = useState(false);
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
+  const [openPrintDialog, setOpenPrintDialog] = useState(false);
   const [entradaEditando, setEntradaEditando] = useState(null);
   const [entradaSelecionada, setEntradaSelecionada] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -426,13 +445,21 @@ function Entradas() {
   };
 
   const handleOpenDetalhes = (entrada) => {
+    console.log('Abrindo detalhes para:', entrada);
+    if (!entrada) {
+      console.error('Entrada não fornecida para detalhes');
+      return;
+    }
     setEntradaSelecionada(entrada);
     setOpenDetalhesDialog(true);
   };
 
   const handleCloseDetalhes = () => {
     setOpenDetalhesDialog(false);
-    setEntradaSelecionada(null);
+    // Pequeno delay para limpar o estado após o fechamento da animação
+    setTimeout(() => {
+      setEntradaSelecionada(null);
+    }, 200);
   };
 
   const handleOpenConferencia = (entrada) => {
@@ -451,6 +478,375 @@ function Entradas() {
   const handleCloseConferencia = () => {
     setOpenConferenciaDialog(false);
     setEntradaSelecionada(null);
+  };
+
+  // Função de impressão personalizada
+  const handlePrint = (entrada) => {
+    if (!entrada) return;
+    setEntradaSelecionada(entrada);
+    setOpenPrintDialog(true);
+  };
+
+  const handlePrintPDF = () => {
+    if (!entradaSelecionada) return;
+
+    try {
+      const doc = new jsPDF();
+      const fornecedor = fornecedores.find(f => f.id === entradaSelecionada.fornecedorId);
+      
+      // Cabeçalho
+      doc.setFillColor(156, 39, 176); // Roxo
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('COMPROVANTE DE ENTRADA', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Nº ${entradaSelecionada.numeroEntrada}`, 105, 30, { align: 'center' });
+
+      // Informações principais
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      
+      let yPos = 50;
+      
+      // Data e Status
+      doc.setFont('helvetica', 'bold');
+      doc.text('Data da Entrada:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(entradaSelecionada.dataEntrada ? format(new Date(entradaSelecionada.dataEntrada), 'dd/MM/yyyy') : '—', 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      const statusMap = {
+        pendente: 'Pendente',
+        conferido: 'Conferido',
+        finalizado: 'Finalizado',
+        cancelado: 'Cancelado'
+      };
+      doc.text(statusMap[entradaSelecionada.status] || entradaSelecionada.status, 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Fornecedor:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(fornecedor?.nome || '—', 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Documento:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(entradaSelecionada.documento || '—', 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Responsável:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(entradaSelecionada.responsavel || '—', 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total de Itens:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(entradaSelecionada.itens?.length || 0), 70, yPos);
+      
+      yPos += 7;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Valor Total:', 20, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`R$ ${Number(entradaSelecionada.valorTotal || 0).toFixed(2)}`, 70, yPos);
+      
+      // Observações
+      if (entradaSelecionada.observacoes) {
+        yPos += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Observações:', 20, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        
+        // Quebrar texto longo
+        const splitObservacoes = doc.splitTextToSize(entradaSelecionada.observacoes, 170);
+        doc.text(splitObservacoes, 20, yPos);
+        yPos += splitObservacoes.length * 5;
+      }
+      
+      // Tabela de Itens
+      yPos += 10;
+      
+      const tableColumn = ['Produto', 'Qtd', 'Lote', 'Validade', 'Valor'];
+      const tableRows = [];
+      
+      entradaSelecionada.itens?.forEach(item => {
+        const itemData = [
+          item.produtoNome || '—',
+          String(item.quantidade || 0),
+          item.lote || '—',
+          item.dataValidade ? format(new Date(item.dataValidade), 'dd/MM/yyyy') : '—',
+          `R$ ${Number(item.valorUnitario || 0).toFixed(2)}`,
+        ];
+        tableRows.push(itemData);
+      });
+      
+      doc.autoTable({
+        startY: yPos,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [156, 39, 176],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { cellWidth: 20, halign: 'center' },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 30, halign: 'right' },
+        },
+      });
+      
+      // Rodapé
+      const finalY = doc.lastAutoTable.finalY || yPos + 50;
+      
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text('Documento gerado pelo sistema de gestão', 105, finalY + 10, { align: 'center' });
+      doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, finalY + 15, { align: 'center' });
+      
+      // Abrir PDF em nova janela
+      window.open(doc.output('bloburl'), '_blank');
+      
+      setOpenPrintDialog(false);
+      toast.success('PDF gerado com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    }
+  };
+
+  const handlePrintHTML = () => {
+    if (!entradaSelecionada) return;
+
+    const printWindow = window.open('', '_blank');
+    const fornecedor = fornecedores.find(f => f.id === entradaSelecionada.fornecedorId);
+    
+    const statusMap = {
+      pendente: 'Pendente',
+      conferido: 'Conferido',
+      finalizado: 'Finalizado',
+      cancelado: 'Cancelado'
+    };
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Comprovante de Entrada - ${entradaSelecionada.numeroEntrada}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+          }
+          .header {
+            background: #9c27b0;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 5px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+          }
+          .header p {
+            margin: 10px 0 0;
+            font-size: 16px;
+          }
+          .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+          .info-item {
+            display: flex;
+            flex-direction: column;
+          }
+          .info-item .label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+          }
+          .info-item .value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+          }
+          th {
+            background: #9c27b0;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-size: 14px;
+          }
+          td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            font-size: 13px;
+          }
+          tr:hover {
+            background: #f5f5f5;
+          }
+          .total {
+            text-align: right;
+            font-size: 18px;
+            font-weight: bold;
+            color: #4caf50;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+          .footer {
+            text-align: center;
+            font-size: 11px;
+            color: #999;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+          }
+          .observacoes {
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            border-radius: 3px;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+            .header {
+              background: #9c27b0 !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            th {
+              background: #9c27b0 !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>COMPROVANTE DE ENTRADA</h1>
+          <p>Nº ${entradaSelecionada.numeroEntrada}</p>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="label">Data da Entrada</span>
+            <span class="value">${entradaSelecionada.dataEntrada ? format(new Date(entradaSelecionada.dataEntrada), 'dd/MM/yyyy') : '—'}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Status</span>
+            <span class="value">${statusMap[entradaSelecionada.status] || entradaSelecionada.status}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Fornecedor</span>
+            <span class="value">${fornecedor?.nome || '—'}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Documento</span>
+            <span class="value">${entradaSelecionada.documento || '—'}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Responsável</span>
+            <span class="value">${entradaSelecionada.responsavel || '—'}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Total de Itens</span>
+            <span class="value">${entradaSelecionada.itens?.length || 0}</span>
+          </div>
+        </div>
+
+        ${entradaSelecionada.observacoes ? `
+          <div class="observacoes">
+            <strong>Observações:</strong><br>
+            ${entradaSelecionada.observacoes}
+          </div>
+        ` : ''}
+
+        <table>
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Quantidade</th>
+              <th>Lote</th>
+              <th>Validade</th>
+              <th>Valor Unit.</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entradaSelecionada.itens?.map(item => `
+              <tr>
+                <td>${item.produtoNome || '—'}</td>
+                <td>${item.quantidade || 0}</td>
+                <td>${item.lote || '—'}</td>
+                <td>${item.dataValidade ? format(new Date(item.dataValidade), 'dd/MM/yyyy') : '—'}</td>
+                <td>R$ ${Number(item.valorUnitario || 0).toFixed(2)}</td>
+                <td>R$ ${Number(item.total || 0).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="total">
+          Valor Total: R$ ${Number(entradaSelecionada.valorTotal || 0).toFixed(2)}
+        </div>
+
+        <div class="footer">
+          Documento gerado pelo sistema de gestão em ${format(new Date(), 'dd/MM/yyyy HH:mm')}
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    setOpenPrintDialog(false);
   };
 
   // Filtrar entradas
@@ -663,7 +1059,7 @@ function Entradas() {
                 fornecedor={fornecedor}
                 onDetalhes={handleOpenDetalhes}
                 onConferir={handleOpenConferencia}
-                onPrint={() => window.print()}
+                onPrint={handlePrint}
               />
             );
           })
@@ -778,6 +1174,298 @@ function Entradas() {
         </Box>
       </SwipeableDrawer>
 
+      {/* Dialog de Impressão */}
+      <Dialog 
+        open={openPrintDialog} 
+        onClose={() => setOpenPrintDialog(false)}
+        fullScreen={isMobile}
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PrintIcon />
+            <Typography variant="h6">Imprimir Comprovante</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="body1" gutterBottom>
+              Escolha o formato para impressão:
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid item xs={12} sm={6}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handlePrintPDF}
+                  sx={{ 
+                    p: 3,
+                    bgcolor: '#f44336',
+                    '&:hover': { bgcolor: '#d32f2f' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                  }}
+                >
+                  <PdfIcon sx={{ fontSize: 40 }} />
+                  <Typography variant="body1">PDF</Typography>
+                  <Typography variant="caption">Gerar documento PDF</Typography>
+                </Button>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handlePrintHTML}
+                  sx={{ 
+                    p: 3,
+                    bgcolor: '#4caf50',
+                    '&:hover': { bgcolor: '#388e3c' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                  }}
+                >
+                  <PrintIcon sx={{ fontSize: 40 }} />
+                  <Typography variant="body1">Impressão</Typography>
+                  <Typography variant="caption">Abrir janela de impressão</Typography>
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenPrintDialog(false)}>Cancelar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Detalhes */}
+      <Dialog 
+        open={openDetalhesDialog} 
+        onClose={handleCloseDetalhes}
+        fullScreen={isMobile}
+        maxWidth="md" 
+        fullWidth={!isMobile}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: '#9c27b0', 
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          p: isMobile ? 2 : 3,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {isMobile && (
+              <IconButton 
+                edge="start" 
+                color="inherit" 
+                onClick={handleCloseDetalhes}
+                sx={{ color: 'white' }}
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+              Detalhes da Entrada
+            </Typography>
+          </Box>
+          {!isMobile && (
+            <IconButton onClick={handleCloseDetalhes} sx={{ color: 'white' }}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
+          {entradaSelecionada ? (
+            <Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
+                    <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2 }}>
+                      {entradaSelecionada.numeroEntrada}
+                    </Typography>
+                    
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Data da Entrada
+                        </Typography>
+                        <Typography variant="body2">
+                          {entradaSelecionada.dataEntrada 
+                            ? format(new Date(entradaSelecionada.dataEntrada), 'dd/MM/yyyy')
+                            : '—'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Status
+                        </Typography>
+                        <Box sx={{ mt: 0.5 }}>
+                          <Chip
+                            label={entradaSelecionada.status}
+                            size="small"
+                            sx={{
+                              bgcolor: entradaSelecionada.status === 'pendente' ? '#fff3e0' :
+                                      entradaSelecionada.status === 'conferido' ? '#e3f2fd' :
+                                      entradaSelecionada.status === 'finalizado' ? '#e8f5e9' :
+                                      '#ffebee',
+                              color: entradaSelecionada.status === 'pendente' ? '#ff9800' :
+                                     entradaSelecionada.status === 'conferido' ? '#2196f3' :
+                                     entradaSelecionada.status === 'finalizado' ? '#4caf50' :
+                                     '#f44336',
+                            }}
+                          />
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Divider sx={{ my: 1 }} />
+                      </Grid>
+
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Fornecedor
+                        </Typography>
+                        <Typography variant="body2">
+                          {fornecedores.find(f => f.id === entradaSelecionada.fornecedorId)?.nome || '—'}
+                        </Typography>
+                      </Grid>
+
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Documento
+                        </Typography>
+                        <Typography variant="body2">
+                          {entradaSelecionada.documento || '—'}
+                        </Typography>
+                      </Grid>
+
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Responsável
+                        </Typography>
+                        <Typography variant="body2">
+                          {entradaSelecionada.responsavel || '—'}
+                        </Typography>
+                      </Grid>
+
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="textSecondary">
+                          Total de Itens
+                        </Typography>
+                        <Typography variant="body2">
+                          {entradaSelecionada.itens?.length || 0}
+                        </Typography>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Typography variant="caption" color="textSecondary">
+                          Observações
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {entradaSelecionada.observacoes || 'Sem observações'}
+                        </Typography>
+                      </Grid>
+
+                      {entradaSelecionada.dataConferencia && (
+                        <>
+                          <Grid item xs={12}>
+                            <Divider sx={{ my: 1 }} />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Alert severity="info">
+                              Conferido por {entradaSelecionada.responsavelConferencia} em{' '}
+                              {format(new Date(entradaSelecionada.dataConferencia), 'dd/MM/yyyy HH:mm')}
+                            </Alert>
+                          </Grid>
+                        </>
+                      )}
+                    </Grid>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2 }}>
+                    Itens da Entrada
+                  </Typography>
+                  
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                          <TableCell><strong>Produto</strong></TableCell>
+                          <TableCell align="right"><strong>Qtd.</strong></TableCell>
+                          <TableCell align="right"><strong>Qtd. Conferida</strong></TableCell>
+                          <TableCell align="right"><strong>Divergência</strong></TableCell>
+                          <TableCell><strong>Lote</strong></TableCell>
+                          <TableCell><strong>Validade</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {entradaSelecionada.itens?.map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{item.produtoNome}</TableCell>
+                            <TableCell align="right">{item.quantidade}</TableCell>
+                            <TableCell align="right">{item.quantidadeConferida || 0}</TableCell>
+                            <TableCell align="right">
+                              <Chip
+                                label={item.divergencia || 0}
+                                size="small"
+                                sx={{
+                                  bgcolor: (item.divergencia || 0) === 0 ? '#e8f5e9' : '#fff3e0',
+                                  color: (item.divergencia || 0) === 0 ? '#4caf50' : '#ff9800',
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>{item.lote || '—'}</TableCell>
+                            <TableCell>
+                              {item.dataValidade 
+                                ? format(new Date(item.dataValidade), 'dd/MM/yyyy')
+                                : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mt: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="subtitle1">Valor Total</Typography>
+                      <Typography variant="h6" sx={{ color: '#4caf50' }}>
+                        R$ {Number(entradaSelecionada.valorTotal || 0).toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </Box>
+          ) : (
+            <Typography>Carregando...</Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: isMobile ? 2 : 3 }}>
+          <Button 
+            onClick={handleCloseDetalhes}
+            variant="contained"
+            sx={{ bgcolor: '#9c27b0' }}
+            fullWidth={isMobile}
+          >
+            Fechar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Demais dialogs existentes (Nova Entrada e Conferência) */}
+      {/* ... */}
+
       {/* Bottom Navigation Mobile */}
       {isMobile && (
         <Paper
@@ -835,64 +1523,6 @@ function Entradas() {
           </BottomNavigation>
         </Paper>
       )}
-
-      {/* Dialogs existentes - mantidos mas com ajustes mobile */}
-      <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog} 
-        fullScreen={isMobile}
-        maxWidth="md" 
-        fullWidth={!isMobile}
-      >
-        <DialogTitle sx={{ 
-          bgcolor: '#9c27b0', 
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          p: isMobile ? 2 : 3,
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {isMobile && (
-              <IconButton 
-                edge="start" 
-                color="inherit" 
-                onClick={handleCloseDialog}
-                sx={{ color: 'white' }}
-              >
-                <ArrowBackIcon />
-              </IconButton>
-            )}
-            <Typography variant={isMobile ? "subtitle1" : "h6"}>
-              {entradaEditando ? 'Editar Entrada' : 'Nova Entrada'}
-            </Typography>
-          </Box>
-          {!isMobile && (
-            <IconButton onClick={handleCloseDialog} sx={{ color: 'white' }}>
-              <CloseIcon />
-            </IconButton>
-          )}
-        </DialogTitle>
-        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
-          <Stepper activeStep={activeStep} orientation="vertical">
-            {/* Conteúdo do Stepper - mantido igual mas com ajustes de padding */}
-            <Step>
-              <StepLabel>Informações da Entrada</StepLabel>
-              <StepContent>
-                <Grid container spacing={isMobile ? 1 : 2}>
-                  {/* ... conteúdo existente com ajustes de spacing ... */}
-                </Grid>
-              </StepContent>
-            </Step>
-            {/* ... outros Steps ... */}
-          </Stepper>
-        </DialogContent>
-        {!isMobile && (
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
-          </DialogActions>
-        )}
-      </Dialog>
 
       {/* Snackbar */}
       <Snackbar
