@@ -323,6 +323,22 @@ const origemColors = {
   compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
 };
 
+const formasPagamento = [
+  { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
+  { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
+  { value: 'cartao_debito', label: 'Cartão de Débito', icon: '💳' },
+  { value: 'pix', label: 'PIX', icon: '⚡' },
+  { value: 'boleto', label: 'Boleto', icon: '📄' },
+  { value: 'transferencia', label: 'Transferência', icon: '🔄' },
+  { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
+];
+
+const formatarDataISO = (data) => {
+  if (!data) return '';
+  const d = new Date(data);
+  return d.toISOString().split('T')[0];
+};
+
 function ContasPagar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -565,7 +581,362 @@ function ContasPagar() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // ... (manter as funções de CRUD existentes: handleOpenDialog, handleSalvar, handlePagarComissao, handlePagarCompra, handleRegistrarPagamento, etc.)
+  // ========== FUNÇÕES DE DIÁLOGO ==========
+  const handleOpenDialog = (conta = null) => {
+    if (conta && conta.origem === 'manual') {
+      setContaEditando(conta);
+      setFormData({
+        descricao: conta.descricao || '',
+        valor: conta.valor || '',
+        dataVencimento: conta.dataVencimento || formatarDataISO(new Date()),
+        categoria: conta.categoria || 'Fornecedor',
+        fornecedorId: conta.fornecedorId || '',
+        profissionalId: conta.profissionalId || '',
+        percentual: conta.percentual || '',
+        formaPagamento: conta.formaPagamento || 'boleto',
+        observacoes: conta.observacoes || '',
+        status: conta.status || 'pendente',
+        recorrente: conta.recorrente || false,
+        parcelas: conta.parcelas || 1,
+        origem: 'manual',
+        origemId: '',
+        itens: [],
+        numeroPedido: '',
+      });
+    } else if (conta) {
+      mostrarSnackbar('Esta conta não pode ser editada diretamente', 'warning');
+      return;
+    } else {
+      setContaEditando(null);
+      setFormData({
+        descricao: '',
+        valor: '',
+        dataVencimento: formatarDataISO(new Date()),
+        categoria: 'Fornecedor',
+        fornecedorId: '',
+        profissionalId: '',
+        percentual: '',
+        formaPagamento: 'boleto',
+        observacoes: '',
+        status: 'pendente',
+        recorrente: false,
+        parcelas: 1,
+        origem: 'manual',
+        origemId: '',
+        itens: [],
+        numeroPedido: '',
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setContaEditando(null);
+  };
+
+  const handleOpenPagamento = (conta) => {
+    setContaSelecionada(conta);
+    setOpenPagamentoDialog(true);
+  };
+
+  const handleClosePagamento = () => {
+    setOpenPagamentoDialog(false);
+    setContaSelecionada(null);
+  };
+
+  const handleOpenDetalhes = (conta) => {
+    setContaSelecionada(conta);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setContaSelecionada(null);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Se selecionar uma compra, carregar os itens (se necessário)
+    if (name === 'compraId' && value) {
+      const compra = compras.find(c => c.id === value);
+      if (compra) {
+        setFormData(prev => ({
+          ...prev,
+          fornecedorId: compra.fornecedorId,
+          itens: (compra.itens || []).map(item => ({
+            ...item,
+            quantidadeConferida: 0,
+            lote: '',
+            dataValidade: '',
+          })),
+          valorTotal: Number(compra.valorTotal) || 0,
+        }));
+      }
+    }
+  };
+
+  // ========== FUNÇÕES DE PAGAMENTO ==========
+  const handlePagarComissao = async (comissaoId) => {
+    try {
+      const comissaoAntiga = comissoes.find(c => c.id === comissaoId);
+      
+      await firebaseService.update('comissoes', comissaoId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await auditoriaService.registrarAtualizacao(
+        'comissoes',
+        comissaoId,
+        comissaoAntiga,
+        { status: 'pago', dataPagamento: new Date().toISOString() },
+        'Pagamento de comissão'
+      );
+
+      mostrarSnackbar('✅ Comissão paga com sucesso!');
+    } catch (error) {
+      console.error('Erro ao pagar comissão:', error);
+      mostrarSnackbar('Erro ao pagar comissão', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'pagar_comissao',
+        comissaoId
+      });
+    }
+  };
+
+  const handlePagarCompra = async (compraId) => {
+    try {
+      const compraAntiga = compras.find(c => c.id === compraId);
+      
+      await firebaseService.update('compras', compraId, {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await auditoriaService.registrarAtualizacao(
+        'compras',
+        compraId,
+        compraAntiga,
+        { status: 'pago', dataPagamento: new Date().toISOString() },
+        'Pagamento de compra'
+      );
+
+      mostrarSnackbar('✅ Compra paga com sucesso!');
+    } catch (error) {
+      console.error('Erro ao pagar compra:', error);
+      mostrarSnackbar('Erro ao pagar compra', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'pagar_compra',
+        compraId
+      });
+    }
+  };
+
+  const handleRegistrarPagamento = async () => {
+    try {
+      if (!contaSelecionada || !contaSelecionada.id) {
+        mostrarSnackbar('Conta inválida', 'error');
+        return;
+      }
+
+      await auditoriaService.registrar('pagamento_conta', {
+        entidade: 'contas_pagar',
+        entidadeId: contaSelecionada.id,
+        detalhes: `Pagamento de conta: ${contaSelecionada.descricao}`,
+        dados: {
+          valor: contaSelecionada.valor,
+          origem: contaSelecionada.origem
+        }
+      });
+
+      if (contaSelecionada.origem === 'comissao' && contaSelecionada.origemId) {
+        await handlePagarComissao(contaSelecionada.origemId);
+        handleClosePagamento();
+        await carregarDados();
+        return;
+      }
+
+      if (contaSelecionada.origem === 'compra' && contaSelecionada.origemId) {
+        await handlePagarCompra(contaSelecionada.origemId);
+        handleClosePagamento();
+        await carregarDados();
+        return;
+      }
+
+      // Para contas manuais
+      const dadosConta = {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await firebaseService.update('contas_pagar', contaSelecionada.id, dadosConta);
+
+      // Atualizar caixa se estiver aberto
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const novoSaldo = (caixa.saldoAtual || 0) - Number(contaSelecionada.valor);
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: 'despesa',
+          valor: Number(contaSelecionada.valor),
+          descricao: `Pagamento: ${contaSelecionada.descricao}`,
+          data: new Date().toISOString(),
+          contaId: contaSelecionada.id,
+          origem: contaSelecionada.origem,
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        await firebaseService.update('caixa', caixa.id, {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      mostrarSnackbar('Pagamento registrado com sucesso!');
+      await carregarDados();
+      handleClosePagamento();
+    } catch (error) {
+      console.error('Erro ao registrar pagamento:', error);
+      mostrarSnackbar('Erro ao registrar pagamento', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'registrar_pagamento',
+        contaId: contaSelecionada?.id
+      });
+    }
+  };
+
+  const handleSalvar = async () => {
+    try {
+      if (!formData.descricao?.trim()) {
+        mostrarSnackbar('Descrição é obrigatória', 'error');
+        return;
+      }
+
+      const valorNumerico = parseFloat(formData.valor);
+      if (isNaN(valorNumerico) || valorNumerico <= 0) {
+        mostrarSnackbar('Valor deve ser maior que zero', 'error');
+        return;
+      }
+
+      const dadosParaSalvar = {
+        descricao: String(formData.descricao).trim(),
+        valor: Number(valorNumerico),
+        dataVencimento: String(formData.dataVencimento),
+        categoria: String(formData.categoria),
+        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        formaPagamento: String(formData.formaPagamento),
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        status: String(formData.status),
+        recorrente: Boolean(formData.recorrente),
+        parcelas: Number(formData.parcelas) || 1,
+        origem: 'manual',
+        updatedAt: new Date().toISOString(),
+      };
+
+      Object.keys(dadosParaSalvar).forEach(key => {
+        if (dadosParaSalvar[key] === undefined) {
+          delete dadosParaSalvar[key];
+        }
+      });
+
+      if (contaEditando) {
+        const contaAntiga = { ...contaEditando };
+        
+        await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
+        
+        await auditoriaService.registrarAtualizacao(
+          'contas_pagar',
+          contaEditando.id,
+          contaAntiga,
+          dadosParaSalvar,
+          `Atualização de conta: ${formData.descricao}`
+        );
+        
+        mostrarSnackbar('Conta atualizada com sucesso!');
+      } else {
+        dadosParaSalvar.dataCriacao = new Date().toISOString();
+        const novaConta = await firebaseService.add('contas_pagar', dadosParaSalvar);
+        
+        await auditoriaService.registrarCriacao(
+          'contas_pagar',
+          novaConta.id,
+          dadosParaSalvar,
+          `Criação de conta: ${formData.descricao}`
+        );
+        
+        mostrarSnackbar('Conta registrada com sucesso!');
+      }
+
+      await carregarDados();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar conta:', error);
+      mostrarSnackbar('Erro ao salvar conta', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: contaEditando ? 'atualizar_conta_pagar' : 'criar_conta_pagar',
+        dados: formData
+      });
+    }
+  };
+
+  // Verificar contas atrasadas
+  useEffect(() => {
+    const verificarEAtualizarAtrasadas = async () => {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      
+      for (const conta of contas) {
+        if (conta.status === 'pendente' && conta.dataVencimento) {
+          const vencimento = new Date(conta.dataVencimento);
+          vencimento.setHours(0, 0, 0, 0);
+          
+          if (vencimento < hoje) {
+            try {
+              if (conta.origem === 'comissao' && conta.origemId) {
+                await firebaseService.update('comissoes', conta.origemId, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              } else if (conta.origem === 'compra' && conta.origemId) {
+                await firebaseService.update('compras', conta.origemId, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              } else if (conta.origem === 'manual') {
+                await firebaseService.update('contas_pagar', conta.id, {
+                  status: 'atrasado',
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+            } catch (error) {
+              console.error('Erro ao atualizar conta atrasada:', error);
+            }
+          }
+        }
+      }
+      
+      if (contas.length > 0) {
+        await carregarDados();
+      }
+    };
+
+    verificarEAtualizarAtrasadas();
+    const interval = setInterval(verificarEAtualizarAtrasadas, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [contas.length]);
 
   // Filtrar contas
   const contasFiltradas = contas.filter(conta => {
@@ -1444,6 +1815,136 @@ function ContasPagar() {
 
       {/* Drawer de filtros mobile */}
       {renderFilterDrawer()}
+
+      {/* Dialog de Nova Conta Manual */}
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          {contaEditando ? 'Editar Conta Manual' : 'Nova Conta a Pagar'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                name="descricao"
+                value={formData.descricao}
+                onChange={handleInputChange}
+                size="small"
+                required
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Valor"
+                name="valor"
+                value={formData.valor}
+                onChange={handleInputChange}
+                size="small"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                  inputProps: { min: 0, step: 0.01 }
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Data Vencimento"
+                name="dataVencimento"
+                value={formData.dataVencimento}
+                onChange={handleInputChange}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Categoria</InputLabel>
+                <Select
+                  name="categoria"
+                  value={formData.categoria}
+                  onChange={handleInputChange}
+                  label="Categoria"
+                >
+                  <MenuItem value="Fornecedor">Fornecedor</MenuItem>
+                  <MenuItem value="Aluguel">Aluguel</MenuItem>
+                  <MenuItem value="Água">Água</MenuItem>
+                  <MenuItem value="Luz">Luz</MenuItem>
+                  <MenuItem value="Telefone">Telefone</MenuItem>
+                  <MenuItem value="Salários">Salários</MenuItem>
+                  <MenuItem value="Impostos">Impostos</MenuItem>
+                  <MenuItem value="Outros">Outros</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Fornecedor</InputLabel>
+                <Select
+                  name="fornecedorId"
+                  value={formData.fornecedorId}
+                  onChange={handleInputChange}
+                  label="Fornecedor"
+                >
+                  <MenuItem value="">Nenhum</MenuItem>
+                  {fornecedores.map(f => (
+                    <MenuItem key={f.id} value={f.id}>{f.nome}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Forma de Pagamento</InputLabel>
+                <Select
+                  name="formaPagamento"
+                  value={formData.formaPagamento}
+                  onChange={handleInputChange}
+                  label="Forma de Pagamento"
+                >
+                  {formasPagamento.map(fp => (
+                    <MenuItem key={fp.value} value={fp.value}>
+                      {fp.icon} {fp.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Observações"
+                name="observacoes"
+                value={formData.observacoes}
+                onChange={handleInputChange}
+                multiline
+                rows={3}
+                size="small"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button 
+            onClick={handleSalvar} 
+            variant="contained"
+            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+          >
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog de Pagamento */}
       <Dialog open={openPagamentoDialog} onClose={handleClosePagamento} maxWidth="xs" fullWidth>
