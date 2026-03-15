@@ -89,6 +89,7 @@ import { format, isValid, subDays, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import ImprimirHistorico from '../components/ImprimirHistorico'; // 🔥 IMPORT ADICIONADO
 
 // 🔥 FUNÇÃO PARA OBTER DADOS DO CLIENTE DE FORMA SEGURA
 const getClienteData = (clienteId, clientes) => {
