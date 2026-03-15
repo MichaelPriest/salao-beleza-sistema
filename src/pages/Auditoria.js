@@ -42,7 +42,6 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  ListItemSecondaryAction,
   Divider,
   Badge,
 } from '@mui/material';
@@ -80,21 +79,56 @@ import { auditoriaService } from '../services/auditoriaService';
 import { useReactToPrint } from 'react-to-print';
 
 // Componente de Impressão
-const RelatorioAuditoria = React.forwardRef(({ logs, filtros, estatisticas }, ref) => {
-  const logo = localStorage.getItem('logo') || '/logo.png';
-  const empresa = JSON.parse(localStorage.getItem('config') || '{}');
+const RelatorioAuditoria = React.forwardRef(({ logs, filtros, estatisticas, config }, ref) => {
+  const logo = config?.salao?.logo || '';
+  const empresa = config?.salao || {
+    nome: 'Sistema de Gestão',
+    cnpj: '',
+    endereco: {}
+  };
 
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Cabeçalho */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        <img src={logo} alt="Logo" style={{ height: 60, marginBottom: 10 }} />
+        {logo && (
+          <img 
+            src={logo} 
+            alt="Logo" 
+            style={{ 
+              maxHeight: 80, 
+              maxWidth: 200, 
+              marginBottom: 10,
+              objectFit: 'contain'
+            }} 
+          />
+        )}
         <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
           {empresa.nome || 'Sistema de Gestão'}
         </Typography>
+        {empresa.nomeFantasia && (
+          <Typography variant="h5" sx={{ color: '#666', mb: 1 }}>
+            {empresa.nomeFantasia}
+          </Typography>
+        )}
         <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
           Relatório de Auditoria
         </Typography>
+        
+        {/* Informações da empresa */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2, fontSize: '0.9rem' }}>
+          {empresa.cnpj && (
+            <Typography variant="body2" color="textSecondary">
+              CNPJ: {empresa.cnpj}
+            </Typography>
+          )}
+          {empresa.endereco?.cidade && empresa.endereco?.estado && (
+            <Typography variant="body2" color="textSecondary">
+              {empresa.endereco.cidade}/{empresa.endereco.estado}
+            </Typography>
+          )}
+        </Box>
+
         <Typography variant="subtitle1" color="textSecondary">
           Período: {filtros.periodo}
         </Typography>
@@ -152,7 +186,7 @@ const RelatorioAuditoria = React.forwardRef(({ logs, filtros, estatisticas }, re
           </tr>
         </thead>
         <tbody>
-          {logs.map((log, index) => (
+          {logs.slice(0, 100).map((log, index) => (
             <tr key={index} style={{ borderBottom: '1px solid #ddd' }}>
               <td style={{ padding: 8 }}>
                 {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
@@ -197,6 +231,7 @@ function Auditoria() {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [config, setConfig] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroAcao, setFiltroAcao] = useState('todos');
   const [filtroUsuario, setFiltroUsuario] = useState('todos');
@@ -236,13 +271,15 @@ function Auditoria() {
     try {
       setLoading(true);
       
-      const [logsData, usuariosData] = await Promise.all([
+      const [logsData, usuariosData, configData] = await Promise.all([
         firebaseService.getAll('auditoria').catch(() => []),
         firebaseService.getAll('usuarios').catch(() => []),
+        firebaseService.getAll('configuracoes').catch(() => []),
       ]);
       
       setLogs(logsData || []);
       setUsuarios(usuariosData || []);
+      setConfig(configData?.[0] || null);
       
       toast.success('Dados carregados!');
     } catch (error) {
@@ -300,6 +337,7 @@ function Auditoria() {
     try {
       const dadosExport = {
         geradoEm: new Date().toISOString(),
+        empresa: config?.salao?.nome || 'Sistema',
         totalRegistros: logsFiltrados.length,
         filtrosAplicados: {
           acao: filtroAcao,
@@ -671,6 +709,7 @@ function Auditoria() {
                      filtroPeriodo === 'personalizado' ? `${dataInicio} a ${dataFim}` : 'Todos'
           }}
           estatisticas={estatisticas}
+          config={config}
         />
       </Box>
 
@@ -789,6 +828,134 @@ function Auditoria() {
         </Grid>
       )}
 
+      {/* Filtros Desktop */}
+      {!isMobile && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Buscar..."
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: filtro && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setFiltro('')}>
+                          <ClearIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Ação</InputLabel>
+                  <Select
+                    value={filtroAcao}
+                    onChange={(e) => setFiltroAcao(e.target.value)}
+                    label="Ação"
+                  >
+                    <MenuItem value="todos">Todas</MenuItem>
+                    {Object.keys(acoesColors).map(acao => (
+                      <MenuItem key={acao} value={acao}>
+                        {acoesColors[acao].label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Usuário</InputLabel>
+                  <Select
+                    value={filtroUsuario}
+                    onChange={(e) => setFiltroUsuario(e.target.value)}
+                    label="Usuário"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    <MenuItem value="Sistema">Sistema</MenuItem>
+                    {usuarios.map(u => (
+                      <MenuItem key={u.id} value={u.nome}>{u.nome}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Período</InputLabel>
+                  <Select
+                    value={filtroPeriodo}
+                    onChange={(e) => setFiltroPeriodo(e.target.value)}
+                    label="Período"
+                  >
+                    <MenuItem value="todos">Todos</MenuItem>
+                    <MenuItem value="hoje">Hoje</MenuItem>
+                    <MenuItem value="ontem">Ontem</MenuItem>
+                    <MenuItem value="semana">Últimos 7 dias</MenuItem>
+                    <MenuItem value="mes">Últimos 30 dias</MenuItem>
+                    <MenuItem value="personalizado">Personalizado</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {filtroPeriodo === 'personalizado' && (
+                <>
+                  <Grid item xs={12} md={1.5}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Início"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={1.5}>
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Fim"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12} md={1}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => {
+                    setFiltroAcao('todos');
+                    setFiltroUsuario('todos');
+                    setFiltroPeriodo('todos');
+                    setFiltro('');
+                  }}
+                >
+                  Limpar
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Conteúdo principal */}
       <Card>
         <CardContent sx={{ p: isMobile ? 1 : 3 }}>
@@ -808,7 +975,7 @@ function Auditoria() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {logsOrdenados.slice(0, 50).map((log, index) => (
+                  {logsOrdenados.slice(0, 100).map((log, index) => (
                     <TableRow key={log.id} hover>
                       <TableCell>
                         {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
