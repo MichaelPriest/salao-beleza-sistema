@@ -66,6 +66,7 @@ function ClienteDashboard() {
   const [historicoAtendimentos, setHistoricoAtendimentos] = useState([]);
   const [recompensasDisponiveis, setRecompensasDisponiveis] = useState([]);
   const [resgatesRecentes, setResgatesRecentes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
 
   const niveis = {
     bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, proximo: 500 },
@@ -108,7 +109,16 @@ function ClienteDashboard() {
 
       console.log('📌 IDs para busca:', idsParaBuscar);
 
-      // 🔥 CARREGAR AGENDAMENTOS - TENTAR TODOS OS IDs
+      // 🔥 CARREGAR PROFISSIONAIS PRIMEIRO
+      try {
+        const profissionaisData = await firebaseService.getAll('profissionais');
+        setProfissionais(profissionaisData || []);
+        console.log('✅ Profissionais carregados:', profissionaisData?.length || 0);
+      } catch (err) {
+        console.error('Erro ao carregar profissionais:', err);
+      }
+
+      // 🔥 CARREGAR AGENDAMENTOS
       try {
         console.log('📌 Buscando agendamentos...');
         let todosAgendamentos = [];
@@ -131,7 +141,7 @@ function ClienteDashboard() {
         console.error('❌ Erro ao carregar agendamentos:', err);
       }
 
-      // 🔥 CARREGAR PONTUAÇÕES - TENTAR TODOS OS IDs
+      // 🔥 CARREGAR PONTUAÇÕES
       try {
         let todasPontuacoes = [];
         
@@ -156,7 +166,6 @@ function ClienteDashboard() {
           { field: 'ativo', operator: '==', value: true }
         ]);
         
-        // Ordenar por pontos necessários (menor para maior)
         const recompensasOrdenadas = (recompensasData || []).sort((a, b) => 
           (a.pontosNecessarios || 0) - (b.pontosNecessarios || 0)
         );
@@ -186,7 +195,7 @@ function ClienteDashboard() {
         console.error('Erro ao carregar resgates:', err);
       }
 
-      // 🔥 CARREGAR ATENDIMENTOS - TENTAR TODOS OS IDs
+      // 🔥 CARREGAR ATENDIMENTOS
       try {
         let todosAtendimentos = [];
         
@@ -199,7 +208,7 @@ function ClienteDashboard() {
         }
         
         const atendimentosUnicos = Array.from(new Map(todosAtendimentos.map(item => [item.id, item])).values());
-        setHistoricoAtendimentos(atendimentosUnicos?.slice(0, 5) || []);
+        setHistoricoAtendimentos(atendimentosUnicos?.slice(0, 10) || []);
         console.log('✅ Atendimentos carregados:', atendimentosUnicos.length);
       } catch (err) {
         console.error('Erro ao carregar atendimentos:', err);
@@ -749,9 +758,24 @@ function ClienteDashboard() {
                       const servicoNome = atendimento.servicos?.[0]?.nome || 
                                          atendimento.servicoNome || 
                                          'Serviço';
-                      const profissionalNome = atendimento.profissionalNome || 
-                                               atendimento.profissional?.nome || 
-                                               'Profissional';
+                      
+                      // 🔥 NOME DO PROFISSIONAL - Buscar na lista de profissionais
+                      let profissionalNome = 'Profissional não informado';
+                      let profissionalFoto = null;
+                      
+                      if (atendimento.profissionalId && profissionais.length > 0) {
+                        const profissional = profissionais.find(p => 
+                          p.id === atendimento.profissionalId || 
+                          p.uid === atendimento.profissionalId
+                        );
+                        if (profissional) {
+                          profissionalNome = profissional.nome;
+                          profissionalFoto = profissional.foto;
+                        }
+                      } else if (atendimento.profissionalNome) {
+                        profissionalNome = atendimento.profissionalNome;
+                      }
+                      
                       const pontosGanhos = atendimento.pontosGanhos || 
                                           Math.floor((atendimento.valorTotal || 0) * 0.1);
                       
@@ -759,7 +783,19 @@ function ClienteDashboard() {
                         <TableRow key={atendimento.id || index}>
                           <TableCell>{formatarData(atendimento.data)}</TableCell>
                           <TableCell>{servicoNome}</TableCell>
-                          <TableCell>{profissionalNome}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Avatar 
+                                src={profissionalFoto} 
+                                sx={{ width: 32, height: 32, bgcolor: '#ff9800' }}
+                              >
+                                {!profissionalFoto && profissionalNome.charAt(0)}
+                              </Avatar>
+                              <Typography variant="body2">
+                                {profissionalNome}
+                              </Typography>
+                            </Box>
+                          </TableCell>
                           <TableCell align="right">
                             R$ {atendimento.valorTotal?.toFixed(2) || '0,00'}
                           </TableCell>
