@@ -26,7 +26,6 @@ import {
   Divider,
   LinearProgress,
   Avatar,
-  Rating,
   useMediaQuery,
   useTheme,
   BottomNavigation,
@@ -89,7 +88,7 @@ import { format, isValid, subDays, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import ImprimirHistorico from '../components/ImprimirHistorico'; // 🔥 IMPORT ADICIONADO
+import { ImprimirHistorico } from '../components/ImprimirHistorico';
 
 // 🔥 FUNÇÃO PARA OBTER DADOS DO CLIENTE DE FORMA SEGURA
 const getClienteData = (clienteId, clientes) => {
@@ -133,20 +132,6 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
     return format(dateObj, formatString, { locale: ptBR });
   } catch (error) {
     console.warn('Erro ao formatar data:', error);
-    return '—';
-  }
-};
-
-const formatDateTime = (date, time) => {
-  if (!date) return '—';
-  try {
-    const dateObj = date?.toDate ? date.toDate() : new Date(date);
-    if (!isValid(dateObj)) return '—';
-    if (time) {
-      return `${format(dateObj, 'dd/MM/yyyy')} ${time}`;
-    }
-    return format(dateObj, 'dd/MM/yyyy HH:mm');
-  } catch {
     return '—';
   }
 };
@@ -272,7 +257,7 @@ const AtendimentoMobileCard = ({ atendimento, clienteData, profissional, servico
                     : 'Sem observações'}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ color: '#4caf50', fontWeight: 600 }}>
-                  R$ {atendimento.valorTotal?.toFixed(2)}
+                  R$ {(atendimento.valorTotal || 0).toFixed(2)}
                 </Typography>
               </Box>
             </Box>
@@ -335,7 +320,6 @@ const TimelineItemMobile = ({ atendimento, clienteData, profissional, index, tot
   );
 };
 
-// Componente Principal
 function HistoricoAtendimentos() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -454,22 +438,10 @@ function HistoricoAtendimentos() {
     return clienteData?.foto || null;
   }, [clientes]);
 
-  const getClienteTelefone = useCallback((clienteId) => {
-    if (!clienteId) return null;
-    const clienteData = getClienteData(clienteId, clientes);
-    return clienteData?.telefone || null;
-  }, [clientes]);
-
   const getProfissionalNome = useCallback((profissionalId) => {
     if (!profissionalId) return 'Profissional não identificado';
     const profissional = profissionais.find(p => p.id === profissionalId);
     return profissional?.nome || 'Profissional não encontrado';
-  }, [profissionais]);
-
-  const getProfissionalFoto = useCallback((profissionalId) => {
-    if (!profissionalId) return null;
-    const profissional = profissionais.find(p => p.id === profissionalId);
-    return profissional?.foto || null;
   }, [profissionais]);
 
   const getServicosNomes = useCallback((atendimento) => {
@@ -663,7 +635,6 @@ function HistoricoAtendimentos() {
     setAtendimentoSelecionado(atendimento);
     setOpenDetalhesDialog(true);
 
-    // Registrar visualização de detalhes
     auditoriaService.registrar('visualizar_detalhes_atendimento', {
       entidade: 'atendimentos',
       entidadeId: atendimento.id,
@@ -1303,11 +1274,9 @@ function HistoricoAtendimentos() {
                       </Avatar>
                       <Box>
                         <Typography variant="h6">{getClienteNome(atendimentoSelecionado.clienteId)}</Typography>
-                        {getClienteTelefone(atendimentoSelecionado.clienteId) && (
-                          <Typography variant="body2" color="textSecondary">
-                            {getClienteTelefone(atendimentoSelecionado.clienteId)}
-                          </Typography>
-                        )}
+                        <Typography variant="body2" color="textSecondary">
+                          Cliente
+                        </Typography>
                       </Box>
                     </Box>
 
@@ -1474,6 +1443,15 @@ function HistoricoAtendimentos() {
                 </Typography>
               </Alert>
             </Box>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handlePrint}
+              sx={{ mt: 2 }}
+            >
+              Imprimir Relatório
+            </Button>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -1485,7 +1463,11 @@ function HistoricoAtendimentos() {
       <Box sx={{ display: 'none' }}>
         <ImprimirHistorico
           ref={componentRef}
-          atendimentos={atendimentosFiltrados}
+          atendimentos={atendimentosFiltrados.map(a => ({
+            ...a,
+            clienteNome: getClienteNome(a.clienteId),
+            profissionalNome: getProfissionalNome(a.profissionalId)
+          }))}
           clienteNome="Todos os Clientes"
           periodo={getPeriodoTexto()}
         />
