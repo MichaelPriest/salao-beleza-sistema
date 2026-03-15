@@ -88,6 +88,12 @@ function ClienteAgendamentos() {
       const uid = firebaseUser?.uid || cliente?.id;
       console.log('📌 Buscando agendamentos para clienteId:', uid);
       
+      if (!uid) {
+        console.error('❌ ID do cliente não encontrado');
+        toast.error('Erro ao identificar o cliente');
+        return;
+      }
+      
       const [agendamentosData, servicosData, profissionaisData] = await Promise.all([
         firebaseService.query('agendamentos', [
           { field: 'clienteId', operator: '==', value: uid }
@@ -97,6 +103,8 @@ function ClienteAgendamentos() {
       ]);
 
       console.log('✅ Agendamentos encontrados:', agendamentosData?.length || 0);
+      console.log('📋 Dados dos agendamentos:', agendamentosData);
+      
       setAgendamentos(agendamentosData || []);
       setServicos(servicosData || []);
       setProfissionais(profissionaisData || []);
@@ -228,7 +236,7 @@ function ClienteAgendamentos() {
       case 'confirmado': return <CheckIcon fontSize="small" />;
       case 'pendente': return <ScheduleIcon fontSize="small" />;
       case 'cancelado': return <CancelIcon fontSize="small" />;
-      case 'finalizado': return <CheckCircleIcon fontSize="small" />;
+      case 'finalizado': return <CheckIcon fontSize="small" />;
       default: return <EventIcon fontSize="small" />;
     }
   };
@@ -251,13 +259,20 @@ function ClienteAgendamentos() {
     return data >= hoje;
   };
 
-  const agendamentosFuturos = agendamentos
-    .filter(a => a.status !== 'cancelado' && a.status !== 'finalizado')
-    .sort((a, b) => a.data.localeCompare(b.data) || a.horario.localeCompare(b.horario));
+  // 🔥 FILTRAGEM CORRIGIDA - case insensitive
+  const agendamentosFuturos = agendamentos.filter(a => {
+    const status = a.status?.toLowerCase() || '';
+    return status !== 'cancelado' && status !== 'finalizado';
+  }).sort((a, b) => a.data.localeCompare(b.data) || a.horario.localeCompare(b.horario));
 
-  const agendamentosPassados = agendamentos
-    .filter(a => a.status === 'cancelado' || a.status === 'finalizado')
-    .sort((a, b) => b.data.localeCompare(a.data));
+  const agendamentosPassados = agendamentos.filter(a => {
+    const status = a.status?.toLowerCase() || '';
+    return status === 'cancelado' || status === 'finalizado';
+  }).sort((a, b) => b.data.localeCompare(a.data));
+
+  console.log('📊 Total agendamentos:', agendamentos.length);
+  console.log('📊 Agendamentos futuros:', agendamentosFuturos.length);
+  console.log('📊 Agendamentos passados:', agendamentosPassados.length);
 
   if (loading) {
     return (
@@ -279,17 +294,24 @@ function ClienteAgendamentos() {
             Gerencie seus horários e serviços
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleNovoAgendamento}
-          sx={{ 
-            bgcolor: '#9c27b0',
-            '&:hover': { bgcolor: '#7b1fa2' }
-          }}
-        >
-          Novo Agendamento
-        </Button>
+        <Box>
+          <Tooltip title="Atualizar">
+            <IconButton onClick={carregarDados} sx={{ mr: 1, color: '#9c27b0' }}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleNovoAgendamento}
+            sx={{ 
+              bgcolor: '#9c27b0',
+              '&:hover': { bgcolor: '#7b1fa2' }
+            }}
+          >
+            Novo Agendamento
+          </Button>
+        </Box>
       </Box>
 
       {/* Cards de Resumo */}
@@ -310,7 +332,7 @@ function ClienteAgendamentos() {
           <Card sx={{ bgcolor: '#fff3e0' }}>
             <CardContent>
               <Typography variant="h3" align="center" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                {agendamentos.filter(a => a.status === 'pendente').length}
+                {agendamentos.filter(a => a.status?.toLowerCase() === 'pendente').length}
               </Typography>
               <Typography variant="body2" align="center" color="textSecondary">
                 Pendentes
@@ -322,7 +344,7 @@ function ClienteAgendamentos() {
           <Card sx={{ bgcolor: '#e8f5e8' }}>
             <CardContent>
               <Typography variant="h3" align="center" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                {agendamentos.filter(a => a.status === 'confirmado').length}
+                {agendamentos.filter(a => a.status?.toLowerCase() === 'confirmado').length}
               </Typography>
               <Typography variant="body2" align="center" color="textSecondary">
                 Confirmados
@@ -354,8 +376,8 @@ function ClienteAgendamentos() {
                         p: 2,
                         borderLeft: '4px solid',
                         borderLeftColor: 
-                          agendamento.status === 'confirmado' ? '#4caf50' :
-                          agendamento.status === 'pendente' ? '#ff9800' : '#9c27b0',
+                          agendamento.status?.toLowerCase() === 'confirmado' ? '#4caf50' :
+                          agendamento.status?.toLowerCase() === 'pendente' ? '#ff9800' : '#9c27b0',
                       }}
                     >
                       <Grid container spacing={2} alignItems="center">
@@ -407,7 +429,7 @@ function ClienteAgendamentos() {
                             >
                               Detalhes
                             </Button>
-                            {agendamento.status === 'pendente' && (
+                            {agendamento.status?.toLowerCase() === 'pendente' && (
                               <Button
                                 size="small"
                                 variant="outlined"
@@ -448,7 +470,7 @@ function ClienteAgendamentos() {
       <Card>
         <CardContent>
           <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-            Histórico
+            Histórico de Agendamentos {agendamentosPassados.length > 0 && `(${agendamentosPassados.length})`}
           </Typography>
 
           {agendamentosPassados.length > 0 ? (
@@ -464,39 +486,60 @@ function ClienteAgendamentos() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {agendamentosPassados.map((agendamento, index) => (
-                    <TableRow key={agendamento.id || index} hover>
-                      <TableCell>{formatarData(agendamento.data)}</TableCell>
-                      <TableCell>{agendamento.horario || '--:--'}</TableCell>
-                      <TableCell>{agendamento.servicoNome || 'Serviço'}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar 
-                            src={profissionais.find(p => p.id === agendamento.profissionalId)?.foto}
-                            sx={{ width: 24, height: 24 }}
-                          >
-                            {agendamento.profissionalNome?.charAt(0) || '?'}
-                          </Avatar>
-                          {agendamento.profissionalNome || '-'}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={getStatusIcon(agendamento.status)}
-                          label={getStatusLabel(agendamento.status)}
-                          color={getStatusColor(agendamento.status)}
-                          size="small"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {agendamentosPassados.map((agendamento, index) => {
+                    const profissional = profissionais.find(p => 
+                      p.id === agendamento.profissionalId || 
+                      p.uid === agendamento.profissionalId
+                    );
+                    
+                    return (
+                      <TableRow key={agendamento.id || index} hover>
+                        <TableCell>{formatarData(agendamento.data)}</TableCell>
+                        <TableCell>{agendamento.horario || '--:--'}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {agendamento.servicoNome || 'Serviço'}
+                          </Typography>
+                          {agendamento.servicoPreco && (
+                            <Typography variant="caption" color="textSecondary">
+                              R$ {agendamento.servicoPreco.toFixed(2)}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar 
+                              src={profissional?.foto}
+                              sx={{ width: 32, height: 32, bgcolor: '#ff9800' }}
+                            >
+                              {!profissional?.foto && (agendamento.profissionalNome?.charAt(0) || '?')}
+                            </Avatar>
+                            <Typography variant="body2">
+                              {agendamento.profissionalNome || 'Não informado'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={getStatusIcon(agendamento.status)}
+                            label={getStatusLabel(agendamento.status)}
+                            color={getStatusColor(agendamento.status)}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
           ) : (
-            <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
-              Nenhum histórico de agendamentos encontrado
-            </Typography>
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+              <Typography variant="body1" color="textSecondary">
+                Nenhum histórico de agendamentos encontrado
+              </Typography>
+            </Paper>
           )}
         </CardContent>
       </Card>
@@ -676,6 +719,11 @@ function ClienteAgendamentos() {
                 <Grid item xs={12}>
                   <Typography variant="caption" color="textSecondary">Serviço</Typography>
                   <Typography variant="body2">{selectedAgendamento.servicoNome}</Typography>
+                  {selectedAgendamento.servicoPreco && (
+                    <Typography variant="caption" color="textSecondary">
+                      R$ {selectedAgendamento.servicoPreco.toFixed(2)}
+                    </Typography>
+                  )}
                 </Grid>
                 <Grid item xs={12}>
                   <Typography variant="caption" color="textSecondary">Profissional</Typography>
@@ -684,7 +732,7 @@ function ClienteAgendamentos() {
                       src={profissionais.find(p => p.id === selectedAgendamento.profissionalId)?.foto}
                       sx={{ width: 32, height: 32 }}
                     >
-                      {selectedAgendamento.profissionalNome?.charAt(0)}
+                      {selectedAgendamento.profissionalNome?.charAt(0) || '?'}
                     </Avatar>
                     <Typography variant="body2">
                       {selectedAgendamento.profissionalNome || 'A definir'}
@@ -721,7 +769,7 @@ function ClienteAgendamentos() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDetailsDialog(false)}>Fechar</Button>
-          {selectedAgendamento?.status === 'pendente' && (
+          {selectedAgendamento?.status?.toLowerCase() === 'pendente' && (
             <Button 
               color="error" 
               onClick={() => {
