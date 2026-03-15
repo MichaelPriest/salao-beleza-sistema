@@ -64,6 +64,7 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente', icon: <ScheduleIcon /> },
@@ -141,6 +142,12 @@ function Entradas() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_entradas',
+        detalhes: 'Erro ao carregar dados de entradas'
+      });
     } finally {
       setLoading(false);
     }
@@ -345,6 +352,16 @@ function Entradas() {
         return;
       }
 
+      // Registrar ação na auditoria
+      await auditoriaService.registrar('conferencia_entrada', {
+        entidade: 'entradas',
+        entidadeId: entradaSelecionada.id,
+        detalhes: `Conferência de entrada: ${entradaSelecionada.numeroEntrada}`,
+        dados: {
+          itens: formData.itens
+        }
+      });
+
       // Verificar se há divergências
       const temDivergencia = formData.itens.some(item => (item.divergencia || 0) !== 0);
       
@@ -358,6 +375,15 @@ function Entradas() {
       };
 
       await firebaseService.update('entradas', entradaSelecionada.id, dadosAtualizados);
+
+      // Registrar atualização na auditoria
+      await auditoriaService.registrarAtualizacao(
+        'entradas',
+        entradaSelecionada.id,
+        entradaSelecionada,
+        dadosAtualizados,
+        temDivergencia ? 'Conferência com divergências' : 'Conferência finalizada'
+      );
 
       // Atualizar estoque dos produtos
       for (const item of formData.itens) {
@@ -395,6 +421,12 @@ function Entradas() {
     } catch (error) {
       console.error('Erro ao finalizar conferência:', error);
       mostrarSnackbar('Erro ao finalizar conferência', 'error');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: 'finalizar_conferencia',
+        entradaId: entradaSelecionada?.id
+      });
     }
   };
 
@@ -433,7 +465,19 @@ function Entradas() {
       };
 
       if (entradaEditando) {
+        // Buscar dados antigos para auditoria
+        const entradaAntiga = { ...entradaEditando };
+        
         await firebaseService.update('entradas', entradaEditando.id, dadosParaSalvar);
+        
+        // Registrar atualização na auditoria
+        await auditoriaService.registrarAtualizacao(
+          'entradas',
+          entradaEditando.id,
+          entradaAntiga,
+          dadosParaSalvar,
+          `Atualização de entrada: ${formData.numeroEntrada}`
+        );
         
         // Atualizar estado local
         setEntradas(prev => prev.map(e => 
@@ -445,6 +489,15 @@ function Entradas() {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
         
         const novoId = await firebaseService.add('entradas', dadosParaSalvar);
+        
+        // Registrar criação na auditoria
+        await auditoriaService.registrarCriacao(
+          'entradas',
+          novoId,
+          dadosParaSalvar,
+          `Criação de entrada: ${formData.numeroEntrada}`
+        );
+        
         setEntradas([...entradas, { ...dadosParaSalvar, id: novoId }]);
         
         mostrarSnackbar('Entrada registrada com sucesso!');
@@ -454,6 +507,12 @@ function Entradas() {
     } catch (error) {
       console.error('Erro ao salvar entrada:', error);
       mostrarSnackbar('Erro ao salvar entrada', 'error');
+      
+      // Registrar erro na auditoria
+      await auditoriaService.registrarErro(error, { 
+        acao: entradaEditando ? 'atualizar_entrada' : 'criar_entrada',
+        dados: formData
+      });
     }
   };
 
