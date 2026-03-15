@@ -108,7 +108,7 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   }
 };
 
-// 🔥 FUNÇÃO PARA FORMATAR MOEDA - ADICIONADA
+// Função para formatar moeda
 const formatarMoeda = (valor) => {
   try {
     return new Intl.NumberFormat('pt-BR', {
@@ -263,12 +263,13 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
             <Box sx={{ flex: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  {atendimento.cliente?.nome || 'Cliente'}
+                  {atendimento.cliente?.nome || 'Cliente não encontrado'}
                 </Typography>
                 <Chip
                   size="small"
-                  label={atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
-                  color={atendimento.comissaoPaga ? 'success' : 'warning'}
+                  label={atendimento.status || 'Pendente'}
+                  color={atendimento.status === 'finalizado' ? 'success' : 
+                         atendimento.status === 'cancelado' ? 'error' : 'warning'}
                   sx={{ height: 20, fontSize: '0.65rem' }}
                 />
               </Box>
@@ -277,20 +278,33 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <EventIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary">
-                    {formatDate(atendimento.data)} {atendimento.horaInicio}
+                    {formatDate(atendimento.data)} {atendimento.horaInicio ? `às ${atendimento.horaInicio}` : ''}
                   </Typography>
                 </Box>
               </Box>
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {atendimento.servicos?.map(s => s.nome).join(', ')?.substring(0, 30)}
-                  {(atendimento.servicos?.map(s => s.nome).join(', ')?.length || 0) > 30 ? '...' : ''}
+                  {atendimento.servicos?.map(s => s.nome).join(', ') || 
+                   atendimento.itensServico?.map(s => s.nome).join(', ') || 
+                   'Serviço'}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ color: '#4caf50', fontWeight: 600 }}>
-                  {formatarMoeda(atendimento.comissaoTotal)}
+                  {formatarMoeda(atendimento.valorTotal || 0)}
                 </Typography>
               </Box>
+
+              {atendimento.comissoes && atendimento.comissoes.length > 0 && (
+                <Box sx={{ mt: 1 }}>
+                  <Chip
+                    size="small"
+                    icon={<PercentIcon sx={{ fontSize: 12 }} />}
+                    label={`Comissão: ${formatarMoeda(atendimento.comissaoTotal || 0)}`}
+                    color={atendimento.comissaoPaga ? 'success' : 'warning'}
+                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  />
+                </Box>
+              )}
             </Box>
           </Box>
         </CardContent>
@@ -308,7 +322,6 @@ const RelatorioComissoes = React.forwardRef(({
   configuracoes,
   tipo = 'completo' 
 }, ref) => {
-  // 🔥 FUNÇÃO DENTRO DO COMPONENTE DE IMPRESSÃO
   const formatarMoeda = (valor) => {
     try {
       return new Intl.NumberFormat('pt-BR', {
@@ -530,12 +543,14 @@ function MinhasComissoes() {
       
       console.log('🔄 Carregando dados de comissões...');
 
+      // Carregar configurações
       const configuracoesData = await firebaseService.getAll('configuracoes');
       const configuracoesArray = Array.isArray(configuracoesData) ? configuracoesData : [];
       if (configuracoesArray.length > 0) {
         setConfiguracoes(configuracoesArray[0]);
       }
       
+      // Carregar usuário logado
       let usuarioLogado = null;
       let profissionalId = null;
       let profissionalNome = '';
@@ -562,8 +577,10 @@ function MinhasComissoes() {
       const isAdminUser = usuarioTipo === 'admin';
       setIsAdmin(isAdminUser);
 
+      // 🔥 CARREGAR PROFISSIONAIS
       const profissionaisData = await firebaseService.getAll('profissionais');
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
+      console.log('Profissionais carregados:', profissionaisArray.length);
       setProfissionais(profissionaisArray);
 
       if (!isAdminUser && !profissionalId) {
@@ -579,11 +596,16 @@ function MinhasComissoes() {
         tipo: usuarioTipo
       });
 
+      // 🔥 CARREGAR CLIENTES
       const clientesData = await firebaseService.getAll('clientes');
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
+      console.log('Clientes carregados:', clientesArray.length);
       setClientes(clientesArray);
 
+      // 🔥 CARREGAR COMISSÕES
       await carregarComissoes(isAdminUser ? null : profissionalId);
+      
+      // 🔥 CARREGAR ATENDIMENTOS (DEPOIS DE TER CLIENTES E COMISSÕES)
       await carregarAtendimentos(isAdminUser ? null : profissionalId);
 
       // Registrar acesso na auditoria
@@ -612,8 +634,10 @@ function MinhasComissoes() {
 
   const carregarComissoes = async (profissionalId) => {
     try {
+      console.log('📊 Carregando comissões...');
       const comissoesData = await firebaseService.getAll('comissoes');
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
+      console.log('Comissões totais:', comissoesArray.length);
       
       let comissoesFiltradas = comissoesArray;
       
@@ -621,6 +645,7 @@ function MinhasComissoes() {
         comissoesFiltradas = comissoesArray.filter(c => 
           c && c.profissionalId === profissionalId
         );
+        console.log('Comissões filtradas pelo profissional:', comissoesFiltradas.length);
       } else if (isAdmin && filtroProfissional !== 'todos') {
         comissoesFiltradas = comissoesArray.filter(c => 
           c && c.profissionalId === filtroProfissional
@@ -635,6 +660,7 @@ function MinhasComissoes() {
           const data = new Date(dataStr);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
+        console.log('Comissões após filtro de data:', comissoesFiltradas.length);
       }
 
       if (filtroStatus !== 'todos') {
@@ -659,6 +685,7 @@ function MinhasComissoes() {
         status: c.status || 'pendente'
       }));
 
+      console.log('Comissões processadas:', comissoesFiltradas.length);
       setComissoes(comissoesFiltradas);
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
@@ -668,27 +695,31 @@ function MinhasComissoes() {
 
   const carregarAtendimentos = async (profissionalId) => {
     try {
+      console.log('📊 Carregando atendimentos...');
       const atendimentosData = await firebaseService.getAll('atendimentos');
       const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
+      console.log('Atendimentos totais:', atendimentosArray.length);
       
+      // Filtrar apenas atendimentos finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => a && a.status === 'finalizado');
+      console.log('Atendimentos finalizados:', atendimentosFiltrados.length);
       
       if (profissionalId) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          const temProfissional = a.itensServico?.some(
-            item => item && item.profissionalId === profissionalId
-          ) || a.servicos?.some(
-            s => s && s.profissionalId === profissionalId
-          );
+          // Verificar se o profissional participou do atendimento (pode estar em itensServico ou servicos)
+          const temProfissional = 
+            (a.itensServico && a.itensServico.some(item => item && item.profissionalId === profissionalId)) ||
+            (a.servicos && a.servicos.some(s => s && s.profissionalId === profissionalId));
+          
           return temProfissional;
         });
+        console.log('Atendimentos filtrados pelo profissional:', atendimentosFiltrados.length);
       } else if (isAdmin && filtroProfissional !== 'todos') {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          const temProfissional = a.itensServico?.some(
-            item => item && item.profissionalId === filtroProfissional
-          ) || a.servicos?.some(
-            s => s && s.profissionalId === filtroProfissional
-          );
+          const temProfissional = 
+            (a.itensServico && a.itensServico.some(item => item && item.profissionalId === filtroProfissional)) ||
+            (a.servicos && a.servicos.some(s => s && s.profissionalId === filtroProfissional));
+          
           return temProfissional;
         });
       }
@@ -699,19 +730,28 @@ function MinhasComissoes() {
           const data = new Date(a.data);
           return data.getMonth() + 1 === filtroMes && data.getFullYear() === filtroAno;
         });
+        console.log('Atendimentos após filtro de data:', atendimentosFiltrados.length);
       }
 
+      // Processar atendimentos com dados do cliente e comissões
       const atendimentosProcessados = atendimentosFiltrados.map(atendimento => {
+        // Buscar cliente pelo ID
         const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
+        
+        // Buscar todas as comissões deste atendimento
         const comissoesDoAtendimento = comissoes.filter(c => 
           c && c.atendimentoId === atendimento.id
         );
         
+        // Se for profissional específico, filtrar as comissões dele
         const comissoesDoProfissional = profissionalId 
           ? comissoesDoAtendimento.filter(c => c.profissionalId === profissionalId)
           : comissoesDoAtendimento;
         
+        // Calcular comissão total
         const comissaoTotal = comissoesDoProfissional.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+        
+        // Verificar se todas as comissões estão pagas
         const todasPagas = comissoesDoProfissional.length > 0 && 
                           comissoesDoProfissional.every(c => c.status === 'pago');
         
@@ -721,11 +761,15 @@ function MinhasComissoes() {
           valorTotal: Number(atendimento.valorTotal) || 0,
           comissaoTotal: comissaoTotal,
           comissaoPaga: todasPagas,
-          comissoes: comissoesDoProfissional
+          comissoes: comissoesDoProfissional,
+          servicos: atendimento.servicos || atendimento.itensServico || []
         };
       });
 
+      // Ordenar por data (mais recentes primeiro)
       atendimentosProcessados.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+      console.log('Atendimentos processados:', atendimentosProcessados.length);
       setAtendimentos(atendimentosProcessados);
     } catch (error) {
       console.error('Erro ao carregar atendimentos:', error);
@@ -782,6 +826,12 @@ function MinhasComissoes() {
         quantidadeCancelada: comissoes.filter(c => c && c.status === 'cancelado').length,
       });
 
+      console.log('Resumo calculado:', {
+        totalPeriodo,
+        aReceber,
+        recebido,
+        quantidade: comissoes.length
+      });
     } catch (error) {
       console.error('Erro ao calcular resumo:', error);
     }
@@ -1010,7 +1060,7 @@ function MinhasComissoes() {
         const atendimentosData = atendimentosFiltrados.slice(0, 20).map(a => [
           formatDate(a.data),
           a.cliente?.nome || '—',
-          a.servicos?.map(s => s.nome).join(', ')?.substring(0, 30) || '—',
+          (a.servicos?.map(s => s.nome).join(', ') || '—').substring(0, 30),
           formatarMoeda(a.valorTotal),
           formatarMoeda(a.comissaoTotal),
           a.comissaoPaga ? 'Pago' : 'Pendente'
@@ -1223,7 +1273,6 @@ function MinhasComissoes() {
       const termo = filtroBusca.toLowerCase();
       return (
         (a.cliente?.nome && a.cliente.nome.toLowerCase().includes(termo)) ||
-        (a.id && a.id.toLowerCase().includes(termo)) ||
         (a.servicos && a.servicos.some(s => s && s.nome && s.nome.toLowerCase().includes(termo)))
       );
     });
@@ -1871,7 +1920,7 @@ function MinhasComissoes() {
                       <Box>
                         <Typography variant="h6">{atendimentoSelecionado.cliente?.nome || 'Cliente'}</Typography>
                         <Typography variant="caption" color="textSecondary">
-                          {formatDate(atendimentoSelecionado.data)} às {atendimentoSelecionado.horaInicio}
+                          {formatDate(atendimentoSelecionado.data)} {atendimentoSelecionado.horaInicio ? `às ${atendimentoSelecionado.horaInicio}` : ''}
                         </Typography>
                       </Box>
                     </Box>
@@ -1892,7 +1941,7 @@ function MinhasComissoes() {
                           <Typography variant="body2">{servico.nome}</Typography>
                           <Box sx={{ textAlign: 'right' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                              R$ {(comissaoServico?.valor || 0).toFixed(2)}
+                              {formatarMoeda(comissaoServico?.valor || 0)}
                             </Typography>
                             {comissaoServico && (
                               <Chip
