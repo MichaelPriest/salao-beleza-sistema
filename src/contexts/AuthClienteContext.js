@@ -57,7 +57,7 @@ export const AuthClienteProvider = ({ children }) => {
       
       if (user) {
         // Usuário está logado no Firebase Auth
-        await carregarClientePorUid(user.uid);
+        await carregarClientePorUid(user.uid, user.email);
       } else {
         // Usuário não está logado no Firebase Auth
         console.log('👤 AuthClienteProvider - Nenhum usuário no Firebase Auth');
@@ -82,15 +82,53 @@ export const AuthClienteProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const carregarClientePorUid = async (uid) => {
+  // 🔥 FUNÇÃO CORRIGIDA PARA BUSCAR CLIENTE POR MÚLTIPLOS CRITÉRIOS
+  const carregarClientePorUid = async (uid, email) => {
     try {
-      console.log('🔍 AuthClienteProvider - Buscando cliente por UID:', uid);
+      console.log('🔍 AuthClienteProvider - Buscando cliente para UID:', uid);
       
-      // Buscar cliente pelo UID (ID do documento)
-      const clienteData = await firebaseService.getById('clientes', uid);
+      // 🔥 PRIMEIRA TENTATIVA: Buscar cliente pelo UID (ID do documento)
+      let clienteData = await firebaseService.getById('clientes', uid);
+
+      // 🔥 SEGUNDA TENTATIVA: Se não encontrar, buscar por googleUid
+      if (!clienteData) {
+        console.log('🔍 AuthClienteProvider - Cliente não encontrado por UID, buscando por googleUid...');
+        
+        const clientesPorGoogleUid = await firebaseService.query('clientes', [
+          { field: 'googleUid', operator: '==', value: uid }
+        ]);
+        
+        if (clientesPorGoogleUid && clientesPorGoogleUid.length > 0) {
+          clienteData = clientesPorGoogleUid[0];
+          console.log('✅ AuthClienteProvider - Cliente encontrado por googleUid:', clienteData);
+        }
+      }
+
+      // 🔥 TERCEIRA TENTATIVA: Buscar por email (fallback)
+      if (!clienteData && email) {
+        console.log('🔍 AuthClienteProvider - Buscando cliente por email:', email);
+        
+        const clientesPorEmail = await firebaseService.query('clientes', [
+          { field: 'email', operator: '==', value: email }
+        ]);
+        
+        if (clientesPorEmail && clientesPorEmail.length > 0) {
+          clienteData = clientesPorEmail[0];
+          console.log('✅ AuthClienteProvider - Cliente encontrado por email:', clienteData);
+          
+          // Se encontrou por email, atualizar com o googleUid para próximos logins
+          if (!clienteData.googleUid) {
+            await firebaseService.update('clientes', clienteData.id, {
+              googleUid: uid,
+              updatedAt: new Date().toISOString()
+            });
+            console.log('✅ AuthClienteProvider - Cliente atualizado com googleUid');
+          }
+        }
+      }
 
       if (clienteData) {
-        console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
+        console.log('✅ AuthClienteProvider - Cliente encontrado:', clienteData);
         setCliente(clienteData);
         setIsAuthenticated(true);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
@@ -168,8 +206,19 @@ export const AuthClienteProvider = ({ children }) => {
       const user = result.user;
       console.log('✅ AuthClienteProvider - Usuário Google autenticado:', user.uid);
       
-      // Verificar se o cliente já existe no Firestore (pelo UID)
+      // Verificar se o cliente já existe no Firestore (pelo UID ou googleUid)
       let clienteData = await firebaseService.getById('clientes', user.uid);
+
+      if (!clienteData) {
+        // Se não encontrar por UID, buscar por googleUid
+        const clientesPorGoogleUid = await firebaseService.query('clientes', [
+          { field: 'googleUid', operator: '==', value: user.uid }
+        ]);
+        
+        if (clientesPorGoogleUid && clientesPorGoogleUid.length > 0) {
+          clienteData = clientesPorGoogleUid[0];
+        }
+      }
 
       if (clienteData) {
         console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
@@ -233,10 +282,7 @@ export const AuthClienteProvider = ({ children }) => {
       // 🔥 IMPORTANTE: Manter o CPF com a máscara (já vem formatado do input)
       const cpfFormatado = dadosComplementares.cpf; // Ex: "331.200.588-40"
       
-      // Para busca, precisamos do CPF sem máscara
-      const cpfLimpo = removerMascaraCPF(cpfFormatado);
-
-      // Verificar se CPF já está cadastrado (usando o CPF com máscara para consistência)
+      // Para busca, usamos o CPF com máscara para consistência
       const clientesPorCpf = await firebaseService.query('clientes', [
         { field: 'cpf', operator: '==', value: cpfFormatado }
       ]);
@@ -278,9 +324,9 @@ export const AuthClienteProvider = ({ children }) => {
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
-      // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
+      // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA E GOOGLEUID
       const novoCliente = {
-        id: pendingGoogleUser.uid,
+        id: pendingGoogleUser.uid, // ID do documento = UID do Google
         nome: pendingGoogleUser.nome,
         email: pendingGoogleUser.email,
         foto: pendingGoogleUser.foto,
@@ -295,7 +341,7 @@ export const AuthClienteProvider = ({ children }) => {
         bairro: dadosComplementares.bairro,
         cidade: dadosComplementares.cidade,
         estado: dadosComplementares.estado,
-        googleUid: pendingGoogleUser.uid,
+        googleUid: pendingGoogleUser.uid, // 🔥 IMPORTANTE: Salvar o googleUid
         dataCadastro: hoje,
         ultimaVisita: new Date().toISOString(),
         totalGasto: 0,
