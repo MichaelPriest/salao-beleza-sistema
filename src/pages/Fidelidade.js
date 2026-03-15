@@ -45,6 +45,8 @@ import {
   ListItemSecondaryAction,
   Collapse,
   Snackbar,
+  Menu,
+  MenuItem as MenuItemMUI,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -75,13 +77,15 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
+  Inventory as InventoryIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { auditoriaService } from '../services/auditoriaService';
-import { format, isValid } from 'date-fns'; // Adicionado isValid
+import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // Função utilitária para formatar data com segurança
@@ -89,7 +93,8 @@ const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   if (!date) return '—';
   
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Handle Firestore Timestamp
+    const dateObj = date?.toDate ? date.toDate() : new Date(date);
     if (!isValid(dateObj)) return '—';
     return format(dateObj, formatString, { locale: ptBR });
   } catch (error) {
@@ -103,7 +108,8 @@ const formatDateTime = (date) => {
   if (!date) return '—';
   
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    // Handle Firestore Timestamp
+    const dateObj = date?.toDate ? date.toDate() : new Date(date);
     if (!isValid(dateObj)) return '—';
     return format(dateObj, 'dd/MM/yyyy HH:mm', { locale: ptBR });
   } catch (error) {
@@ -120,7 +126,8 @@ const niveis = {
     minimo: 0, 
     multiplicador: 1,
     beneficios: ['5% de desconto', 'Aniversário: 50 pontos extras'],
-    icone: <StarIcon />
+    icone: <StarIcon />,
+    label: 'Bronze'
   },
   prata: { 
     cor: '#c0c0c0', 
@@ -128,7 +135,8 @@ const niveis = {
     minimo: 500, 
     multiplicador: 1.2,
     beneficios: ['10% de desconto', 'Prioridade no agendamento', 'Cortesia no aniversário'],
-    icone: <StarIcon />
+    icone: <StarIcon />,
+    label: 'Prata'
   },
   ouro: { 
     cor: '#ffd700', 
@@ -136,7 +144,8 @@ const niveis = {
     minimo: 2000, 
     multiplicador: 1.5,
     beneficios: ['15% de desconto', 'Agendamento VIP', 'Brinde surpresa', 'Convite para eventos'],
-    icone: <StarIcon />
+    icone: <StarIcon />,
+    label: 'Ouro'
   },
   platina: { 
     cor: '#e5e4e2', 
@@ -144,19 +153,10 @@ const niveis = {
     minimo: 5000, 
     multiplicador: 2,
     beneficios: ['20% de desconto', 'Acesso antecipado a promoções', 'Presente de aniversário', 'Consultoria exclusiva'],
-    icone: <StarIcon />
+    icone: <StarIcon />,
+    label: 'Platina'
   },
 };
-
-// Recompensas disponíveis
-const recompensasPadrao = [
-  { id: 'desc_10', nome: '10% de desconto', pontos: 100, tipo: 'desconto', valor: 10, icone: <TagIcon /> },
-  { id: 'desc_15', nome: '15% de desconto', pontos: 200, tipo: 'desconto', valor: 15, icone: <TagIcon /> },
-  { id: 'desc_20', nome: '20% de desconto', pontos: 300, tipo: 'desconto', valor: 20, icone: <TagIcon /> },
-  { id: 'servico_brinde', nome: 'Serviço Brinde', pontos: 500, tipo: 'servico', valor: 0, icone: <GiftIcon /> },
-  { id: 'produto_brinde', nome: 'Produto Brinde', pontos: 400, tipo: 'produto', valor: 0, icone: <GiftIcon /> },
-  { id: 'cortesia_aniversario', nome: 'Cortesia de Aniversário', pontos: 0, tipo: 'especial', valor: 0, icone: <RewardIcon /> },
-];
 
 // Componente de Card de Nível Mobile
 const NivelMobileCard = ({ nivel, config, count, onClick }) => {
@@ -187,7 +187,7 @@ const NivelMobileCard = ({ nivel, config, count, onClick }) => {
           </Box>
           
           <Typography variant="subtitle1" sx={{ fontWeight: 700, textTransform: 'uppercase', color: config.cor }}>
-            {nivel}
+            {config.label}
           </Typography>
           
           <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
@@ -248,7 +248,7 @@ const ClienteMobileCard = ({ cliente, isAdmin, onGerenciarPontos, onResgatar }) 
           {/* Nível e Saldo */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Chip
-              label={cliente.nivel?.toUpperCase()}
+              label={niveis[cliente.nivel]?.label || cliente.nivel?.toUpperCase()}
               size="small"
               sx={{
                 bgcolor: niveis[cliente.nivel] ? `${niveis[cliente.nivel].cor}20` : '#f5f5f5',
@@ -269,7 +269,7 @@ const ClienteMobileCard = ({ cliente, isAdmin, onGerenciarPontos, onResgatar }) 
           <Box sx={{ mb: 1 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography variant="caption">
-                Próximo: {cliente.proximoNivel}
+                Próximo: {niveis[cliente.proximoNivel]?.label || cliente.proximoNivel}
               </Typography>
               <Typography variant="caption" sx={{ fontWeight: 600 }}>
                 {cliente.progresso?.toFixed(0) || 0}%
@@ -333,9 +333,51 @@ const ClienteMobileCard = ({ cliente, isAdmin, onGerenciarPontos, onResgatar }) 
   );
 };
 
-// Componente de Card de Recompensa Mobile
+// Componente de Card de Recompensa Mobile (atualizado para os dados do Firebase)
 const RecompensaMobileCard = ({ recompensa, saldo, onResgatar, isAdmin }) => {
-  const podeResgatar = saldo >= recompensa.pontos;
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+  
+  const podeResgatar = saldo >= (recompensa.pontos || recompensa.pontosNecessarios || 0);
+  const pontosNecessarios = recompensa.pontos || recompensa.pontosNecessarios || 0;
+  
+  // Verificar disponibilidade
+  const disponivel = recompensa.ativo && (
+    !recompensa.quantidade || 
+    recompensa.quantidade > 0 || 
+    recompensa.ilimitado
+  );
+
+  const handleClick = (event) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const getIconByCategoria = () => {
+    switch(recompensa.categoria) {
+      case 'produtos':
+        return <InventoryIcon />;
+      case 'servicos':
+        return <GiftIcon />;
+      case 'descontos':
+        return <TagIcon />;
+      default:
+        return <RewardIcon />;
+    }
+  };
+
+  const getCategoriaLabel = () => {
+    const categorias = {
+      'produtos': 'Produto',
+      'servicos': 'Serviço',
+      'descontos': 'Desconto'
+    };
+    return categorias[recompensa.categoria] || recompensa.tipo || 'Recompensa';
+  };
 
   return (
     <motion.div
@@ -345,37 +387,127 @@ const RecompensaMobileCard = ({ recompensa, saldo, onResgatar, isAdmin }) => {
       <Card 
         sx={{ 
           mb: 1.5,
-          opacity: saldo !== undefined && !podeResgatar ? 0.5 : 1,
-          cursor: podeResgatar ? 'pointer' : 'default',
+          opacity: !disponivel || (saldo !== undefined && !podeResgatar) ? 0.5 : 1,
+          cursor: disponivel && podeResgatar ? 'pointer' : 'default',
+          position: 'relative',
         }}
-        onClick={() => podeResgatar && onResgatar(recompensa)}
+        onClick={() => disponivel && podeResgatar && onResgatar(recompensa)}
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: '#9c27b0' }}>
-              {recompensa.icone}
+            <Avatar 
+              sx={{ 
+                bgcolor: recompensa.destaque ? '#ff9800' : '#9c27b0',
+                width: 48,
+                height: 48,
+              }}
+            >
+              {recompensa.imagem ? (
+                <img src={recompensa.imagem} alt={recompensa.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                getIconByCategoria()
+              )}
             </Avatar>
             
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 {recompensa.nome}
               </Typography>
-              <Chip
-                size="small"
-                label={recompensa.tipo}
-                sx={{ height: 20, fontSize: '0.7rem', mt: 0.5 }}
-              />
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                <Chip
+                  size="small"
+                  label={getCategoriaLabel()}
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+                {recompensa.nivelMinimo && (
+                  <Chip
+                    size="small"
+                    label={niveis[recompensa.nivelMinimo]?.label || recompensa.nivelMinimo}
+                    sx={{ 
+                      height: 20, 
+                      fontSize: '0.7rem',
+                      bgcolor: niveis[recompensa.nivelMinimo] ? `${niveis[recompensa.nivelMinimo].cor}20` : '#f5f5f5',
+                      color: niveis[recompensa.nivelMinimo]?.cor || '#666',
+                    }}
+                  />
+                )}
+                {recompensa.destaque && (
+                  <Chip
+                    size="small"
+                    label="Destaque"
+                    sx={{ height: 20, fontSize: '0.7rem', bgcolor: '#ff9800', color: 'white' }}
+                  />
+                )}
+              </Box>
+              {recompensa.descricao && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  {recompensa.descricao.substring(0, 40)}
+                  {recompensa.descricao.length > 40 ? '...' : ''}
+                </Typography>
+              )}
             </Box>
             
             <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 700 }}>
-                {recompensa.pontos}
+              <Typography variant="h6" sx={{ color: podeResgatar ? '#9c27b0' : '#ccc', fontWeight: 700 }}>
+                {pontosNecessarios}
               </Typography>
               <Typography variant="caption">pontos</Typography>
+              {!recompensa.ilimitado && recompensa.quantidade > 0 && (
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {recompensa.quantidade} disponíveis
+                </Typography>
+              )}
             </Box>
           </Box>
+
+          {!disponivel && (
+            <Alert severity="warning" sx={{ mt: 1, py: 0, '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
+              Indisponível
+            </Alert>
+          )}
+
+          {isAdmin && (
+            <IconButton
+              size="small"
+              sx={{ position: 'absolute', top: 8, right: 8 }}
+              onClick={handleClick}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          )}
         </CardContent>
       </Card>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <MenuItemMUI onClick={() => { handleClose(); /* editar */ }}>
+          <EditIcon fontSize="small" sx={{ mr: 1 }} /> Editar
+        </MenuItemMUI>
+        <MenuItemMUI onClick={() => { handleClose(); /* duplicar */ }}>
+          <AddIcon fontSize="small" sx={{ mr: 1 }} /> Duplicar
+        </MenuItemMUI>
+        <MenuItemMUI 
+          onClick={() => { handleClose(); /* ativar/desativar */ }}
+          sx={{ color: recompensa.ativo ? '#f44336' : '#4caf50' }}
+        >
+          {recompensa.ativo ? (
+            <>
+              <CancelIcon fontSize="small" sx={{ mr: 1 }} /> Desativar
+            </>
+          ) : (
+            <>
+              <CheckIcon fontSize="small" sx={{ mr: 1 }} /> Ativar
+            </>
+          )}
+        </MenuItemMUI>
+        <MenuItemMUI onClick={() => { handleClose(); /* excluir */ }} sx={{ color: '#f44336' }}>
+          <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Excluir
+        </MenuItemMUI>
+      </Menu>
     </motion.div>
   );
 };
@@ -433,19 +565,20 @@ const HistoricoItem = ({ item }) => {
 function Fidelidade() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
   const [loading, setLoading] = useState(true);
   const [clientesFidelidade, setClientesFidelidade] = useState([]);
-  const [recompensas, setRecompensas] = useState(recompensasPadrao);
+  const [recompensas, setRecompensas] = useState([]);
+  const [recompensasFirebase, setRecompensasFirebase] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCliente, setSelectedCliente] = useState(null);
+  const [selectedRecompensa, setSelectedRecompensa] = useState(null);
   const [openPontosDialog, setOpenPontosDialog] = useState(false);
   const [openRecompensaDialog, setOpenRecompensaDialog] = useState(false);
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
-  const [openDetalhesCliente, setOpenDetalhesCliente] = useState(false);
+  const [openDetalhesRecompensa, setOpenDetalhesRecompensa] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [pontosForm, setPontosForm] = useState({
     quantidade: '',
@@ -460,6 +593,7 @@ function Fidelidade() {
   const [usuario, setUsuario] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [filtroNivel, setFiltroNivel] = useState('todos');
+  const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [bottomNavValue, setBottomNavValue] = useState(0);
 
   // Hooks do Firebase
@@ -467,6 +601,7 @@ function Fidelidade() {
   const { data: pontuacao, loading: loadingPontuacao } = useFirebase('pontuacao');
   const { data: resgates, loading: loadingResgates } = useFirebase('resgates_fidelidade');
   const { data: configuracoes, loading: loadingConfig } = useFirebase('config_fidelidade');
+  const { data: recompensasData, loading: loadingRecompensas } = useFirebase('recompensas');
 
   useEffect(() => {
     // Carregar usuário do localStorage
@@ -483,10 +618,10 @@ function Fidelidade() {
   }, []);
 
   useEffect(() => {
-    if (!loadingClientes) {
+    if (!loadingClientes && !loadingRecompensas) {
       carregarDados();
     }
-  }, [loadingClientes, pontuacao, resgates, configuracoes]);
+  }, [loadingClientes, loadingRecompensas, pontuacao, resgates, configuracoes, recompensasData]);
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -511,6 +646,17 @@ function Fidelidade() {
       // Carregar configurações
       if (configuracoes && configuracoes.length > 0) {
         setConfig(configuracoes[0]);
+      }
+
+      // Carregar recompensas do Firebase
+      if (recompensasData) {
+        // Filtrar apenas recompensas ativas (ou todas se for admin)
+        const recompensasFiltradas = isAdmin 
+          ? recompensasData 
+          : recompensasData.filter(r => r.ativo === true);
+        
+        setRecompensasFirebase(recompensasFiltradas);
+        setRecompensas(recompensasFiltradas);
       }
 
       // Calcular pontuação de cada cliente
@@ -579,7 +725,7 @@ function Fidelidade() {
     } finally {
       setLoading(false);
     }
-  }, [clientes, pontuacao, resgates, configuracoes, usuario]);
+  }, [clientes, pontuacao, resgates, configuracoes, recompensasData, usuario, isAdmin]);
 
   const handleAdicionarPontos = async () => {
     try {
@@ -663,14 +809,40 @@ function Fidelidade() {
 
   const handleResgatarRecompensa = async (recompensa) => {
     try {
-      if (!selectedCliente) return;
+      if (!selectedCliente) {
+        mostrarSnackbar('Selecione um cliente primeiro', 'warning');
+        return;
+      }
+
+      const pontosNecessarios = recompensa.pontos || recompensa.pontosNecessarios || 0;
       
-      if (selectedCliente.saldo < recompensa.pontos) {
+      if (selectedCliente.saldo < pontosNecessarios) {
         mostrarSnackbar('Saldo insuficiente', 'error');
         return;
       }
 
-      // Validar se pode resgatar (apenas admin ou cliente pode resgatar para si mesmo)
+      // Validar disponibilidade
+      if (!recompensa.ativo) {
+        mostrarSnackbar('Recompensa não está ativa', 'error');
+        return;
+      }
+
+      if (!recompensa.ilimitado && recompensa.quantidade <= 0) {
+        mostrarSnackbar('Recompensa sem estoque disponível', 'error');
+        return;
+      }
+
+      // Validar nível mínimo
+      if (recompensa.nivelMinimo && niveis[recompensa.nivelMinimo]) {
+        const nivelIndex = Object.keys(niveis).indexOf(selectedCliente.nivel);
+        const nivelMinimoIndex = Object.keys(niveis).indexOf(recompensa.nivelMinimo);
+        
+        if (nivelIndex < nivelMinimoIndex) {
+          mostrarSnackbar(`Cliente precisa ser nível ${niveis[recompensa.nivelMinimo].label} ou superior`, 'error');
+          return;
+        }
+      }
+
       if (!isAdmin) {
         mostrarSnackbar('Apenas administradores podem realizar resgates', 'error');
         return;
@@ -681,7 +853,7 @@ function Fidelidade() {
         clienteNome: selectedCliente.nome,
         recompensaId: recompensa.id,
         recompensaNome: recompensa.nome,
-        pontosGastos: recompensa.pontos,
+        pontosGastos: pontosNecessarios,
         data: new Date().toISOString(),
         status: 'resgatado',
         utilizado: false,
@@ -692,11 +864,19 @@ function Fidelidade() {
 
       await firebaseService.add('resgates_fidelidade', resgate);
 
+      // Atualizar quantidade da recompensa se não for ilimitada
+      if (!recompensa.ilimitado && recompensa.quantidade > 0) {
+        await firebaseService.update('recompensas', recompensa.id, {
+          quantidade: recompensa.quantidade - 1,
+          updatedAt: Timestamp.now(),
+        });
+      }
+
       // Registrar débito dos pontos
       const debito = {
         clienteId: selectedCliente.id,
         clienteNome: selectedCliente.nome,
-        quantidade: recompensa.pontos,
+        quantidade: pontosNecessarios,
         tipo: 'debito',
         motivo: `Resgate: ${recompensa.nome}`,
         data: new Date().toISOString(),
@@ -715,9 +895,9 @@ function Fidelidade() {
           clienteNome: selectedCliente.nome,
           recompensaId: recompensa.id,
           recompensaNome: recompensa.nome,
-          pontosGastos: recompensa.pontos,
+          pontosGastos: pontosNecessarios,
           saldoAnterior: selectedCliente.saldo,
-          saldoNovo: selectedCliente.saldo - recompensa.pontos
+          saldoNovo: selectedCliente.saldo - pontosNecessarios
         }
       });
 
@@ -739,40 +919,18 @@ function Fidelidade() {
     }
   };
 
-  const handleConfigChange = async () => {
-    try {
-      if (!isAdmin) {
-        mostrarSnackbar('Apenas administradores podem alterar configurações', 'error');
-        return;
-      }
-
-      const configAntiga = configuracoes && configuracoes.length > 0 ? configuracoes[0] : {};
-
-      if (configuracoes && configuracoes.length > 0) {
-        await firebaseService.update('config_fidelidade', configuracoes[0].id, config);
-      } else {
-        await firebaseService.add('config_fidelidade', config);
-      }
-
-      await auditoriaService.registrarAtualizacao(
-        'config_fidelidade',
-        configuracoes?.[0]?.id || 'nova',
-        configAntiga,
-        config,
-        'Atualização das configurações de fidelidade'
-      );
-
-      mostrarSnackbar('Configurações salvas!');
-    } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
-      mostrarSnackbar('Erro ao salvar configurações', 'error');
+  // Filtrar recompensas
+  const recompensasFiltradas = useMemo(() => {
+    return recompensas.filter(r => {
+      const matchesCategoria = filtroCategoria === 'todos' || r.categoria === filtroCategoria;
+      const matchesNivel = filtroNivel === 'todos' || r.nivelMinimo === filtroNivel;
+      const matchesTexto = searchTerm === '' || 
+        r.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.descricao?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      await auditoriaService.registrarErro(error, { 
-        acao: 'salvar_config_fidelidade',
-        dados: config
-      });
-    }
-  };
+      return matchesCategoria && matchesNivel && matchesTexto;
+    });
+  }, [recompensas, searchTerm, filtroCategoria, filtroNivel]);
 
   // Filtrar clientes
   const clientesFiltrados = useMemo(() => {
@@ -796,8 +954,9 @@ function Fidelidade() {
       ouro: clientesFidelidade.filter(c => c.nivel === 'ouro').length,
       platina: clientesFidelidade.filter(c => c.nivel === 'platina').length,
       totalPontos: clientesFidelidade.reduce((acc, c) => acc + c.saldo, 0),
+      recompensasAtivas: recompensas.filter(r => r.ativo).length,
     };
-  }, [clientesFidelidade]);
+  }, [clientesFidelidade, recompensas]);
 
   if (loading) {
     return (
@@ -850,7 +1009,7 @@ function Fidelidade() {
             Fidelidade
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Recompense seus clientes
+            {stats.recompensasAtivas} recompensas disponíveis
           </Typography>
           {!isAdmin && (
             <Alert severity="info" sx={{ mt: 1, fontSize: '0.8rem' }}>
@@ -908,7 +1067,7 @@ function Fidelidade() {
         <TextField
           fullWidth
           size="small"
-          placeholder="Buscar cliente..."
+          placeholder={tabValue === 0 ? "Buscar cliente..." : "Buscar recompensa..."}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           variant="standard"
@@ -934,13 +1093,13 @@ function Fidelidade() {
           onClick={() => setOpenFilterDrawer(true)}
           sx={{ 
             mx: 1,
-            color: filtroNivel !== 'todos' ? '#9c27b0' : 'text.secondary'
+            color: filtroNivel !== 'todos' || filtroCategoria !== 'todos' ? '#9c27b0' : 'text.secondary'
           }}
         >
           <Badge 
             variant="dot" 
             color="primary"
-            invisible={filtroNivel === 'todos'}
+            invisible={filtroNivel === 'todos' && filtroCategoria === 'todos'}
           >
             <FilterIcon />
           </Badge>
@@ -1033,21 +1192,24 @@ function Fidelidade() {
               </Alert>
             </Box>
             
-            {recompensas.map((recompensa) => (
-              <RecompensaMobileCard
-                key={recompensa.id}
-                recompensa={recompensa}
-                saldo={selectedCliente?.saldo}
-                isAdmin={isAdmin}
-                onResgatar={() => {
-                  if (!selectedCliente) {
-                    mostrarSnackbar('Selecione um cliente primeiro', 'warning');
-                    return;
-                  }
-                  handleResgatarRecompensa(recompensa);
-                }}
-              />
-            ))}
+            {recompensasFiltradas.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <GiftIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography color="textSecondary">
+                  Nenhuma recompensa encontrada
+                </Typography>
+              </Paper>
+            ) : (
+              recompensasFiltradas.map((recompensa) => (
+                <RecompensaMobileCard
+                  key={recompensa.id}
+                  recompensa={recompensa}
+                  saldo={selectedCliente?.saldo}
+                  isAdmin={isAdmin}
+                  onResgatar={() => handleResgatarRecompensa(recompensa)}
+                />
+              ))
+            )}
           </motion.div>
         )}
 
@@ -1098,21 +1260,21 @@ function Fidelidade() {
         <Box sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Filtrar por Nível
+              Filtros
             </Typography>
             <IconButton onClick={() => setOpenFilterDrawer(false)}>
               <CloseIcon />
             </IconButton>
           </Box>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Nível
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
             <Button
               fullWidth
               variant={filtroNivel === 'todos' ? 'contained' : 'outlined'}
-              onClick={() => {
-                setFiltroNivel('todos');
-                setOpenFilterDrawer(false);
-              }}
+              onClick={() => setFiltroNivel('todos')}
               sx={{ 
                 justifyContent: 'flex-start',
                 bgcolor: filtroNivel === 'todos' ? '#9c27b0' : 'transparent',
@@ -1127,10 +1289,7 @@ function Fidelidade() {
                 key={nivel}
                 fullWidth
                 variant={filtroNivel === nivel ? 'contained' : 'outlined'}
-                onClick={() => {
-                  setFiltroNivel(nivel);
-                  setOpenFilterDrawer(false);
-                }}
+                onClick={() => setFiltroNivel(nivel)}
                 sx={{ 
                   justifyContent: 'flex-start',
                   bgcolor: filtroNivel === nivel ? config.cor : 'transparent',
@@ -1141,10 +1300,60 @@ function Fidelidade() {
                   }
                 }}
               >
-                {nivel.toUpperCase()}
+                {config.label}
               </Button>
             ))}
           </Box>
+
+          <Typography variant="subtitle2" gutterBottom sx={{ color: '#9c27b0' }}>
+            Categoria
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Button
+              fullWidth
+              variant={filtroCategoria === 'todos' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroCategoria('todos')}
+              sx={{ 
+                justifyContent: 'flex-start',
+                bgcolor: filtroCategoria === 'todos' ? '#9c27b0' : 'transparent',
+              }}
+            >
+              Todas as categorias
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroCategoria === 'produtos' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroCategoria('produtos')}
+              sx={{ justifyContent: 'flex-start' }}
+            >
+              Produtos
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroCategoria === 'servicos' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroCategoria('servicos')}
+              sx={{ justifyContent: 'flex-start' }}
+            >
+              Serviços
+            </Button>
+            <Button
+              fullWidth
+              variant={filtroCategoria === 'descontos' ? 'contained' : 'outlined'}
+              onClick={() => setFiltroCategoria('descontos')}
+              sx={{ justifyContent: 'flex-start' }}
+            >
+              Descontos
+            </Button>
+          </Box>
+
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => setOpenFilterDrawer(false)}
+            sx={{ bgcolor: '#9c27b0', mt: 3 }}
+          >
+            Aplicar Filtros
+          </Button>
         </Box>
       </SwipeableDrawer>
 
@@ -1269,35 +1478,50 @@ function Fidelidade() {
           )}
           
           <Box sx={{ mt: 2 }}>
-            {recompensas.map((recompensa) => {
-              const podeResgatar = selectedCliente && selectedCliente.saldo >= recompensa.pontos;
+            {recompensasFiltradas.map((recompensa) => {
+              const pontosNecessarios = recompensa.pontos || recompensa.pontosNecessarios || 0;
+              const podeResgatar = selectedCliente && 
+                selectedCliente.saldo >= pontosNecessarios &&
+                recompensa.ativo &&
+                (recompensa.ilimitado || recompensa.quantidade > 0);
+
               return (
                 <Card
                   key={recompensa.id}
                   sx={{
                     mb: 1,
-                    cursor: selectedCliente ? 'pointer' : 'default',
-                    opacity: selectedCliente && !podeResgatar ? 0.5 : 1,
+                    cursor: selectedCliente && podeResgatar ? 'pointer' : 'default',
+                    opacity: !podeResgatar ? 0.5 : 1,
                     '&:hover': selectedCliente && podeResgatar ? { bgcolor: '#f5f5f5' } : {},
                   }}
                   onClick={() => selectedCliente && podeResgatar && handleResgatarRecompensa(recompensa)}
                 >
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: podeResgatar ? '#9c27b0' : '#ccc' }}>
-                        {recompensa.icone}
+                      <Avatar 
+                        sx={{ 
+                          bgcolor: podeResgatar ? '#9c27b0' : '#ccc',
+                          width: 48,
+                          height: 48,
+                        }}
+                      >
+                        {recompensa.imagem ? (
+                          <img src={recompensa.imagem} alt={recompensa.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          recompensa.categoria === 'produtos' ? <InventoryIcon /> : <GiftIcon />
+                        )}
                       </Avatar>
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                           {recompensa.nome}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {recompensa.tipo}
+                          {recompensa.categoria || recompensa.tipo}
                         </Typography>
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="h6" sx={{ color: podeResgatar ? '#9c27b0' : '#ccc', fontWeight: 700 }}>
-                          {recompensa.pontos}
+                          {pontosNecessarios}
                         </Typography>
                         <Typography variant="caption">pontos</Typography>
                       </Box>
@@ -1367,7 +1591,7 @@ function Fidelidade() {
                 <Badge 
                   variant="dot" 
                   color="primary"
-                  invisible={filtroNivel === 'todos'}
+                  invisible={filtroNivel === 'todos' && filtroCategoria === 'todos'}
                 >
                   <FilterIcon />
                 </Badge>
