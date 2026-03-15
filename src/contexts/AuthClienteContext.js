@@ -12,6 +12,7 @@ import {
   signInWithEmailAndPassword
 } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
+import { removerMascaraCPF } from '../utils/cpfUtils';
 
 // Configuração do Firebase (use as mesmas do seu projeto)
 const firebaseConfig = {
@@ -37,6 +38,7 @@ export const AuthClienteProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(null);
+  const [pendingGoogleUser, setPendingGoogleUser] = useState(null); // 🔥 NOVO: usuário Google pendente de cadastro
 
   // 🔥 OUVIR MUDANÇAS NO ESTADO DE AUTENTICAÇÃO DO FIREBASE
   useEffect(() => {
@@ -87,7 +89,7 @@ export const AuthClienteProvider = ({ children }) => {
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
         console.log('❌ Cliente não encontrado para o UID:', uid);
-        console.log('🚫 AuthClienteProvider - Usuário não é cliente, mantendo logout');
+        console.log('🚫 AuthClienteProvider - Usuário não é cliente');
         // 🔥 NÃO FAZER LOGOUT AUTOMÁTICO - apenas limpar estado
         setCliente(null);
         setIsAuthenticated(false);
@@ -124,7 +126,7 @@ export const AuthClienteProvider = ({ children }) => {
       localStorage.setItem('cliente', JSON.stringify(clienteData));
       
       toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-      return true;
+      return { success: true, data: clienteData };
       
     } catch (error) {
       console.error('Erro no login:', error);
@@ -138,13 +140,13 @@ export const AuthClienteProvider = ({ children }) => {
       } else {
         toast.error('Erro ao fazer login');
       }
-      return false;
+      return { success: false, error: error.message };
     } finally {
       setLoading(false);
     }
   };
 
-  // LOGIN COM GOOGLE
+  // 🔥 LOGIN COM GOOGLE - VERSÃO ATUALIZADA COM FLUXO DE CADASTRO
   const loginComGoogle = async () => {
     try {
       setLoading(true);
@@ -155,41 +157,33 @@ export const AuthClienteProvider = ({ children }) => {
       // Verificar se o cliente já existe no Firestore (pelo UID)
       let clienteData = await firebaseService.getById('clientes', user.uid);
 
-      if (!clienteData) {
-        // Cliente não existe - criar novo
-        const agora = new Date().toISOString();
-        const hoje = new Date().toISOString().split('T')[0];
-
-        const novoCliente = {
-          id: user.uid,
+      if (clienteData) {
+        // Cliente já existe - login normal
+        setCliente(clienteData);
+        setIsAuthenticated(true);
+        localStorage.setItem('cliente', JSON.stringify(clienteData));
+        toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
+        return { success: true, data: clienteData };
+      } else {
+        // Cliente não existe - verificar se já existe por CPF? Não temos CPF ainda
+        // Então precisamos de cadastro complementar
+        const userData = {
+          uid: user.uid,
           nome: user.displayName || 'Cliente Google',
           email: user.email,
           foto: user.photoURL || null,
-          dataCadastro: hoje,
-          ultimaVisita: null,
-          totalGasto: 0,
-          status: 'Novo',
-          loginGoogle: true,
-          googleUid: user.uid,
-          preferencias: {
-            notificacoes: true,
-            profissionalPreferido: '',
-            servicosPreferidos: []
-          },
-          createdAt: agora,
-          updatedAt: agora
         };
-
-        await firebaseService.set('clientes', user.uid, novoCliente);
-        clienteData = novoCliente;
+        
+        // Guardar dados do usuário pendente
+        setPendingGoogleUser(userData);
+        
+        // Retornar indicando que precisa completar cadastro
+        return { 
+          success: false, 
+          needCompletion: true, 
+          userData 
+        };
       }
-
-      setCliente(clienteData);
-      setIsAuthenticated(true);
-      localStorage.setItem('cliente', JSON.stringify(clienteData));
-      
-      toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-      return true;
       
     } catch (error) {
       console.error('Erro no login com Google:', error);
@@ -201,8 +195,104 @@ export const AuthClienteProvider = ({ children }) => {
       } else {
         toast.error('Erro ao fazer login com Google');
       }
-      return false;
+      return { success: false, error: error.message };
       
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔥 COMPLETAR CADASTRO APÓS LOGIN GOOGLE
+  const completarCadastroGoogle = async (dadosComplementares) => {
+    try {
+      setLoading(true);
+      
+      if (!pendingGoogleUser) {
+        toast.error('Nenhum usuário pendente para completar cadastro');
+        return false;
+      }
+
+      // Verificar se CPF já está cadastrado (evitar duplicatas)
+      const cpfLimpo = removerMascaraCPF(dadosComplementares.cpf);
+      const clientesPorCpf = await firebaseService.query('clientes', [
+        { field: 'cpf', operator: '==', value: cpfLimpo }
+      ]);
+
+      if (clientesPorCpf && clientesPorCpf.length > 0) {
+        // CPF já cadastrado - vincular conta Google ao cliente existente
+        const clienteExistente = clientesPorCpf[0];
+        
+        // Atualizar o cliente com o UID do Google
+        await firebaseService.update('clientes', clienteExistente.id, {
+          googleUid: pendingGoogleUser.uid,
+          foto: pendingGoogleUser.foto || clienteExistente.foto,
+          ultimoAcesso: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        const clienteCompleto = {
+          ...clienteExistente,
+          googleUid: pendingGoogleUser.uid,
+          foto: pendingGoogleUser.foto || clienteExistente.foto
+        };
+        
+        setCliente(clienteCompleto);
+        setIsAuthenticated(true);
+        localStorage.setItem('cliente', JSON.stringify(clienteCompleto));
+        setPendingGoogleUser(null);
+        
+        toast.success(`Bem-vindo(a), ${clienteCompleto.nome}!`);
+        return { success: true, data: clienteCompleto };
+      }
+
+      // Se não encontrou CPF, criar novo cliente com todos os dados
+      const agora = new Date().toISOString();
+      const hoje = new Date().toISOString().split('T')[0];
+
+      const novoCliente = {
+        id: pendingGoogleUser.uid,
+        nome: pendingGoogleUser.nome,
+        email: pendingGoogleUser.email,
+        foto: pendingGoogleUser.foto,
+        cpf: cpfLimpo,
+        telefone: dadosComplementares.telefone,
+        dataNascimento: dadosComplementares.dataNascimento,
+        genero: dadosComplementares.genero,
+        cep: dadosComplementares.cep,
+        logradouro: dadosComplementares.logradouro,
+        numero: dadosComplementares.numero,
+        complemento: dadosComplementares.complemento,
+        bairro: dadosComplementares.bairro,
+        cidade: dadosComplementares.cidade,
+        estado: dadosComplementares.estado,
+        googleUid: pendingGoogleUser.uid,
+        dataCadastro: hoje,
+        ultimaVisita: null,
+        totalGasto: 0,
+        status: 'Regular',
+        preferencias: {
+          notificacoes: true,
+          profissionalPreferido: '',
+          servicosPreferidos: []
+        },
+        createdAt: agora,
+        updatedAt: agora
+      };
+
+      await firebaseService.set('clientes', pendingGoogleUser.uid, novoCliente);
+      
+      setCliente(novoCliente);
+      setIsAuthenticated(true);
+      localStorage.setItem('cliente', JSON.stringify(novoCliente));
+      setPendingGoogleUser(null);
+      
+      toast.success(`Bem-vindo(a), ${novoCliente.nome}!`);
+      return { success: true, data: novoCliente };
+      
+    } catch (error) {
+      console.error('Erro ao completar cadastro:', error);
+      toast.error('Erro ao completar cadastro');
+      return { success: false, error: error.message };
     } finally {
       setLoading(false);
     }
@@ -212,6 +302,17 @@ export const AuthClienteProvider = ({ children }) => {
   const cadastrar = async (dadosCliente) => {
     try {
       setLoading(true);
+
+      // Verificar se CPF já existe (evitar duplicatas)
+      const cpfLimpo = removerMascaraCPF(dadosCliente.cpf);
+      const clientesPorCpf = await firebaseService.query('clientes', [
+        { field: 'cpf', operator: '==', value: cpfLimpo }
+      ]);
+
+      if (clientesPorCpf && clientesPorCpf.length > 0) {
+        toast.error('Este CPF já está cadastrado no sistema');
+        return false;
+      }
 
       // 1. Verificar se email já existe no Firebase Auth (tentando criar)
       let userCredential;
@@ -243,7 +344,7 @@ export const AuthClienteProvider = ({ children }) => {
         nome: dadosCliente.nome,
         email: dadosCliente.email,
         telefone: dadosCliente.telefone,
-        cpf: dadosCliente.cpf || null,
+        cpf: cpfLimpo,
         dataNascimento: dadosCliente.dataNascimento || null,
         genero: dadosCliente.genero || null,
         cep: dadosCliente.cep || null,
@@ -260,7 +361,7 @@ export const AuthClienteProvider = ({ children }) => {
         dataCadastro: hoje,
         ultimaVisita: null,
         totalGasto: 0,
-        status: 'Novo',
+        status: 'Regular',
         preferencias: {
           notificacoes: true,
           profissionalPreferido: dadosCliente.profissionalPreferido || '',
@@ -293,6 +394,7 @@ export const AuthClienteProvider = ({ children }) => {
     } finally {
       setCliente(null);
       setIsAuthenticated(false);
+      setPendingGoogleUser(null);
       localStorage.removeItem('cliente');
       toast.success('Logout realizado com sucesso!');
     }
@@ -327,8 +429,10 @@ export const AuthClienteProvider = ({ children }) => {
       loading,
       isAuthenticated,
       firebaseUser,
+      pendingGoogleUser, // 🔥 EXPOR PARA O COMPONENTE DE LOGIN
       login,
       loginComGoogle,
+      completarCadastroGoogle, // 🔥 NOVA FUNÇÃO
       cadastrar,
       logout,
       atualizarCliente
