@@ -61,6 +61,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente', icon: <WarningIcon /> },
@@ -259,6 +260,12 @@ function ContasPagar() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
+      
+      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_contas_pagar',
+        detalhes: 'Erro ao carregar dados de contas a pagar'
+      });
     } finally {
       setLoading(false);
     }
@@ -354,34 +361,70 @@ function ContasPagar() {
   // Função para pagar comissão
   const handlePagarComissao = async (comissaoId) => {
     try {
+      // Buscar dados antigos para auditoria
+      const comissaoAntiga = comissoes.find(c => c.id === comissaoId);
+      
       await firebaseService.update('comissoes', comissaoId, {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
+      // 🔥 REGISTRAR NA AUDITORIA
+      await auditoriaService.registrarAtualizacao(
+        'comissoes',
+        comissaoId,
+        comissaoAntiga,
+        { status: 'pago', dataPagamento: new Date().toISOString() },
+        'Pagamento de comissão'
+      );
+
       mostrarSnackbar('✅ Comissão paga com sucesso!');
       await carregarDados(); // Recarregar dados
     } catch (error) {
       console.error('Erro ao pagar comissão:', error);
       mostrarSnackbar('Erro ao pagar comissão', 'error');
+      
+      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: 'pagar_comissao',
+        comissaoId
+      });
     }
   };
 
   // Função para pagar compra
   const handlePagarCompra = async (compraId) => {
     try {
+      // Buscar dados antigos para auditoria
+      const compraAntiga = compras.find(c => c.id === compraId);
+      
       await firebaseService.update('compras', compraId, {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
+      // 🔥 REGISTRAR NA AUDITORIA
+      await auditoriaService.registrarAtualizacao(
+        'compras',
+        compraId,
+        compraAntiga,
+        { status: 'pago', dataPagamento: new Date().toISOString() },
+        'Pagamento de compra'
+      );
+
       mostrarSnackbar('✅ Compra paga com sucesso!');
       await carregarDados(); // Recarregar dados
     } catch (error) {
       console.error('Erro ao pagar compra:', error);
       mostrarSnackbar('Erro ao pagar compra', 'error');
+      
+      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: 'pagar_compra',
+        compraId
+      });
     }
   };
 
@@ -391,6 +434,17 @@ function ContasPagar() {
         mostrarSnackbar('Conta inválida', 'error');
         return;
       }
+
+      // 🔥 REGISTRAR AÇÃO NA AUDITORIA
+      await auditoriaService.registrar('pagamento_conta', {
+        entidade: 'contas_pagar',
+        entidadeId: contaSelecionada.id,
+        detalhes: `Pagamento de conta: ${contaSelecionada.descricao}`,
+        dados: {
+          valor: contaSelecionada.valor,
+          origem: contaSelecionada.origem
+        }
+      });
 
       // Pagamento específico por origem
       if (contaSelecionada.origem === 'comissao' && contaSelecionada.origemId) {
@@ -444,6 +498,12 @@ function ContasPagar() {
     } catch (error) {
       console.error('Erro ao registrar pagamento:', error);
       mostrarSnackbar('Erro ao registrar pagamento', 'error');
+      
+      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: 'registrar_pagamento',
+        contaId: contaSelecionada?.id
+      });
     }
   };
 
@@ -484,11 +544,33 @@ function ContasPagar() {
       });
 
       if (contaEditando) {
+        // Buscar dados antigos para auditoria
+        const contaAntiga = { ...contaEditando };
+        
         await firebaseService.update('contas_pagar', contaEditando.id, dadosParaSalvar);
+        
+        // 🔥 REGISTRAR ATUALIZAÇÃO NA AUDITORIA
+        await auditoriaService.registrarAtualizacao(
+          'contas_pagar',
+          contaEditando.id,
+          contaAntiga,
+          dadosParaSalvar,
+          `Atualização de conta: ${formData.descricao}`
+        );
+        
         mostrarSnackbar('Conta atualizada com sucesso!');
       } else {
         dadosParaSalvar.dataCriacao = new Date().toISOString();
-        await firebaseService.add('contas_pagar', dadosParaSalvar);
+        const novaConta = await firebaseService.add('contas_pagar', dadosParaSalvar);
+        
+        // 🔥 REGISTRAR CRIAÇÃO NA AUDITORIA
+        await auditoriaService.registrarCriacao(
+          'contas_pagar',
+          novaConta.id,
+          dadosParaSalvar,
+          `Criação de conta: ${formData.descricao}`
+        );
+        
         mostrarSnackbar('Conta registrada com sucesso!');
       }
 
@@ -497,6 +579,12 @@ function ContasPagar() {
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
       mostrarSnackbar('Erro ao salvar conta', 'error');
+      
+      // 🔥 REGISTRAR ERRO NA AUDITORIA
+      await auditoriaService.registrarErro(error, { 
+        acao: contaEditando ? 'atualizar_conta_pagar' : 'criar_conta_pagar',
+        dados: formData
+      });
     }
   };
 
