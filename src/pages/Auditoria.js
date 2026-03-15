@@ -1,5 +1,5 @@
 // src/pages/Auditoria.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -9,12 +9,6 @@ import {
   Button,
   TextField,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   IconButton,
   Chip,
   Dialog,
@@ -29,10 +23,22 @@ import {
   Alert,
   Snackbar,
   InputAdornment,
-  Divider,
   LinearProgress,
-  TablePagination,
   Avatar,
+  BottomNavigation,
+  BottomNavigationAction,
+  SwipeableDrawer,
+  Fab,
+  Zoom,
+  useMediaQuery,
+  useTheme,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  Badge,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -44,8 +50,6 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon,
   Error as ErrorIcon,
-  CheckCircle as CheckCircleIcon,
-  Lock as LockIcon,
   Login as LoginIcon,
   Logout as LogoutIcon,
   Create as CreateIcon,
@@ -54,21 +58,118 @@ import {
   Visibility as VisibilityIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
+  FilterList as FilterIcon,
+  Close as CloseIcon,
+  Menu as MenuIcon,
+  ArrowBack as ArrowBackIcon,
+  Today as TodayIcon,
+  DateRange as DateRangeIcon,
 } from '@mui/icons-material';
-import {
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot
-} from '@mui/lab';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
+import { useReactToPrint } from 'react-to-print';
+
+// Componente de Impressão
+const RelatorioAuditoria = React.forwardRef(({ logs, filtros, estatisticas }, ref) => {
+  const logo = localStorage.getItem('logo') || '/logo.png';
+  const empresa = JSON.parse(localStorage.getItem('config') || '{}');
+
+  return (
+    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Cabeçalho */}
+      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <img src={logo} alt="Logo" style={{ height: 60, marginBottom: 10 }} />
+        <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+          {empresa.nome || 'Sistema de Gestão'}
+        </Typography>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
+          Relatório de Auditoria
+        </Typography>
+        <Typography variant="subtitle1" color="textSecondary">
+          Período: {filtros.periodo}
+        </Typography>
+        <Typography variant="subtitle2" color="textSecondary">
+          Emitido em: {new Date().toLocaleString('pt-BR')}
+        </Typography>
+      </Box>
+
+      {/* Estatísticas */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+          Resumo do Período
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2">Total</Typography>
+              <Typography variant="h6">{estatisticas.total}</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2">Hoje</Typography>
+              <Typography variant="h6">{estatisticas.hoje}</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2">Semana</Typography>
+              <Typography variant="h6">{estatisticas.semana}</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2">Mês</Typography>
+              <Typography variant="h6">{estatisticas.mes}</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* Tabela de Logs */}
+      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+        Registros de Auditoria
+      </Typography>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#9c27b0', color: 'white' }}>
+            <th style={{ padding: 10, textAlign: 'left' }}>Data/Hora</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Usuário</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Ação</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Entidade</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>IP</th>
+            <th style={{ padding: 10, textAlign: 'left' }}>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log, index) => (
+            <tr key={index} style={{ borderBottom: '1px solid #ddd' }}>
+              <td style={{ padding: 8 }}>
+                {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
+              </td>
+              <td style={{ padding: 8 }}>{log.usuario || 'Sistema'}</td>
+              <td style={{ padding: 8 }}>{log.acao}</td>
+              <td style={{ padding: 8 }}>{log.entidade || '-'}</td>
+              <td style={{ padding: 8 }}>{log.ip || '-'}</td>
+              <td style={{ padding: 8 }}>{log.detalhes || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Rodapé */}
+      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
+        <Typography variant="caption">
+          Relatório gerado automaticamente pelo sistema • Documento não fiscal
+        </Typography>
+      </Box>
+    </Box>
+  );
+});
 
 const acoesColors = {
   login: { color: '#4caf50', icon: <LoginIcon />, label: 'Login' },
@@ -79,26 +180,14 @@ const acoesColors = {
   visualizar: { color: '#9c27b0', icon: <VisibilityIcon />, label: 'Visualização' },
   erro: { color: '#f44336', icon: <ErrorIcon />, label: 'Erro' },
   alerta: { color: '#ff9800', icon: <WarningIcon />, label: 'Alerta' },
-  acesso_negado: { color: '#f44336', icon: <LockIcon />, label: 'Acesso Negado' },
-};
-
-const entidadesLabels = {
-  usuarios: 'Usuários',
-  clientes: 'Clientes',
-  profissionais: 'Profissionais',
-  servicos: 'Serviços',
-  agendamentos: 'Agendamentos',
-  atendimentos: 'Atendimentos',
-  pagamentos: 'Pagamentos',
-  produtos: 'Produtos',
-  compras: 'Compras',
-  fornecedores: 'Fornecedores',
-  configuracoes: 'Configurações',
-  notificacoes: 'Notificações',
-  auditoria: 'Auditoria',
+  acesso_negado: { color: '#f44336', icon: <SecurityIcon />, label: 'Acesso Negado' },
 };
 
 function Auditoria() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const printRef = useRef();
+  
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -106,15 +195,13 @@ function Auditoria() {
   const [filtroAcao, setFiltroAcao] = useState('todos');
   const [filtroUsuario, setFiltroUsuario] = useState('todos');
   const [filtroEntidade, setFiltroEntidade] = useState('todos');
-  const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
   const [dataInicio, setDataInicio] = useState(
     new Date().toISOString().split('T')[0]
   );
   const [dataFim, setDataFim] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [logSelecionado, setLogSelecionado] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -126,6 +213,10 @@ function Auditoria() {
     porAcao: {},
     porUsuario: {},
   });
+  
+  // Mobile states
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [bottomNavValue, setBottomNavValue] = useState(0);
 
   useEffect(() => {
     carregarDados();
@@ -151,6 +242,10 @@ function Auditoria() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
+      await auditoriaService.registrarErro(error, { 
+        acao: 'carregar_auditoria',
+        detalhes: 'Erro ao carregar dados de auditoria'
+      });
     } finally {
       setLoading(false);
     }
@@ -171,10 +266,7 @@ function Auditoria() {
     };
 
     logs.forEach(log => {
-      // Por ação
       stats.porAcao[log.acao] = (stats.porAcao[log.acao] || 0) + 1;
-
-      // Por usuário
       if (log.usuario) {
         stats.porUsuario[log.usuario] = (stats.porUsuario[log.usuario] || 0) + 1;
       }
@@ -183,23 +275,20 @@ function Auditoria() {
     setEstatisticas(stats);
   };
 
-  const mostrarSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const handleOpenDetalhes = (log) => {
-    setLogSelecionado(log);
-    setOpenDetalhesDialog(true);
-  };
-
-  const handleCloseDetalhes = () => {
-    setOpenDetalhesDialog(false);
-    setLogSelecionado(null);
-  };
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `auditoria_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: () => {
+      toast.loading('Preparando impressão...', { id: 'print' });
+    },
+    onAfterPrint: () => {
+      toast.success('Impressão enviada!', { id: 'print' });
+    },
+    onPrintError: (error) => {
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir', { id: 'print' });
+    }
+  });
 
   const handleExportJSON = () => {
     try {
@@ -222,11 +311,10 @@ function Auditoria() {
       link.href = URL.createObjectURL(blob);
       link.download = `auditoria_${new Date().toISOString().split('T')[0]}.json`;
       link.click();
-      
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar:', error);
-      mostrarSnackbar('Erro ao exportar relatório', 'error');
+      mostrarSnackbar('Erro ao exportar', 'error');
     }
   };
 
@@ -237,7 +325,7 @@ function Auditoria() {
         log.data ? new Date(log.data).toLocaleString('pt-BR') : '',
         log.usuario || 'Sistema',
         acoesColors[log.acao]?.label || log.acao,
-        entidadesLabels[log.entidade] || log.entidade || '-',
+        log.entidade || '-',
         log.entidadeId || '-',
         log.ip || '-',
         (log.detalhes || '').replace(/"/g, '""'),
@@ -252,19 +340,15 @@ function Auditoria() {
       link.href = URL.createObjectURL(blob);
       link.download = `auditoria_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar:', error);
-      mostrarSnackbar('Erro ao exportar relatório', 'error');
+      mostrarSnackbar('Erro ao exportar', 'error');
     }
   };
 
-  // Função para limpar logs antigos (opcional - para administradores)
   const handleLimparLogsAntigos = async () => {
-    if (!window.confirm('Tem certeza que deseja limpar logs com mais de 90 dias? Esta ação não pode ser desfeita.')) {
-      return;
-    }
+    if (!window.confirm('Tem certeza que deseja limpar logs com mais de 90 dias?')) return;
 
     try {
       const noventaDiasAtras = subDays(new Date(), 90).toISOString();
@@ -296,17 +380,14 @@ function Auditoria() {
 
     let matchesPeriodo = true;
     if (filtroPeriodo === 'hoje') {
-      const hoje = new Date().toISOString().split('T')[0];
-      matchesPeriodo = log.data?.split('T')[0] === hoje;
+      matchesPeriodo = log.data?.split('T')[0] === new Date().toISOString().split('T')[0];
     } else if (filtroPeriodo === 'ontem') {
       const ontem = subDays(new Date(), 1).toISOString().split('T')[0];
       matchesPeriodo = log.data?.split('T')[0] === ontem;
     } else if (filtroPeriodo === 'semana') {
-      const seteDiasAtras = subDays(new Date(), 7).toISOString();
-      matchesPeriodo = log.data >= seteDiasAtras;
+      matchesPeriodo = log.data >= subDays(new Date(), 7).toISOString();
     } else if (filtroPeriodo === 'mes') {
-      const trintaDiasAtras = subDays(new Date(), 30).toISOString();
-      matchesPeriodo = log.data >= trintaDiasAtras;
+      matchesPeriodo = log.data >= subDays(new Date(), 30).toISOString();
     } else if (filtroPeriodo === 'personalizado') {
       matchesPeriodo = log.data >= new Date(dataInicio).toISOString() && 
                        log.data <= new Date(dataFim + 'T23:59:59').toISOString();
@@ -322,20 +403,244 @@ function Auditoria() {
     return new Date(b.data) - new Date(a.data);
   });
 
-  // Paginação
-  const paginatedLogs = logsOrdenados.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleOpenDetalhes = (log) => {
+    setLogSelecionado(log);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setLogSelecionado(null);
+  };
+
+  // Renderização mobile
+  const renderMobileList = () => {
+    if (logsOrdenados.length === 0) {
+      return (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <SecurityIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+          <Typography variant="body1" color="textSecondary">
+            Nenhum registro encontrado
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <List sx={{ p: 0 }}>
+        <AnimatePresence>
+          {logsOrdenados.slice(0, 20).map((log, index) => (
+            <motion.div
+              key={log.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <ListItem
+                button
+                onClick={() => handleOpenDetalhes(log)}
+                sx={{
+                  bgcolor: log.acao === 'erro' ? '#ffebee' : 'white',
+                  borderBottom: '1px solid #f0f0f0',
+                }}
+              >
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: acoesColors[log.acao]?.color || '#999' }}>
+                    {acoesColors[log.acao]?.icon || <InfoIcon />}
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle2">
+                        {log.usuario || 'Sistema'}
+                      </Typography>
+                      <Chip
+                        label={acoesColors[log.acao]?.label || log.acao}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.6rem',
+                          bgcolor: `${acoesColors[log.acao]?.color}20`,
+                          color: acoesColors[log.acao]?.color,
+                        }}
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <>
+                      <Typography variant="caption" display="block">
+                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {log.detalhes}
+                      </Typography>
+                    </>
+                  }
+                />
+              </ListItem>
+              <Divider />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </List>
+    );
+  };
+
+  const renderFilterDrawer = () => (
+    <SwipeableDrawer
+      anchor="bottom"
+      open={filterDrawerOpen}
+      onClose={() => setFilterDrawerOpen(false)}
+      onOpen={() => {}}
+      disableSwipeToOpen
+      PaperProps={{
+        sx: {
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          maxHeight: '80vh',
+        }
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Filtrar Registros
+          </Typography>
+          <IconButton onClick={() => setFilterDrawerOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar..."
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Ação</InputLabel>
+              <Select
+                value={filtroAcao}
+                onChange={(e) => setFiltroAcao(e.target.value)}
+                label="Ação"
+              >
+                <MenuItem value="todos">Todas</MenuItem>
+                {Object.keys(acoesColors).map(acao => (
+                  <MenuItem key={acao} value={acao}>
+                    {acoesColors[acao].label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Usuário</InputLabel>
+              <Select
+                value={filtroUsuario}
+                onChange={(e) => setFiltroUsuario(e.target.value)}
+                label="Usuário"
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="Sistema">Sistema</MenuItem>
+                {usuarios.map(u => (
+                  <MenuItem key={u.id} value={u.nome}>{u.nome}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Período</InputLabel>
+              <Select
+                value={filtroPeriodo}
+                onChange={(e) => setFiltroPeriodo(e.target.value)}
+                label="Período"
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="hoje">Hoje</MenuItem>
+                <MenuItem value="ontem">Ontem</MenuItem>
+                <MenuItem value="semana">Últimos 7 dias</MenuItem>
+                <MenuItem value="mes">Últimos 30 dias</MenuItem>
+                <MenuItem value="personalizado">Personalizado</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {filtroPeriodo === 'personalizado' && (
+            <>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Início"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Fim"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+            </>
+          )}
+
+          <Grid item xs={6}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => {
+                setFilterDrawerOpen(false);
+                setFiltroAcao('todos');
+                setFiltroUsuario('todos');
+                setFiltroPeriodo('todos');
+                setFiltro('');
+              }}
+            >
+              Limpar
+            </Button>
+          </Grid>
+          <Grid item xs={6}>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => setFilterDrawerOpen(false)}
+              sx={{ bgcolor: '#9c27b0' }}
+            >
+              Aplicar
+            </Button>
+          </Grid>
+        </Grid>
+      </Box>
+    </SwipeableDrawer>
   );
-
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
 
   if (loading) {
     return (
@@ -347,401 +652,234 @@ function Auditoria() {
 
   return (
     <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-            Auditoria do Sistema
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Visualize todas as ações realizadas no sistema
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportJSON}
-          >
-            JSON
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportCSV}
-          >
-            CSV
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleLimparLogsAntigos}
-          >
-            Limpar Antigos
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<RefreshIcon />}
-            onClick={carregarDados}
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-          >
-            Atualizar
-          </Button>
-        </Box>
+      {/* Componente oculto para impressão */}
+      <Box sx={{ display: 'none' }}>
+        <RelatorioAuditoria
+          ref={printRef}
+          logs={logsOrdenados}
+          filtros={{
+            periodo: filtroPeriodo === 'hoje' ? 'Hoje' :
+                     filtroPeriodo === 'ontem' ? 'Ontem' :
+                     filtroPeriodo === 'semana' ? 'Últimos 7 dias' :
+                     filtroPeriodo === 'mes' ? 'Últimos 30 dias' :
+                     filtroPeriodo === 'personalizado' ? `${dataInicio} a ${dataFim}` : 'Todos'
+          }}
+          estatisticas={estatisticas}
+        />
       </Box>
 
-      {/* Cards de Estatísticas */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+      {/* Header Mobile */}
+      {isMobile && (
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 10, bgcolor: 'white', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #f0f0f0' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', flex: 1 }}>
+              Auditoria
+            </Typography>
+            <IconButton onClick={() => setFilterDrawerOpen(true)}>
+              <Badge badgeContent={filtroAcao !== 'todos' || filtroUsuario !== 'todos' || filtro ? 1 : 0} color="secondary">
+                <FilterIcon />
+              </Badge>
+            </IconButton>
+            <IconButton onClick={carregarDados}>
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+
+          {/* Cards de estatísticas mobile */}
+          <Box sx={{ p: 2, display: 'flex', gap: 1, overflowX: 'auto' }}>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center' }}>
+              <Typography variant="caption">Total</Typography>
+              <Typography variant="h6">{estatisticas.total}</Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#e8f5e9' }}>
+              <Typography variant="caption">Hoje</Typography>
+              <Typography variant="h6">{estatisticas.hoje}</Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#fff3e0' }}>
+              <Typography variant="caption">Semana</Typography>
+              <Typography variant="h6">{estatisticas.semana}</Typography>
+            </Paper>
+            <Paper sx={{ p: 1.5, minWidth: 80, textAlign: 'center', bgcolor: '#e3f2fd' }}>
+              <Typography variant="caption">Mês</Typography>
+              <Typography variant="h6">{estatisticas.mes}</Typography>
+            </Paper>
+          </Box>
+        </Box>
+      )}
+
+      {/* Header Desktop */}
+      {!isMobile && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              Auditoria do Sistema
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button startIcon={<PrintIcon />} onClick={handlePrint} variant="outlined">
+              Imprimir
+            </Button>
+            <Button startIcon={<DownloadIcon />} onClick={handleExportJSON} variant="outlined">
+              JSON
+            </Button>
+            <Button startIcon={<DownloadIcon />} onClick={handleExportCSV} variant="outlined">
+              CSV
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<RefreshIcon />}
+              onClick={carregarDados}
+              sx={{ bgcolor: '#9c27b0' }}
+            >
+              Atualizar
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Cards de Estatísticas Desktop */}
+      {!isMobile && (
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Total de Registros
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                <Typography color="textSecondary">Total</Typography>
+                <Typography variant="h4" sx={{ color: '#9c27b0' }}>
                   {estatisticas.total}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Hoje
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                <Typography color="textSecondary">Hoje</Typography>
+                <Typography variant="h4" sx={{ color: '#4caf50' }}>
                   {estatisticas.hoje}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Últimos 7 dias
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                <Typography color="textSecondary">Semana</Typography>
+                <Typography variant="h4" sx={{ color: '#ff9800' }}>
                   {estatisticas.semana}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ bgcolor: '#e3f2fd' }}>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Últimos 30 dias
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                <Typography color="textSecondary">Mês</Typography>
+                <Typography variant="h4" sx={{ color: '#2196f3' }}>
                   {estatisticas.mes}
                 </Typography>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      {/* Filtros */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Buscar por usuário, IP, ID ou detalhes..."
-                value={filtro}
-                onChange={(e) => setFiltro(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  endAdornment: filtro && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setFiltro('')}>
-                        <ClearIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Ação</InputLabel>
-                <Select
-                  value={filtroAcao}
-                  onChange={(e) => setFiltroAcao(e.target.value)}
-                  label="Ação"
-                >
-                  <MenuItem value="todos">Todas</MenuItem>
-                  {Object.keys(acoesColors).map(acao => (
-                    <MenuItem key={acao} value={acao}>
-                      {acoesColors[acao].label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Usuário</InputLabel>
-                <Select
-                  value={filtroUsuario}
-                  onChange={(e) => setFiltroUsuario(e.target.value)}
-                  label="Usuário"
-                >
-                  <MenuItem value="todos">Todos</MenuItem>
-                  <MenuItem value="Sistema">Sistema</MenuItem>
-                  {usuarios.map(u => (
-                    <MenuItem key={u.id} value={u.nome}>{u.nome}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Entidade</InputLabel>
-                <Select
-                  value={filtroEntidade}
-                  onChange={(e) => setFiltroEntidade(e.target.value)}
-                  label="Entidade"
-                >
-                  <MenuItem value="todos">Todas</MenuItem>
-                  {Object.entries(entidadesLabels).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>{label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Período</InputLabel>
-                <Select
-                  value={filtroPeriodo}
-                  onChange={(e) => setFiltroPeriodo(e.target.value)}
-                  label="Período"
-                >
-                  <MenuItem value="hoje">Hoje</MenuItem>
-                  <MenuItem value="ontem">Ontem</MenuItem>
-                  <MenuItem value="semana">Últimos 7 dias</MenuItem>
-                  <MenuItem value="mes">Últimos 30 dias</MenuItem>
-                  <MenuItem value="personalizado">Personalizado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {filtroPeriodo === 'personalizado' && (
-              <>
-                <Grid item xs={12} md={3}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label="Data Início"
-                    value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
-                </Grid>
-                <Grid item xs={12} md={3}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label="Data Fim"
-                    value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
-                </Grid>
-              </>
-            )}
           </Grid>
+        </Grid>
+      )}
+
+      {/* Conteúdo principal */}
+      <Card>
+        <CardContent sx={{ p: isMobile ? 1 : 3 }}>
+          {isMobile ? (
+            renderMobileList()
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableCell><strong>Data/Hora</strong></TableCell>
+                    <TableCell><strong>Usuário</strong></TableCell>
+                    <TableCell><strong>Ação</strong></TableCell>
+                    <TableCell><strong>Entidade</strong></TableCell>
+                    <TableCell><strong>IP</strong></TableCell>
+                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {logsOrdenados.slice(0, 50).map((log, index) => (
+                    <TableRow key={log.id} hover>
+                      <TableCell>
+                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
+                            {log.usuario?.charAt(0) || 'S'}
+                          </Avatar>
+                          {log.usuario || 'Sistema'}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={acoesColors[log.acao]?.icon}
+                          label={acoesColors[log.acao]?.label || log.acao}
+                          size="small"
+                          sx={{
+                            bgcolor: `${acoesColors[log.acao]?.color}20`,
+                            color: acoesColors[log.acao]?.color,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{log.entidade || '-'}</TableCell>
+                      <TableCell>{log.ip || '-'}</TableCell>
+                      <TableCell align="center">
+                        <IconButton size="small" onClick={() => handleOpenDetalhes(log)}>
+                          <VisibilityIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
-      {/* Timeline de Atividades Recentes */}
-      {logsOrdenados.length > 0 && (
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom sx={{ color: '#9c27b0', fontWeight: 600 }}>
-              Atividades Recentes
-            </Typography>
-            <Timeline position="alternate">
-              {logsOrdenados.slice(0, 5).map((log, index) => (
-                <TimelineItem key={log.id}>
-                  <TimelineSeparator>
-                    <TimelineDot sx={{ bgcolor: acoesColors[log.acao]?.color || '#999' }}>
-                      {acoesColors[log.acao]?.icon || <InfoIcon />}
-                    </TimelineDot>
-                    {index < 4 && <TimelineConnector />}
-                  </TimelineSeparator>
-                  <TimelineContent>
-                    <Paper elevation={3} sx={{ p: 2 }}>
-                      <Typography variant="subtitle2">
-                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : 'Data não informada'}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>{log.usuario || 'Sistema'}</strong> - {acoesColors[log.acao]?.label || log.acao}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {log.detalhes}
-                      </Typography>
-                    </Paper>
-                  </TimelineContent>
-                </TimelineItem>
-              ))}
-            </Timeline>
-          </CardContent>
-        </Card>
+      {/* Bottom Navigation Mobile */}
+      {isMobile && (
+        <Paper sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10 }} elevation={3}>
+          <BottomNavigation
+            value={bottomNavValue}
+            onChange={(event, newValue) => setBottomNavValue(newValue)}
+            showLabels
+          >
+            <BottomNavigationAction label="Lista" icon={<HistoryIcon />} />
+            <BottomNavigationAction 
+              label="Imprimir" 
+              icon={<PrintIcon />} 
+              onClick={handlePrint}
+            />
+            <BottomNavigationAction 
+              label="Exportar" 
+              icon={<DownloadIcon />}
+              onClick={handleExportCSV}
+            />
+          </BottomNavigation>
+        </Paper>
       )}
 
-      {/* Tabela de Logs */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                <TableCell><strong>Data/Hora</strong></TableCell>
-                <TableCell><strong>Usuário</strong></TableCell>
-                <TableCell><strong>Ação</strong></TableCell>
-                <TableCell><strong>Entidade</strong></TableCell>
-                <TableCell><strong>ID</strong></TableCell>
-                <TableCell><strong>IP</strong></TableCell>
-                <TableCell align="center"><strong>Ações</strong></TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              <AnimatePresence>
-                {paginatedLogs.map((log, index) => (
-                  <motion.tr
-                    key={log.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                  >
-                    <TableCell>
-                      {log.data ? (
-                        <>
-                          {new Date(log.data).toLocaleDateString('pt-BR')}
-                          <Typography variant="caption" display="block" color="textSecondary">
-                            {new Date(log.data).toLocaleTimeString('pt-BR')}
-                          </Typography>
-                        </>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0', fontSize: '0.75rem' }}>
-                          {log.usuario?.charAt(0) || 'S'}
-                        </Avatar>
-                        {log.usuario || 'Sistema'}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={acoesColors[log.acao]?.icon}
-                        label={acoesColors[log.acao]?.label || log.acao}
-                        size="small"
-                        sx={{
-                          bgcolor: `${acoesColors[log.acao]?.color}20`,
-                          color: acoesColors[log.acao]?.color,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {entidadesLabels[log.entidade] || log.entidade || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {log.entidadeId || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={log.ip || '-'}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Ver Detalhes">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleOpenDetalhes(log)}
-                          sx={{ color: '#9c27b0' }}
-                        >
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
+      {/* FAB para filtros mobile */}
+      {isMobile && (
+        <Zoom in={!filterDrawerOpen}>
+          <Fab
+            color="primary"
+            sx={{ position: 'fixed', bottom: 80, right: 16 }}
+            onClick={() => setFilterDrawerOpen(true)}
+          >
+            <FilterIcon />
+          </Fab>
+        </Zoom>
+      )}
 
-              {paginatedLogs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
-                    <SecurityIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                    <Typography variant="body1" color="textSecondary">
-                      Nenhum registro de auditoria encontrado
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <TablePagination
-          rowsPerPageOptions={[10, 20, 50, 100]}
-          component="div"
-          count={logsOrdenados.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Registros por página"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-        />
-      </Card>
+      {/* Drawer de filtros mobile */}
+      {renderFilterDrawer()}
 
       {/* Dialog de Detalhes */}
       <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
@@ -787,15 +925,13 @@ function Auditoria() {
                 {logSelecionado.entidade && (
                   <Grid item xs={6}>
                     <Typography variant="caption" color="textSecondary">Entidade</Typography>
-                    <Typography variant="body2">
-                      {entidadesLabels[logSelecionado.entidade] || logSelecionado.entidade}
-                    </Typography>
+                    <Typography variant="body2">{logSelecionado.entidade}</Typography>
                   </Grid>
                 )}
 
                 {logSelecionado.entidadeId && (
                   <Grid item xs={6}>
-                    <Typography variant="caption" color="textSecondary">ID da Entidade</Typography>
+                    <Typography variant="caption" color="textSecondary">ID</Typography>
                     <Typography variant="body2">{logSelecionado.entidadeId}</Typography>
                   </Grid>
                 )}
@@ -811,8 +947,8 @@ function Auditoria() {
 
                 {logSelecionado.dados && (
                   <Grid item xs={12}>
-                    <Typography variant="caption" color="textSecondary">Dados da Operação</Typography>
-                    <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#f5f5f5', overflow: 'auto', maxHeight: 300 }}>
+                    <Typography variant="caption" color="textSecondary">Dados</Typography>
+                    <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#f5f5f5', overflow: 'auto' }}>
                       <pre style={{ margin: 0, fontSize: '0.75rem' }}>
                         {JSON.stringify(logSelecionado.dados, null, 2)}
                       </pre>
@@ -825,17 +961,9 @@ function Auditoria() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetalhes}>Fechar</Button>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={() => window.print()}
-          >
-            Imprimir
-          </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
       <Snackbar 
         open={snackbar.open} 
         autoHideDuration={6000} 
