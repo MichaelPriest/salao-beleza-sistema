@@ -49,12 +49,12 @@ import {
   Collapse,
   Pagination,
   Stack,
-  TableContainer, // 🔥 ADICIONADO
-  Table,           // 🔥 ADICIONADO
-  TableHead,       // 🔥 ADICIONADO
-  TableBody,       // 🔥 ADICIONADO
-  TableRow,        // 🔥 ADICIONADO
-  TableCell,       // 🔥 ADICIONADO
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -326,13 +326,14 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
   );
 };
 
-// Componente para impressão
+// Componente para impressão - ESTILIZADO IGUAL AO PDF
 const RelatorioComissoes = React.forwardRef(({ 
   dados, 
   profissional, 
   periodo, 
   filtros,
   configuracoes,
+  isAdmin,
   tipo = 'completo' 
 }, ref) => {
   const formatarMoeda = (valor) => {
@@ -346,9 +347,23 @@ const RelatorioComissoes = React.forwardRef(({
     }
   };
 
+  // Determinar o nome correto do profissional para exibição
+  const getNomeProfissional = () => {
+    // Se for admin e tiver um profissional selecionado no filtro
+    if (isAdmin && filtros?.profissionalNome) {
+      return filtros.profissionalNome;
+    }
+    // Se for admin sem filtro específico
+    if (isAdmin && (!filtros?.profissionalId || filtros.profissionalId === 'todos')) {
+      return 'Todos os Profissionais';
+    }
+    // Se for profissional logado
+    return profissional?.nome || 'Todos os Profissionais';
+  };
+
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Cabeçalho com Logo */}
+      {/* Cabeçalho com Logo - IGUAL AO PDF */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
         {configuracoes?.salao?.logo ? (
           <Box sx={{ mb: 2 }}>
@@ -372,7 +387,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Typography>
         
         <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>
-          {profissional?.nome || 'Todos os Profissionais'}
+          {getNomeProfissional()}
         </Typography>
         
         <Typography variant="subtitle1" color="textSecondary" sx={{ mt: 1 }}>
@@ -390,7 +405,7 @@ const RelatorioComissoes = React.forwardRef(({
         )}
       </Box>
 
-      {/* Resumo */}
+      {/* Resumo - IGUAL AO PDF */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
           Resumo do Período
@@ -423,7 +438,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Grid>
       </Box>
 
-      {/* Estatísticas */}
+      {/* Estatísticas - IGUAL AO PDF */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
           Estatísticas
@@ -464,7 +479,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Grid>
       </Box>
 
-      {/* Atendimentos */}
+      {/* Atendimentos - IGUAL AO PDF */}
       {dados.atendimentos.length > 0 && (
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
@@ -505,7 +520,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Box>
       )}
 
-      {/* Comissões Detalhadas */}
+      {/* Comissões Detalhadas - IGUAL AO PDF */}
       {dados.comissoes.length > 0 && (
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
@@ -546,7 +561,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Box>
       )}
 
-      {/* Resumo por Serviço */}
+      {/* Resumo por Serviço - IGUAL AO PDF */}
       {dados.resumo?.porServico && dados.resumo.porServico.length > 0 && (
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
@@ -579,7 +594,7 @@ const RelatorioComissoes = React.forwardRef(({
         </Box>
       )}
 
-      {/* Rodapé */}
+      {/* Rodapé - IGUAL AO PDF */}
       <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
         <Typography variant="caption">
           Relatório gerado automaticamente pelo sistema • Documento não fiscal
@@ -587,6 +602,7 @@ const RelatorioComissoes = React.forwardRef(({
         <Typography variant="caption" display="block" sx={{ mt: 1 }}>
           Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
           Período: {periodo}
+          {filtros.profissionalNome && filtros.profissionalNome !== 'todos' && ` • Profissional: ${filtros.profissionalNome}`}
         </Typography>
         {configuracoes?.salao?.contato && (
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
@@ -1210,8 +1226,19 @@ function MinhasComissoes() {
       
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
-      const profissionalNome = profissional?.nome || 'Todos os Profissionais';
-      doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 40, { align: 'center' });
+      
+      // Nome do profissional correto
+      let nomeProfissional = profissional?.nome || 'Todos os Profissionais';
+      if (isAdmin && filtroProfissional !== 'todos') {
+        const profSelecionado = profissionais.find(p => p.id === filtroProfissional);
+        if (profSelecionado) {
+          nomeProfissional = profSelecionado.nome;
+        }
+      } else if (isAdmin && filtroProfissional === 'todos') {
+        nomeProfissional = 'Todos os Profissionais';
+      }
+      
+      doc.text(`Profissional: ${nomeProfissional}`, pageWidth / 2, 40, { align: 'center' });
       
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`;
       doc.setFontSize(10);
@@ -1310,7 +1337,7 @@ function MinhasComissoes() {
         detalhes: 'Exportação de relatório de comissões em PDF',
         dados: {
           periodo,
-          profissional: profissionalNome,
+          profissional: nomeProfissional,
           totalComissoes: comissoesFiltradas.length
         }
       });
@@ -1333,7 +1360,17 @@ function MinhasComissoes() {
       
       const wb = XLSX.utils.book_new();
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
-      const profissionalNome = profissional?.nome || 'Todos os Profissionais';
+      
+      // Nome do profissional correto
+      let nomeProfissional = profissional?.nome || 'Todos os Profissionais';
+      if (isAdmin && filtroProfissional !== 'todos') {
+        const profSelecionado = profissionais.find(p => p.id === filtroProfissional);
+        if (profSelecionado) {
+          nomeProfissional = profSelecionado.nome;
+        }
+      } else if (isAdmin && filtroProfissional === 'todos') {
+        nomeProfissional = 'Todos os Profissionais';
+      }
       
       if (exportOptions.incluirResumo && resumo) {
         const resumoData = [
@@ -1410,7 +1447,7 @@ function MinhasComissoes() {
       const infoData = [
         ['Informações do Relatório'],
         [''],
-        ['Profissional', profissionalNome],
+        ['Profissional', nomeProfissional],
         ['Período', periodo],
         ['Data de Emissão', new Date().toLocaleString('pt-BR')],
         ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
@@ -1427,7 +1464,7 @@ function MinhasComissoes() {
         detalhes: 'Exportação de relatório de comissões em Excel',
         dados: {
           periodo,
-          profissional: profissionalNome,
+          profissional: nomeProfissional,
           totalComissoes: comissoesFiltradas.length
         }
       });
@@ -1553,7 +1590,9 @@ function MinhasComissoes() {
             {isAdmin ? 'Comissões' : 'Minhas Comissões'}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            {profissional?.nome || 'Carregando...'}
+            {isAdmin && filtroProfissional !== 'todos' 
+              ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+              : profissional?.nome || 'Carregando...'}
           </Typography>
         </Box>
         
@@ -2148,7 +2187,7 @@ function MinhasComissoes() {
               </Paper>
             </Box>
           ) : itemSelecionado ? (
-            // Detalhes do Atendimento (código existente)
+            // Detalhes do Atendimento
             <Box>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
@@ -2412,6 +2451,11 @@ function MinhasComissoes() {
                   Período: {meses.find(m => m.value === filtroMes)?.label} / {filtroAno}
                 </Typography>
                 <Typography variant="caption" display="block">
+                  Profissional: {isAdmin && filtroProfissional !== 'todos' 
+                    ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+                    : (profissional?.nome || 'Todos')}
+                </Typography>
+                <Typography variant="caption" display="block">
                   Total de comissões: {comissoesFiltradas.length}
                 </Typography>
                 <Typography variant="caption" display="block">
@@ -2435,10 +2479,19 @@ function MinhasComissoes() {
             comissoes: comissoesFiltradas,
             atendimentos: atendimentosFiltrados
           }}
-          profissional={isAdmin ? { nome: 'Todos os Profissionais', id: 'todos' } : profissional}
+          profissional={profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
-          filtros={{ mes: filtroMes, ano: filtroAno, status: filtroStatus }}
+          filtros={{ 
+            mes: filtroMes, 
+            ano: filtroAno, 
+            status: filtroStatus,
+            profissionalId: filtroProfissional,
+            profissionalNome: isAdmin && filtroProfissional !== 'todos' 
+              ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+              : null
+          }}
           configuracoes={configuracoes}
+          isAdmin={isAdmin}
           tipo="completo"
         />
       </Box>
