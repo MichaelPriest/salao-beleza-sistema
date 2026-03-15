@@ -1,5 +1,5 @@
 // src/components/ClienteLayout.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
   Box,
@@ -17,8 +17,12 @@ import {
   useMediaQuery,
   useTheme,
   SwipeableDrawer,
-  Fab,
-  Zoom,
+  Badge,
+  Menu,
+  MenuItem,
+  Popover,
+  Button,
+  Paper,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -31,9 +35,16 @@ import {
   Logout as LogoutIcon,
   Close as CloseIcon,
   Spa as SpaIcon,
+  Notifications as NotificationsIcon,
+  CheckCircle as CheckIcon,
+  Event as EventIcon,
+  EmojiEvents as TrophyIcon,
+  Redeem as RedeemIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { notificacoesPushService } from '../services/notificacoesPushService';
 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/cliente/dashboard' },
@@ -49,8 +60,108 @@ function ClienteLayout() {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { cliente, logout } = useAuthCliente();
+  const { cliente, logout, firebaseUser } = useAuthCliente();
   const [mobileOpen, setMobileOpen] = useState(false);
+  
+  // 🔥 ESTADOS PARA NOTIFICAÇÕES
+  const [notificacoes, setNotificacoes] = useState([]);
+  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
+  const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
+  const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
+
+  useEffect(() => {
+    if (cliente) {
+      carregarNotificacoes();
+      
+      // Inscrever para receber atualizações em tempo real
+      const unsubscribe = notificacoesPushService.inscrever((notificacao) => {
+        if (notificacao.tipo === 'contagem') {
+          setNotificacoesNaoLidas(notificacao.quantidade);
+        } else if (notificacao.tipo === 'nova') {
+          setNotificacoes(prev => [notificacao.dados, ...prev]);
+          setNotificacoesNaoLidas(prev => prev + 1);
+        }
+      });
+      
+      return unsubscribe;
+    }
+  }, [cliente]);
+
+  const carregarNotificacoes = async () => {
+    if (!cliente?.id) return;
+    
+    try {
+      setLoadingNotificacoes(true);
+      const uid = firebaseUser?.uid || cliente?.id;
+      const data = await notificacoesPushService.buscarNotificacoes(uid);
+      setNotificacoes(data);
+      setNotificacoesNaoLidas(data.filter(n => !n.lida).length);
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
+    } finally {
+      setLoadingNotificacoes(false);
+    }
+  };
+
+  const handleNotificacoesClick = (event) => {
+    setNotificacoesAnchor(event.currentTarget);
+  };
+
+  const handleNotificacoesClose = () => {
+    setNotificacoesAnchor(null);
+  };
+
+  const handleNotificacaoClick = async (notificacao) => {
+    if (!notificacao.lida) {
+      await notificacoesPushService.marcarComoLida(notificacao.id);
+      setNotificacoes(prev =>
+        prev.map(n => n.id === notificacao.id ? { ...n, lida: true } : n)
+      );
+    }
+    
+    if (notificacao.link) {
+      navigate(notificacao.link);
+    }
+    
+    handleNotificacoesClose();
+  };
+
+  const handleMarcarTodasComoLidas = async () => {
+    const uid = firebaseUser?.uid || cliente?.id;
+    await notificacoesPushService.marcarTodasComoLidas(uid);
+    setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
+    setNotificacoesNaoLidas(0);
+  };
+
+  const getIconeNotificacao = (tipo) => {
+    switch(tipo) {
+      case 'agendamento': return <EventIcon sx={{ color: '#9c27b0' }} />;
+      case 'pontos': return <StarIcon sx={{ color: '#ff9800' }} />;
+      case 'nivel': return <TrophyIcon sx={{ color: '#4caf50' }} />;
+      case 'recompensa': return <GiftIcon sx={{ color: '#ff4081' }} />;
+      case 'resgate': return <RedeemIcon sx={{ color: '#2196f3' }} />;
+      case 'lembrete': return <EventIcon sx={{ color: '#ff9800' }} />;
+      default: return <InfoIcon sx={{ color: '#2196f3' }} />;
+    }
+  };
+
+  const formatarData = (data) => {
+    if (!data) return '';
+    try {
+      const date = new Date(data);
+      const agora = new Date();
+      const diff = Math.floor((agora - date) / 1000); // diferença em segundos
+      
+      if (diff < 60) return 'agora';
+      if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} h atrás`;
+      if (diff < 604800) return `${Math.floor(diff / 86400)} d atrás`;
+      
+      return date.toLocaleDateString('pt-BR');
+    } catch {
+      return '';
+    }
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -199,9 +310,17 @@ function ClienteLayout() {
             <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0' }}>
               BeautyPro
             </Typography>
+            
+            {/* 🔥 ÍCONE DE NOTIFICAÇÕES MOBILE */}
+            <IconButton color="inherit" onClick={handleNotificacoesClick}>
+              <Badge badgeContent={notificacoesNaoLidas} color="secondary">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+            
             <Avatar
               src={cliente?.foto}
-              sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}
+              sx={{ width: 32, height: 32, bgcolor: '#9c27b0', ml: 1 }}
             >
               {!cliente?.foto && getInitials(cliente?.nome)}
             </Avatar>
@@ -257,6 +376,24 @@ function ClienteLayout() {
           minHeight: '100vh',
         }}
       >
+        {/* 🔥 ÍCONE DE NOTIFICAÇÕES DESKTOP (fora do drawer) */}
+        {!isMobile && (
+          <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
+            <IconButton
+              onClick={handleNotificacoesClick}
+              sx={{
+                bgcolor: 'white',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                '&:hover': { bgcolor: '#f5f5f5' }
+              }}
+            >
+              <Badge badgeContent={notificacoesNaoLidas} color="secondary">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+          </Box>
+        )}
+
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 20 }}
@@ -266,6 +403,101 @@ function ClienteLayout() {
           <Outlet />
         </motion.div>
       </Box>
+
+      {/* 🔥 POPOVER DE NOTIFICAÇÕES */}
+      <Popover
+        open={Boolean(notificacoesAnchor)}
+        anchorEl={notificacoesAnchor}
+        onClose={handleNotificacoesClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        PaperProps={{
+          sx: {
+            width: 360,
+            maxHeight: 480,
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+          }
+        }}
+      >
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Notificações
+          </Typography>
+          {notificacoesNaoLidas > 0 && (
+            <Button size="small" onClick={handleMarcarTodasComoLidas}>
+              Marcar todas como lidas
+            </Button>
+          )}
+        </Box>
+        <Divider />
+        
+        {loadingNotificacoes ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="body2" color="textSecondary">Carregando...</Typography>
+          </Box>
+        ) : notificacoes.length === 0 ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+            <Typography variant="body2" color="textSecondary">
+              Nenhuma notificação
+            </Typography>
+          </Box>
+        ) : (
+          <List sx={{ p: 0 }}>
+            {notificacoes.slice(0, 5).map((notificacao) => (
+              <React.Fragment key={notificacao.id}>
+                <ListItem
+                  button
+                  onClick={() => handleNotificacaoClick(notificacao)}
+                  sx={{
+                    bgcolor: notificacao.lida ? 'transparent' : '#f3e5f5',
+                    py: 1.5,
+                  }}
+                >
+                  <ListItemIcon>
+                    {getIconeNotificacao(notificacao.tipo)}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        {notificacao.titulo}
+                      </Typography>
+                    }
+                    secondary={
+                      <>
+                        <Typography variant="body2" color="textSecondary" noWrap>
+                          {notificacao.mensagem}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {formatarData(notificacao.data)}
+                        </Typography>
+                      </>
+                    }
+                  />
+                  {!notificacao.lida && (
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#9c27b0', ml: 1 }} />
+                  )}
+                </ListItem>
+                <Divider />
+              </React.Fragment>
+            ))}
+            {notificacoes.length > 5 && (
+              <Box sx={{ p: 1, textAlign: 'center' }}>
+                <Button size="small" onClick={() => navigate('/cliente/notificacoes')}>
+                  Ver todas ({notificacoes.length})
+                </Button>
+              </Box>
+            )}
+          </List>
+        )}
+      </Popover>
     </Box>
   );
 }
