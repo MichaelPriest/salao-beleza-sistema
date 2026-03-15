@@ -49,6 +49,12 @@ import {
   Collapse,
   Pagination,
   Stack,
+  TableContainer, // 🔥 ADICIONADO
+  Table,           // 🔥 ADICIONADO
+  TableHead,       // 🔥 ADICIONADO
+  TableBody,       // 🔥 ADICIONADO
+  TableRow,        // 🔥 ADICIONADO
+  TableCell,       // 🔥 ADICIONADO
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
