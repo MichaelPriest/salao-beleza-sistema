@@ -83,6 +83,16 @@ class CupomService {
     }
   }
 
+  // Buscar cupom por ID
+  async buscarCupomPorId(id) {
+    try {
+      return await firebaseService.getById('cupons', id);
+    } catch (error) {
+      console.error('Erro ao buscar cupom por ID:', error);
+      return null;
+    }
+  }
+
   // Buscar cupom por código
   async buscarCupomPorCodigo(codigo) {
     try {
@@ -120,6 +130,16 @@ class CupomService {
     } catch (error) {
       console.error('Erro ao listar cupons:', error);
       return [];
+    }
+  }
+
+  // Deletar cupom
+  async deletarCupom(id) {
+    try {
+      await firebaseService.delete('cupons', id);
+    } catch (error) {
+      console.error('Erro ao deletar cupom:', error);
+      throw error;
     }
   }
 
@@ -273,31 +293,31 @@ class CupomService {
   // ============================================
 
   // Registrar uso do cupom
-  async registrarUso(cupomId, clienteId, atendimentoId, valorOriginal, valorFinal) {
+  async registrarUso(cupomId, dados) {
     try {
       const usoData = {
         cupomId,
-        clienteId,
-        atendimentoId,
-        valorOriginal,
-        valorFinal,
-        descontoAplicado: valorOriginal - valorFinal,
+        cupomCodigo: dados.cupomCodigo,
+        atendimentoId: dados.atendimentoId,
+        clienteId: dados.clienteId,
+        clienteNome: dados.clienteNome,
+        valorDesconto: dados.valorDesconto || 0,
+        valorTotal: dados.valorTotal || 0,
         data: new Date().toISOString(),
         createdAt: Timestamp.now()
       };
 
-      await firebaseService.add('usos_cupons', usoData);
+      const id = await firebaseService.add('usos_cupons', usoData);
 
       // Incrementar contador de usos do cupom
-      const cupom = await firebaseService.getById('cupons', cupomId);
+      const cupom = await this.buscarCupomPorId(cupomId);
       if (cupom) {
-        await firebaseService.update('cupons', cupomId, {
-          usosAtuais: (cupom.usosAtuais || 0) + 1,
-          updatedAt: Timestamp.now()
+        await this.atualizarCupom(cupomId, {
+          usosAtuais: (cupom.usosAtuais || 0) + 1
         });
       }
 
-      return usoData;
+      return { id, ...usoData };
     } catch (error) {
       console.error('Erro ao registrar uso do cupom:', error);
       throw error;
@@ -355,6 +375,63 @@ class CupomService {
   }
 
   // ============================================
+  // NOVO MÉTODO: VERIFICAR CUPONS PRÓXIMOS DE EXPIRAR
+  // ============================================
+
+  async verificarCuponsExpirados(clienteId) {
+    try {
+      // Buscar todos os cupons ativos
+      const cupons = await this.listarCupons({ ativo: true });
+      
+      const hoje = new Date();
+      const daqui7Dias = new Date();
+      daqui7Dias.setDate(hoje.getDate() + 7);
+      
+      // Se tiver clienteId, buscar usos do cliente
+      let usosCliente = [];
+      if (clienteId) {
+        usosCliente = await firebaseService.query('usos_cupons', [
+          { field: 'clienteId', operator: '==', value: clienteId }
+        ]).catch(() => []);
+      }
+
+      const cuponsProximos = cupons.filter(cupom => {
+        // Verificar se tem data de fim
+        if (!cupom.dataFim) return false;
+        
+        const dataFim = new Date(cupom.dataFim + 'T23:59:59');
+        const diffDias = Math.ceil((dataFim - hoje) / (1000 * 60 * 60 * 24));
+        
+        // Cupom deve expirar nos próximos 7 dias
+        if (dataFim <= hoje || dataFim > daqui7Dias) return false;
+        
+        // Verificar se cliente já usou este cupom
+        if (clienteId) {
+          const usosClienteNesteCupom = usosCliente.filter(u => u.cupomId === cupom.id).length;
+          if (usosClienteNesteCupom >= (cupom.usoMaximoPorCliente || 1)) {
+            return false; // Cliente já atingiu limite de uso
+          }
+        }
+        
+        // Verificar limite geral
+        if (cupom.usoMaximo && cupom.usosAtuais >= cupom.usoMaximo) {
+          return false; // Cupom esgotado
+        }
+        
+        return diffDias > 0 && diffDias <= 7;
+      });
+
+      return cuponsProximos.map(cupom => ({
+        ...cupom,
+        diasRestantes: Math.ceil((new Date(cupom.dataFim + 'T23:59:59') - hoje) / (1000 * 60 * 60 * 24))
+      }));
+    } catch (error) {
+      console.error('Erro ao verificar cupons expirados:', error);
+      return [];
+    }
+  }
+
+  // ============================================
   // ESTATÍSTICAS
   // ============================================
 
@@ -366,11 +443,12 @@ class CupomService {
       const ativos = cupons.filter(c => c.ativo).length;
       const inativos = cupons.length - ativos;
       const totalUsos = usos.length;
-      const valorTotalDescontos = usos.reduce((acc, u) => acc + (u.descontoAplicado || 0), 0);
+      const valorTotalDescontos = usos.reduce((acc, u) => acc + (u.valorDesconto || 0), 0);
 
       // Usos por período (últimos 30 dias)
       const hoje = new Date();
-      const trintaDiasAtras = new Date(hoje.setDate(hoje.getDate() - 30));
+      const trintaDiasAtras = new Date();
+      trintaDiasAtras.setDate(hoje.getDate() - 30);
       const usosRecentes = usos.filter(u => new Date(u.data) >= trintaDiasAtras);
 
       // Top cupons mais usados
@@ -379,20 +457,22 @@ class CupomService {
         usosPorCupom[u.cupomId] = (usosPorCupom[u.cupomId] || 0) + 1;
       });
 
-      const topCupons = Object.entries(usosPorCupom)
-        .map(([cupomId, quantidade]) => {
-          const cupom = cupons.find(c => c.id === cupomId);
-          return {
-            cupomId,
-            codigo: cupom?.codigo || 'Desconhecido',
-            quantidade,
-            valorTotal: usos
-              .filter(u => u.cupomId === cupomId)
-              .reduce((acc, u) => acc + (u.descontoAplicado || 0), 0)
-          };
-        })
-        .sort((a, b) => b.quantidade - a.quantidade)
-        .slice(0, 5);
+      const topCupons = await Promise.all(
+        Object.entries(usosPorCupom)
+          .map(async ([cupomId, quantidade]) => {
+            const cupom = cupons.find(c => c.id === cupomId) || await this.buscarCupomPorId(cupomId);
+            return {
+              cupomId,
+              codigo: cupom?.codigo || 'Desconhecido',
+              quantidade,
+              valorTotal: usos
+                .filter(u => u.cupomId === cupomId)
+                .reduce((acc, u) => acc + (u.valorDesconto || 0), 0)
+            };
+          })
+          .sort((a, b) => b.quantidade - a.quantidade)
+          .slice(0, 5)
+      );
 
       return {
         totalCupons: cupons.length,
