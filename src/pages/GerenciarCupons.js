@@ -39,6 +39,8 @@ import {
   FormControlLabel,
   Autocomplete,
   Badge,
+  Checkbox, // <-- ADICIONAR ESTA LINHA
+  ListItemText, // <-- ADICIONAR ESTA LINHA
 } from '@mui/material';
 import {
   Add as AddIcon,
