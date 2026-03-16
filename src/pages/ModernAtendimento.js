@@ -47,7 +47,6 @@ import {
   Fade,
   Badge,
   Collapse,
-  LinearProgress,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -224,7 +223,7 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
     setCupomEncontrado(null);
 
     try {
-      // Buscar cupom pelo código usando o cupomService
+      // Buscar cupom pelo código
       const cupom = await cupomService.buscarCupomPorCodigo(codigoCupom);
 
       if (!cupom) {
@@ -421,7 +420,6 @@ function ModernAtendimento() {
         console.log('✅ Usuário carregado:', usuarioData);
       } else {
         console.warn('⚠️ Nenhum usuário encontrado no localStorage');
-        // Usuário padrão para testes (remova em produção)
         setUsuario({ id: 'sistema', nome: 'Sistema' });
       }
     } catch (error) {
@@ -472,10 +470,9 @@ function ModernAtendimento() {
     calcularDescontoCupons();
   }, [cuponsAplicados, itensServico, itensProduto]);
 
-  // Função para registrar na auditoria (CORRIGIDA)
+  // Função para registrar na auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      // Garantir que usuário existe
       const usuarioId = usuario?.id || 'sistema';
       const usuarioNome = usuario?.nome || 'Sistema';
       
@@ -494,11 +491,9 @@ function ModernAtendimento() {
       };
 
       console.log('📝 Registrando auditoria:', auditoriaData);
-      
       await firebaseService.add('auditoria', auditoriaData);
     } catch (error) {
       console.error('❌ Erro ao registrar auditoria:', error);
-      // Não throw o erro para não interromper o fluxo principal
     }
   };
 
@@ -529,7 +524,6 @@ function ModernAtendimento() {
       if (cupom.tipo === 'percentual') {
         let valorDesconto = (subtotal * cupom.valor) / 100;
         
-        // Aplicar limite máximo se existir
         if (cupom.valorMaximoDesconto && valorDesconto > cupom.valorMaximoDesconto) {
           valorDesconto = cupom.valorMaximoDesconto;
         }
@@ -540,14 +534,9 @@ function ModernAtendimento() {
       } else if (cupom.tipo === 'fixo') {
         descontoTotal += cupom.valor;
         cupom.valorDescontoCalculado = cupom.valor;
-        
-      } else if (cupom.tipo === 'produto') {
-        descontoTotal += cupom.valor || 0;
-        cupom.valorDescontoCalculado = cupom.valor || 0;
       }
     });
 
-    // Garantir que o desconto não seja maior que o subtotal
     if (descontoTotal > subtotal) {
       descontoTotal = subtotal;
     }
@@ -596,7 +585,6 @@ function ModernAtendimento() {
 
       setPontosCliente(saldo);
 
-      // Determinar nível do cliente
       let nivel = 'bronze';
       if (fidelidadeConfig?.niveis) {
         if (saldo >= (fidelidadeConfig.niveis.platina?.minimo || 5000)) nivel = 'platina';
@@ -617,18 +605,15 @@ function ModernAtendimento() {
     let pontos = 0;
     const bonus = [];
 
-    // Pontos por valor gasto (considera apenas serviços, produtos não dão pontos)
     const pontosPorReal = fidelidadeConfig.pontosPorReal || 10;
     pontos += Math.floor(valorServicos * pontosPorReal);
 
-    // Aplicar multiplicador do nível
     const multiplicador = fidelidadeConfig.niveis?.[nivelCliente]?.multiplicador || 1;
     if (multiplicador > 1) {
       pontos = Math.floor(pontos * multiplicador);
       bonus.push(`Multiplicador ${nivelCliente}: ${multiplicador}x`);
     }
 
-    // Verificar se é primeiro atendimento
     if (fidelidadeConfig.regrasEspeciais?.primeiraCompra && !cliente?.ultimaVisita) {
       pontos += fidelidadeConfig.bonusPrimeiroAtendimento || 0;
       bonus.push(`Primeiro atendimento: +${fidelidadeConfig.bonusPrimeiroAtendimento} pontos`);
@@ -642,12 +627,10 @@ function ModernAtendimento() {
     try {
       setLoading(true);
       
-      // Buscar atendimento
       const atendimentoData = await firebaseService.getById('atendimentos', id);
       setAtendimento(atendimentoData);
       setObservacoes(atendimentoData.observacoes || '');
 
-      // Buscar dados relacionados
       const [clienteData, profissionalData] = await Promise.all([
         firebaseService.getById('clientes', atendimentoData.clienteId),
         firebaseService.getById('profissionais', atendimentoData.profissionalId)
@@ -656,11 +639,9 @@ function ModernAtendimento() {
       setCliente(clienteData);
       setProfissional(profissionalData);
 
-      // Carregar itens do atendimento - ARRAY de serviços
       if (atendimentoData.itensServico && atendimentoData.itensServico.length > 0) {
         setItensServico(atendimentoData.itensServico);
       } else if (atendimentoData.servicoId) {
-        // Se tiver apenas servicoId, buscar o serviço
         const servicoData = await firebaseService.getById('servicos', atendimentoData.servicoId);
         setItensServico([{
           id: servicoData.id,
@@ -671,7 +652,6 @@ function ModernAtendimento() {
         }]);
       }
 
-      // Carregar itens de produto - ARRAY de produtos
       if (atendimentoData.itensProduto) {
         setItensProduto(atendimentoData.itensProduto);
       }
@@ -681,13 +661,11 @@ function ModernAtendimento() {
         setCuponsAplicados(atendimentoData.cuponsAplicados);
       }
 
-      // Carregar pagamentos - ARRAY de pagamentos
       const pagamentosData = await firebaseService.query('pagamentos', [
         { field: 'atendimentoId', operator: '==', value: id }
       ]);
       setPagamentos(pagamentosData || []);
 
-      // Registrar acesso na auditoria
       await registrarAuditoria(
         'acesso_atendimento',
         id,
@@ -695,7 +673,6 @@ function ModernAtendimento() {
         { cliente: clienteData?.nome, profissional: profissionalData?.nome }
       );
 
-      // Verificar status para definir o step atual
       if (atendimentoData.status === 'finalizado') {
         setActiveStep(3);
       } else if (pagamentosData.length > 0) {
@@ -705,13 +682,6 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados do atendimento');
-      
-      await registrarAuditoria(
-        'erro_carregar_atendimento',
-        id,
-        `Erro ao carregar atendimento: ${error.message}`,
-        {}
-      );
     } finally {
       setLoading(false);
     }
@@ -730,33 +700,27 @@ function ModernAtendimento() {
     }
   };
 
-  // Função para obter o símbolo da unidade
   const getUnidadeSimbolo = (unidade) => {
     const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
     return unidadeEncontrada?.simbolo || unidade;
   };
 
-  // Função para calcular quantidade em estoque baseado na unidade de venda
   const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
     if (!produto) return 0;
-    
     const estoqueEmUnidadeVenda = produto.quantidadeEstoque * (produto.fatorConversao || 1);
     return Math.floor(estoqueEmUnidadeVenda);
   };
 
-  // Função para converter quantidade de venda para estoque
   const converterParaEstoque = (produto, quantidadeVenda) => {
     if (!produto) return 0;
     return quantidadeVenda / (produto.fatorConversao || 1);
   };
 
-  // Filtrar serviços pela busca
   const servicosFiltrados = servicosDisponiveis.filter(servico => 
     servico.nome?.toLowerCase().includes(buscaServico.toLowerCase()) ||
     servico.categoria?.toLowerCase().includes(buscaServico.toLowerCase())
   );
 
-  // Filtrar produtos pela busca
   const produtosFiltrados = produtosDisponiveis.filter(produto => 
     produto.nome?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
@@ -765,7 +729,6 @@ function ModernAtendimento() {
 
   // FUNÇÃO: Aplicar cupom válido
   const handleAplicarCupom = (cupom) => {
-    // Verificar se já foi aplicado
     if (cuponsAplicados.some(c => c.id === cupom.id)) {
       toast.error('Este cupom já foi aplicado');
       return;
@@ -826,26 +789,23 @@ function ModernAtendimento() {
     }
   }, [cliente]);
 
-  // Adicionar serviço ao ARRAY itensServico
   const handleAdicionarServico = () => {
     if (!servicoSelecionado) {
       toast.error('Selecione um serviço');
       return;
     }
 
-    // Verificar se o serviço já foi adicionado
     if (itensServico.some(item => item.id === servicoSelecionado.id)) {
       toast.error('Serviço já adicionado');
       return;
     }
 
-    // Adicionar ao array
     setItensServico([...itensServico, {
       id: servicoSelecionado.id,
       nome: servicoSelecionado.nome,
       preco: servicoSelecionado.preco,
       duracao: servicoSelecionado.duracao,
-      principal: itensServico.length === 0 // Primeiro serviço é principal
+      principal: itensServico.length === 0
     }]);
 
     setServicoSelecionado(null);
@@ -853,7 +813,6 @@ function ModernAtendimento() {
     toast.success('Serviço adicionado!');
   };
 
-  // Adicionar produto ao ARRAY itensProduto (com unidades de medida)
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado) {
       toast.error('Selecione um produto');
@@ -865,7 +824,6 @@ function ModernAtendimento() {
       return;
     }
 
-    // Calcular quantidade disponível na unidade de venda
     const quantidadeDisponivel = calcularQuantidadeDisponivel(produtoSelecionado, quantidadeProduto);
     
     if (quantidadeProduto > quantidadeDisponivel) {
@@ -875,26 +833,22 @@ function ModernAtendimento() {
       return;
     }
 
-    // Calcular quanto será baixado do estoque
     const quantidadeEstoque = converterParaEstoque(produtoSelecionado, quantidadeProduto);
 
-    // Verificar se o produto já foi adicionado
     const produtoExistente = itensProduto.find(item => item.id === produtoSelecionado.id);
     
     if (produtoExistente) {
-      // Atualizar quantidade no array
       setItensProduto(itensProduto.map(item => 
         item.id === produtoSelecionado.id 
           ? { 
               ...item, 
               quantidadeVenda: item.quantidadeVenda + quantidadeProduto,
               quantidadeEstoque: item.quantidadeEstoque + quantidadeEstoque,
-              semCobranca: item.semCobranca // Manter status de cobrança
+              semCobranca: item.semCobranca
             }
           : item
       ));
     } else {
-      // Adicionar novo item ao array
       setItensProduto([...itensProduto, {
         id: produtoSelecionado.id,
         nome: produtoSelecionado.nome,
@@ -909,14 +863,12 @@ function ModernAtendimento() {
       }]);
     }
 
-    // Atualizar estoque (sempre dá baixa, independente de cobrança)
     const novaQuantidadeEstoque = produtoSelecionado.quantidadeEstoque - quantidadeEstoque;
     firebaseService.update('produtos', produtoSelecionado.id, {
       quantidadeEstoque: novaQuantidadeEstoque,
       updatedAt: Timestamp.now()
     });
 
-    // Registrar movimentação de estoque
     registrarMovimentacaoEstoque(
       produtoSelecionado, 
       quantidadeEstoque, 
@@ -935,7 +887,6 @@ function ModernAtendimento() {
     );
   };
 
-  // Registrar movimentação de estoque
   const registrarMovimentacaoEstoque = async (produto, quantidade, unidade, tipo) => {
     try {
       const movimentacao = {
@@ -954,21 +905,17 @@ function ModernAtendimento() {
     }
   };
 
-  // Remover serviço do ARRAY itensServico
   const handleRemoverServico = (index) => {
     const novosItens = itensServico.filter((_, i) => i !== index);
-    // Se removeu o principal, definir o primeiro como principal
     if (itensServico[index].principal && novosItens.length > 0) {
       novosItens[0].principal = true;
     }
     setItensServico(novosItens);
   };
 
-  // Remover produto do ARRAY itensProduto (com devolução ao estoque)
   const handleRemoverProduto = (index) => {
     const itemRemovido = itensProduto[index];
     
-    // Devolver ao estoque
     if (itemRemovido) {
       firebaseService.getById('produtos', itemRemovido.id).then(produto => {
         const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidadeEstoque;
@@ -977,7 +924,6 @@ function ModernAtendimento() {
           updatedAt: Timestamp.now()
         });
         
-        // Registrar devolução
         registrarMovimentacaoEstoque(
           produto, 
           itemRemovido.quantidadeEstoque, 
@@ -997,19 +943,17 @@ function ModernAtendimento() {
       
       const valorTotal = calcularValorTotal();
       
-      // Preparar dados para salvar - garantindo que são arrays
       const dadosAtendimento = {
         observacoes,
-        itensServico: itensServico, // Array
-        itensProduto: itensProduto, // Array
-        cuponsAplicados: cuponsAplicados, // Array de cupons
+        itensServico: itensServico,
+        itensProduto: itensProduto,
+        cuponsAplicados: cuponsAplicados,
         descontoTotal: descontoTotalCupons,
         valorTotal,
         status: 'em_andamento',
         updatedAt: Timestamp.now()
       };
 
-      // Atualizar atendimento
       await firebaseService.update('atendimentos', id, dadosAtendimento);
 
       await registrarAuditoria(
@@ -1024,23 +968,13 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('Erro ao confirmar atendimento:', error);
       toast.error('Erro ao confirmar atendimento');
-      
-      await registrarAuditoria(
-        'erro_confirmar_atendimento',
-        id,
-        `Erro ao confirmar atendimento: ${error.message}`,
-        {}
-      );
     } finally {
       setSaving(false);
     }
   };
 
-  // Função para criar transação financeira
   const criarTransacaoFinanceira = async (pagamento) => {
     try {
-      console.log('💰 CRIANDO TRANSAÇÃO FINANCEIRA - INÍCIO');
-      
       const transacao = {
         tipo: 'receita',
         descricao: `Atendimento - ${cliente?.nome}`,
@@ -1060,10 +994,7 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       };
 
-      console.log('📌 Dados da transação:', transacao);
-      
       const transacaoId = await firebaseService.add('transacoes', transacao);
-      console.log('✅ Transação criada com ID:', transacaoId);
 
       await registrarAuditoria(
         'criar_transacao',
@@ -1097,7 +1028,6 @@ function ModernAtendimento() {
     }
   };
 
-  // Função para adicionar pontos de fidelidade
   const adicionarPontosFidelidade = async () => {
     if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
 
@@ -1119,7 +1049,6 @@ function ModernAtendimento() {
       await firebaseService.add('pontuacao', pontuacaoData);
       console.log('✅ Pontos de fidelidade adicionados:', pontosGanhos);
       
-      // Atualizar saldo do cliente
       setPontosCliente(prev => prev + pontosGanhos);
 
       await registrarAuditoria(
@@ -1131,17 +1060,9 @@ function ModernAtendimento() {
       
     } catch (error) {
       console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
-      
-      await registrarAuditoria(
-        'erro_adicionar_pontos_fidelidade',
-        cliente?.id,
-        `Erro ao adicionar pontos: ${error.message}`,
-        { atendimentoId: id }
-      );
     }
   };
 
-  // FUNÇÃO: Processar indicação (dar pontos para quem indicou)
   const processarIndicacao = async () => {
     if (!cliente?.indicadoPor) {
       console.log('ℹ️ Cliente não foi indicado por ninguém');
@@ -1149,20 +1070,14 @@ function ModernAtendimento() {
     }
 
     try {
-      console.log('🔍 Processando indicação do cliente:', cliente.nome);
-      console.log('👤 Indicado por ID:', cliente.indicadoPor);
-
-      // Buscar configurações de fidelidade
       const configFidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
       const config = configFidelidade[0] || { 
         pontosIndicacao: 100,
-        pontosPorReal: 1,
         bonusIndicacao: 100
       };
 
       const pontosBonus = config.pontosIndicacao || config.bonusIndicacao || 100;
 
-      // Verificar se este cliente já teve uma indicação confirmada anteriormente
       const indicacoesExistentes = await firebaseService.query('indicacoes', [
         { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
         { field: 'status', operator: '==', value: 'confirmada' }
@@ -1175,13 +1090,10 @@ function ModernAtendimento() {
         return;
       }
 
-      // Buscar a indicação pendente
       const indicacoesPendentes = await firebaseService.query('indicacoes', [
         { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
         { field: 'status', operator: '==', value: 'pendente' }
       ]);
-
-      console.log('📌 Indicações pendentes encontradas:', indicacoesPendentes.length);
 
       if (indicacoesPendentes.length === 0) {
         console.log('ℹ️ Nenhuma indicação pendente encontrada');
@@ -1189,18 +1101,13 @@ function ModernAtendimento() {
       }
 
       const indicacao = indicacoesPendentes[0];
-      console.log('✅ Indicação encontrada:', indicacao);
 
-      // Verificar se o cliente que indicou ainda existe
       const clienteIndicador = await firebaseService.getById('clientes', indicacao.clienteId);
       if (!clienteIndicador) {
-        console.error('❌ Cliente que indicou não encontrado:', indicacao.clienteId);
+        console.error('❌ Cliente que indicou não encontrado');
         return;
       }
 
-      console.log('👤 Cliente indicador encontrado:', clienteIndicador.nome);
-
-      // Atualizar status da indicação
       await firebaseService.update('indicacoes', indicacao.id, {
         status: 'confirmada',
         pontosGanhos: pontosBonus,
@@ -1208,9 +1115,6 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
 
-      console.log('✅ Indicação confirmada no banco');
-
-      // Adicionar pontos ao cliente que indicou
       const pontuacaoData = {
         clienteId: indicacao.clienteId,
         clienteNome: indicacao.clienteNome,
@@ -1224,9 +1128,7 @@ function ModernAtendimento() {
       };
 
       await firebaseService.add('pontuacao', pontuacaoData);
-      console.log('✅ Pontos adicionados para o cliente indicador:', indicacao.clienteNome);
 
-      // Registrar na auditoria
       await registrarAuditoria(
         'confirmar_indicacao',
         indicacao.id,
@@ -1244,17 +1146,9 @@ function ModernAtendimento() {
 
     } catch (error) {
       console.error('❌ Erro ao processar indicação:', error);
-      
-      await registrarAuditoria(
-        'erro_processar_indicacao',
-        id,
-        `Erro ao processar indicação: ${error.message}`,
-        { clienteIndicadoId: cliente?.id }
-      );
     }
   };
 
-  // Adicionar pagamento ao ARRAY pagamentos
   const handleSalvarPagamento = async () => {
     try {
       const valorTotal = calcularValorTotal();
@@ -1289,7 +1183,6 @@ function ModernAtendimento() {
       let pagamentoSalvo;
 
       if (pagamentoEditando) {
-        // Atualizar pagamento no array
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
         pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
         setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
@@ -1303,7 +1196,6 @@ function ModernAtendimento() {
         
         toast.success('Pagamento atualizado!');
       } else {
-        // Adicionar novo pagamento ao array
         pagamentoSalvo = await firebaseService.add('pagamentos', pagamentoData);
         setPagamentos([...pagamentos, pagamentoSalvo]);
         
@@ -1316,8 +1208,6 @@ function ModernAtendimento() {
         
         toast.success('Pagamento registrado!');
 
-        // CRIAR TRANSAÇÃO FINANCEIRA AUTOMATICAMENTE
-        console.log('💰 Chamando criarTransacaoFinanceira para novo pagamento');
         await criarTransacaoFinanceira(pagamentoSalvo);
       }
 
@@ -1325,31 +1215,20 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('Erro ao salvar pagamento:', error);
       toast.error('Erro ao salvar pagamento');
-      
-      await registrarAuditoria(
-        'erro_salvar_pagamento',
-        id,
-        `Erro ao salvar pagamento: ${error.message}`,
-        { dados: pagamentoForm }
-      );
     }
   };
 
-  // Remover pagamento do ARRAY pagamentos
   const handleRemoverPagamento = async (pagamentoId) => {
     if (window.confirm('Deseja remover este pagamento?')) {
       try {
-        // Buscar transações relacionadas a este atendimento
         const transacoes = await firebaseService.query('transacoes', [
           { field: 'atendimentoId', operator: '==', value: id }
         ]);
 
-        // Remover transações relacionadas
         for (const transacao of transacoes) {
           await firebaseService.delete('transacoes', transacao.id);
         }
 
-        // Remover pagamento
         await firebaseService.delete('pagamentos', pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
         
@@ -1364,13 +1243,6 @@ function ModernAtendimento() {
       } catch (error) {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
-        
-        await registrarAuditoria(
-          'erro_remover_pagamento',
-          id,
-          `Erro ao remover pagamento: ${error.message}`,
-          { pagamentoId }
-        );
       }
     }
   };
@@ -1416,59 +1288,33 @@ function ModernAtendimento() {
       }
   
       console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
-      console.log('📌 Atendimento ID:', id);
-      console.log('📌 Valor total:', valorTotal);
-      console.log('📌 Desconto cupons:', descontoTotalCupons);
-      console.log('📌 Itens serviço:', itensServico);
-      console.log('📌 Itens produto:', itensProduto);
-      console.log('📌 Cupons aplicados:', cuponsAplicados);
-      console.log('📌 Pagamentos:', pagamentos);
   
-      // 1. Buscar o agendamento associado a este atendimento
+      // 1. Buscar o agendamento associado
       let agendamentoId = null;
       
-      // Primeiro, verificar se o atendimento já tem um agendamentoId
       if (atendimento.agendamentoId) {
         agendamentoId = atendimento.agendamentoId;
-        console.log('📌 Agendamento ID encontrado no atendimento:', agendamentoId);
-      } 
-      // Se não tiver, tentar buscar pelo serviço, profissional e data
-      else {
-        console.log('📌 Buscando agendamento por:');
-        console.log('   - Profissional:', atendimento.profissionalId);
-        console.log('   - Data:', atendimento.data);
-        console.log('   - Serviço:', atendimento.servicoId || (itensServico[0]?.id));
-  
-        // Buscar agendamentos que correspondam aos critérios
+      } else {
         const agendamentos = await firebaseService.query('agendamentos', [
           { field: 'profissionalId', operator: '==', value: atendimento.profissionalId },
           { field: 'data', operator: '==', value: atendimento.data },
-          { field: 'status', operator: '==', value: 'agendado' } // Apenas agendamentos não cancelados/finalizados
+          { field: 'status', operator: '==', value: 'agendado' }
         ]);
   
-        console.log('📌 Agendamentos encontrados:', agendamentos.length);
-  
-        // Filtrar por serviço (pode ter múltiplos serviços no agendamento)
         const servicoId = atendimento.servicoId || itensServico[0]?.id;
         const agendamentoCorrespondente = agendamentos.find(ag => {
-          // Verificar se o agendamento tem o serviço na lista de serviços
           if (ag.servicos && Array.isArray(ag.servicos)) {
             return ag.servicos.some(s => s.id === servicoId);
           }
-          // Verificar se tem servicoId diretamente (formato antigo)
           return ag.servicoId === servicoId;
         });
   
         if (agendamentoCorrespondente) {
           agendamentoId = agendamentoCorrespondente.id;
-          console.log('📌 Agendamento correspondente encontrado:', agendamentoId);
-        } else {
-          console.log('📌 Nenhum agendamento correspondente encontrado');
         }
       }
   
-      // 2. Atualizar o atendimento no Firebase
-      console.log('📌 Atualizando atendimento...');
+      // 2. Atualizar o atendimento
       const dadosAtendimento = {
         status: 'finalizado',
         horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1481,35 +1327,29 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       };
   
-      // Se encontrou um agendamento, salvar o ID
       if (agendamentoId) {
         dadosAtendimento.agendamentoId = agendamentoId;
       }
   
       await firebaseService.update('atendimentos', id, dadosAtendimento);
-      console.log('✅ Atendimento atualizado');
   
-      // 3. Registrar uso dos cupons aplicados
+      // 3. Registrar uso dos cupons
       for (const cupom of cuponsAplicados) {
         await registrarUsoCupom(cupom);
       }
   
-      // 4. Se houver agendamento vinculado, atualizar para finalizado
+      // 4. Atualizar agendamento
       if (agendamentoId) {
-        console.log('📌 Atualizando agendamento...');
-        
-        // Buscar o agendamento atual para preservar os dados
         const agendamentoAtual = await firebaseService.getById('agendamentos', agendamentoId);
         
         if (agendamentoAtual) {
           const dadosAgendamento = {
             status: 'finalizado',
             atendimentoRealizado: true,
-            atendimentoId: id, // Vincular o atendimento ao agendamento
+            atendimentoId: id,
             updatedAt: Timestamp.now()
           };
   
-          // Se o agendamento tiver lista de serviços, podemos marcar qual foi realizado
           if (agendamentoAtual.servicos && Array.isArray(agendamentoAtual.servicos)) {
             const servicoRealizado = atendimento.servicoId || itensServico[0]?.id;
             dadosAgendamento.servicosRealizados = agendamentoAtual.servicos.map(s => ({
@@ -1519,27 +1359,14 @@ function ModernAtendimento() {
           }
   
           await firebaseService.update('agendamentos', agendamentoId, dadosAgendamento);
-          console.log('✅ Agendamento atualizado para finalizado');
-        } else {
-          console.log('⚠️ Agendamento não encontrado no banco');
         }
       }
   
-      // 5. Buscar dados para comissão
+      // 5. Registrar comissão
       const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
       const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
-      
-      console.log('📌 Profissional:', profissional);
-      console.log('📌 Serviço principal:', servicoPrincipal);
-  
-      // 6. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
       const percentual = profissional?.comissao || 40;
       const valorComissao = (calcularTotalServicos() * percentual) / 100;
-  
-      console.log('📊 Cálculo da comissão:');
-      console.log('   - Percentual:', percentual);
-      console.log('   - Valor serviços:', calcularTotalServicos());
-      console.log('   - Comissão:', valorComissao);
   
       const comissaoData = {
         atendimentoId: id,
@@ -1556,33 +1383,28 @@ function ModernAtendimento() {
         updatedAt: new Date().toISOString()
       };
   
-      // Adicionar agendamentoId à comissão se existir
       if (agendamentoId) {
         comissaoData.agendamentoId = agendamentoId;
       }
   
-      console.log('📌 Salvando comissão no Firebase...');
-      const comissaoId = await firebaseService.add('comissoes', comissaoData);
-      console.log('✅ Comissão registrada com ID:', comissaoId);
+      await firebaseService.add('comissoes', comissaoData);
   
-      // 7. ADICIONAR PONTOS DE FIDELIDADE PARA O CLIENTE DO ATENDIMENTO
+      // 6. Adicionar pontos de fidelidade
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
-        console.log('📌 Adicionando pontos de fidelidade para o cliente:', pontosGanhos);
         await adicionarPontosFidelidade();
       }
   
-      // 8. PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
+      // 7. Processar indicação
       await processarIndicacao();
   
-      // 9. Atualizar cliente
-      console.log('📌 Atualizando cliente...');
+      // 8. Atualizar cliente
       await firebaseService.update('clientes', cliente.id, {
         ultimaVisita: new Date().toISOString().split('T')[0],
-        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(), // Só serviços entram no total gasto
+        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(),
         updatedAt: Timestamp.now()
       });
 
-      // 10. Registrar na auditoria
+      // 9. Registrar na auditoria
       await registrarAuditoria(
         'finalizar_atendimento',
         id,
@@ -1601,48 +1423,9 @@ function ModernAtendimento() {
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       
-      // 11. Verificar se a comissão foi criada
-      setTimeout(async () => {
-        const comissoes = await firebaseService.getAll('comissoes');
-        const minhaComissao = comissoes.find(c => c.atendimentoId === id);
-        console.log('🔍 Verificação pós-finalização - Comissão encontrada:', minhaComissao);
-        
-        const transacoes = await firebaseService.getAll('transacoes');
-        const minhasTransacoes = transacoes.filter(t => t.atendimentoId === id);
-        console.log('🔍 Verificação pós-finalização - Transações encontradas:', minhasTransacoes);
-  
-        if (agendamentoId) {
-          const agendamento = await firebaseService.getById('agendamentos', agendamentoId);
-          console.log('🔍 Verificação pós-finalização - Agendamento atualizado:', agendamento);
-        }
-
-        // Verificar pontos adicionados
-        if (fidelidadeConfig?.ativo) {
-          const pontuacoes = await firebaseService.query('pontuacao', [
-            { field: 'atendimentoId', operator: '==', value: id }
-          ]);
-          console.log('🔍 Verificação pós-finalização - Pontos do atendimento:', pontuacoes);
-
-          // Verificar pontos da indicação
-          if (cliente?.indicadoPor) {
-            const pontuacoesIndicacao = await firebaseService.query('pontuacao', [
-              { field: 'indicacaoId', operator: '==', value: id }
-            ]);
-            console.log('🔍 Verificação pós-finalização - Pontos da indicação:', pontuacoesIndicacao);
-          }
-        }
-      }, 2000);
-      
     } catch (error) {
       console.error('❌ Erro ao finalizar atendimento:', error);
       toast.error('Erro ao finalizar atendimento');
-      
-      await registrarAuditoria(
-        'erro_finalizar_atendimento',
-        id,
-        `Erro ao finalizar atendimento: ${error.message}`,
-        {}
-      );
     } finally {
       setSaving(false);
     }
@@ -1654,7 +1437,6 @@ function ModernAtendimento() {
       const totalPago = calcularTotalPago();
       const subtotal = calcularSubtotal();
       
-      // Filtrar produtos sem cobrança para não aparecer no comprovante de pagamento
       const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
       
       let mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
@@ -1665,7 +1447,6 @@ function ModernAtendimento() {
           ).join('\n')}\n\n` 
           : '');
 
-      // Adicionar informações de cupons
       if (cuponsAplicados.length > 0) {
         mensagem += `🏷️ *Cupons aplicados:*\n`;
         cuponsAplicados.forEach(c => {
@@ -1679,7 +1460,6 @@ function ModernAtendimento() {
         `💳 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
         `💵 *Pago: R$ ${totalPago.toFixed(2)}*\n\n`;
 
-      // Adicionar informações de fidelidade
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
         mensagem += `⭐ *Fidelidade:*\n` +
           `• Pontos ganhos: ${pontosGanhos}\n` +
