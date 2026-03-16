@@ -369,6 +369,9 @@ function ModernAtendimento() {
   const [pontosGanhos, setPontosGanhos] = useState(0);
   const [bonusAplicados, setBonusAplicados] = useState([]);
   
+  // Configurações do sistema
+  const [configuracoes, setConfiguracoes] = useState(null);
+  
   // Estado para cupons
   const [cuponsAplicados, setCuponsAplicados] = useState([]);
   const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
@@ -584,6 +587,7 @@ function ModernAtendimento() {
     carregarDados();
     carregarServicosEProdutos();
     carregarConfigFidelidade();
+    carregarConfiguracoes();
   }, [id]);
 
   useEffect(() => {
@@ -627,6 +631,18 @@ function ModernAtendimento() {
       }
     } catch (error) {
       console.error('Erro ao carregar configurações de fidelidade:', error);
+    }
+  };
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      if (configs && configs.length > 0) {
+        setConfiguracoes(configs[0]);
+        console.log('✅ Configurações carregadas:', configs[0]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
     }
   };
 
