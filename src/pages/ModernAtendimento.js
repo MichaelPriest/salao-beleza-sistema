@@ -45,6 +45,9 @@ import {
   ListItemText,
   ListItemAvatar,
   Fade,
+  Badge,
+  Collapse,
+  LinearProgress,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -69,12 +72,22 @@ import {
   Star as StarIcon,
   EmojiEvents as TrophyIcon,
   PersonAdd as PersonAddIcon,
+  LocalOffer as CouponIcon,
+  Percent as PercentIcon,
+  ShoppingCart as FreteIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  CheckCircle as ValidIcon,
+  Cancel as InvalidIcon,
+  Info as InfoIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
+import { cupomService } from '../services/cupomService';
 import { Timestamp } from 'firebase/firestore';
 
 // Lista de unidades de medida
@@ -112,6 +125,237 @@ const FORMAS_PAGAMENTO = [
 
 const steps = ['Confirmar Atendimento', 'Adicionar Itens', 'Registrar Pagamentos', 'Finalizar'];
 
+// Componente para exibir cupom aplicado
+const CupomAplicado = ({ cupom, onRemover }) => {
+  const getIcon = () => {
+    switch (cupom.tipo) {
+      case 'percentual': return <PercentIcon fontSize="small" />;
+      case 'fixo': return <MoneyIcon fontSize="small" />;
+      case 'frete': return <FreteIcon fontSize="small" />;
+      case 'produto': return <InventoryIcon fontSize="small" />;
+      default: return <CouponIcon fontSize="small" />;
+    }
+  };
+
+  const getDescricao = () => {
+    if (cupom.tipo === 'percentual') {
+      return `${cupom.valor}% de desconto`;
+    } else if (cupom.tipo === 'fixo') {
+      return `R$ ${cupom.valor?.toFixed(2)} de desconto`;
+    } else if (cupom.tipo === 'frete') {
+      return 'Frete grátis';
+    } else {
+      return 'Desconto em produto';
+    }
+  };
+
+  const getValorDesconto = () => {
+    if (cupom.tipo === 'percentual') {
+      return `${cupom.valor}%`;
+    } else if (cupom.tipo === 'fixo') {
+      return `R$ ${cupom.valor?.toFixed(2)}`;
+    } else {
+      return '';
+    }
+  };
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        mb: 1,
+        bgcolor: '#f3e5f5',
+        borderColor: '#9c27b0',
+        position: 'relative',
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Badge
+          color="success"
+          variant="dot"
+          sx={{ '& .MuiBadge-badge': { right: 2, top: 2 } }}
+        >
+          <Avatar sx={{ bgcolor: '#9c27b0', width: 32, height: 32 }}>
+            {getIcon()}
+          </Avatar>
+        </Badge>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            {cupom.codigo}
+          </Typography>
+          <Typography variant="caption" color="textSecondary">
+            {cupom.descricao || getDescricao()}
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+            {getValorDesconto()}
+          </Typography>
+          {cupom.valorDescontoCalculado > 0 && (
+            <Typography variant="caption" color="success.main">
+              - R$ {cupom.valorDescontoCalculado?.toFixed(2)}
+            </Typography>
+          )}
+        </Box>
+        <IconButton size="small" onClick={onRemover} sx={{ color: '#f44336' }}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Box>
+    </Paper>
+  );
+};
+
+// Componente para validação de cupom
+const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) => {
+  const [codigoCupom, setCodigoCupom] = useState('');
+  const [validando, setValidando] = useState(false);
+  const [cupomEncontrado, setCupomEncontrado] = useState(null);
+  const [erro, setErro] = useState('');
+
+  const handleBuscarCupom = async () => {
+    if (!codigoCupom.trim()) {
+      setErro('Digite um código de cupom');
+      return;
+    }
+
+    setValidando(true);
+    setErro('');
+    setCupomEncontrado(null);
+
+    try {
+      // Buscar cupom pelo código
+      const cupons = await cupomService.listarCupons();
+      const cupom = cupons.find(c => 
+        c.codigo?.toUpperCase() === codigoCupom.trim().toUpperCase() && c.ativo === true
+      );
+
+      if (!cupom) {
+        setErro('Cupom não encontrado');
+        return;
+      }
+
+      // Validar cupom
+      const validacao = await cupomService.validarCupom(
+        cupom.id,
+        cliente?.id,
+        valorTotal,
+        itensServico
+      );
+
+      if (!validacao.valido) {
+        setErro(validacao.mensagem || 'Cupom inválido');
+        return;
+      }
+
+      setCupomEncontrado({
+        ...cupom,
+        ...validacao,
+      });
+
+    } catch (error) {
+      console.error('Erro ao validar cupom:', error);
+      setErro('Erro ao validar cupom');
+    } finally {
+      setValidando(false);
+    }
+  };
+
+  const handleAplicarCupom = () => {
+    if (cupomEncontrado) {
+      onCupomValido(cupomEncontrado);
+      setCodigoCupom('');
+      setCupomEncontrado(null);
+    }
+  };
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Digite o código do cupom"
+          value={codigoCupom}
+          onChange={(e) => setCodigoCupom(e.target.value.toUpperCase())}
+          onKeyPress={(e) => e.key === 'Enter' && handleBuscarCupom()}
+          error={!!erro}
+          helperText={erro}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <CouponIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Button
+          variant="outlined"
+          onClick={handleBuscarCupom}
+          disabled={validando}
+          sx={{ minWidth: '100px' }}
+        >
+          {validando ? <CircularProgress size={24} /> : 'Validar'}
+        </Button>
+      </Box>
+
+      {cupomEncontrado && (
+        <Fade in>
+          <Paper
+            variant="outlined"
+            sx={{
+              mt: 2,
+              p: 2,
+              bgcolor: '#e8f5e8',
+              borderColor: '#4caf50',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <ValidIcon sx={{ color: '#4caf50' }} />
+              <Typography variant="subtitle2" sx={{ color: '#4caf50' }}>
+                Cupom válido!
+              </Typography>
+            </Box>
+            
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {cupomEncontrado.codigo}
+            </Typography>
+            
+            <Typography variant="body2" color="textSecondary" gutterBottom>
+              {cupomEncontrado.descricao || 
+                (cupomEncontrado.tipo === 'percentual' 
+                  ? `${cupomEncontrado.valor}% de desconto`
+                  : cupomEncontrado.tipo === 'fixo'
+                    ? `R$ ${cupomEncontrado.valor?.toFixed(2)} de desconto`
+                    : 'Desconto aplicável')}
+            </Typography>
+
+            {cupomEncontrado.mensagem && (
+              <Typography variant="caption" color="info.main" sx={{ display: 'block', mb: 1 }}>
+                {cupomEncontrado.mensagem}
+              </Typography>
+            )}
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+              <Button size="small" onClick={() => setCupomEncontrado(null)}>
+                Cancelar
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleAplicarCupom}
+                sx={{ bgcolor: '#4caf50' }}
+              >
+                Aplicar Cupom
+              </Button>
+            </Box>
+          </Paper>
+        </Fade>
+      )}
+    </Box>
+  );
+};
+
 function ModernAtendimento() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -129,6 +373,12 @@ function ModernAtendimento() {
   const [nivelCliente, setNivelCliente] = useState('bronze');
   const [pontosGanhos, setPontosGanhos] = useState(0);
   const [bonusAplicados, setBonusAplicados] = useState([]);
+  
+  // NOVO: Estado para cupons
+  const [cuponsAplicados, setCuponsAplicados] = useState([]);
+  const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
+  const [descontoTotalCupons, setDescontoTotalCupons] = useState(0);
+  const [cuponsExpirados, setCuponsExpirados] = useState([]);
   
   // Itens do atendimento - ARRAYS
   const [itensServico, setItensServico] = useState([]);
@@ -214,6 +464,11 @@ function ModernAtendimento() {
     }
   }, [itensServico, fidelidadeConfig, cliente]);
 
+  // Efeito para calcular desconto total dos cupons
+  useEffect(() => {
+    calcularDescontoCupons();
+  }, [cuponsAplicados, itensServico, itensProduto]);
+
   // Função para registrar na auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
@@ -246,9 +501,53 @@ function ModernAtendimento() {
     }, 0);
   };
 
-  // Calcular valor total do atendimento
-  const calcularValorTotal = () => {
+  // Calcular subtotal (sem desconto)
+  const calcularSubtotal = () => {
     return calcularTotalServicos() + calcularTotalProdutos();
+  };
+
+  // Calcular desconto total dos cupons
+  const calcularDescontoCupons = () => {
+    let descontoTotal = 0;
+    const subtotal = calcularSubtotal();
+    const servicosValor = calcularTotalServicos();
+
+    cuponsAplicados.forEach(cupom => {
+      if (cupom.tipo === 'percentual') {
+        let valorDesconto = (subtotal * cupom.valor) / 100;
+        
+        // Aplicar limite máximo se existir
+        if (cupom.valorMaximoDesconto && valorDesconto > cupom.valorMaximoDesconto) {
+          valorDesconto = cupom.valorMaximoDesconto;
+        }
+        
+        descontoTotal += valorDesconto;
+        cupom.valorDescontoCalculado = valorDesconto;
+        
+      } else if (cupom.tipo === 'fixo') {
+        descontoTotal += cupom.valor;
+        cupom.valorDescontoCalculado = cupom.valor;
+        
+      } else if (cupom.tipo === 'produto') {
+        // Lógica para desconto em produtos específicos
+        // Por enquanto, simplificado
+        descontoTotal += cupom.valor || 0;
+        cupom.valorDescontoCalculado = cupom.valor || 0;
+      }
+    });
+
+    // Garantir que o desconto não seja maior que o subtotal
+    if (descontoTotal > subtotal) {
+      descontoTotal = subtotal;
+    }
+
+    setDescontoTotalCupons(descontoTotal);
+    return descontoTotal;
+  };
+
+  // Calcular valor total com descontos
+  const calcularValorTotal = () => {
+    return calcularSubtotal() - descontoTotalCupons;
   };
 
   // Calcular total pago
@@ -307,7 +606,7 @@ function ModernAtendimento() {
     let pontos = 0;
     const bonus = [];
 
-    // Pontos por valor gasto
+    // Pontos por valor gasto (considera apenas serviços, produtos não dão pontos)
     const pontosPorReal = fidelidadeConfig.pontosPorReal || 10;
     pontos += Math.floor(valorServicos * pontosPorReal);
 
@@ -364,6 +663,11 @@ function ModernAtendimento() {
       // Carregar itens de produto - ARRAY de produtos
       if (atendimentoData.itensProduto) {
         setItensProduto(atendimentoData.itensProduto);
+      }
+
+      // Carregar cupons aplicados
+      if (atendimentoData.cuponsAplicados) {
+        setCuponsAplicados(atendimentoData.cuponsAplicados);
       }
 
       // Carregar pagamentos - ARRAY de pagamentos
@@ -445,6 +749,67 @@ function ModernAtendimento() {
     produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
+
+  // NOVA FUNÇÃO: Aplicar cupom válido
+  const handleAplicarCupom = (cupom) => {
+    // Verificar se já foi aplicado
+    if (cuponsAplicados.some(c => c.id === cupom.id)) {
+      toast.error('Este cupom já foi aplicado');
+      return;
+    }
+
+    setCuponsAplicados([...cuponsAplicados, cupom]);
+    setMostrarValidadorCupom(false);
+    
+    toast.success(`Cupom ${cupom.codigo} aplicado com sucesso!`);
+    
+    registrarAuditoria(
+      'aplicar_cupom',
+      id,
+      `Cupom ${cupom.codigo} aplicado`,
+      { cupomId: cupom.id, valorDesconto: cupom.valor }
+    );
+  };
+
+  // NOVA FUNÇÃO: Remover cupom
+  const handleRemoverCupom = (index) => {
+    const cupomRemovido = cuponsAplicados[index];
+    const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
+    setCuponsAplicados(novosCupons);
+    
+    toast.info(`Cupom ${cupomRemovido.codigo} removido`);
+    
+    registrarAuditoria(
+      'remover_cupom',
+      id,
+      `Cupom ${cupomRemovido.codigo} removido`,
+      { cupomId: cupomRemovido.id }
+    );
+  };
+
+  // NOVA FUNÇÃO: Verificar cupons expirados
+  const verificarCuponsExpirados = async () => {
+    try {
+      const expirados = await cupomService.verificarCuponsExpirados(cliente?.id);
+      setCuponsExpirados(expirados);
+      
+      if (expirados.length > 0) {
+        toast.info(`${expirados.length} cupom(ns) próximo(s) de expirar!`, {
+          icon: '⏰',
+          duration: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao verificar cupons expirados:', error);
+    }
+  };
+
+  // Chamar verificação quando cliente carregar
+  useEffect(() => {
+    if (cliente?.id) {
+      verificarCuponsExpirados();
+    }
+  }, [cliente]);
 
   // Adicionar serviço ao ARRAY itensServico
   const handleAdicionarServico = () => {
@@ -622,6 +987,8 @@ function ModernAtendimento() {
         observacoes,
         itensServico: itensServico, // Array
         itensProduto: itensProduto, // Array
+        cuponsAplicados: cuponsAplicados, // Array de cupons
+        descontoTotal: descontoTotalCupons,
         valorTotal,
         status: 'em_andamento',
         updatedAt: Timestamp.now()
@@ -692,6 +1059,23 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('❌ Erro ao criar transação financeira:', error);
       throw error;
+    }
+  };
+
+  // Função para registrar uso do cupom
+  const registrarUsoCupom = async (cupom) => {
+    try {
+      await cupomService.registrarUso(cupom.id, {
+        atendimentoId: id,
+        clienteId: cliente?.id,
+        clienteNome: cliente?.nome,
+        valorDesconto: cupom.valorDescontoCalculado || 0,
+        valorTotal: calcularValorTotal(),
+      });
+      
+      console.log(`✅ Uso do cupom ${cupom.codigo} registrado`);
+    } catch (error) {
+      console.error('❌ Erro ao registrar uso do cupom:', error);
     }
   };
 
@@ -1012,8 +1396,10 @@ function ModernAtendimento() {
       console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
       console.log('📌 Atendimento ID:', id);
       console.log('📌 Valor total:', valorTotal);
+      console.log('📌 Desconto cupons:', descontoTotalCupons);
       console.log('📌 Itens serviço:', itensServico);
       console.log('📌 Itens produto:', itensProduto);
+      console.log('📌 Cupons aplicados:', cuponsAplicados);
       console.log('📌 Pagamentos:', pagamentos);
   
       // 1. Buscar o agendamento associado a este atendimento
@@ -1065,8 +1451,10 @@ function ModernAtendimento() {
         status: 'finalizado',
         horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         valorTotal,
+        descontoTotal: descontoTotalCupons,
         itensServico,
         itensProduto,
+        cuponsAplicados,
         pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0,
         updatedAt: Timestamp.now()
       };
@@ -1079,7 +1467,12 @@ function ModernAtendimento() {
       await firebaseService.update('atendimentos', id, dadosAtendimento);
       console.log('✅ Atendimento atualizado');
   
-      // 3. Se houver agendamento vinculado, atualizar para finalizado
+      // 3. Registrar uso dos cupons aplicados
+      for (const cupom of cuponsAplicados) {
+        await registrarUsoCupom(cupom);
+      }
+  
+      // 4. Se houver agendamento vinculado, atualizar para finalizado
       if (agendamentoId) {
         console.log('📌 Atualizando agendamento...');
         
@@ -1110,14 +1503,14 @@ function ModernAtendimento() {
         }
       }
   
-      // 4. Buscar dados para comissão
+      // 5. Buscar dados para comissão
       const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
       const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
       
       console.log('📌 Profissional:', profissional);
       console.log('📌 Serviço principal:', servicoPrincipal);
   
-      // 5. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
+      // 6. Calcular e registrar comissão (apenas sobre serviços, não sobre produtos)
       const percentual = profissional?.comissao || 40;
       const valorComissao = (calcularTotalServicos() * percentual) / 100;
   
@@ -1150,16 +1543,16 @@ function ModernAtendimento() {
       const comissaoId = await firebaseService.add('comissoes', comissaoData);
       console.log('✅ Comissão registrada com ID:', comissaoId);
   
-      // 6. ADICIONAR PONTOS DE FIDELIDADE PARA O CLIENTE DO ATENDIMENTO
+      // 7. ADICIONAR PONTOS DE FIDELIDADE PARA O CLIENTE DO ATENDIMENTO
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
         console.log('📌 Adicionando pontos de fidelidade para o cliente:', pontosGanhos);
         await adicionarPontosFidelidade();
       }
   
-      // 7. 🔥 PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
+      // 8. 🔥 PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
       await processarIndicacao();
   
-      // 8. Atualizar cliente
+      // 9. Atualizar cliente
       console.log('📌 Atualizando cliente...');
       await firebaseService.update('clientes', cliente.id, {
         ultimaVisita: new Date().toISOString().split('T')[0],
@@ -1167,15 +1560,17 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
 
-      // 9. Registrar na auditoria
+      // 10. Registrar na auditoria
       await registrarAuditoria(
         'finalizar_atendimento',
         id,
         `Atendimento finalizado`,
         { 
           valorTotal, 
+          descontoTotal: descontoTotalCupons,
           itensServico: itensServico.length, 
           itensProduto: itensProduto.length,
+          cuponsAplicados: cuponsAplicados.length,
           pagamentos: pagamentos.length,
           pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0
         }
@@ -1184,7 +1579,7 @@ function ModernAtendimento() {
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       
-      // 10. Verificar se a comissão foi criada
+      // 11. Verificar se a comissão foi criada
       setTimeout(async () => {
         const comissoes = await firebaseService.getAll('comissoes');
         const minhaComissao = comissoes.find(c => c.atendimentoId === id);
@@ -1233,33 +1628,45 @@ function ModernAtendimento() {
     try {
       const valorTotal = calcularValorTotal();
       const totalPago = calcularTotalPago();
+      const subtotal = calcularSubtotal();
+      
+      // Filtrar produtos sem cobrança para não aparecer no comprovante de pagamento
+      const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
+      
+      let mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
+        `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
+        (produtosCobrados.length > 0 ? 
+          `🛍️ *Produtos:*\n${produtosCobrados.map(p => 
+            `• ${p.nome} (${p.quantidadeVenda} ${getUnidadeSimbolo(p.unidadeVenda)}): R$ ${((p.preco || 0) * (p.quantidadeVenda || 1)).toFixed(2)}`
+          ).join('\n')}\n\n` 
+          : '');
+
+      // Adicionar informações de cupons
+      if (cuponsAplicados.length > 0) {
+        mensagem += `🏷️ *Cupons aplicados:*\n`;
+        cuponsAplicados.forEach(c => {
+          mensagem += `• ${c.codigo}: -R$ ${c.valorDescontoCalculado?.toFixed(2)}\n`;
+        });
+        mensagem += `\n`;
+      }
+
+      mensagem += `💰 *Subtotal: R$ ${subtotal.toFixed(2)}*\n` +
+        (descontoTotalCupons > 0 ? `💸 *Desconto: -R$ ${descontoTotalCupons.toFixed(2)}*\n` : '') +
+        `💳 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
+        `💵 *Pago: R$ ${totalPago.toFixed(2)}*\n\n`;
+
+      // Adicionar informações de fidelidade
+      if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
+        mensagem += `⭐ *Fidelidade:*\n` +
+          `• Pontos ganhos: ${pontosGanhos}\n` +
+          `• Saldo atual: ${pontosCliente + pontosGanhos}\n` +
+          `• Nível: ${nivelCliente.toUpperCase()}\n\n`;
+      }
+
+      mensagem += `Obrigado pela preferência!`;
       
       if (metodo === 'whatsapp') {
         const numero = cliente?.telefone?.replace(/\D/g, '') || '';
-        
-        // Filtrar produtos sem cobrança para não aparecer no comprovante de pagamento
-        const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
-        
-        let mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
-          `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
-          (produtosCobrados.length > 0 ? 
-            `🛍️ *Produtos:*\n${produtosCobrados.map(p => 
-              `• ${p.nome} (${p.quantidadeVenda} ${getUnidadeSimbolo(p.unidadeVenda)}): R$ ${((p.preco || 0) * (p.quantidadeVenda || 1)).toFixed(2)}`
-            ).join('\n')}\n\n` 
-            : '') +
-          `💰 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
-          `💳 *Pago: R$ ${totalPago.toFixed(2)}*\n\n`;
-
-        // Adicionar informações de fidelidade
-        if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
-          mensagem += `⭐ *Fidelidade:*\n` +
-            `• Pontos ganhos: ${pontosGanhos}\n` +
-            `• Saldo atual: ${pontosCliente + pontosGanhos}\n` +
-            `• Nível: ${nivelCliente.toUpperCase()}\n\n`;
-        }
-
-        mensagem += `Obrigado pela preferência!`;
-        
         window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
         
         await registrarAuditoria(
@@ -1322,6 +1729,7 @@ function ModernAtendimento() {
     );
   }
 
+  const subtotal = calcularSubtotal();
   const valorTotal = calcularValorTotal();
   const totalPago = calcularTotalPago();
   const saldoRestante = calcularSaldoRestante();
@@ -1366,6 +1774,24 @@ function ModernAtendimento() {
                       {tempoDecorrido}
                     </Typography>
                   </Box>
+                </Box>
+              )}
+
+              {/* Alertas de cupons próximos de expirar */}
+              {cuponsExpirados.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  {cuponsExpirados.map((cupom, idx) => (
+                    <Alert 
+                      key={idx} 
+                      severity="warning" 
+                      icon={<TimerIcon />}
+                      sx={{ mb: 1 }}
+                    >
+                      <Typography variant="body2">
+                        <strong>{cupom.codigo}</strong> expira em {cupom.diasRestantes} dias
+                      </Typography>
+                    </Alert>
+                  ))}
                 </Box>
               )}
 
@@ -1527,15 +1953,46 @@ function ModernAtendimento() {
                 </>
               )}
 
+              {/* Lista de Cupons Aplicados */}
+              {cuponsAplicados.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ mt: 2 }}>
+                    Cupons Aplicados
+                  </Typography>
+                  {cuponsAplicados.map((cupom, index) => (
+                    <CupomAplicado
+                      key={index}
+                      cupom={cupom}
+                      onRemover={() => handleRemoverCupom(index)}
+                    />
+                  ))}
+                </>
+              )}
+
               <Divider sx={{ my: 2 }} />
 
+              {/* Resumo de Valores */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Total
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  R$ {valorTotal.toFixed(2)}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="body2">Subtotal:</Typography>
+                  <Typography variant="body2">R$ {subtotal.toFixed(2)}</Typography>
+                </Box>
+                
+                {descontoTotalCupons > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: '#4caf50' }}>
+                    <Typography variant="body2">Descontos:</Typography>
+                    <Typography variant="body2">- R$ {descontoTotalCupons.toFixed(2)}</Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Total:
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                    R$ {valorTotal.toFixed(2)}
+                  </Typography>
+                </Box>
               </Box>
 
               {/* Resumo de Pagamentos - ARRAY */}
@@ -1667,12 +2124,55 @@ function ModernAtendimento() {
                 {activeStep === 1 && (
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                      Adicionar Itens
+                      Adicionar Itens e Cupons
                     </Typography>
 
                     <Alert severity="info" sx={{ mb: 3 }}>
-                      Adicione serviços adicionais ou produtos utilizados durante o atendimento.
+                      Adicione serviços adicionais, produtos utilizados e cupons de desconto.
                     </Alert>
+
+                    {/* Seção de Cupons */}
+                    <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: '#faf5ff' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CouponIcon sx={{ color: '#9c27b0' }} />
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            Cupons de Desconto
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() => setMostrarValidadorCupom(!mostrarValidadorCupom)}
+                        >
+                          {mostrarValidadorCupom ? 'Fechar' : 'Adicionar Cupom'}
+                        </Button>
+                      </Box>
+
+                      <Collapse in={mostrarValidadorCupom}>
+                        <ValidadorCupom
+                          valorTotal={subtotal}
+                          itensServico={itensServico}
+                          cliente={cliente}
+                          onCupomValido={handleAplicarCupom}
+                        />
+                      </Collapse>
+
+                      {cuponsAplicados.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Cupons aplicados:
+                          </Typography>
+                          {cuponsAplicados.map((cupom, index) => (
+                            <CupomAplicado
+                              key={index}
+                              cupom={cupom}
+                              onRemover={() => handleRemoverCupom(index)}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </Paper>
 
                     {/* Adicionar Serviço */}
                     <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
@@ -1911,9 +2411,16 @@ function ModernAtendimento() {
                             *Itens marcados como "sem cobrança" não entram no total
                           </Typography>
                         </Box>
-                        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                          R$ {valorTotal.toFixed(2)}
-                        </Typography>
+                        <Box sx={{ textAlign: 'right' }}>
+                          {descontoTotalCupons > 0 && (
+                            <Typography variant="body2" color="textSecondary" sx={{ textDecoration: 'line-through' }}>
+                              R$ {subtotal.toFixed(2)}
+                            </Typography>
+                          )}
+                          <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                            R$ {valorTotal.toFixed(2)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </Paper>
 
@@ -2045,6 +2552,12 @@ function ModernAtendimento() {
 
                     <Alert severity="success" sx={{ mb: 3 }}>
                       Pagamentos registrados, comissão calculada e transação lançada no financeiro.
+                      {cuponsAplicados.length > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <CouponIcon sx={{ verticalAlign: 'middle', mr: 0.5, color: '#9c27b0' }} />
+                          <strong>{cuponsAplicados.length} cupom(ns)</strong> aplicados com sucesso!
+                        </Box>
+                      )}
                       {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
                         <Box sx={{ mt: 1 }}>
                           <StarIcon sx={{ verticalAlign: 'middle', mr: 0.5, color: '#ff9800' }} />
@@ -2138,9 +2651,39 @@ function ModernAtendimento() {
                           </Grid>
                         )}
 
+                        {cuponsAplicados.length > 0 && (
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                              Cupons Aplicados:
+                            </Typography>
+                            {cuponsAplicados.map((cupom, idx) => (
+                              <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">
+                                  {cupom.codigo} - {cupom.descricao || ''}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#4caf50' }}>
+                                  -R$ {cupom.valorDescontoCalculado?.toFixed(2)}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Grid>
+                        )}
+
                         <Grid item xs={12}>
                           <Divider sx={{ my: 1 }} />
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2">Subtotal:</Typography>
+                            <Typography variant="body2">R$ {subtotal.toFixed(2)}</Typography>
+                          </Box>
+                          {descontoTotalCupons > 0 && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Typography variant="body2">Descontos:</Typography>
+                              <Typography variant="body2" sx={{ color: '#4caf50' }}>
+                                -R$ {descontoTotalCupons.toFixed(2)}
+                              </Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
                             <Typography variant="h6">Total:</Typography>
                             <Typography variant="h6" sx={{ color: '#9c27b0' }}>
                               R$ {valorTotal.toFixed(2)}
