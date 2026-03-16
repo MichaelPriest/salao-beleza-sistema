@@ -1,5 +1,5 @@
 // src/pages/ModernAtendimento.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -80,6 +80,7 @@ import {
   Cancel as InvalidIcon,
   Info as InfoIcon,
   Search as SearchIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -223,7 +224,6 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
     setCupomEncontrado(null);
 
     try {
-      // Buscar cupom pelo código
       const cupom = await cupomService.buscarCupomPorCodigo(codigoCupom);
 
       if (!cupom) {
@@ -231,7 +231,6 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
         return;
       }
 
-      // Validar cupom
       const validacao = await cupomService.validarCupom(
         cupom.codigo,
         cliente?.id,
@@ -355,6 +354,12 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
 function ModernAtendimento() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  // Refs para controle de duplicidade
+  const processandoRef = useRef(false);
+  const ultimaAcaoRef = useRef({ tipo: '', timestamp: 0, hash: '' });
+  const pagamentosProcessadosRef = useRef(new Set());
+  
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -410,6 +415,42 @@ function ModernAtendimento() {
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
 
+  // Função para gerar hash de uma ação
+  const gerarHashAcao = (tipo, dados) => {
+    const str = `${tipo}_${JSON.stringify(dados)}_${Date.now()}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString();
+  };
+
+  // Função para verificar duplicidade
+  const verificarDuplicidade = (tipo, dados, intervaloMs = 3000) => {
+    const agora = Date.now();
+    const hash = gerarHashAcao(tipo, dados);
+    
+    if (ultimaAcaoRef.current.tipo === tipo && 
+        ultimaAcaoRef.current.hash === hash && 
+        agora - ultimaAcaoRef.current.timestamp < intervaloMs) {
+      console.warn(`⚠️ Ação duplicada detectada: ${tipo}`);
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Função para registrar ação processada
+  const registrarAcaoProcessada = (tipo, dados) => {
+    ultimaAcaoRef.current = {
+      tipo,
+      timestamp: Date.now(),
+      hash: gerarHashAcao(tipo, dados)
+    };
+  };
+
   // Carregar usuário atual
   useEffect(() => {
     try {
@@ -434,12 +475,11 @@ function ModernAtendimento() {
   }, [id]);
 
   useEffect(() => {
-    // Calcular tempo decorrido se o atendimento estiver em andamento
     if (atendimento && atendimento.horaInicio && !atendimento.horaFim) {
       const calcularTempo = () => {
         const inicio = new Date(`${atendimento.data}T${atendimento.horaInicio}`);
         const agora = new Date();
-        const diff = Math.floor((agora - inicio) / 60000); // minutos
+        const diff = Math.floor((agora - inicio) / 60000);
         const horas = Math.floor(diff / 60);
         const minutos = diff % 60;
         setTempoDecorrido(`${horas}h ${minutos}min`);
@@ -451,28 +491,31 @@ function ModernAtendimento() {
     }
   }, [atendimento]);
 
-  // Efeito para carregar pontos do cliente quando cliente for carregado
   useEffect(() => {
     if (cliente?.id && fidelidadeConfig?.ativo) {
       carregarPontosCliente(cliente.id);
     }
   }, [cliente, fidelidadeConfig]);
 
-  // Efeito para calcular pontos ganhos quando itensServico mudar
   useEffect(() => {
     if (fidelidadeConfig?.ativo && cliente) {
       calcularPontosGanhos();
     }
   }, [itensServico, fidelidadeConfig, cliente]);
 
-  // Efeito para calcular desconto total dos cupons
   useEffect(() => {
     calcularDescontoCupons();
   }, [cuponsAplicados, itensServico, itensProduto]);
 
-  // Função para registrar na auditoria
+  // Função para registrar na auditoria com controle de duplicidade
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
+      // Verificar duplicidade de auditoria (5 segundos)
+      if (verificarDuplicidade('auditoria', { acao, entidadeId }, 5000)) {
+        console.log('🔄 Auditoria duplicada ignorada:', acao);
+        return;
+      }
+
       const usuarioId = usuario?.id || 'sistema';
       const usuarioNome = usuario?.nome || 'Sistema';
       
@@ -485,37 +528,36 @@ function ModernAtendimento() {
           ...dados,
           usuarioId,
           usuarioNome,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          hash: gerarHashAcao('auditoria', { acao, entidadeId })
         },
         data: Timestamp.now()
       };
 
       console.log('📝 Registrando auditoria:', auditoriaData);
       await firebaseService.add('auditoria', auditoriaData);
+      
+      registrarAcaoProcessada('auditoria', { acao, entidadeId });
     } catch (error) {
       console.error('❌ Erro ao registrar auditoria:', error);
     }
   };
 
-  // Calcular valor total dos serviços
   const calcularTotalServicos = () => {
     return itensServico.reduce((acc, item) => acc + (item.preco || 0), 0);
   };
 
-  // Calcular valor total dos produtos (considerando itens sem cobrança)
   const calcularTotalProdutos = () => {
     return itensProduto.reduce((acc, item) => {
-      if (item.semCobranca) return acc; // Não cobra se for sem cobrança
+      if (item.semCobranca) return acc;
       return acc + ((item.preco || 0) * (item.quantidadeVenda || 1));
     }, 0);
   };
 
-  // Calcular subtotal (sem desconto)
   const calcularSubtotal = () => {
     return calcularTotalServicos() + calcularTotalProdutos();
   };
 
-  // Calcular desconto total dos cupons
   const calcularDescontoCupons = () => {
     let descontoTotal = 0;
     const subtotal = calcularSubtotal();
@@ -545,22 +587,18 @@ function ModernAtendimento() {
     return descontoTotal;
   };
 
-  // Calcular valor total com descontos
   const calcularValorTotal = () => {
     return calcularSubtotal() - descontoTotalCupons;
   };
 
-  // Calcular total pago
   const calcularTotalPago = () => {
     return pagamentos.reduce((acc, p) => acc + (p.valor || 0), 0);
   };
 
-  // Calcular saldo restante
   const calcularSaldoRestante = () => {
     return calcularValorTotal() - calcularTotalPago();
   };
 
-  // Carregar configurações de fidelidade
   const carregarConfigFidelidade = async () => {
     try {
       const configs = await firebaseService.getAll('config_fidelidade').catch(() => []);
@@ -572,7 +610,6 @@ function ModernAtendimento() {
     }
   };
 
-  // Carregar pontos do cliente
   const carregarPontosCliente = async (clienteId) => {
     try {
       const pontuacoes = await firebaseService.query('pontuacao', [
@@ -597,7 +634,6 @@ function ModernAtendimento() {
     }
   };
 
-  // Calcular pontos ganhos neste atendimento
   const calcularPontosGanhos = () => {
     if (!fidelidadeConfig?.ativo) return;
 
@@ -656,7 +692,6 @@ function ModernAtendimento() {
         setItensProduto(atendimentoData.itensProduto);
       }
 
-      // Carregar cupons aplicados
       if (atendimentoData.cuponsAplicados) {
         setCuponsAplicados(atendimentoData.cuponsAplicados);
       }
@@ -665,6 +700,11 @@ function ModernAtendimento() {
         { field: 'atendimentoId', operator: '==', value: id }
       ]);
       setPagamentos(pagamentosData || []);
+      
+      // Preencher set de pagamentos processados
+      pagamentosData.forEach(p => {
+        if (p.id) pagamentosProcessadosRef.current.add(p.id);
+      });
 
       await registrarAuditoria(
         'acesso_atendimento',
@@ -727,7 +767,6 @@ function ModernAtendimento() {
     produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
 
-  // FUNÇÃO: Aplicar cupom válido
   const handleAplicarCupom = (cupom) => {
     if (cuponsAplicados.some(c => c.id === cupom.id)) {
       toast.error('Este cupom já foi aplicado');
@@ -747,7 +786,6 @@ function ModernAtendimento() {
     );
   };
 
-  // FUNÇÃO: Remover cupom
   const handleRemoverCupom = (index) => {
     const cupomRemovido = cuponsAplicados[index];
     const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
@@ -763,7 +801,6 @@ function ModernAtendimento() {
     );
   };
 
-  // FUNÇÃO: Verificar cupons próximos de expirar
   const verificarCuponsProximosExpiracao = async () => {
     try {
       if (!cliente?.id) return;
@@ -782,7 +819,6 @@ function ModernAtendimento() {
     }
   };
 
-  // Chamar verificação quando cliente carregar
   useEffect(() => {
     if (cliente?.id) {
       verificarCuponsProximosExpiracao();
@@ -938,7 +974,19 @@ function ModernAtendimento() {
   };
 
   const handleConfirmarAtendimento = async () => {
+    // Verificar duplicidade
+    if (verificarDuplicidade('confirmar_atendimento', { id })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
+    if (processandoRef.current) {
+      toast.error('Já existe uma operação em andamento');
+      return;
+    }
+
     try {
+      processandoRef.current = true;
       setSaving(true);
       
       const valorTotal = calcularValorTotal();
@@ -965,10 +1013,13 @@ function ModernAtendimento() {
 
       setActiveStep(1);
       toast.success('Atendimento confirmado!');
+      registrarAcaoProcessada('confirmar_atendimento', { id });
+      
     } catch (error) {
       console.error('Erro ao confirmar atendimento:', error);
       toast.error('Erro ao confirmar atendimento');
     } finally {
+      processandoRef.current = false;
       setSaving(false);
     }
   };
@@ -1010,7 +1061,6 @@ function ModernAtendimento() {
     }
   };
 
-  // Função para registrar uso do cupom
   const registrarUsoCupom = async (cupom) => {
     try {
       await cupomService.registrarUso(cupom.id, {
@@ -1150,7 +1200,27 @@ function ModernAtendimento() {
   };
 
   const handleSalvarPagamento = async () => {
+    // Verificar duplicidade
+    const dadosPagamento = {
+      formaPagamento: pagamentoForm.formaPagamento,
+      valor: pagamentoForm.valor,
+      parcelas: pagamentoForm.parcelas
+    };
+
+    if (verificarDuplicidade('salvar_pagamento', dadosPagamento)) {
+      toast.error('Pagamento já foi processado. Aguarde um momento.');
+      return;
+    }
+
+    if (processandoRef.current) {
+      toast.error('Já existe uma operação em andamento');
+      return;
+    }
+
     try {
+      processandoRef.current = true;
+      setSaving(true);
+
       const valorTotal = calcularValorTotal();
       const totalPago = calcularTotalPago();
       const saldoRestante = valorTotal - totalPago;
@@ -1183,6 +1253,14 @@ function ModernAtendimento() {
       let pagamentoSalvo;
 
       if (pagamentoEditando) {
+        // Verificar se houve alteração no valor
+        const valorAlterado = Math.abs(pagamentoEditando.valor - pagamentoData.valor) > 0.01;
+        
+        if (!valorAlterado) {
+          toast.error('Nenhuma alteração no valor do pagamento');
+          return;
+        }
+
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
         pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
         setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
@@ -1196,7 +1274,19 @@ function ModernAtendimento() {
         
         toast.success('Pagamento atualizado!');
       } else {
+        // Verificar se já existe pagamento com mesmo valor e forma para este atendimento
+        const pagamentoExistente = pagamentos.find(p => 
+          Math.abs(p.valor - pagamentoData.valor) < 0.01 && 
+          p.formaPagamento === pagamentoData.formaPagamento
+        );
+
+        if (pagamentoExistente) {
+          toast.error('Já existe um pagamento com este valor e forma de pagamento');
+          return;
+        }
+
         pagamentoSalvo = await firebaseService.add('pagamentos', pagamentoData);
+        pagamentosProcessadosRef.current.add(pagamentoSalvo.id);
         setPagamentos([...pagamentos, pagamentoSalvo]);
         
         await registrarAuditoria(
@@ -1212,13 +1302,23 @@ function ModernAtendimento() {
       }
 
       handleClosePagamentoDialog();
+      registrarAcaoProcessada('salvar_pagamento', dadosPagamento);
+      
     } catch (error) {
       console.error('Erro ao salvar pagamento:', error);
       toast.error('Erro ao salvar pagamento');
+    } finally {
+      processandoRef.current = false;
+      setSaving(false);
     }
   };
 
   const handleRemoverPagamento = async (pagamentoId) => {
+    if (verificarDuplicidade('remover_pagamento', { pagamentoId })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
     if (window.confirm('Deseja remover este pagamento?')) {
       try {
         const transacoes = await firebaseService.query('transacoes', [
@@ -1230,6 +1330,7 @@ function ModernAtendimento() {
         }
 
         await firebaseService.delete('pagamentos', pagamentoId);
+        pagamentosProcessadosRef.current.delete(pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
         
         await registrarAuditoria(
@@ -1240,6 +1341,8 @@ function ModernAtendimento() {
         );
         
         toast.success('Pagamento e transações removidos!');
+        registrarAcaoProcessada('remover_pagamento', { pagamentoId });
+        
       } catch (error) {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
@@ -1274,7 +1377,25 @@ function ModernAtendimento() {
   };
 
   const handleFinalizarAtendimento = async () => {
+    // Verificar duplicidade
+    if (verificarDuplicidade('finalizar_atendimento', { id })) {
+      toast.error('Atendimento já está sendo finalizado. Aguarde um momento.');
+      return;
+    }
+
+    if (processandoRef.current) {
+      toast.error('Já existe uma operação em andamento');
+      return;
+    }
+
+    // Verificar se já foi finalizado
+    if (atendimento.status === 'finalizado') {
+      toast.error('Este atendimento já foi finalizado');
+      return;
+    }
+
     try {
+      processandoRef.current = true;
       setSaving(true);
       
       const valorTotal = calcularValorTotal();
@@ -1422,16 +1543,24 @@ function ModernAtendimento() {
   
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
+      registrarAcaoProcessada('finalizar_atendimento', { id });
       
     } catch (error) {
       console.error('❌ Erro ao finalizar atendimento:', error);
       toast.error('Erro ao finalizar atendimento');
     } finally {
+      processandoRef.current = false;
       setSaving(false);
     }
   };
 
   const handleEnviarComprovante = async (metodo) => {
+    // Verificar duplicidade (10 segundos para envio de comprovante)
+    if (verificarDuplicidade('enviar_comprovante', { metodo }, 10000)) {
+      toast.error('Comprovante já foi enviado recentemente. Aguarde um momento.');
+      return;
+    }
+
     try {
       const valorTotal = calcularValorTotal();
       const totalPago = calcularTotalPago();
@@ -1481,10 +1610,14 @@ function ModernAtendimento() {
         );
         
         toast.success('WhatsApp aberto para envio!');
+        registrarAcaoProcessada('enviar_comprovante', { metodo });
+        
       } else if (metodo === 'email') {
         toast.success('Comprovante enviado por email!');
+        registrarAcaoProcessada('enviar_comprovante', { metodo });
       } else if (metodo === 'print') {
         window.print();
+        registrarAcaoProcessada('enviar_comprovante', { metodo });
       }
     } catch (error) {
       toast.error('Erro ao enviar comprovante');
@@ -1914,7 +2047,7 @@ function ModernAtendimento() {
                         variant="contained"
                         onClick={handleConfirmarAtendimento}
                         startIcon={<CheckIcon />}
-                        disabled={saving}
+                        disabled={saving || processandoRef.current}
                         sx={{
                           background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
                         }}
@@ -2236,7 +2369,7 @@ function ModernAtendimento() {
                         variant="contained"
                         onClick={() => setActiveStep(2)}
                         startIcon={<PaymentIcon />}
-                        disabled={itensServico.length === 0}
+                        disabled={itensServico.length === 0 || saving || processandoRef.current}
                         sx={{
                           background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
                         }}
@@ -2273,7 +2406,7 @@ function ModernAtendimento() {
                           variant="outlined"
                           startIcon={<AddIcon />}
                           onClick={() => handleOpenPagamentoDialog()}
-                          disabled={saldoRestante <= 0}
+                          disabled={saldoRestante <= 0 || saving || processandoRef.current}
                           size="small"
                         >
                           Adicionar Pagamento
@@ -2306,10 +2439,18 @@ function ModernAtendimento() {
                                   <TableCell>{pagamento.parcelas > 1 ? `${pagamento.parcelas}x` : '-'}</TableCell>
                                   <TableCell>{formatarDataFirebase(pagamento.data)}</TableCell>
                                   <TableCell align="center">
-                                    <IconButton size="small" onClick={() => handleOpenPagamentoDialog(pagamento)}>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleOpenPagamentoDialog(pagamento)}
+                                      disabled={saving || processandoRef.current}
+                                    >
                                       <EditIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" onClick={() => handleRemoverPagamento(pagamento.id)}>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleRemoverPagamento(pagamento.id)}
+                                      disabled={saving || processandoRef.current}
+                                    >
                                       <DeleteIcon fontSize="small" />
                                     </IconButton>
                                   </TableCell>
@@ -2322,20 +2463,20 @@ function ModernAtendimento() {
                     </Paper>
 
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                      <Button onClick={() => setActiveStep(1)} disabled={saving}>
+                      <Button onClick={() => setActiveStep(1)} disabled={saving || processandoRef.current}>
                         Voltar
                       </Button>
                       <Button
                         variant="contained"
                         onClick={handleFinalizarAtendimento}
                         startIcon={<CheckIcon />}
-                        disabled={saving || Math.abs(calcularSaldoRestante()) > 0.01}
+                        disabled={saving || processandoRef.current || Math.abs(calcularSaldoRestante()) > 0.01 || atendimento.status === 'finalizado'}
                         sx={{
-                          background: Math.abs(calcularSaldoRestante()) <= 0.01 
+                          background: Math.abs(calcularSaldoRestante()) <= 0.01 && atendimento.status !== 'finalizado'
                             ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' 
                             : 'grey',
                           '&:hover': {
-                            background: Math.abs(calcularSaldoRestante()) <= 0.01 
+                            background: Math.abs(calcularSaldoRestante()) <= 0.01 && atendimento.status !== 'finalizado'
                               ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)' 
                               : 'grey',
                           },
@@ -2678,10 +2819,13 @@ function ModernAtendimento() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClosePagamentoDialog}>Cancelar</Button>
+          <Button onClick={handleClosePagamentoDialog} disabled={saving || processandoRef.current}>
+            Cancelar
+          </Button>
           <Button
             onClick={handleSalvarPagamento}
             variant="contained"
+            disabled={saving || processandoRef.current}
             sx={{ bgcolor: '#9c27b0' }}
           >
             {pagamentoEditando ? 'Atualizar' : 'Registrar Pagamento'}
