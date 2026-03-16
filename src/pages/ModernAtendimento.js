@@ -738,6 +738,118 @@ function ModernAtendimento() {
     }
   };
 
+  // 🔥 NOVA FUNÇÃO: Processar indicação (dar pontos para quem indicou)
+  const processarIndicacao = async () => {
+    if (!cliente?.indicadoPor) {
+      console.log('ℹ️ Cliente não foi indicado por ninguém');
+      return;
+    }
+
+    try {
+      console.log('🔍 Processando indicação do cliente:', cliente.nome);
+      console.log('👤 Indicado por ID:', cliente.indicadoPor);
+
+      // Buscar configurações de fidelidade
+      const configFidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
+      const config = configFidelidade[0] || { 
+        pontosIndicacao: 100,
+        pontosPorReal: 1,
+        bonusIndicacao: 100
+      };
+
+      const pontosBonus = config.pontosIndicacao || config.bonusIndicacao || 100;
+
+      // Verificar se este cliente já teve uma indicação confirmada anteriormente
+      const indicacoesExistentes = await firebaseService.query('indicacoes', [
+        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
+        { field: 'status', operator: '==', value: 'confirmada' }
+      ]);
+
+      const jaFoiConfirmada = indicacoesExistentes.length > 0;
+
+      if (jaFoiConfirmada) {
+        console.log('⚠️ Indicação já foi confirmada anteriormente');
+        return;
+      }
+
+      // Buscar a indicação pendente
+      const indicacoesPendentes = await firebaseService.query('indicacoes', [
+        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
+        { field: 'status', operator: '==', value: 'pendente' }
+      ]);
+
+      console.log('📌 Indicações pendentes encontradas:', indicacoesPendentes.length);
+
+      if (indicacoesPendentes.length === 0) {
+        console.log('ℹ️ Nenhuma indicação pendente encontrada');
+        return;
+      }
+
+      const indicacao = indicacoesPendentes[0];
+      console.log('✅ Indicação encontrada:', indicacao);
+
+      // Verificar se o cliente que indicou ainda existe
+      const clienteIndicador = await firebaseService.getById('clientes', indicacao.clienteId);
+      if (!clienteIndicador) {
+        console.error('❌ Cliente que indicou não encontrado:', indicacao.clienteId);
+        return;
+      }
+
+      console.log('👤 Cliente indicador encontrado:', clienteIndicador.nome);
+
+      // Atualizar status da indicação
+      await firebaseService.update('indicacoes', indicacao.id, {
+        status: 'confirmada',
+        pontosGanhos: pontosBonus,
+        dataConfirmacao: new Date().toISOString(),
+        updatedAt: Timestamp.now()
+      });
+
+      console.log('✅ Indicação confirmada no banco');
+
+      // Adicionar pontos ao cliente que indicou
+      const pontuacaoData = {
+        clienteId: indicacao.clienteId,
+        clienteNome: indicacao.clienteNome,
+        quantidade: pontosBonus,
+        tipo: 'credito',
+        motivo: `Bônus por indicação de ${cliente.nome}`,
+        data: new Date().toISOString(),
+        indicacaoId: indicacao.id,
+        atendimentoId: id,
+        createdAt: Timestamp.now()
+      };
+
+      await firebaseService.add('pontuacao', pontuacaoData);
+      console.log('✅ Pontos adicionados para o cliente indicador:', indicacao.clienteNome);
+
+      // Registrar na auditoria
+      await registrarAuditoria(
+        'confirmar_indicacao',
+        indicacao.id,
+        `Indicação confirmada: ${indicacao.clienteIndicadoNome} realizou primeiro atendimento`,
+        {
+          clienteIndicadorId: indicacao.clienteId,
+          clienteIndicadorNome: indicacao.clienteNome,
+          clienteIndicadoId: cliente.id,
+          clienteIndicadoNome: cliente.nome,
+          pontosBonus
+        }
+      );
+
+      toast.success(`🎉 ${pontosBonus} pontos creditados para ${indicacao.clienteNome} por indicação!`);
+
+    } catch (error) {
+      console.error('❌ Erro ao processar indicação:', error);
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'processar_indicacao',
+        clienteIndicadoId: cliente?.id,
+        atendimentoId: id
+      });
+    }
+  };
+
   // Adicionar pagamento ao ARRAY pagamentos
   const handleSalvarPagamento = async () => {
     try {
@@ -1038,13 +1150,16 @@ function ModernAtendimento() {
       const comissaoId = await firebaseService.add('comissoes', comissaoData);
       console.log('✅ Comissão registrada com ID:', comissaoId);
   
-      // 6. ADICIONAR PONTOS DE FIDELIDADE
+      // 6. ADICIONAR PONTOS DE FIDELIDADE PARA O CLIENTE DO ATENDIMENTO
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
-        console.log('📌 Adicionando pontos de fidelidade:', pontosGanhos);
+        console.log('📌 Adicionando pontos de fidelidade para o cliente:', pontosGanhos);
         await adicionarPontosFidelidade();
       }
   
-      // 7. Atualizar cliente
+      // 7. 🔥 PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
+      await processarIndicacao();
+  
+      // 8. Atualizar cliente
       console.log('📌 Atualizando cliente...');
       await firebaseService.update('clientes', cliente.id, {
         ultimaVisita: new Date().toISOString().split('T')[0],
@@ -1052,7 +1167,7 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
 
-      // 8. Registrar na auditoria
+      // 9. Registrar na auditoria
       await registrarAuditoria(
         'finalizar_atendimento',
         id,
@@ -1069,7 +1184,7 @@ function ModernAtendimento() {
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       
-      // 9. Verificar se a comissão foi criada
+      // 10. Verificar se a comissão foi criada
       setTimeout(async () => {
         const comissoes = await firebaseService.getAll('comissoes');
         const minhaComissao = comissoes.find(c => c.atendimentoId === id);
@@ -1089,7 +1204,15 @@ function ModernAtendimento() {
           const pontuacoes = await firebaseService.query('pontuacao', [
             { field: 'atendimentoId', operator: '==', value: id }
           ]);
-          console.log('🔍 Verificação pós-finalização - Pontos adicionados:', pontuacoes);
+          console.log('🔍 Verificação pós-finalização - Pontos do atendimento:', pontuacoes);
+
+          // Verificar pontos da indicação
+          if (cliente?.indicadoPor) {
+            const pontuacoesIndicacao = await firebaseService.query('pontuacao', [
+              { field: 'indicacaoId', operator: '==', value: id }
+            ]);
+            console.log('🔍 Verificação pós-finalização - Pontos da indicação:', pontuacoesIndicacao);
+          }
         }
       }, 2000);
       
@@ -1261,6 +1384,14 @@ function ModernAtendimento() {
                     <Typography variant="body2" color="textSecondary">
                       {cliente?.telefone}
                     </Typography>
+                    {cliente?.indicadoPorNome && (
+                      <Chip
+                        icon={<PersonAddIcon />}
+                        label={`Indicado por: ${cliente.indicadoPorNome}`}
+                        size="small"
+                        sx={{ mt: 0.5, bgcolor: '#fff3e0', color: '#ff9800', height: 20 }}
+                      />
+                    )}
                   </Box>
                 </Box>
               </Box>
