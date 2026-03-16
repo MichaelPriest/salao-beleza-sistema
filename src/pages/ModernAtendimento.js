@@ -224,11 +224,8 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
     setCupomEncontrado(null);
 
     try {
-      // Buscar cupom pelo código
-      const cupons = await cupomService.listarCupons();
-      const cupom = cupons.find(c => 
-        c.codigo?.toUpperCase() === codigoCupom.trim().toUpperCase() && c.ativo === true
-      );
+      // Buscar cupom pelo código usando o cupomService
+      const cupom = await cupomService.buscarCupomPorCodigo(codigoCupom);
 
       if (!cupom) {
         setErro('Cupom não encontrado');
@@ -237,14 +234,14 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
 
       // Validar cupom
       const validacao = await cupomService.validarCupom(
-        cupom.id,
+        cupom.codigo,
         cliente?.id,
         valorTotal,
         itensServico
       );
 
       if (!validacao.valido) {
-        setErro(validacao.mensagem || 'Cupom inválido');
+        setErro(validacao.motivo || 'Cupom inválido');
         return;
       }
 
@@ -330,9 +327,9 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
                     : 'Desconto aplicável')}
             </Typography>
 
-            {cupomEncontrado.mensagem && (
+            {cupomEncontrado.motivo && (
               <Typography variant="caption" color="info.main" sx={{ display: 'block', mb: 1 }}>
-                {cupomEncontrado.mensagem}
+                {cupomEncontrado.motivo}
               </Typography>
             )}
 
@@ -366,6 +363,7 @@ function ModernAtendimento() {
   const [cliente, setCliente] = useState(null);
   const [profissional, setProfissional] = useState(null);
   const [observacoes, setObservacoes] = useState('');
+  const [usuario, setUsuario] = useState(null);
   
   // Configurações de fidelidade
   const [fidelidadeConfig, setFidelidadeConfig] = useState(null);
@@ -374,11 +372,11 @@ function ModernAtendimento() {
   const [pontosGanhos, setPontosGanhos] = useState(0);
   const [bonusAplicados, setBonusAplicados] = useState([]);
   
-  // NOVO: Estado para cupons
+  // Estado para cupons
   const [cuponsAplicados, setCuponsAplicados] = useState([]);
   const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
   const [descontoTotalCupons, setDescontoTotalCupons] = useState(0);
-  const [cuponsExpirados, setCuponsExpirados] = useState([]);
+  const [cuponsProximosExpiracao, setCuponsProximosExpiracao] = useState([]);
   
   // Itens do atendimento - ARRAYS
   const [itensServico, setItensServico] = useState([]);
@@ -389,10 +387,10 @@ function ModernAtendimento() {
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidadeProduto, setQuantidadeProduto] = useState(1);
   
-  // NOVO: controle para item sem cobrança
+  // Controle para item sem cobrança
   const [itemSemCobranca, setItemSemCobranca] = useState(false);
   
-  // NOVO: busca nos selects
+  // Busca nos selects
   const [buscaServico, setBuscaServico] = useState('');
   const [buscaProduto, setBuscaProduto] = useState('');
   
@@ -408,7 +406,6 @@ function ModernAtendimento() {
   });
 
   const [tempoDecorrido, setTempoDecorrido] = useState('');
-  const [usuario, setUsuario] = useState(null);
 
   // Listas de serviços e produtos disponíveis
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
@@ -419,7 +416,13 @@ function ModernAtendimento() {
     try {
       const usuarioStr = localStorage.getItem('usuario');
       if (usuarioStr) {
-        setUsuario(JSON.parse(usuarioStr));
+        const usuarioData = JSON.parse(usuarioStr);
+        setUsuario(usuarioData);
+        console.log('✅ Usuário carregado:', usuarioData);
+      } else {
+        console.warn('⚠️ Nenhum usuário encontrado no localStorage');
+        // Usuário padrão para testes (remova em produção)
+        setUsuario({ id: 'sistema', nome: 'Sistema' });
       }
     } catch (error) {
       console.error('Erro ao carregar usuário:', error);
@@ -469,22 +472,33 @@ function ModernAtendimento() {
     calcularDescontoCupons();
   }, [cuponsAplicados, itensServico, itensProduto]);
 
-  // Função para registrar na auditoria
+  // Função para registrar na auditoria (CORRIGIDA)
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      await auditoriaService.registrar(acao, {
+      // Garantir que usuário existe
+      const usuarioId = usuario?.id || 'sistema';
+      const usuarioNome = usuario?.nome || 'Sistema';
+      
+      const auditoriaData = {
+        acao,
         entidade: 'atendimentos',
         entidadeId,
         detalhes,
         dados: {
           ...dados,
-          usuarioId: usuario?.id,
-          usuarioNome: usuario?.nome,
+          usuarioId,
+          usuarioNome,
           timestamp: new Date().toISOString()
-        }
-      });
+        },
+        data: Timestamp.now()
+      };
+
+      console.log('📝 Registrando auditoria:', auditoriaData);
+      
+      await firebaseService.add('auditoria', auditoriaData);
     } catch (error) {
-      console.error('Erro ao registrar auditoria:', error);
+      console.error('❌ Erro ao registrar auditoria:', error);
+      // Não throw o erro para não interromper o fluxo principal
     }
   };
 
@@ -510,7 +524,6 @@ function ModernAtendimento() {
   const calcularDescontoCupons = () => {
     let descontoTotal = 0;
     const subtotal = calcularSubtotal();
-    const servicosValor = calcularTotalServicos();
 
     cuponsAplicados.forEach(cupom => {
       if (cupom.tipo === 'percentual') {
@@ -529,8 +542,6 @@ function ModernAtendimento() {
         cupom.valorDescontoCalculado = cupom.valor;
         
       } else if (cupom.tipo === 'produto') {
-        // Lógica para desconto em produtos específicos
-        // Por enquanto, simplificado
         descontoTotal += cupom.valor || 0;
         cupom.valorDescontoCalculado = cupom.valor || 0;
       }
@@ -695,10 +706,12 @@ function ModernAtendimento() {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados do atendimento');
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'carregar_atendimento',
-        atendimentoId: id
-      });
+      await registrarAuditoria(
+        'erro_carregar_atendimento',
+        id,
+        `Erro ao carregar atendimento: ${error.message}`,
+        {}
+      );
     } finally {
       setLoading(false);
     }
@@ -750,7 +763,7 @@ function ModernAtendimento() {
     produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
 
-  // NOVA FUNÇÃO: Aplicar cupom válido
+  // FUNÇÃO: Aplicar cupom válido
   const handleAplicarCupom = (cupom) => {
     // Verificar se já foi aplicado
     if (cuponsAplicados.some(c => c.id === cupom.id)) {
@@ -771,7 +784,7 @@ function ModernAtendimento() {
     );
   };
 
-  // NOVA FUNÇÃO: Remover cupom
+  // FUNÇÃO: Remover cupom
   const handleRemoverCupom = (index) => {
     const cupomRemovido = cuponsAplicados[index];
     const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
@@ -787,27 +800,29 @@ function ModernAtendimento() {
     );
   };
 
-  // NOVA FUNÇÃO: Verificar cupons expirados
-  const verificarCuponsExpirados = async () => {
+  // FUNÇÃO: Verificar cupons próximos de expirar
+  const verificarCuponsProximosExpiracao = async () => {
     try {
-      const expirados = await cupomService.verificarCuponsExpirados(cliente?.id);
-      setCuponsExpirados(expirados);
+      if (!cliente?.id) return;
       
-      if (expirados.length > 0) {
-        toast.info(`${expirados.length} cupom(ns) próximo(s) de expirar!`, {
+      const cupons = await cupomService.verificarCuponsExpirados(cliente.id);
+      setCuponsProximosExpiracao(cupons);
+      
+      if (cupons.length > 0) {
+        toast.info(`${cupons.length} cupom(ns) próximo(s) de expirar!`, {
           icon: '⏰',
           duration: 5000
         });
       }
     } catch (error) {
-      console.error('Erro ao verificar cupons expirados:', error);
+      console.error('Erro ao verificar cupons próximos de expirar:', error);
     }
   };
 
   // Chamar verificação quando cliente carregar
   useEffect(() => {
     if (cliente?.id) {
-      verificarCuponsExpirados();
+      verificarCuponsProximosExpiracao();
     }
   }, [cliente]);
 
@@ -931,7 +946,7 @@ function ModernAtendimento() {
         tipo: tipo,
         data: new Date().toISOString(),
         atendimentoId: id,
-        usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema'
+        usuario: usuario?.nome || 'Sistema'
       };
       await firebaseService.add('movimentacoes_estoque', movimentacao);
     } catch (error) {
@@ -1010,10 +1025,12 @@ function ModernAtendimento() {
       console.error('Erro ao confirmar atendimento:', error);
       toast.error('Erro ao confirmar atendimento');
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'confirmar_atendimento',
-        atendimentoId: id
-      });
+      await registrarAuditoria(
+        'erro_confirmar_atendimento',
+        id,
+        `Erro ao confirmar atendimento: ${error.message}`,
+        {}
+      );
     } finally {
       setSaving(false);
     }
@@ -1066,6 +1083,7 @@ function ModernAtendimento() {
   const registrarUsoCupom = async (cupom) => {
     try {
       await cupomService.registrarUso(cupom.id, {
+        cupomCodigo: cupom.codigo,
         atendimentoId: id,
         clienteId: cliente?.id,
         clienteNome: cliente?.nome,
@@ -1114,15 +1132,16 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'adicionar_pontos_fidelidade',
-        clienteId: cliente?.id,
-        atendimentoId: id
-      });
+      await registrarAuditoria(
+        'erro_adicionar_pontos_fidelidade',
+        cliente?.id,
+        `Erro ao adicionar pontos: ${error.message}`,
+        { atendimentoId: id }
+      );
     }
   };
 
-  // 🔥 NOVA FUNÇÃO: Processar indicação (dar pontos para quem indicou)
+  // FUNÇÃO: Processar indicação (dar pontos para quem indicou)
   const processarIndicacao = async () => {
     if (!cliente?.indicadoPor) {
       console.log('ℹ️ Cliente não foi indicado por ninguém');
@@ -1226,11 +1245,12 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('❌ Erro ao processar indicação:', error);
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'processar_indicacao',
-        clienteIndicadoId: cliente?.id,
-        atendimentoId: id
-      });
+      await registrarAuditoria(
+        'erro_processar_indicacao',
+        id,
+        `Erro ao processar indicação: ${error.message}`,
+        { clienteIndicadoId: cliente?.id }
+      );
     }
   };
 
@@ -1306,11 +1326,12 @@ function ModernAtendimento() {
       console.error('Erro ao salvar pagamento:', error);
       toast.error('Erro ao salvar pagamento');
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'salvar_pagamento',
-        atendimentoId: id,
-        dados: pagamentoForm
-      });
+      await registrarAuditoria(
+        'erro_salvar_pagamento',
+        id,
+        `Erro ao salvar pagamento: ${error.message}`,
+        { dados: pagamentoForm }
+      );
     }
   };
 
@@ -1344,11 +1365,12 @@ function ModernAtendimento() {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
         
-        await auditoriaService.registrarErro(error, {
-          acao: 'remover_pagamento',
-          pagamentoId,
-          atendimentoId: id
-        });
+        await registrarAuditoria(
+          'erro_remover_pagamento',
+          id,
+          `Erro ao remover pagamento: ${error.message}`,
+          { pagamentoId }
+        );
       }
     }
   };
@@ -1549,7 +1571,7 @@ function ModernAtendimento() {
         await adicionarPontosFidelidade();
       }
   
-      // 8. 🔥 PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
+      // 8. PROCESSAR INDICAÇÃO (dar pontos para quem indicou este cliente)
       await processarIndicacao();
   
       // 9. Atualizar cliente
@@ -1615,10 +1637,12 @@ function ModernAtendimento() {
       console.error('❌ Erro ao finalizar atendimento:', error);
       toast.error('Erro ao finalizar atendimento');
       
-      await auditoriaService.registrarErro(error, {
-        acao: 'finalizar_atendimento',
-        atendimentoId: id
-      });
+      await registrarAuditoria(
+        'erro_finalizar_atendimento',
+        id,
+        `Erro ao finalizar atendimento: ${error.message}`,
+        {}
+      );
     } finally {
       setSaving(false);
     }
@@ -1778,9 +1802,9 @@ function ModernAtendimento() {
               )}
 
               {/* Alertas de cupons próximos de expirar */}
-              {cuponsExpirados.length > 0 && (
+              {cuponsProximosExpiracao.length > 0 && (
                 <Box sx={{ mb: 3 }}>
-                  {cuponsExpirados.map((cupom, idx) => (
+                  {cuponsProximosExpiracao.map((cupom, idx) => (
                     <Alert 
                       key={idx} 
                       severity="warning" 
