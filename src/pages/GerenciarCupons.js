@@ -39,8 +39,16 @@ import {
   FormControlLabel,
   Autocomplete,
   Badge,
-  Checkbox, // <-- ADICIONAR ESTA LINHA
-  ListItemText, // <-- ADICIONAR ESTA LINHA
+  Checkbox,
+  ListItemText,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Slider,
+  ColorPicker,
+  Radio,
+  RadioGroup,
+  FormHelperText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -65,6 +73,12 @@ import {
   DateRange as DateRangeIcon,
   AccessTime as TimeIcon,
   Star as StarIcon,
+  Print as PrintIcon,
+  Palette as PaletteIcon,
+  QrCode as QrCodeIcon,
+  Download as DownloadIcon,
+  Share as ShareIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -74,6 +88,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
+import QRCode from 'qrcode.react';
 
 const tiposCupom = [
   { value: 'percentual', label: 'Percentual', icon: <PercentIcon /> },
@@ -99,6 +114,14 @@ const clientesElegiveis = [
   { value: 'lista', label: 'Lista específica' },
 ];
 
+const estilosCupom = [
+  { value: 'classico', label: 'Clássico', cor: '#9c27b0' },
+  { value: 'moderno', label: 'Moderno', cor: '#2196f3' },
+  { value: 'elegante', label: 'Elegante', cor: '#4caf50' },
+  { value: 'vibrante', label: 'Vibrante', cor: '#ff9800' },
+  { value: 'luxo', label: 'Luxo', cor: '#9c27b0' },
+];
+
 function GerenciarCupons() {
   const [loading, setLoading] = useState(true);
   const [cupons, setCupons] = useState([]);
@@ -108,14 +131,30 @@ function GerenciarCupons() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openHistoricoDialog, setOpenHistoricoDialog] = useState(false);
+  const [openImpressaoDialog, setOpenImpressaoDialog] = useState(false);
+  const [cupomSelecionado, setCupomSelecionado] = useState(null);
+  const [historicoUsos, setHistoricoUsos] = useState([]);
   const [cupomEditando, setCupomEditando] = useState(null);
   const [usuario, setUsuario] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [configuracoes, setConfiguracoes] = useState(null);
   
   // Dados para selects
   const [clientes, setClientes] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [produtos, setProdutos] = useState([]);
+
+  // Estado para customização de cupom
+  const [customizacao, setCustomizacao] = useState({
+    estilo: 'classico',
+    corPrimaria: '#9c27b0',
+    corSecundaria: '#ff4081',
+    mostrarLogo: true,
+    mostrarQrCode: true,
+    mensagemPersonalizada: '',
+    imagemFundo: null,
+  });
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -141,12 +180,21 @@ function GerenciarCupons() {
     listaProdutosIds: [],
     ativo: true,
     primeiroAcesso: false,
+    customizacao: {
+      estilo: 'classico',
+      corPrimaria: '#9c27b0',
+      corSecundaria: '#ff4081',
+      mostrarLogo: true,
+      mostrarQrCode: true,
+      mensagemPersonalizada: '',
+    }
   });
 
   useEffect(() => {
     carregarUsuario();
     carregarDados();
     carregarClientesServicosProdutos();
+    carregarConfiguracoes();
   }, []);
 
   const carregarUsuario = () => {
@@ -157,6 +205,17 @@ function GerenciarCupons() {
       }
     } catch (error) {
       console.error('Erro ao carregar usuário:', error);
+    }
+  };
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      if (configs && configs.length > 0) {
+        setConfiguracoes(configs[0]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
     }
   };
 
@@ -222,6 +281,14 @@ function GerenciarCupons() {
         listaProdutosIds: cupom.listaProdutosIds || [],
         ativo: cupom.ativo !== false,
         primeiroAcesso: cupom.primeiroAcesso || false,
+        customizacao: cupom.customizacao || {
+          estilo: 'classico',
+          corPrimaria: '#9c27b0',
+          corSecundaria: '#ff4081',
+          mostrarLogo: true,
+          mostrarQrCode: true,
+          mensagemPersonalizada: '',
+        }
       });
     } else {
       setCupomEditando(null);
@@ -248,6 +315,14 @@ function GerenciarCupons() {
         listaProdutosIds: [],
         ativo: true,
         primeiroAcesso: false,
+        customizacao: {
+          estilo: 'classico',
+          corPrimaria: '#9c27b0',
+          corSecundaria: '#ff4081',
+          mostrarLogo: true,
+          mostrarQrCode: true,
+          mensagemPersonalizada: '',
+        }
       });
     }
     setOpenDialog(true);
@@ -263,6 +338,17 @@ function GerenciarCupons() {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleCustomizacaoChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      customizacao: {
+        ...prev.customizacao,
+        [name]: type === 'checkbox' ? checked : value
+      }
     }));
   };
 
@@ -319,10 +405,299 @@ function GerenciarCupons() {
   };
 
   const handleVerHistorico = async (cupom) => {
-    // Implementar modal de histórico
-    const historico = await cupomService.historicoUso(cupom.id);
-    console.log('Histórico:', historico);
-    // Abrir dialog com histórico
+    try {
+      setCupomSelecionado(cupom);
+      const historico = await cupomService.historicoUso(cupom.id);
+      setHistoricoUsos(historico);
+      setOpenHistoricoDialog(true);
+    } catch (error) {
+      console.error('Erro ao carregar histórico:', error);
+      mostrarSnackbar('Erro ao carregar histórico', 'error');
+    }
+  };
+
+  const handleAbrirImpressao = (cupom) => {
+    setCupomSelecionado(cupom);
+    setCustomizacao({
+      estilo: cupom.customizacao?.estilo || 'classico',
+      corPrimaria: cupom.customizacao?.corPrimaria || '#9c27b0',
+      corSecundaria: cupom.customizacao?.corSecundaria || '#ff4081',
+      mostrarLogo: cupom.customizacao?.mostrarLogo !== false,
+      mostrarQrCode: cupom.customizacao?.mostrarQrCode !== false,
+      mensagemPersonalizada: cupom.customizacao?.mensagemPersonalizada || '',
+    });
+    setOpenImpressaoDialog(true);
+  };
+
+  const handleImprimirCupom = () => {
+    const janelaImpressao = window.open('', '_blank');
+    const corPrimaria = customizacao.corPrimaria;
+    const corSecundaria = customizacao.corSecundaria;
+    const fonte = configuracoes?.tema?.fonte || 'Poppins';
+    
+    janelaImpressao.document.write(`
+      <html>
+        <head>
+          <title>Cupom ${cupomSelecionado?.codigo}</title>
+          <style>
+            body { 
+              font-family: '${fonte}', sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .cupom-container {
+              max-width: 400px;
+              width: 100%;
+              background: white;
+              border-radius: 16px;
+              overflow: hidden;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+              position: relative;
+            }
+            ${customizacao.estilo === 'moderno' ? `
+              .cupom-container {
+                border: 2px solid ${corPrimaria};
+              }
+            ` : ''}
+            ${customizacao.estilo === 'elegante' ? `
+              .cupom-container {
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+              }
+            ` : ''}
+            ${customizacao.estilo === 'vibrante' ? `
+              .cupom-container {
+                background: linear-gradient(135deg, ${corPrimaria}10, ${corSecundaria}10);
+              }
+            ` : ''}
+            ${customizacao.estilo === 'luxo' ? `
+              .cupom-container {
+                border: 1px solid gold;
+                box-shadow: 0 0 30px rgba(255,215,0,0.2);
+              }
+            ` : ''}
+            .cupom-header {
+              background: ${corPrimaria};
+              color: white;
+              padding: 20px;
+              text-align: center;
+              position: relative;
+            }
+            .cupom-header::after {
+              content: '';
+              position: absolute;
+              bottom: -10px;
+              left: 0;
+              right: 0;
+              height: 20px;
+              background: linear-gradient(to bottom right, transparent 49%, ${corPrimaria} 50%);
+            }
+            .logo {
+              max-width: 120px;
+              max-height: 60px;
+              object-fit: contain;
+              margin-bottom: 10px;
+            }
+            .cupom-titulo {
+              font-size: 24px;
+              font-weight: bold;
+              margin: 10px 0 5px;
+            }
+            .cupom-codigo {
+              font-size: 28px;
+              font-weight: bold;
+              letter-spacing: 2px;
+              margin: 10px 0;
+              padding: 10px;
+              background: rgba(255,255,255,0.2);
+              border-radius: 8px;
+              display: inline-block;
+            }
+            .cupom-body {
+              padding: 30px 20px;
+              text-align: center;
+            }
+            .desconto {
+              font-size: 48px;
+              font-weight: bold;
+              color: ${corPrimaria};
+              margin: 20px 0;
+            }
+            .desconto small {
+              font-size: 18px;
+              color: #666;
+            }
+            .descricao {
+              color: #666;
+              margin: 20px 0;
+              line-height: 1.6;
+            }
+            .validade {
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              font-size: 14px;
+            }
+            .validade strong {
+              color: ${corSecundaria};
+            }
+            .regras {
+              text-align: left;
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              font-size: 13px;
+            }
+            .regras ul {
+              margin: 10px 0;
+              padding-left: 20px;
+            }
+            .regras li {
+              margin: 5px 0;
+            }
+            .qr-code {
+              margin: 20px 0;
+              padding: 20px;
+              background: white;
+              border-radius: 8px;
+              display: inline-block;
+            }
+            .mensagem-personalizada {
+              font-style: italic;
+              color: ${corSecundaria};
+              margin: 20px 0;
+              padding: 10px;
+              border-top: 1px dashed #ccc;
+              border-bottom: 1px dashed #ccc;
+            }
+            .cupom-footer {
+              background: #f8f9fa;
+              padding: 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #999;
+              border-top: 1px solid #e0e0e0;
+            }
+            .info-empresa {
+              margin-bottom: 10px;
+            }
+            @media print {
+              body {
+                padding: 0;
+                background: white;
+              }
+              .cupom-container {
+                box-shadow: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cupom-container">
+            <div class="cupom-header">
+              ${customizacao.mostrarLogo && configuracoes?.salao?.logo ? `
+                <img src="${configuracoes.salao.logo}" alt="Logo" class="logo">
+              ` : ''}
+              <div class="cupom-titulo">CUPOM DE DESCONTO</div>
+            </div>
+            
+            <div class="cupom-body">
+              <div class="cupom-codigo">${cupomSelecionado?.codigo}</div>
+              
+              <div class="desconto">
+                ${cupomSelecionado?.tipo === 'percentual' 
+                  ? `${cupomSelecionado?.valor}% OFF` 
+                  : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
+                ${cupomSelecionado?.tipo === 'percentual' && cupomSelecionado?.valorMaximoDesconto ? 
+                  `<br><small>Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
+              </div>
+              
+              <div class="descricao">
+                ${cupomSelecionado?.descricao || 'Aproveite esta oferta especial!'}
+              </div>
+              
+              ${cupomSelecionado?.dataFim ? `
+                <div class="validade">
+                  <strong>Válido até:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
+                </div>
+              ` : ''}
+              
+              <div class="regras">
+                <strong>Regras do cupom:</strong>
+                <ul>
+                  ${cupomSelecionado?.valorMinimo > 0 ? 
+                    `<li>Valor mínimo da compra: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
+                  ${cupomSelecionado?.usoMaximo ? 
+                    `<li>Limite de ${cupomSelecionado.usoMaximo} uso(s) total(is)</li>` : ''}
+                  ${cupomSelecionado?.usoMaximoPorCliente > 1 ? 
+                    `<li>Máximo de ${cupomSelecionado.usoMaximoPorCliente} uso(s) por cliente</li>` : ''}
+                  ${cupomSelecionado?.primeiroAcesso ? 
+                    '<li>Válido apenas para primeiro atendimento</li>' : ''}
+                  ${cupomSelecionado?.clientesElegiveis === 'novos' ? 
+                    '<li>Válido apenas para novos clientes</li>' : ''}
+                  ${cupomSelecionado?.clientesElegiveis === 'vip' ? 
+                    '<li>Válido apenas para clientes VIP</li>' : ''}
+                </ul>
+              </div>
+              
+              ${customizacao.mostrarQrCode ? `
+                <div class="qr-code">
+                  <QRCode value="${cupomSelecionado?.codigo}" size={120} />
+                </div>
+              ` : ''}
+              
+              ${customizacao.mensagemPersonalizada ? `
+                <div class="mensagem-personalizada">
+                  "${customizacao.mensagemPersonalizada}"
+                </div>
+              ` : ''}
+            </div>
+            
+            <div class="cupom-footer">
+              <div class="info-empresa">
+                <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
+                ${configuracoes?.salao?.contato?.telefone ? `Tel: ${configuracoes.salao.contato.telefone}<br>` : ''}
+                ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}<br>` : ''}
+                ${configuracoes?.salao?.endereco?.cidade ? `${configuracoes.salao.endereco.cidade} - ${configuracoes.salao.endereco.estado}` : ''}
+              </div>
+              <div>
+                *Apresente este cupom no momento do atendimento
+              </div>
+            </div>
+          </div>
+          <div style="text-align: center; margin-top: 20px;">
+            <button onclick="window.print()" style="
+              background: ${corPrimaria};
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin-right: 10px;
+              font-family: ${fonte};
+            ">🖨️ Imprimir Cupom</button>
+            <button onclick="window.close()" style="
+              background: #f44336;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              font-family: ${fonte};
+            ">✖️ Fechar</button>
+          </div>
+        </body>
+      </html>
+    `);
+    janelaImpressao.document.close();
+    setOpenImpressaoDialog(false);
   };
 
   const cuponsFiltrados = cupons.filter(cupom => {
@@ -358,6 +733,16 @@ function GerenciarCupons() {
     if (!ativo) return 'Inativo';
     if (usoMaximo && usosAtuais >= usoMaximo) return 'Esgotado';
     return 'Ativo';
+  };
+
+  const formatarData = (data) => {
+    if (!data) return '';
+    return new Date(data).toLocaleDateString('pt-BR');
+  };
+
+  const formatarHora = (data) => {
+    if (!data) return '';
+    return new Date(data).toLocaleTimeString('pt-BR');
   };
 
   if (loading) {
@@ -558,6 +943,15 @@ function GerenciarCupons() {
                             <HistoryIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="Imprimir Cupom">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleAbrirImpressao(cupom)}
+                            sx={{ color: '#4caf50' }}
+                          >
+                            <PrintIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Editar">
                           <IconButton
                             size="small"
@@ -606,6 +1000,260 @@ function GerenciarCupons() {
             }}
           />
         </Card>
+
+        {/* Dialog de Histórico de Uso */}
+        <Dialog open={openHistoricoDialog} onClose={() => setOpenHistoricoDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HistoryIcon />
+              <Typography variant="h6">
+                Histórico de Uso - {cupomSelecionado?.codigo}
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            {historicoUsos.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <HistoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="body1" color="textSecondary">
+                  Nenhum uso registrado para este cupom
+                </Typography>
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Data</strong></TableCell>
+                      <TableCell><strong>Cliente</strong></TableCell>
+                      <TableCell align="right"><strong>Valor Original</strong></TableCell>
+                      <TableCell align="right"><strong>Desconto</strong></TableCell>
+                      <TableCell align="right"><strong>Valor Final</strong></TableCell>
+                      <TableCell><strong>Atendimento</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {historicoUsos.map((uso, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          {formatarData(uso.data)} {formatarHora(uso.data)}
+                        </TableCell>
+                        <TableCell>{uso.clienteNome || 'N/A'}</TableCell>
+                        <TableCell align="right">R$ {uso.valorOriginal?.toFixed(2)}</TableCell>
+                        <TableCell align="right" sx={{ color: '#4caf50' }}>
+                          - R$ {uso.descontoAplicado?.toFixed(2)}
+                        </TableCell>
+                        <TableCell align="right">R$ {uso.valorFinal?.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={`#${uso.atendimentoId?.slice(-6) || 'N/A'}`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenHistoricoDialog(false)}>Fechar</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog de Impressão/Customização de Cupom */}
+        <Dialog open={openImpressaoDialog} onClose={() => setOpenImpressaoDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PaletteIcon />
+              <Typography variant="h6">
+                Customizar Cupom - {cupomSelecionado?.codigo}
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={3} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Estilo do Cupom
+                </Typography>
+                <RadioGroup
+                  value={customizacao.estilo}
+                  onChange={(e) => setCustomizacao({ ...customizacao, estilo: e.target.value })}
+                >
+                  <Grid container spacing={2}>
+                    {estilosCupom.map((estilo) => (
+                      <Grid item xs={6} key={estilo.value}>
+                        <Paper
+                          variant={customizacao.estilo === estilo.value ? 'elevation' : 'outlined'}
+                          elevation={customizacao.estilo === estilo.value ? 3 : 0}
+                          sx={{
+                            p: 2,
+                            cursor: 'pointer',
+                            border: customizacao.estilo === estilo.value ? `2px solid ${estilo.cor}` : '1px solid #e0e0e0',
+                            '&:hover': {
+                              borderColor: estilo.cor,
+                            }
+                          }}
+                          onClick={() => setCustomizacao({ ...customizacao, estilo: estilo.value })}
+                        >
+                          <FormControlLabel
+                            value={estilo.value}
+                            control={<Radio />}
+                            label={estilo.label}
+                            sx={{ m: 0 }}
+                          />
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: 4,
+                              bgcolor: estilo.cor,
+                              borderRadius: 2,
+                              mt: 1
+                            }}
+                          />
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </RadioGroup>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Cores
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Cor Primária"
+                      type="color"
+                      value={customizacao.corPrimaria}
+                      onChange={(e) => setCustomizacao({ ...customizacao, corPrimaria: e.target.value })}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <PaletteIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Cor Secundária"
+                      type="color"
+                      value={customizacao.corSecundaria}
+                      onChange={(e) => setCustomizacao({ ...customizacao, corSecundaria: e.target.value })}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <PaletteIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Opções de Exibição
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={customizacao.mostrarLogo}
+                          onChange={(e) => setCustomizacao({ ...customizacao, mostrarLogo: e.target.checked })}
+                        />
+                      }
+                      label="Mostrar Logo da Empresa"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={customizacao.mostrarQrCode}
+                          onChange={(e) => setCustomizacao({ ...customizacao, mostrarQrCode: e.target.checked })}
+                        />
+                      }
+                      label="Mostrar QR Code"
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Mensagem Personalizada"
+                  multiline
+                  rows={2}
+                  value={customizacao.mensagemPersonalizada}
+                  onChange={(e) => setCustomizacao({ ...customizacao, mensagemPersonalizada: e.target.value })}
+                  placeholder="Ex: Apresente este cupom e ganhe um brinde especial!"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Prévia do Cupom
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2">
+                        <strong>{cupomSelecionado?.codigo}</strong>
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {cupomSelecionado?.descricao}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      <Typography variant="h6" sx={{ color: customizacao.corPrimaria }}>
+                        {cupomSelecionado?.tipo === 'percentual' 
+                          ? `${cupomSelecionado?.valor}% OFF` 
+                          : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  {customizacao.mensagemPersonalizada && (
+                    <Typography variant="caption" sx={{ color: customizacao.corSecundaria, display: 'block', mt: 1 }}>
+                      "{customizacao.mensagemPersonalizada}"
+                    </Typography>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenImpressaoDialog(false)}>Cancelar</Button>
+            <Button
+              onClick={handleImprimirCupom}
+              variant="contained"
+              startIcon={<PrintIcon />}
+              sx={{ bgcolor: '#4caf50' }}
+            >
+              Imprimir Cupom
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Dialog de Cadastro/Edição */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
@@ -958,6 +1606,144 @@ function GerenciarCupons() {
                   />
                 </Grid>
               )}
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ color: '#9c27b0', mt: 2, mb: 1 }}>
+                  Produtos Elegíveis
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Produtos Elegíveis</InputLabel>
+                  <Select
+                    name="produtosElegiveis"
+                    value={formData.produtosElegiveis}
+                    label="Produtos Elegíveis"
+                    onChange={handleInputChange}
+                  >
+                    <MenuItem value="todos">Todos os produtos</MenuItem>
+                    <MenuItem value="lista">Apenas selecionados</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {formData.produtosElegiveis === 'lista' && (
+                <Grid item xs={12} md={8}>
+                  <Autocomplete
+                    multiple
+                    options={produtos}
+                    getOptionLabel={(option) => `${option.nome} - R$ ${option.precoVenda?.toFixed(2)}`}
+                    value={produtos.filter(p => formData.listaProdutosIds.includes(p.id))}
+                    onChange={(e, newValue) => {
+                      setFormData({
+                        ...formData,
+                        listaProdutosIds: newValue.map(p => p.id)
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Selecionar Produtos"
+                        size="small"
+                        placeholder="Buscar produtos..."
+                      />
+                    )}
+                  />
+                </Grid>
+              )}
+
+              {/* Customização do Cupom */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ color: '#9c27b0', mt: 2, mb: 1 }}>
+                  Customização do Cupom
+                </Typography>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Opções de Personalização</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Estilo do Cupom</InputLabel>
+                          <Select
+                            name="estilo"
+                            value={formData.customizacao.estilo}
+                            label="Estilo do Cupom"
+                            onChange={handleCustomizacaoChange}
+                          >
+                            {estilosCupom.map(estilo => (
+                              <MenuItem key={estilo.value} value={estilo.value}>
+                                {estilo.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          label="Cor Primária"
+                          name="corPrimaria"
+                          type="color"
+                          value={formData.customizacao.corPrimaria}
+                          onChange={handleCustomizacaoChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          label="Cor Secundária"
+                          name="corSecundaria"
+                          type="color"
+                          value={formData.customizacao.corSecundaria}
+                          onChange={handleCustomizacaoChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.customizacao.mostrarLogo}
+                              onChange={handleCustomizacaoChange}
+                              name="mostrarLogo"
+                            />
+                          }
+                          label="Mostrar logo da empresa"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.customizacao.mostrarQrCode}
+                              onChange={handleCustomizacaoChange}
+                              name="mostrarQrCode"
+                            />
+                          }
+                          label="Mostrar QR Code"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Mensagem Personalizada"
+                          name="mensagemPersonalizada"
+                          multiline
+                          rows={2}
+                          value={formData.customizacao.mensagemPersonalizada}
+                          onChange={handleCustomizacaoChange}
+                          placeholder="Ex: Apresente este cupom e ganhe um brinde especial!"
+                          size="small"
+                        />
+                      </Grid>
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              </Grid>
 
               {/* Opções adicionais */}
               <Grid item xs={12}>
