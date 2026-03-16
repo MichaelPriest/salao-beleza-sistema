@@ -67,6 +67,9 @@ import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
 
+// Pages de Cupons (NOVA)
+import GerenciarCupons from './pages/GerenciarCupons';
+
 // Páginas do Cliente
 import ClienteLogin from './pages/ClienteLogin';
 import ClienteCadastro from './pages/ClienteCadastro';
@@ -538,6 +541,15 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ImportarServicos />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+
+                {/* 🔥 NOVA ROTA PARA GERENCIAR CUPONS */}
+                <Route path="/cupons" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <GerenciarCupons />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
