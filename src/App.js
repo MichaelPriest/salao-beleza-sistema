@@ -1,15 +1,19 @@
 // src/App.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
+import { lightTheme, darkTheme } from './theme'; // Importando os temas
 
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
 import { DadosProvider } from './contexts/DadosContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthClienteProvider } from './contexts/AuthClienteContext';
+
+// Services
+import { firebaseService } from './services/firebase';
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -87,33 +91,8 @@ import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
 
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
-    },
-    secondary: {
-      main: '#ff4081',
-      light: '#ff79b0',
-      dark: '#c60055',
-    },
-    background: {
-      default: '#faf5ff',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: '"Poppins", "Roboto", "Arial", sans-serif',
-  },
-  shape: {
-    borderRadius: 12,
-  },
-});
-
 // Componente para rotas do sistema (com sidebar)
-const SistemaLayout = ({ children }) => (
+const SistemaLayout = ({ children, theme }) => (
   <div style={{ display: 'flex', minHeight: '100vh' }}>
     <ModernSidebar />
     <div style={{ 
@@ -126,7 +105,7 @@ const SistemaLayout = ({ children }) => (
       <main style={{ 
         flexGrow: 1, 
         padding: '24px',
-        backgroundColor: '#faf5ff',
+        backgroundColor: theme.palette.background.default,
         minHeight: 'calc(100vh - 64px)',
         overflow: 'auto'
       }}>
@@ -137,15 +116,75 @@ const SistemaLayout = ({ children }) => (
 );
 
 function App() {
+  const [modoEscuro, setModoEscuro] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [configuracoes, setConfiguracoes] = useState(null);
+  const currentTheme = modoEscuro ? darkTheme : lightTheme;
+
+  // Carregar configurações do Firebase
+  useEffect(() => {
+    const carregarConfiguracoes = async () => {
+      try {
+        const configData = await firebaseService.getAll('configuracoes');
+        if (configData && configData.length > 0) {
+          const config = configData[0];
+          setConfiguracoes(config);
+          setModoEscuro(config.tema?.modoEscuro || false);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarConfiguracoes();
+  }, []);
+
+  // Listener para mudanças no modo escuro via localStorage (para sincronizar entre abas)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'modoEscuro') {
+        setModoEscuro(e.newValue === 'true');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: modoEscuro ? '#121212' : '#faf5ff'
+      }}>
+        <GlobalLoading />
+      </div>
+    );
+  }
+
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={currentTheme}>
       <CssBaseline />
       <FeedbackProvider>
         <DadosProvider>
           {/* Provider do SISTEMA (funcionários) */}
           <AuthProvider>
             <GlobalLoading />
-            <Toaster position="top-right" />
+            <Toaster 
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: currentTheme.palette.background.paper,
+                  color: currentTheme.palette.text.primary,
+                  border: `1px solid ${currentTheme.palette.divider}`,
+                },
+              }}
+            />
             <GlobalSnackbar />
             
             <Router>
@@ -200,7 +239,7 @@ function App() {
                   <Route path="pontos" element={<ClientePontos />} />
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
-                  <Route path="notificacoes" element={<ClienteNotificacoes />} /> {/* NOVA ROTA */}
+                  <Route path="notificacoes" element={<ClienteNotificacoes />} />
                 </Route>
                 
                 {/* =========================================== */}
@@ -213,7 +252,7 @@ function App() {
                 {/* DASHBOARD DO SISTEMA (agora em /dashboard) */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernDashboard />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -222,7 +261,7 @@ function App() {
                 {/* CLIENTES */}
                 <Route path="/clientes" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernClientes />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -231,7 +270,7 @@ function App() {
                 {/* SERVIÇOS */}
                 <Route path="/servicos" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernServicos />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -240,7 +279,7 @@ function App() {
                 {/* PROFISSIONAIS */}
                 <Route path="/profissionais" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernProfissionais />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -249,7 +288,7 @@ function App() {
                 {/* AGENDAMENTOS */}
                 <Route path="/agendamentos" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernAgendamentos />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -258,7 +297,7 @@ function App() {
                 {/* AGENDA */}
                 <Route path="/agenda" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Agenda />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -267,7 +306,7 @@ function App() {
                 {/* ATENDIMENTOS */}
                 <Route path="/atendimentos" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernAtendimentos />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -276,7 +315,7 @@ function App() {
                 {/* ATENDIMENTO DETALHE */}
                 <Route path="/atendimento/:id" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernAtendimento />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -285,7 +324,7 @@ function App() {
                 {/* FIDELIDADE */}
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Fidelidade />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -294,7 +333,7 @@ function App() {
                 {/* GERENCIAR FIDELIDADE */}
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <GerenciarFidelidade />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -303,7 +342,7 @@ function App() {
                 {/* RECOMPENSAS */}
                 <Route path="/fidelidade/recompensas" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Recompensas />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -312,7 +351,7 @@ function App() {
                 {/* MEUS PONTOS */}
                 <Route path="/meus-pontos" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <MeusPontos />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -321,7 +360,7 @@ function App() {
                 {/* HISTÓRICO FIDELIDADE */}
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <FidelidadeHistorico />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -330,7 +369,7 @@ function App() {
                 {/* FINANCEIRO */}
                 <Route path="/financeiro" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernFinanceiro />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -339,7 +378,7 @@ function App() {
                 {/* CONTAS A PAGAR */}
                 <Route path="/financeiro/pagar" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ContasPagar />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -348,7 +387,7 @@ function App() {
                 {/* CONTAS A RECEBER */}
                 <Route path="/financeiro/receber" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ContasReceber />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -357,7 +396,7 @@ function App() {
                 {/* FLUXO DE CAIXA */}
                 <Route path="/financeiro/fluxo" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <FluxoCaixa />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -366,7 +405,7 @@ function App() {
                 {/* COMPRAS */}
                 <Route path="/compras" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernCompras />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -375,7 +414,7 @@ function App() {
                 {/* RELATÓRIOS */}
                 <Route path="/relatorios" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernRelatorios />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -384,7 +423,7 @@ function App() {
                 {/* ESTOQUE */}
                 <Route path="/estoque" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernEstoque />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -393,7 +432,7 @@ function App() {
                 {/* FORNECEDORES */}
                 <Route path="/fornecedores" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Fornecedores />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -402,7 +441,7 @@ function App() {
                 {/* ENTRADAS */}
                 <Route path="/entradas" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Entradas />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -411,7 +450,7 @@ function App() {
                 {/* USUÁRIOS */}
                 <Route path="/usuarios" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <GerenciarUsuarios />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -420,7 +459,7 @@ function App() {
                 {/* HISTÓRICO ATENDIMENTOS */}
                 <Route path="/historico" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <HistoricoAtendimentos />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -429,7 +468,7 @@ function App() {
                 {/* AUDITORIA */}
                 <Route path="/auditoria" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <Auditoria />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -438,7 +477,7 @@ function App() {
                 {/* PERFIL */}
                 <Route path="/perfil" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernPerfil />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -447,7 +486,7 @@ function App() {
                 {/* NOTIFICAÇÕES */}
                 <Route path="/notificacoes" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -456,7 +495,7 @@ function App() {
                 {/* CONFIGURAÇÕES */}
                 <Route path="/configuracoes" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ModernConfiguracoes />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -465,7 +504,7 @@ function App() {
                 {/* MINHAS COMISSÕES */}
                 <Route path="/minhas-comissoes" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <MinhasComissoes />
                     </SistemaLayout>
                   </PrivateRoute>
@@ -474,7 +513,7 @@ function App() {
                 {/* IMPORTAR SERVIÇOS */}
                 <Route path="/importar-servicos" element={
                   <PrivateRoute>
-                    <SistemaLayout>
+                    <SistemaLayout theme={currentTheme}>
                       <ImportarServicos />
                     </SistemaLayout>
                   </PrivateRoute>
