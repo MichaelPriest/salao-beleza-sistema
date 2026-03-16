@@ -89,6 +89,12 @@ import {
   Person as PersonIcon,
   Security as SecurityIcon,
   Assignment as AssignmentIcon,
+  Category as CategoryIcon,
+  History as HistoryIcon,
+  Logs as LogsIcon,
+  NotificationsActive as NotificationsActiveIcon,
+  LocalShipping as ShippingIcon,
+  EmojiEvents as PrizeIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -207,24 +213,78 @@ function ModernConfiguracoes() {
   const [cleaningProgress, setCleaningProgress] = useState(0);
   const [cleanResults, setCleanResults] = useState(null);
   const [confirmText, setConfirmText] = useState('');
-  const [selectedCollections, setSelectedCollections] = useState({
-    agendamentos: true,
-    atendimentos: true,
-    clientes: true,
-    comissoes: true,
-    compras: true,
-    contas_pagar: true,
-    contas_receber: true,
-    indicacoes: true,
-    pagamentos: true,
-    pontuacao: true,
-    profissionais: true,
-    produtos: true,
-    recompensas: true,
-    resgates_fidelidade: true,
-    servicos: true,
-    transacoes: true,
-  });
+  
+  // Lista completa de coleções do Firebase
+  const colecoes = [
+    'agendamentos',
+    'atendimentos',
+    'auditoria',
+    'caixa',
+    'categorias_produtos',
+    'clientes',
+    'comissoes',
+    'compras',
+    'config_fidelidade',
+    'configuracoes',
+    'contas_pagar',
+    'contas_receber',
+    'entradas',
+    'fornecedores',
+    'indicacoes',
+    'logs',
+    'movimentacoes_estoque',
+    'notificacoes',
+    'pagamentos',
+    'pontuacao',
+    'produtos',
+    'profissionais',
+    'recompensas',
+    'resgates_fidelidade',
+    'servicos',
+    'transacoes',
+    'usuarios'
+  ];
+
+  const [selectedCollections, setSelectedCollections] = useState(
+    colecoes.reduce((acc, colecao) => {
+      acc[colecao] = true;
+      return acc;
+    }, {})
+  );
+
+  // Mapeamento de ícones por coleção
+  const getIconForCollection = (colecao) => {
+    switch(colecao) {
+      case 'agendamentos': return <EventIcon fontSize="small" />;
+      case 'atendimentos': return <EventIcon fontSize="small" />;
+      case 'auditoria': return <HistoryIcon fontSize="small" />;
+      case 'caixa': return <MoneyIcon fontSize="small" />;
+      case 'categorias_produtos': return <CategoryIcon fontSize="small" />;
+      case 'clientes': return <PersonIcon fontSize="small" />;
+      case 'comissoes': return <MoneyIcon fontSize="small" />;
+      case 'compras': return <ShoppingCartIcon fontSize="small" />;
+      case 'config_fidelidade': return <TrophyIcon fontSize="small" />;
+      case 'configuracoes': return <SettingsIcon fontSize="small" />;
+      case 'contas_pagar': return <ReceiptIcon fontSize="small" />;
+      case 'contas_receber': return <ReceiptIcon fontSize="small" />;
+      case 'entradas': return <InventoryIcon fontSize="small" />;
+      case 'fornecedores': return <ShippingIcon fontSize="small" />;
+      case 'indicacoes': return <GiftIcon fontSize="small" />;
+      case 'logs': return <LogsIcon fontSize="small" />;
+      case 'movimentacoes_estoque': return <InventoryIcon fontSize="small" />;
+      case 'notificacoes': return <NotificationsActiveIcon fontSize="small" />;
+      case 'pagamentos': return <MoneyIcon fontSize="small" />;
+      case 'pontuacao': return <StarIcon fontSize="small" />;
+      case 'produtos': return <InventoryIcon fontSize="small" />;
+      case 'profissionais': return <PersonIcon fontSize="small" />;
+      case 'recompensas': return <GiftIcon fontSize="small" />;
+      case 'resgates_fidelidade': return <GiftIcon fontSize="small" />;
+      case 'servicos': return <BusinessIcon fontSize="small" />;
+      case 'transacoes': return <ReceiptIcon fontSize="small" />;
+      case 'usuarios': return <PeopleIcon fontSize="small" />;
+      default: return <StorageIcon fontSize="small" />;
+    }
+  };
 
   // Usuário a ser preservado
   const USUARIO_PRESERVADO = 'michael.rodrigoraimundo@gmail.com';
@@ -743,7 +803,7 @@ function ModernConfiguracoes() {
         if (!selected) continue;
 
         try {
-          setCleaningProgress(prev => Math.min(prev + 5, 70));
+          setCleaningProgress(prev => Math.min(prev + 2, 70));
           
           // Buscar todos os documentos da coleção
           const documentos = await firebaseService.getAll(collection).catch(() => []);
@@ -780,7 +840,7 @@ function ModernConfiguracoes() {
             };
           }
 
-          setCleaningProgress(prev => Math.min(prev + 10, 90));
+          setCleaningProgress(prev => Math.min(prev + 2, 90));
 
         } catch (error) {
           console.error(`Erro ao limpar coleção ${collection}:`, error);
@@ -1777,18 +1837,15 @@ function ModernConfiguracoes() {
                       O backup incluirá:
                     </Typography>
                     
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
-                      <Chip label="Clientes" size="small" />
-                      <Chip label="Profissionais" size="small" />
-                      <Chip label="Serviços" size="small" />
-                      <Chip label="Agendamentos" size="small" />
-                      <Chip label="Atendimentos" size="small" />
-                      <Chip label="Comissões" size="small" />
-                      <Chip label="Pagamentos" size="small" />
-                      <Chip label="Produtos" size="small" />
-                      <Chip label="Usuários" size="small" />
-                      <Chip label="Configurações" size="small" />
-                      <Chip label="Fidelidade" size="small" icon={<TrophyIcon />} />
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3, maxHeight: 200, overflow: 'auto', p: 1 }}>
+                      {colecoes.map(colecao => (
+                        <Chip 
+                          key={colecao}
+                          label={colecao.replace(/_/g, ' ')} 
+                          size="small"
+                          icon={getIconForCollection(colecao)}
+                        />
+                      ))}
                     </Box>
 
                     <Button
@@ -1970,38 +2027,22 @@ function ModernConfiguracoes() {
                 </Button>
               </Box>
 
-              <Grid container spacing={1}>
-                {Object.entries(selectedCollections).map(([collection, selected]) => (
-                  <Grid item xs={12} sm={6} md={4} key={collection}>
+              <Grid container spacing={1} sx={{ maxHeight: 400, overflow: 'auto', p: 1 }}>
+                {colecoes.map((colecao) => (
+                  <Grid item xs={12} sm={6} md={4} key={colecao}>
                     <FormControlLabel
                       control={
                         <Checkbox
-                          checked={selected}
-                          onChange={() => handleCollectionToggle(collection)}
-                          disabled={collection === 'usuarios'} // Usuários é gerenciado separadamente
+                          checked={selectedCollections[colecao] || false}
+                          onChange={() => handleCollectionToggle(colecao)}
+                          disabled={colecao === 'usuarios'} // Usuários é gerenciado separadamente
                         />
                       }
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {collection === 'usuarios' && <PeopleIcon fontSize="small" />}
-                          {collection === 'agendamentos' && <EventIcon fontSize="small" />}
-                          {collection === 'atendimentos' && <EventIcon fontSize="small" />}
-                          {collection === 'clientes' && <PersonIcon fontSize="small" />}
-                          {collection === 'comissoes' && <AttachMoneyIcon fontSize="small" />}
-                          {collection === 'compras' && <ShoppingCartIcon fontSize="small" />}
-                          {collection === 'contas_pagar' && <ReceiptIcon fontSize="small" />}
-                          {collection === 'contas_receber' && <ReceiptIcon fontSize="small" />}
-                          {collection === 'indicacoes' && <GiftIcon fontSize="small" />}
-                          {collection === 'pagamentos' && <AttachMoneyIcon fontSize="small" />}
-                          {collection === 'pontuacao' && <StarIcon fontSize="small" />}
-                          {collection === 'profissionais' && <PersonIcon fontSize="small" />}
-                          {collection === 'produtos' && <InventoryIcon fontSize="small" />}
-                          {collection === 'recompensas' && <GiftIcon fontSize="small" />}
-                          {collection === 'resgates_fidelidade' && <GiftIcon fontSize="small" />}
-                          {collection === 'servicos' && <BusinessIcon fontSize="small" />}
-                          {collection === 'transacoes' && <ReceiptIcon fontSize="small" />}
+                          {getIconForCollection(colecao)}
                           <Typography variant="body2">
-                            {collection.replace(/_/g, ' ')}
+                            {colecao.replace(/_/g, ' ')}
                           </Typography>
                         </Box>
                       }
@@ -2057,7 +2098,7 @@ function ModernConfiguracoes() {
                 Resultados da Limpeza:
               </Typography>
 
-              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, maxHeight: 300, overflow: 'auto' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
