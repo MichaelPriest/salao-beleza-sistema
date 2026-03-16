@@ -81,6 +81,7 @@ import {
   Info as InfoIcon,
   Search as SearchIcon,
   Lock as LockIcon,
+  ReceiptLong as ReceiptLongIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -149,16 +150,6 @@ const CupomAplicado = ({ cupom, onRemover }) => {
     }
   };
 
-  const getValorDesconto = () => {
-    if (cupom.tipo === 'percentual') {
-      return `${cupom.valor}%`;
-    } else if (cupom.tipo === 'fixo') {
-      return `R$ ${cupom.valor?.toFixed(2)}`;
-    } else {
-      return '';
-    }
-  };
-
   return (
     <Paper
       variant="outlined"
@@ -190,7 +181,7 @@ const CupomAplicado = ({ cupom, onRemover }) => {
         </Box>
         <Box sx={{ textAlign: 'right' }}>
           <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-            {getValorDesconto()}
+            {cupom.tipo === 'percentual' ? `${cupom.valor}%` : `R$ ${cupom.valor?.toFixed(2)}`}
           </Typography>
           {cupom.valorDescontoCalculado > 0 && (
             <Typography variant="caption" color="success.main">
@@ -359,6 +350,8 @@ function ModernAtendimento() {
   const processandoRef = useRef(false);
   const ultimaAcaoRef = useRef({ tipo: '', timestamp: 0, hash: '' });
   const pagamentosProcessadosRef = useRef(new Set());
+  const pontosProcessadosRef = useRef(new Set());
+  const cuponsProcessadosRef = useRef(new Set());
   
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -510,7 +503,6 @@ function ModernAtendimento() {
   // Função para registrar na auditoria com controle de duplicidade
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      // Verificar duplicidade de auditoria (5 segundos)
       if (verificarDuplicidade('auditoria', { acao, entidadeId }, 5000)) {
         console.log('🔄 Auditoria duplicada ignorada:', acao);
         return;
@@ -694,6 +686,10 @@ function ModernAtendimento() {
 
       if (atendimentoData.cuponsAplicados) {
         setCuponsAplicados(atendimentoData.cuponsAplicados);
+        // Preencher set de cupons processados
+        atendimentoData.cuponsAplicados.forEach(c => {
+          if (c.id) cuponsProcessadosRef.current.add(c.id);
+        });
       }
 
       const pagamentosData = await firebaseService.query('pagamentos', [
@@ -773,10 +769,18 @@ function ModernAtendimento() {
       return;
     }
 
+    // Verificar duplicidade na aplicação do cupom
+    if (verificarDuplicidade('aplicar_cupom', { cupomId: cupom.id })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
     setCuponsAplicados([...cuponsAplicados, cupom]);
+    cuponsProcessadosRef.current.add(cupom.id);
     setMostrarValidadorCupom(false);
     
     toast.success(`Cupom ${cupom.codigo} aplicado com sucesso!`);
+    registrarAcaoProcessada('aplicar_cupom', { cupomId: cupom.id });
     
     registrarAuditoria(
       'aplicar_cupom',
@@ -788,10 +792,18 @@ function ModernAtendimento() {
 
   const handleRemoverCupom = (index) => {
     const cupomRemovido = cuponsAplicados[index];
+    
+    if (verificarDuplicidade('remover_cupom', { cupomId: cupomRemovido.id })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
     const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
     setCuponsAplicados(novosCupons);
+    cuponsProcessadosRef.current.delete(cupomRemovido.id);
     
     toast.info(`Cupom ${cupomRemovido.codigo} removido`);
+    registrarAcaoProcessada('remover_cupom', { cupomId: cupomRemovido.id });
     
     registrarAuditoria(
       'remover_cupom',
@@ -974,7 +986,6 @@ function ModernAtendimento() {
   };
 
   const handleConfirmarAtendimento = async () => {
-    // Verificar duplicidade
     if (verificarDuplicidade('confirmar_atendimento', { id })) {
       toast.error('Operação já foi processada. Aguarde um momento.');
       return;
@@ -1063,6 +1074,12 @@ function ModernAtendimento() {
 
   const registrarUsoCupom = async (cupom) => {
     try {
+      // Verificar se cupom já foi processado
+      if (cuponsProcessadosRef.current.has(cupom.id)) {
+        console.log(`🔄 Cupom ${cupom.codigo} já foi processado`);
+        return;
+      }
+
       await cupomService.registrarUso(cupom.id, {
         cupomCodigo: cupom.codigo,
         atendimentoId: id,
@@ -1072,6 +1089,7 @@ function ModernAtendimento() {
         valorTotal: calcularValorTotal(),
       });
       
+      cuponsProcessadosRef.current.add(cupom.id);
       console.log(`✅ Uso do cupom ${cupom.codigo} registrado`);
     } catch (error) {
       console.error('❌ Erro ao registrar uso do cupom:', error);
@@ -1082,6 +1100,13 @@ function ModernAtendimento() {
     if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
 
     try {
+      // Verificar se pontos já foram processados para este atendimento
+      const pontosKey = `${id}_${cliente.id}`;
+      if (pontosProcessadosRef.current.has(pontosKey)) {
+        console.log('🔄 Pontos já foram processados para este atendimento');
+        return;
+      }
+
       const pontuacaoData = {
         clienteId: cliente.id,
         clienteNome: cliente.nome,
@@ -1097,6 +1122,7 @@ function ModernAtendimento() {
       };
 
       await firebaseService.add('pontuacao', pontuacaoData);
+      pontosProcessadosRef.current.add(pontosKey);
       console.log('✅ Pontos de fidelidade adicionados:', pontosGanhos);
       
       setPontosCliente(prev => prev + pontosGanhos);
@@ -1200,7 +1226,6 @@ function ModernAtendimento() {
   };
 
   const handleSalvarPagamento = async () => {
-    // Verificar duplicidade
     const dadosPagamento = {
       formaPagamento: pagamentoForm.formaPagamento,
       valor: pagamentoForm.valor,
@@ -1253,7 +1278,6 @@ function ModernAtendimento() {
       let pagamentoSalvo;
 
       if (pagamentoEditando) {
-        // Verificar se houve alteração no valor
         const valorAlterado = Math.abs(pagamentoEditando.valor - pagamentoData.valor) > 0.01;
         
         if (!valorAlterado) {
@@ -1274,7 +1298,6 @@ function ModernAtendimento() {
         
         toast.success('Pagamento atualizado!');
       } else {
-        // Verificar se já existe pagamento com mesmo valor e forma para este atendimento
         const pagamentoExistente = pagamentos.find(p => 
           Math.abs(p.valor - pagamentoData.valor) < 0.01 && 
           p.formaPagamento === pagamentoData.formaPagamento
@@ -1376,230 +1399,140 @@ function ModernAtendimento() {
     setPagamentoEditando(null);
   };
 
-  const handleFinalizarAtendimento = async () => {
-    // Verificar duplicidade
-    if (verificarDuplicidade('finalizar_atendimento', { id })) {
-      toast.error('Atendimento já está sendo finalizado. Aguarde um momento.');
-      return;
-    }
+  // Função para gerar o texto do comprovante
+  const gerarTextoComprovante = (formato = 'texto') => {
+    const subtotal = calcularSubtotal();
+    const valorTotal = calcularValorTotal();
+    const totalPago = calcularTotalPago();
+    const data = new Date();
+    const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
+    const produtosCortesia = itensProduto.filter(p => p.semCobranca);
+    
+    const linha = formato === 'html' ? '<hr/>' : '\n' + '═'.repeat(40) + '\n';
+    const linhaDupla = formato === 'html' ? '<hr style="border-top: 2px solid #000"/>' : '\n' + '█'.repeat(40) + '\n';
+    const negritoInicio = formato === 'html' ? '<strong>' : '*';
+    const negritoFim = formato === 'html' ? '</strong>' : '*';
+    const quebraLinha = formato === 'html' ? '<br/>' : '\n';
 
-    if (processandoRef.current) {
-      toast.error('Já existe uma operação em andamento');
-      return;
-    }
-
-    // Verificar se já foi finalizado
-    if (atendimento.status === 'finalizado') {
-      toast.error('Este atendimento já foi finalizado');
-      return;
-    }
-
-    try {
-      processandoRef.current = true;
-      setSaving(true);
-      
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
-      const saldoRestante = valorTotal - totalPago;
-      const MARGEM_ERRO = 0.01;
-  
-      if (Math.abs(saldoRestante) > MARGEM_ERRO) {
-        toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
-        return;
-      }
-  
-      console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
-  
-      // 1. Buscar o agendamento associado
-      let agendamentoId = null;
-      
-      if (atendimento.agendamentoId) {
-        agendamentoId = atendimento.agendamentoId;
-      } else {
-        const agendamentos = await firebaseService.query('agendamentos', [
-          { field: 'profissionalId', operator: '==', value: atendimento.profissionalId },
-          { field: 'data', operator: '==', value: atendimento.data },
-          { field: 'status', operator: '==', value: 'agendado' }
-        ]);
-  
-        const servicoId = atendimento.servicoId || itensServico[0]?.id;
-        const agendamentoCorrespondente = agendamentos.find(ag => {
-          if (ag.servicos && Array.isArray(ag.servicos)) {
-            return ag.servicos.some(s => s.id === servicoId);
-          }
-          return ag.servicoId === servicoId;
-        });
-  
-        if (agendamentoCorrespondente) {
-          agendamentoId = agendamentoCorrespondente.id;
-        }
-      }
-  
-      // 2. Atualizar o atendimento
-      const dadosAtendimento = {
-        status: 'finalizado',
-        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        valorTotal,
-        descontoTotal: descontoTotalCupons,
-        itensServico,
-        itensProduto,
-        cuponsAplicados,
-        pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0,
-        updatedAt: Timestamp.now()
-      };
-  
-      if (agendamentoId) {
-        dadosAtendimento.agendamentoId = agendamentoId;
-      }
-  
-      await firebaseService.update('atendimentos', id, dadosAtendimento);
-  
-      // 3. Registrar uso dos cupons
-      for (const cupom of cuponsAplicados) {
-        await registrarUsoCupom(cupom);
-      }
-  
-      // 4. Atualizar agendamento
-      if (agendamentoId) {
-        const agendamentoAtual = await firebaseService.getById('agendamentos', agendamentoId);
-        
-        if (agendamentoAtual) {
-          const dadosAgendamento = {
-            status: 'finalizado',
-            atendimentoRealizado: true,
-            atendimentoId: id,
-            updatedAt: Timestamp.now()
-          };
-  
-          if (agendamentoAtual.servicos && Array.isArray(agendamentoAtual.servicos)) {
-            const servicoRealizado = atendimento.servicoId || itensServico[0]?.id;
-            dadosAgendamento.servicosRealizados = agendamentoAtual.servicos.map(s => ({
-              ...s,
-              realizado: s.id === servicoRealizado
-            }));
-          }
-  
-          await firebaseService.update('agendamentos', agendamentoId, dadosAgendamento);
-        }
-      }
-  
-      // 5. Registrar comissão
-      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
-      const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
-      const percentual = profissional?.comissao || 40;
-      const valorComissao = (calcularTotalServicos() * percentual) / 100;
-  
-      const comissaoData = {
-        atendimentoId: id,
-        profissionalId: atendimento.profissionalId,
-        profissionalNome: profissional?.nome || atendimento.profissionalNome,
-        servicoId: servicoPrincipal?.id || atendimento.servicoId,
-        servicoNome: servicoPrincipal?.nome || atendimento.servicoNome || 'Serviço',
-        valorAtendimento: calcularTotalServicos(),
-        percentual,
-        valor: valorComissao,
-        data: atendimento.data,
-        status: 'pendente',
-        dataRegistro: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-  
-      if (agendamentoId) {
-        comissaoData.agendamentoId = agendamentoId;
-      }
-  
-      await firebaseService.add('comissoes', comissaoData);
-  
-      // 6. Adicionar pontos de fidelidade
-      if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
-        await adicionarPontosFidelidade();
-      }
-  
-      // 7. Processar indicação
-      await processarIndicacao();
-  
-      // 8. Atualizar cliente
-      await firebaseService.update('clientes', cliente.id, {
-        ultimaVisita: new Date().toISOString().split('T')[0],
-        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(),
-        updatedAt: Timestamp.now()
+    let texto = '';
+    
+    // Cabeçalho
+    texto += formato === 'html' ? '<div style="font-family: monospace; padding: 20px;">' : '';
+    texto += `${linhaDupla}`;
+    texto += `${' '.repeat(12)}${negritoInicio}CUPOM FISCAL${negritoFim}${quebraLinha}`;
+    texto += `${' '.repeat(10)}ATENDIMENTO #${id.slice(-6)}${quebraLinha}`;
+    texto += `${linha}`;
+    
+    // Informações do estabelecimento
+    texto += `${negritoInicio}${window.location.hostname || 'Empresa'}${negritoFim}${quebraLinha}`;
+    texto += `CNPJ: 00.000.000/0001-00${quebraLinha}`;
+    texto += `${linha}`;
+    
+    // Data e hora
+    texto += `Data: ${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR')}${quebraLinha}`;
+    texto += `Cliente: ${cliente?.nome || 'Não informado'}${quebraLinha}`;
+    texto += `Profissional: ${profissional?.nome || 'Não informado'}${quebraLinha}`;
+    texto += `${linha}`;
+    
+    // Serviços
+    texto += `${negritoInicio}SERVIÇOS REALIZADOS:${negritoFim}${quebraLinha}`;
+    itensServico.forEach((item, idx) => {
+      texto += `${idx + 1}. ${item.nome}${quebraLinha}`;
+      texto += `   R$ ${item.preco?.toFixed(2)}${quebraLinha}`;
+    });
+    texto += `${linha}`;
+    
+    // Produtos cobrados
+    if (produtosCobrados.length > 0) {
+      texto += `${negritoInicio}PRODUTOS:${negritoFim}${quebraLinha}`;
+      produtosCobrados.forEach((item, idx) => {
+        const total = (item.preco || 0) * (item.quantidadeVenda || 1);
+        texto += `${idx + 1}. ${item.nome}${quebraLinha}`;
+        texto += `   ${item.quantidadeVenda} ${getUnidadeSimbolo(item.unidadeVenda)} x R$ ${item.preco?.toFixed(2)} = R$ ${total.toFixed(2)}${quebraLinha}`;
       });
-
-      // 9. Registrar na auditoria
-      await registrarAuditoria(
-        'finalizar_atendimento',
-        id,
-        `Atendimento finalizado`,
-        { 
-          valorTotal, 
-          descontoTotal: descontoTotalCupons,
-          itensServico: itensServico.length, 
-          itensProduto: itensProduto.length,
-          cuponsAplicados: cuponsAplicados.length,
-          pagamentos: pagamentos.length,
-          pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0
-        }
-      );
-  
-      setActiveStep(3);
-      toast.success('Atendimento finalizado com sucesso!');
-      registrarAcaoProcessada('finalizar_atendimento', { id });
-      
-    } catch (error) {
-      console.error('❌ Erro ao finalizar atendimento:', error);
-      toast.error('Erro ao finalizar atendimento');
-    } finally {
-      processandoRef.current = false;
-      setSaving(false);
+      texto += `${linha}`;
     }
+    
+    // Produtos cortesia
+    if (produtosCortesia.length > 0) {
+      texto += `${negritoInicio}CORTESIA:${negritoFim}${quebraLinha}`;
+      produtosCortesia.forEach((item, idx) => {
+        texto += `${idx + 1}. ${item.nome} - ${item.quantidadeVenda} ${getUnidadeSimbolo(item.unidadeVenda)}${quebraLinha}`;
+        texto += `   ${negritoInicio}GRÁTIS${negritoFim}${quebraLinha}`;
+      });
+      texto += `${linha}`;
+    }
+    
+    // Cupons aplicados
+    if (cuponsAplicados.length > 0) {
+      texto += `${negritoInicio}CUPONS APLICADOS:${negritoFim}${quebraLinha}`;
+      cuponsAplicados.forEach((cupom, idx) => {
+        texto += `${idx + 1}. ${cupom.codigo} - ${cupom.descricao || ''}${quebraLinha}`;
+        texto += `   Desconto: R$ ${cupom.valorDescontoCalculado?.toFixed(2)}${quebraLinha}`;
+      });
+      texto += `${linha}`;
+    }
+    
+    // Resumo financeiro
+    texto += `${negritoInicio}RESUMO:${negritoFim}${quebraLinha}`;
+    texto += `Subtotal: R$ ${subtotal.toFixed(2)}${quebraLinha}`;
+    if (descontoTotalCupons > 0) {
+      texto += `Descontos: -R$ ${descontoTotalCupons.toFixed(2)}${quebraLinha}`;
+    }
+    texto += `${negritoInicio}Total: R$ ${valorTotal.toFixed(2)}${negritoFim}${quebraLinha}`;
+    texto += `Pago: R$ ${totalPago.toFixed(2)}${quebraLinha}`;
+    
+    if (Math.abs(valorTotal - totalPago) > 0.01) {
+      texto += `Restante: R$ ${(valorTotal - totalPago).toFixed(2)}${quebraLinha}`;
+    }
+    texto += `${linha}`;
+    
+    // Pagamentos
+    texto += `${negritoInicio}PAGAMENTOS:${negritoFim}${quebraLinha}`;
+    pagamentos.forEach((p, idx) => {
+      const forma = FORMAS_PAGAMENTO.find(f => f.value === p.formaPagamento)?.label || p.formaPagamento;
+      texto += `${idx + 1}. ${forma}`;
+      if (p.parcelas > 1) texto += ` (${p.parcelas}x)`;
+      texto += `: R$ ${p.valor?.toFixed(2)}${quebraLinha}`;
+    });
+    texto += `${linha}`;
+    
+    // Fidelidade
+    if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
+      texto += `${negritoInicio}FIDELIDADE:${negritoFim}${quebraLinha}`;
+      texto += `Pontos ganhos: +${pontosGanhos}${quebraLinha}`;
+      texto += `Saldo atual: ${pontosCliente + pontosGanhos} pontos${quebraLinha}`;
+      texto += `Nível: ${nivelCliente.toUpperCase()}${quebraLinha}`;
+      texto += `${linha}`;
+    }
+    
+    // Rodapé
+    texto += `${negritoInicio}AGRADECEMOS A PREFERÊNCIA!${negritoFim}${quebraLinha}`;
+    texto += `Volte sempre!${quebraLinha}`;
+    texto += `${linhaDupla}`;
+    
+    if (formato === 'html') {
+      texto += '</div>';
+    }
+    
+    return texto;
   };
 
   const handleEnviarComprovante = async (metodo) => {
-    // Verificar duplicidade (10 segundos para envio de comprovante)
     if (verificarDuplicidade('enviar_comprovante', { metodo }, 10000)) {
       toast.error('Comprovante já foi enviado recentemente. Aguarde um momento.');
       return;
     }
 
     try {
-      const valorTotal = calcularValorTotal();
-      const totalPago = calcularTotalPago();
-      const subtotal = calcularSubtotal();
-      
-      const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
-      
-      let mensagem = `Olá ${cliente?.nome}, seu atendimento foi finalizado!\n\n` +
-        `📋 *Serviços realizados:*\n${itensServico.map(s => `• ${s.nome}: R$ ${s.preco?.toFixed(2)}`).join('\n')}\n\n` +
-        (produtosCobrados.length > 0 ? 
-          `🛍️ *Produtos:*\n${produtosCobrados.map(p => 
-            `• ${p.nome} (${p.quantidadeVenda} ${getUnidadeSimbolo(p.unidadeVenda)}): R$ ${((p.preco || 0) * (p.quantidadeVenda || 1)).toFixed(2)}`
-          ).join('\n')}\n\n` 
-          : '');
-
-      if (cuponsAplicados.length > 0) {
-        mensagem += `🏷️ *Cupons aplicados:*\n`;
-        cuponsAplicados.forEach(c => {
-          mensagem += `• ${c.codigo}: -R$ ${c.valorDescontoCalculado?.toFixed(2)}\n`;
-        });
-        mensagem += `\n`;
-      }
-
-      mensagem += `💰 *Subtotal: R$ ${subtotal.toFixed(2)}*\n` +
-        (descontoTotalCupons > 0 ? `💸 *Desconto: -R$ ${descontoTotalCupons.toFixed(2)}*\n` : '') +
-        `💳 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
-        `💵 *Pago: R$ ${totalPago.toFixed(2)}*\n\n`;
-
-      if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
-        mensagem += `⭐ *Fidelidade:*\n` +
-          `• Pontos ganhos: ${pontosGanhos}\n` +
-          `• Saldo atual: ${pontosCliente + pontosGanhos}\n` +
-          `• Nível: ${nivelCliente.toUpperCase()}\n\n`;
-      }
-
-      mensagem += `Obrigado pela preferência!`;
-      
       if (metodo === 'whatsapp') {
         const numero = cliente?.telefone?.replace(/\D/g, '') || '';
+        if (!numero) {
+          toast.error('Cliente não possui telefone cadastrado');
+          return;
+        }
+        
+        const mensagem = gerarTextoComprovante('texto');
         window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
         
         await registrarAuditoria(
@@ -1615,8 +1548,32 @@ function ModernAtendimento() {
       } else if (metodo === 'email') {
         toast.success('Comprovante enviado por email!');
         registrarAcaoProcessada('enviar_comprovante', { metodo });
+        
       } else if (metodo === 'print') {
-        window.print();
+        const janelaImpressao = window.open('', '_blank');
+        janelaImpressao.document.write(`
+          <html>
+            <head>
+              <title>Comprovante de Atendimento #${id.slice(-6)}</title>
+              <style>
+                body { font-family: 'Courier New', monospace; padding: 20px; }
+                @media print {
+                  body { margin: 0; }
+                  button { display: none; }
+                }
+              </style>
+            </head>
+            <body>
+              ${gerarTextoComprovante('html')}
+              <div style="text-align: center; margin-top: 20px;">
+                <button onclick="window.print()">Imprimir</button>
+                <button onclick="window.close()">Fechar</button>
+              </div>
+            </body>
+          </html>
+        `);
+        janelaImpressao.document.close();
+        
         registrarAcaoProcessada('enviar_comprovante', { metodo });
       }
     } catch (error) {
@@ -2707,7 +2664,7 @@ function ModernAtendimento() {
                           startIcon={<PrintIcon />}
                           onClick={() => handleEnviarComprovante('print')}
                         >
-                          Imprimir
+                          Imprimir Cupom
                         </Button>
                       </Tooltip>
                     </Box>
