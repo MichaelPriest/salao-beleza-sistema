@@ -142,6 +142,10 @@ import {
   Loyalty as LoyaltyIcon,
   Stars as StarsIcon,
   Redeem as RedeemIcon,
+  
+  // 🔥 ÍCONES PARA CUPONS
+  LocalOffer as TagIcon,
+  Sell as SellIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -269,7 +273,7 @@ const menuGroups = [
     icon: <AccountBalanceWalletIcon />,
     items: [
       { 
-        text: 'Dashboard', 
+        text: 'Dashboard Financeiro', 
         icon: <BarChartIcon />, 
         path: '/financeiro', 
         permission: 'financeiro',
@@ -366,6 +370,20 @@ const menuGroups = [
       },
     ],
   },
+  // 🔥 NOVO GRUPO PARA MARKETING
+  {
+    title: 'MARKETING',
+    icon: <SellIcon />,
+    items: [
+      { 
+        text: 'Cupons de Desconto', 
+        icon: <TagIcon />, 
+        path: '/cupons', 
+        permission: 'gerenciar_cupons',
+        cargos: ['admin', 'gerente'] // Apenas admin e gerente
+      },
+    ],
+  },
 ];
 
 // Ícones extras que podem ser usados em badges ou situações específicas
@@ -389,6 +407,8 @@ export const extraIcons = {
   loyalty: <LoyaltyIcon />,
   stars: <StarsIcon />,
   redeem: <RedeemIcon />,
+  tag: <TagIcon />, // 🔥 NOVO ÍCONE PARA CUPONS
+  sell: <SellIcon />, // 🔥 NOVO ÍCONE PARA MARKETING
 };
 
 // Componente Mobile Sidebar Otimizado
