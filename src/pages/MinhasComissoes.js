@@ -326,7 +326,7 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
   );
 };
 
-// Componente para impressão - ESTILIZADO IGUAL AO PDF
+// Componente para impressão - VERSÃO REFINADA
 const RelatorioComissoes = React.forwardRef(({ 
   dados, 
   profissional, 
@@ -349,88 +349,203 @@ const RelatorioComissoes = React.forwardRef(({
 
   // Determinar o nome correto do profissional para exibição
   const getNomeProfissional = () => {
-    // Se for admin e tiver um profissional selecionado no filtro
     if (isAdmin && filtros?.profissionalNome) {
       return filtros.profissionalNome;
     }
-    // Se for admin sem filtro específico
     if (isAdmin && (!filtros?.profissionalId || filtros.profissionalId === 'todos')) {
       return 'Todos os Profissionais';
     }
-    // Se for profissional logado
     return profissional?.nome || 'Todos os Profissionais';
   };
 
   return (
-    <Box ref={ref} sx={{ p: 4, fontFamily: 'Arial', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Cabeçalho com Logo - IGUAL AO PDF */}
-      <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        {configuracoes?.salao?.logo ? (
-          <Box sx={{ mb: 2 }}>
-            <img 
-              src={configuracoes.salao.logo} 
-              alt={configuracoes.salao.nomeFantasia || 'Logo do Salão'}
-              style={{ maxHeight: '80px', maxWidth: '200px', objectFit: 'contain' }}
-            />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
-            <StorefrontIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-            <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
+    <Box ref={ref} sx={{ 
+      p: 4, 
+      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+      maxWidth: '1200px', 
+      margin: '0 auto',
+      backgroundColor: '#ffffff',
+      color: '#1e293b',
+      lineHeight: 1.5
+    }}>
+      {/* HEADER MODERNO */}
+      <Box sx={{ 
+        mb: 4, 
+        pb: 3, 
+        borderBottom: '3px solid',
+        borderImage: 'linear-gradient(90deg, #9c27b0 0%, #ff4081 100%)',
+        borderImageSlice: 1,
+        position: 'relative'
+      }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 2
+        }}>
+          <Box>
+            <Typography variant="h3" sx={{ 
+              fontWeight: 800, 
+              color: '#0f172a',
+              letterSpacing: '-0.02em',
+              fontSize: '2rem'
+            }}>
               {configuracoes?.salao?.nomeFantasia || 'Salão de Beleza'}
             </Typography>
+            {configuracoes?.salao?.cnpj && (
+              <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+                CNPJ: {configuracoes.salao.cnpj}
+              </Typography>
+            )}
           </Box>
-        )}
-        
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333', mb: 2 }}>
-          Relatório de Comissões
-        </Typography>
-        
-        <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>
-          {getNomeProfissional()}
-        </Typography>
-        
-        <Typography variant="subtitle1" color="textSecondary" sx={{ mt: 1 }}>
-          Período: {periodo}
-        </Typography>
-        
-        <Typography variant="subtitle2" color="textSecondary">
-          Emitido em: {new Date().toLocaleString('pt-BR')}
-        </Typography>
-        
-        {configuracoes?.salao?.cnpj && (
-          <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
-            CNPJ: {configuracoes.salao.cnpj}
-          </Typography>
-        )}
+          
+          <Box sx={{ 
+            textAlign: 'right',
+            bgcolor: '#f8fafc',
+            p: 2,
+            borderRadius: 2
+          }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 600, 
+              color: '#9c27b0',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              fontSize: '0.875rem'
+            }}>
+              Relatório de Comissões
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#475569', mt: 0.5 }}>
+              Emitido em: {new Date().toLocaleString('pt-BR')}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 4,
+          mt: 3,
+          flexWrap: 'wrap'
+        }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            gap: 1,
+            bgcolor: '#f1f5f9',
+            px: 2,
+            py: 1,
+            borderRadius: 6
+          }}>
+            <PersonIcon sx={{ fontSize: 18, color: '#475569' }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <span style={{ color: '#64748b' }}>Profissional:</span>{' '}
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>{getNomeProfissional()}</span>
+            </Typography>
+          </Box>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            gap: 1,
+            bgcolor: '#f1f5f9',
+            px: 2,
+            py: 1,
+            borderRadius: 6
+          }}>
+            <CalendarTodayIcon sx={{ fontSize: 18, color: '#475569' }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              <span style={{ color: '#64748b' }}>Período:</span>{' '}
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>{periodo}</span>
+            </Typography>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Resumo - IGUAL AO PDF */}
+      {/* CARDS DE RESUMO */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+        <Typography variant="h5" sx={{ 
+          fontWeight: 600, 
+          mb: 2, 
+          color: '#0f172a',
+          fontSize: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <span style={{ 
+            display: 'inline-block',
+            width: 4,
+            height: 20,
+            backgroundColor: '#9c27b0',
+            borderRadius: 4,
+            marginRight: 8
+          }} />
           Resumo do Período
         </Typography>
+        
         <Grid container spacing={2}>
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body1" color="textSecondary">Total de Comissões</Typography>
-              <Typography variant="h5" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+            <Paper sx={{ 
+              p: 2.5, 
+              bgcolor: '#f8fafc',
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: '#e2e8f0',
+              transition: 'all 0.2s',
+              '&:hover': {
+                borderColor: '#9c27b0',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+              }
+            }}>
+              <Typography variant="body2" sx={{ color: '#64748b', mb: 1, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Total de Comissões
+              </Typography>
+              <Typography variant="h4" sx={{ 
+                color: '#059669', 
+                fontWeight: 700,
+                fontSize: '1.5rem'
+              }}>
                 {formatarMoeda(dados.resumo.totalPeriodo)}
               </Typography>
             </Paper>
           </Grid>
+          
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body1" color="textSecondary">A Receber</Typography>
-              <Typography variant="h5" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
+            <Paper sx={{ 
+              p: 2.5, 
+              bgcolor: '#f8fafc',
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: '#e2e8f0'
+            }}>
+              <Typography variant="body2" sx={{ color: '#64748b', mb: 1, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                A Receber
+              </Typography>
+              <Typography variant="h4" sx={{ 
+                color: '#d97706', 
+                fontWeight: 700,
+                fontSize: '1.5rem'
+              }}>
                 {formatarMoeda(dados.resumo.aReceber)}
               </Typography>
             </Paper>
           </Grid>
+          
           <Grid item xs={4}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body1" color="textSecondary">Recebido</Typography>
-              <Typography variant="h5" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+            <Paper sx={{ 
+              p: 2.5, 
+              bgcolor: '#f8fafc',
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: '#e2e8f0'
+            }}>
+              <Typography variant="body2" sx={{ color: '#64748b', mb: 1, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Recebido
+              </Typography>
+              <Typography variant="h4" sx={{ 
+                color: '#059669', 
+                fontWeight: 700,
+                fontSize: '1.5rem'
+              }}>
                 {formatarMoeda(dados.resumo.recebido)}
               </Typography>
             </Paper>
@@ -438,119 +553,239 @@ const RelatorioComissoes = React.forwardRef(({
         </Grid>
       </Box>
 
-      {/* Estatísticas - IGUAL AO PDF */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-          Estatísticas
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Total de Comissões</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                {dados.resumo.quantidade}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Comissões Pagas</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                {dados.resumo.quantidadePaga}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Comissões Pendentes</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
-                {dados.resumo.quantidadePendente}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="body2" color="textSecondary">Total de Atendimentos</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                {dados.atendimentos.length}
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Atendimentos - IGUAL AO PDF */}
+      {/* TABELA DE ATENDIMENTOS */}
       {dados.atendimentos.length > 0 && (
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+          <Typography variant="h5" sx={{ 
+            fontWeight: 600, 
+            mb: 2, 
+            color: '#0f172a',
+            fontSize: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}>
+            <span style={{ 
+              display: 'inline-block',
+              width: 4,
+              height: 20,
+              backgroundColor: '#9c27b0',
+              borderRadius: 4,
+              marginRight: 8
+            }} />
             Atendimentos no Período
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
+          
+          <TableContainer component={Paper} sx={{ 
+            borderRadius: 3,
+            border: '1px solid',
+            borderColor: '#e2e8f0',
+            overflow: 'hidden'
+          }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Cliente</strong></TableCell>
-                  <TableCell><strong>Serviços</strong></TableCell>
-                  <TableCell align="right"><strong>Valor</strong></TableCell>
-                  <TableCell align="right"><strong>Comissão</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
+                <TableRow sx={{ 
+                  bgcolor: '#f8fafc',
+                  '& th': {
+                    fontWeight: 600,
+                    color: '#1e293b',
+                    fontSize: '0.75rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    borderBottom: '2px solid',
+                    borderColor: '#e2e8f0',
+                    py: 1.5
+                  }
+                }}>
+                  <TableCell>Data</TableCell>
+                  <TableCell>Cliente</TableCell>
+                  <TableCell>Serviços</TableCell>
+                  <TableCell align="right">Valor</TableCell>
+                  <TableCell align="right">Comissão</TableCell>
+                  <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dados.atendimentos.slice(0, 20).map((atendimento, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{formatDate(atendimento.data)}</TableCell>
-                    <TableCell>{atendimento.cliente?.nome || '—'}</TableCell>
-                    <TableCell>
-                      {atendimento.servicos?.map(s => s.nome).join(', ')?.substring(0, 30) || '—'}
+                  <TableRow 
+                    key={index}
+                    sx={{ 
+                      '&:nth-of-type(even)': { bgcolor: '#faf9ff' },
+                      '& td': {
+                        borderBottom: '1px solid',
+                        borderColor: '#e2e8f0',
+                        py: 1.2
+                      }
+                    }}
+                  >
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {formatDate(atendimento.data)}
                     </TableCell>
-                    <TableCell align="right">{formatarMoeda(atendimento.valorTotal)}</TableCell>
-                    <TableCell align="right">
-                      <strong>{formatarMoeda(atendimento.comissaoTotal)}</strong>
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {atendimento.cliente?.nome || '—'}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {atendimento.servicos?.map(s => s.nome).join(', ')?.substring(0, 40) || '—'}
+                      {atendimento.servicos?.map(s => s.nome).join(', ')?.length > 40 && '...'}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                      {formatarMoeda(atendimento.valorTotal)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ 
+                      fontSize: '0.875rem', 
+                      fontWeight: 700,
+                      color: '#059669'
+                    }}>
+                      {formatarMoeda(atendimento.comissaoTotal)}
                     </TableCell>
                     <TableCell>
-                      {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 8px',
+                        borderRadius: 12,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: atendimento.comissaoPaga ? '#ecfdf5' : '#fffbeb',
+                        color: atendimento.comissaoPaga ? '#059669' : '#d97706',
+                        border: '1px solid',
+                        borderColor: atendimento.comissaoPaga ? '#a7f3d0' : '#fed7aa'
+                      }}>
+                        {atendimento.comissaoPaga ? 'Pago' : 'Pendente'}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {dados.atendimentos.length > 20 && (
+            <Typography variant="caption" sx={{ 
+              display: 'block', 
+              textAlign: 'center', 
+              mt: 1, 
+              color: '#64748b',
+              fontStyle: 'italic'
+            }}>
+              Mostrando os 20 atendimentos mais recentes de {dados.atendimentos.length}
+            </Typography>
+          )}
         </Box>
       )}
 
-      {/* Comissões Detalhadas - IGUAL AO PDF */}
+      {/* TABELA DE COMISSÕES */}
       {dados.comissoes.length > 0 && (
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
+          <Typography variant="h5" sx={{ 
+            fontWeight: 600, 
+            mb: 2, 
+            color: '#0f172a',
+            fontSize: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}>
+            <span style={{ 
+              display: 'inline-block',
+              width: 4,
+              height: 20,
+              backgroundColor: '#9c27b0',
+              borderRadius: 4,
+              marginRight: 8
+            }} />
             Detalhamento das Comissões
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
+          
+          <TableContainer component={Paper} sx={{ 
+            borderRadius: 3,
+            border: '1px solid',
+            borderColor: '#e2e8f0',
+            overflow: 'hidden'
+          }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Serviço</strong></TableCell>
-                  <TableCell align="right"><strong>%</strong></TableCell>
-                  <TableCell align="right"><strong>Valor Base</strong></TableCell>
-                  <TableCell align="right"><strong>Comissão</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
-                  <TableCell><strong>Pagamento</strong></TableCell>
+                <TableRow sx={{ 
+                  bgcolor: '#f8fafc',
+                  '& th': {
+                    fontWeight: 600,
+                    color: '#1e293b',
+                    fontSize: '0.75rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    borderBottom: '2px solid',
+                    borderColor: '#e2e8f0',
+                    py: 1.5
+                  }
+                }}>
+                  <TableCell>Data</TableCell>
+                  <TableCell>Serviço</TableCell>
+                  <TableCell align="right">%</TableCell>
+                  <TableCell align="right">Valor Base</TableCell>
+                  <TableCell align="right">Comissão</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Pagamento</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dados.comissoes.slice(0, 20).map((comissao, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{formatDate(comissao.data)}</TableCell>
-                    <TableCell>{comissao.servicoNome}</TableCell>
-                    <TableCell align="right">{comissao.percentual}%</TableCell>
-                    <TableCell align="right">{formatarMoeda(comissao.valorAtendimento)}</TableCell>
-                    <TableCell align="right">
-                      <strong>{formatarMoeda(comissao.valor)}</strong>
+                  <TableRow 
+                    key={index}
+                    sx={{ 
+                      '&:nth-of-type(even)': { bgcolor: '#faf9ff' },
+                      '& td': {
+                        borderBottom: '1px solid',
+                        borderColor: '#e2e8f0',
+                        py: 1.2
+                      }
+                    }}
+                  >
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {formatDate(comissao.data)}
                     </TableCell>
-                    <TableCell>{comissao.status}</TableCell>
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {comissao.servicoNome}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.875rem' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        backgroundColor: '#f3e5f5',
+                        color: '#9c27b0',
+                        fontWeight: 600
+                      }}>
+                        {comissao.percentual}%
+                      </span>
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.875rem' }}>
+                      {formatarMoeda(comissao.valorAtendimento)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ 
+                      fontSize: '0.875rem', 
+                      fontWeight: 700,
+                      color: '#059669'
+                    }}>
+                      {formatarMoeda(comissao.valor)}
+                    </TableCell>
                     <TableCell>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 8px',
+                        borderRadius: 12,
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        backgroundColor: comissao.status === 'pago' ? '#ecfdf5' : 
+                                       comissao.status === 'cancelado' ? '#fef2f2' : '#fffbeb',
+                        color: comissao.status === 'pago' ? '#059669' : 
+                               comissao.status === 'cancelado' ? '#dc2626' : '#d97706',
+                        border: '1px solid',
+                        borderColor: comissao.status === 'pago' ? '#a7f3d0' : 
+                                    comissao.status === 'cancelado' ? '#fecaca' : '#fed7aa'
+                      }}>
+                        {comissao.status}
+                      </span>
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
                       {comissao.dataPagamento ? formatDate(comissao.dataPagamento) : '—'}
                     </TableCell>
                   </TableRow>
@@ -558,58 +793,58 @@ const RelatorioComissoes = React.forwardRef(({
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {dados.comissoes.length > 20 && (
+            <Typography variant="caption" sx={{ 
+              display: 'block', 
+              textAlign: 'center', 
+              mt: 1, 
+              color: '#64748b',
+              fontStyle: 'italic'
+            }}>
+              Mostrando as 20 comissões mais recentes de {dados.comissoes.length}
+            </Typography>
+          )}
         </Box>
       )}
 
-      {/* Resumo por Serviço - IGUAL AO PDF */}
-      {dados.resumo?.porServico && dados.resumo.porServico.length > 0 && (
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#333', borderBottom: '1px solid #ccc', pb: 1 }}>
-            Resumo por Serviço
+      {/* RODAPÉ */}
+      <Box sx={{ 
+        mt: 4, 
+        pt: 3, 
+        borderTop: '1px dashed',
+        borderColor: '#cbd5e1',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        color: '#64748b',
+        fontSize: '0.75rem'
+      }}>
+        <Box>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 500 }}>
+            © {new Date().getFullYear()} - {configuracoes?.salao?.nomeFantasia || 'Sistema de Gestão'}
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                  <TableCell><strong>Serviço</strong></TableCell>
-                  <TableCell align="right"><strong>Quantidade</strong></TableCell>
-                  <TableCell align="right"><strong>Total</strong></TableCell>
-                  <TableCell align="right"><strong>% do Total</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dados.resumo.porServico.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.nome}</TableCell>
-                    <TableCell align="right">{item.quantidade}</TableCell>
-                    <TableCell align="right">{formatarMoeda(item.valor)}</TableCell>
-                    <TableCell align="right">
-                      {((item.valor / dados.resumo.totalPeriodo) * 100).toFixed(1)}%
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+            Documento gerado automaticamente • Não é um documento fiscal
+          </Typography>
         </Box>
-      )}
-
-      {/* Rodapé - IGUAL AO PDF */}
-      <Box sx={{ mt: 4, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 2 }}>
-        <Typography variant="caption">
-          Relatório gerado automaticamente pelo sistema • Documento não fiscal
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-          Filtros aplicados: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
-          Período: {periodo}
-          {filtros.profissionalNome && filtros.profissionalNome !== 'todos' && ` • Profissional: ${filtros.profissionalNome}`}
-        </Typography>
-        {configuracoes?.salao?.contato && (
-          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-            {configuracoes.salao.contato.telefone && `Tel: ${configuracoes.salao.contato.telefone} • `}
-            {configuracoes.salao.contato.email && `Email: ${configuracoes.salao.contato.email}`}
+        
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic' }}>
+            Filtros: {filtros.status !== 'todos' ? `Status: ${filtros.status} • ` : ''}
+            Período: {periodo}
           </Typography>
-        )}
+          {filtros.profissionalNome && filtros.profissionalNome !== 'todos' && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>
+              Profissional: {filtros.profissionalNome}
+            </Typography>
+          )}
+          {configuracoes?.salao?.contato?.telefone && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>
+              {configuracoes.salao.contato.telefone}
+            </Typography>
+          )}
+        </Box>
       </Box>
     </Box>
   );
