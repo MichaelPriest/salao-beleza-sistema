@@ -25,8 +25,33 @@ import {
   Snackbar,
   Avatar,
   Tooltip,
-  Slider,
   InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Checkbox,
+  Radio,
+  RadioGroup,
+  FormLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -37,6 +62,7 @@ import {
   Backup as BackupIcon,
   Refresh as RefreshIcon,
   Delete as DeleteIcon,
+  DeleteSweep as CleanIcon,
   Email as EmailIcon,
   WhatsApp as WhatsAppIcon,
   Sms as SmsIcon,
@@ -46,17 +72,31 @@ import {
   Download as DownloadIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
-  Lock as LockIcon,
-  LockOpen as LockOpenIcon,
   EmojiEvents as TrophyIcon,
   Star as StarIcon,
+  Warning as WarningIcon,
+  ExpandMore as ExpandMoreIcon,
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  Storage as StorageIcon,
+  People as PeopleIcon,
+  Event as EventIcon,
+  Receipt as ReceiptIcon,
+  Inventory as InventoryIcon,
+  ShoppingCart as ShoppingCartIcon,
+  AttachMoney as MoneyIcon,
   CardGiftcard as GiftIcon,
+  Person as PersonIcon,
+  Security as SecurityIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { masks, MaskedInput } from '../utils/plugins';
 import { backupService } from '../services/backupService';
+import { collection, getDocs, deleteDoc, doc, writeBatch } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (
@@ -140,7 +180,7 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
             label="Benefícios"
             size="small"
             placeholder="Separe por vírgula"
-            value={dados?.benefícios?.join(', ') || dados?.beneficios?.join(', ') || ''}
+            value={dados?.beneficios?.join(', ') || dados?.benefícios?.join(', ') || ''}
             onChange={(e) => onUpdate(nivel, 'beneficios', e.target.value.split(',').map(b => b.trim()))}
           />
         </Grid>
@@ -152,6 +192,7 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
 function ModernConfiguracoes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [config, setConfig] = useState(null);
   const [backup, setBackup] = useState(null);
@@ -159,6 +200,34 @@ function ModernConfiguracoes() {
   const [showPassword, setShowPassword] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Estados para limpeza de dados
+  const [openCleanDialog, setOpenCleanDialog] = useState(false);
+  const [cleanStep, setCleanStep] = useState(0);
+  const [cleaningProgress, setCleaningProgress] = useState(0);
+  const [cleanResults, setCleanResults] = useState(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [selectedCollections, setSelectedCollections] = useState({
+    agendamentos: true,
+    atendimentos: true,
+    clientes: true,
+    comissoes: true,
+    compras: true,
+    contas_pagar: true,
+    contas_receber: true,
+    indicacoes: true,
+    pagamentos: true,
+    pontuacao: true,
+    profissionais: true,
+    produtos: true,
+    recompensas: true,
+    resgates_fidelidade: true,
+    servicos: true,
+    transacoes: true,
+  });
+
+  // Usuário a ser preservado
+  const USUARIO_PRESERVADO = 'michael.rodrigoraimundo@gmail.com';
 
   // Configurações de fidelidade
   const [fidelidadeConfig, setFidelidadeConfig] = useState({
@@ -600,6 +669,143 @@ function ModernConfiguracoes() {
     }, 2000);
   };
 
+  // ============================================
+  // FUNÇÕES PARA LIMPEZA DE DADOS
+  // ============================================
+
+  const handleOpenCleanDialog = () => {
+    setOpenCleanDialog(true);
+    setCleanStep(0);
+    setCleanResults(null);
+    setConfirmText('');
+    setCleaningProgress(0);
+  };
+
+  const handleCloseCleanDialog = () => {
+    setOpenCleanDialog(false);
+  };
+
+  const handleSelectAllCollections = (checked) => {
+    const newSelected = {};
+    Object.keys(selectedCollections).forEach(key => {
+      newSelected[key] = checked;
+    });
+    setSelectedCollections(newSelected);
+  };
+
+  const handleCollectionToggle = (collection) => {
+    setSelectedCollections(prev => ({
+      ...prev,
+      [collection]: !prev[collection]
+    }));
+  };
+
+  const contarRegistros = async () => {
+    const contagens = {};
+    let total = 0;
+    
+    for (const [collection, selected] of Object.entries(selectedCollections)) {
+      if (selected) {
+        try {
+          const dados = await firebaseService.getAll(collection).catch(() => []);
+          contagens[collection] = dados.length;
+          total += dados.length;
+        } catch (error) {
+          console.error(`Erro ao contar ${collection}:`, error);
+          contagens[collection] = 0;
+        }
+      }
+    }
+    
+    return { contagens, total };
+  };
+
+  const handleCleanData = async () => {
+    if (confirmText !== 'LIMPAR DADOS') {
+      toast.error('Digite "LIMPAR DADOS" para confirmar');
+      return;
+    }
+
+    try {
+      setCleaning(true);
+      setCleanStep(1);
+      setCleaningProgress(10);
+
+      // Fazer backup automático antes de limpar
+      const backupRealizado = await backupService.criarBackup();
+      setCleaningProgress(30);
+
+      const resultados = {};
+      const erros = [];
+
+      // Limpar cada coleção selecionada
+      for (const [collection, selected] of Object.entries(selectedCollections)) {
+        if (!selected) continue;
+
+        try {
+          setCleaningProgress(prev => Math.min(prev + 5, 70));
+          
+          // Buscar todos os documentos da coleção
+          const documentos = await firebaseService.getAll(collection).catch(() => []);
+          
+          // Para usuários, preservar o usuário específico
+          if (collection === 'usuarios') {
+            const usuariosParaManter = documentos.filter(u => 
+              u.email?.toLowerCase() === USUARIO_PRESERVADO.toLowerCase()
+            );
+            
+            const usuariosParaDeletar = documentos.filter(u => 
+              u.email?.toLowerCase() !== USUARIO_PRESERVADO.toLowerCase()
+            );
+
+            // Deletar usuários que não são o preservado
+            for (const usuario of usuariosParaDeletar) {
+              await firebaseService.delete(collection, usuario.id);
+            }
+
+            resultados[collection] = {
+              total: documentos.length,
+              mantidos: usuariosParaManter.length,
+              removidos: usuariosParaDeletar.length
+            };
+          } else {
+            // Para outras coleções, deletar todos
+            for (const doc of documentos) {
+              await firebaseService.delete(collection, doc.id);
+            }
+            
+            resultados[collection] = {
+              total: documentos.length,
+              removidos: documentos.length
+            };
+          }
+
+          setCleaningProgress(prev => Math.min(prev + 10, 90));
+
+        } catch (error) {
+          console.error(`Erro ao limpar coleção ${collection}:`, error);
+          erros.push({ collection, error: error.message });
+        }
+      }
+
+      setCleaningProgress(100);
+      setCleanResults({ resultados, erros, backup: backupRealizado });
+      setCleanStep(2);
+
+      toast.success('Limpeza de dados concluída!');
+    } catch (error) {
+      console.error('Erro durante limpeza:', error);
+      toast.error('Erro durante a limpeza de dados');
+      setCleanStep(0);
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  // ============================================
+  // RENDER
+  // ============================================
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -668,6 +874,7 @@ function ModernConfiguracoes() {
             <Tab icon={<PaletteIcon />} label="Aparência" />
             <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
+            <Tab icon={<CleanIcon />} label="Limpeza" />
           </Tabs>
 
           {/* Dados do Salão */}
@@ -1672,8 +1879,247 @@ function ModernConfiguracoes() {
               )}
             </Grid>
           </TabPanel>
+
+          {/* Aba de Limpeza de Dados */}
+          <TabPanel value={tabValue} index={6}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert 
+                  severity="warning" 
+                  sx={{ mb: 3 }}
+                  icon={<WarningIcon />}
+                >
+                  <strong>Área Restrita - Limpeza de Dados</strong>
+                  <br />
+                  Esta operação irá remover permanentemente os dados das coleções selecionadas.
+                  A coleção <strong>usuários</strong> será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>.
+                  Recomenda-se fazer um backup antes de prosseguir.
+                </Alert>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3, bgcolor: '#fff3e0' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                    <Avatar sx={{ bgcolor: '#f44336', width: 56, height: 56 }}>
+                      <CleanIcon />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        Limpar Dados do Sistema
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Selecione as coleções que deseja limpar. A coleção "usuários" manterá apenas o usuário administrador.
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="large"
+                    startIcon={<CleanIcon />}
+                    onClick={handleOpenCleanDialog}
+                    sx={{ mb: 3 }}
+                  >
+                    Iniciar Limpeza de Dados
+                  </Button>
+
+                  <Typography variant="caption" color="textSecondary" display="block">
+                    Esta ação é irreversível. Todos os dados selecionados serão permanentemente removidos.
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </TabPanel>
         </CardContent>
       </Card>
+
+      {/* Dialog de Limpeza de Dados */}
+      <Dialog 
+        open={openCleanDialog} 
+        onClose={handleCloseCleanDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#f44336', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon />
+            <Typography variant="h6">Limpeza de Dados</Typography>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent>
+          {cleanStep === 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+                Selecione as coleções para limpar:
+              </Typography>
+              
+              <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+                <Button 
+                  size="small" 
+                  onClick={() => handleSelectAllCollections(true)}
+                >
+                  Selecionar todas
+                </Button>
+                <Button 
+                  size="small" 
+                  onClick={() => handleSelectAllCollections(false)}
+                >
+                  Desmarcar todas
+                </Button>
+              </Box>
+
+              <Grid container spacing={1}>
+                {Object.entries(selectedCollections).map(([collection, selected]) => (
+                  <Grid item xs={12} sm={6} md={4} key={collection}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={selected}
+                          onChange={() => handleCollectionToggle(collection)}
+                          disabled={collection === 'usuarios'} // Usuários é gerenciado separadamente
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {collection === 'usuarios' && <PeopleIcon fontSize="small" />}
+                          {collection === 'agendamentos' && <EventIcon fontSize="small" />}
+                          {collection === 'atendimentos' && <EventIcon fontSize="small" />}
+                          {collection === 'clientes' && <PersonIcon fontSize="small" />}
+                          {collection === 'comissoes' && <AttachMoneyIcon fontSize="small" />}
+                          {collection === 'compras' && <ShoppingCartIcon fontSize="small" />}
+                          {collection === 'contas_pagar' && <ReceiptIcon fontSize="small" />}
+                          {collection === 'contas_receber' && <ReceiptIcon fontSize="small" />}
+                          {collection === 'indicacoes' && <GiftIcon fontSize="small" />}
+                          {collection === 'pagamentos' && <AttachMoneyIcon fontSize="small" />}
+                          {collection === 'pontuacao' && <StarIcon fontSize="small" />}
+                          {collection === 'profissionais' && <PersonIcon fontSize="small" />}
+                          {collection === 'produtos' && <InventoryIcon fontSize="small" />}
+                          {collection === 'recompensas' && <GiftIcon fontSize="small" />}
+                          {collection === 'resgates_fidelidade' && <GiftIcon fontSize="small" />}
+                          {collection === 'servicos' && <BusinessIcon fontSize="small" />}
+                          {collection === 'transacoes' && <ReceiptIcon fontSize="small" />}
+                          <Typography variant="body2">
+                            {collection.replace(/_/g, ' ')}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Alert severity="info" sx={{ mt: 3 }}>
+                <strong>Nota sobre usuários:</strong> A coleção "usuários" será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>. 
+                Todos os outros usuários serão removidos.
+              </Alert>
+
+              <Box sx={{ mt: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Confirmação"
+                  placeholder='Digite "LIMPAR DADOS" para confirmar'
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  size="small"
+                  helperText="Esta ação não pode ser desfeita"
+                />
+              </Box>
+            </Box>
+          )}
+
+          {cleanStep === 1 && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="h6" gutterBottom>
+                Limpando dados...
+              </Typography>
+              <CircularProgress size={60} sx={{ my: 3, color: '#f44336' }} />
+              <LinearProgress variant="determinate" value={cleaningProgress} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {cleaningProgress}% concluído
+              </Typography>
+            </Box>
+          )}
+
+          {cleanStep === 2 && cleanResults && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Limpeza concluída com sucesso!
+                {cleanResults.backup && (
+                  <Typography variant="caption" display="block">
+                    Backup automático criado em: {new Date(cleanResults.backup.dataBackup).toLocaleString('pt-BR')}
+                  </Typography>
+                )}
+              </Alert>
+
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                Resultados da Limpeza:
+              </Typography>
+
+              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Coleção</TableCell>
+                      <TableCell align="right">Total</TableCell>
+                      <TableCell align="right">Removidos</TableCell>
+                      <TableCell align="right">Mantidos</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Object.entries(cleanResults.resultados).map(([collection, res]) => (
+                      <TableRow key={collection}>
+                        <TableCell>{collection}</TableCell>
+                        <TableCell align="right">{res.total}</TableCell>
+                        <TableCell align="right">{res.removidos}</TableCell>
+                        <TableCell align="right">{res.mantidos || 0}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {cleanResults.erros && cleanResults.erros.length > 0 && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Erros encontrados:</Typography>
+                  {cleanResults.erros.map((erro, idx) => (
+                    <Typography key={idx} variant="caption" display="block">
+                      {erro.collection}: {erro.error}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          {cleanStep === 0 && (
+            <>
+              <Button onClick={handleCloseCleanDialog}>Cancelar</Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleCleanData}
+                disabled={confirmText !== 'LIMPAR DADOS' || cleaning}
+              >
+                {cleaning ? 'Limpando...' : 'Confirmar Limpeza'}
+              </Button>
+            </>
+          )}
+          {cleanStep === 1 && (
+            <Button onClick={handleCloseCleanDialog} disabled>
+              Aguarde...
+            </Button>
+          )}
+          {cleanStep === 2 && (
+            <Button onClick={handleCloseCleanDialog} variant="contained">
+              Fechar
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar */}
       <Snackbar
@@ -1690,4 +2136,4 @@ function ModernConfiguracoes() {
   );
 }
 
-export default ModernConfiguracoes;             
+export default ModernConfiguracoes;
