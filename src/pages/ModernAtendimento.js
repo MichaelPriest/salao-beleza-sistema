@@ -1628,16 +1628,64 @@ function ModernAtendimento() {
     
     let texto = '';
     
-    // Cabeçalho
-    texto += formato === 'html' ? '<div style="font-family: monospace; padding: 20px;">' : '';
+    // Cabeçalho com Logo (apenas para HTML)
+    texto += formato === 'html' ? '<div style="font-family: monospace; padding: 20px; max-width: 400px; margin: 0 auto;">' : '';
+    
+    if (formato === 'html' && configuracoes?.salao?.logo) {
+      texto += `
+        <div style="text-align: center; margin-bottom: 20px;">
+          <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: 150px; max-height: 80px; object-fit: contain;">
+        </div>
+      `;
+    }
+    
     texto += `${linhaDupla}`;
-    texto += `${' '.repeat(12)}${negritoInicio}CUPOM FISCAL${negritoFim}${quebraLinha}`;
-    texto += `${' '.repeat(10)}ATENDIMENTO #${id.slice(-6)}${quebraLinha}`;
+    
+    // Nome da empresa com estilo
+    if (formato === 'html') {
+      texto += `<div style="text-align: center; font-size: 18px; font-weight: bold; margin: 5px 0;">${configuracoes?.salao?.nome || 'BeautyPro'}</div>`;
+      texto += `<div style="text-align: center; font-size: 12px;">ATENDIMENTO #${id.slice(-6)}</div>`;
+    } else {
+      texto += `${' '.repeat(8)}${negritoInicio}${configuracoes?.salao?.nome || 'BeautyPro'}${negritoFim}${quebraLinha}`;
+      texto += `${' '.repeat(6)}ATENDIMENTO #${id.slice(-6)}${quebraLinha}`;
+    }
+    
     texto += `${linha}`;
     
     // Informações do estabelecimento
-    texto += `${negritoInicio}${window.location.hostname || 'Empresa'}${negritoFim}${quebraLinha}`;
-    texto += `CNPJ: 00.000.000/0001-00${quebraLinha}`;
+    if (configuracoes?.salao) {
+      if (formato === 'html') {
+        texto += `<div style="font-size: 11px;">`;
+      }
+      
+      if (configuracoes.salao.cnpj) texto += `CNPJ: ${configuracoes.salao.cnpj}${quebraLinha}`;
+      if (configuracoes.salao.ie) texto += `IE: ${configuracoes.salao.ie}${quebraLinha}`;
+      
+      // Endereço
+      if (configuracoes.salao.endereco) {
+        const end = configuracoes.salao.endereco;
+        const enderecoCompleto = [
+          end.logradouro,
+          end.bairro,
+          end.cidade,
+          end.estado,
+          end.cep
+        ].filter(Boolean).join(', ');
+        if (enderecoCompleto) texto += `${enderecoCompleto}${quebraLinha}`;
+      }
+      
+      // Contato
+      if (configuracoes.salao.contato) {
+        const cont = configuracoes.salao.contato;
+        if (cont.telefone) texto += `Tel: ${cont.telefone}${quebraLinha}`;
+        if (cont.whatsapp) texto += `WhatsApp: ${cont.whatsapp}${quebraLinha}`;
+        if (cont.email) texto += `Email: ${cont.email}${quebraLinha}`;
+      }
+      
+      if (formato === 'html') {
+        texto += `</div>`;
+      }
+    }
     texto += `${linha}`;
     
     // Data e hora
@@ -1719,8 +1767,33 @@ function ModernAtendimento() {
     }
     
     // Rodapé
+    if (formato === 'html') {
+      texto += `<div style="text-align: center; margin-top: 20px;">`;
+    }
+    
     texto += `${negritoInicio}AGRADECEMOS A PREFERÊNCIA!${negritoFim}${quebraLinha}`;
     texto += `Volte sempre!${quebraLinha}`;
+    
+    // Redes sociais
+    if (configuracoes?.salao?.contato) {
+      const cont = configuracoes.salao.contato;
+      const redes = [];
+      if (cont.instagram) redes.push(`Instagram: @${cont.instagram.replace('@', '')}`);
+      if (cont.facebook) redes.push(`Facebook: ${cont.facebook}`);
+      if (cont.site) redes.push(`Site: ${cont.site}`);
+      
+      if (redes.length > 0) {
+        texto += `${linha}`;
+        redes.forEach(rede => {
+          texto += `${rede}${quebraLinha}`;
+        });
+      }
+    }
+    
+    if (formato === 'html') {
+      texto += `</div>`;
+    }
+    
     texto += `${linhaDupla}`;
     
     if (formato === 'html') {
@@ -1735,7 +1808,7 @@ function ModernAtendimento() {
       toast.error('Comprovante já foi enviado recentemente. Aguarde um momento.');
       return;
     }
-
+  
     try {
       if (metodo === 'whatsapp') {
         const numero = cliente?.telefone?.replace(/\D/g, '') || '';
@@ -1763,23 +1836,127 @@ function ModernAtendimento() {
         
       } else if (metodo === 'print') {
         const janelaImpressao = window.open('', '_blank');
+        const corPrimaria = configuracoes?.tema?.corPrimaria || '#9c27b0';
+        const corSecundaria = configuracoes?.tema?.corSecundaria || '#ff4081';
+        const fonte = configuracoes?.tema?.fonte || 'Courier New';
+        
         janelaImpressao.document.write(`
           <html>
             <head>
               <title>Comprovante de Atendimento #${id.slice(-6)}</title>
               <style>
-                body { font-family: 'Courier New', monospace; padding: 20px; }
+                body { 
+                  font-family: '${fonte}', monospace; 
+                  padding: 20px; 
+                  background: #fff;
+                  color: #333;
+                  display: flex;
+                  justify-content: center;
+                }
+                .container {
+                  max-width: 400px;
+                  width: 100%;
+                  background: white;
+                  padding: 20px;
+                  border-radius: 8px;
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .header {
+                  text-align: center;
+                  margin-bottom: 20px;
+                }
+                .logo {
+                  max-width: 150px;
+                  max-height: 80px;
+                  object-fit: contain;
+                  margin-bottom: 10px;
+                }
+                .empresa-nome {
+                  font-size: 18px;
+                  font-weight: bold;
+                  color: ${corPrimaria};
+                  margin: 5px 0;
+                }
+                .atendimento-id {
+                  font-size: 12px;
+                  color: #666;
+                }
+                .linha {
+                  border-top: 1px dashed #ccc;
+                  margin: 10px 0;
+                }
+                .linha-dupla {
+                  border-top: 2px solid ${corPrimaria};
+                  margin: 15px 0;
+                }
+                .destaque {
+                  font-weight: bold;
+                  color: ${corSecundaria};
+                }
+                .total {
+                  font-size: 16px;
+                  font-weight: bold;
+                  color: ${corPrimaria};
+                }
+                .rodape {
+                  text-align: center;
+                  margin-top: 20px;
+                  font-size: 12px;
+                  color: #666;
+                }
+                .redes {
+                  font-size: 11px;
+                  color: #888;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                }
+                td {
+                  padding: 3px 0;
+                }
+                .valor {
+                  text-align: right;
+                }
                 @media print {
-                  body { margin: 0; }
-                  button { display: none; }
+                  body { 
+                    padding: 0; 
+                    background: white;
+                  }
+                  .container {
+                    box-shadow: none;
+                    padding: 10px;
+                  }
+                  button { 
+                    display: none; 
+                  }
                 }
               </style>
             </head>
             <body>
-              ${gerarTextoComprovante('html')}
-              <div style="text-align: center; margin-top: 20px;">
-                <button onclick="window.print()">Imprimir</button>
-                <button onclick="window.close()">Fechar</button>
+              <div class="container">
+                ${gerarTextoComprovante('html')}
+                <div style="text-align: center; margin-top: 20px;">
+                  <button onclick="window.print()" style="
+                    background: ${corPrimaria};
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    margin-right: 10px;
+                    font-family: ${fonte};
+                  ">🖨️ Imprimir</button>
+                  <button onclick="window.close()" style="
+                    background: #f44336;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-family: ${fonte};
+                  ">✖️ Fechar</button>
+                </div>
               </div>
             </body>
           </html>
