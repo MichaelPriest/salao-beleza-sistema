@@ -239,7 +239,7 @@ function ModernConfiguracoes() {
     'profissionais',
     'recompensas',
     'resgates_fidelidade',
-    'servicos',
+    'servicos', // ✅ Está aqui
     'transacoes',
     'usuarios'
   ];
