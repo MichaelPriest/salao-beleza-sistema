@@ -408,6 +408,10 @@ function ModernAtendimento() {
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
 
+  // ============================================
+  // FUNÇÕES AUXILIARES
+  // ============================================
+
   // Função para gerar hash de uma ação
   const gerarHashAcao = (tipo, dados) => {
     const str = `${tipo}_${JSON.stringify(dados)}_${Date.now()}`;
@@ -444,62 +448,6 @@ function ModernAtendimento() {
     };
   };
 
-  // Carregar usuário atual
-  useEffect(() => {
-    try {
-      const usuarioStr = localStorage.getItem('usuario');
-      if (usuarioStr) {
-        const usuarioData = JSON.parse(usuarioStr);
-        setUsuario(usuarioData);
-        console.log('✅ Usuário carregado:', usuarioData);
-      } else {
-        console.warn('⚠️ Nenhum usuário encontrado no localStorage');
-        setUsuario({ id: 'sistema', nome: 'Sistema' });
-      }
-    } catch (error) {
-      console.error('Erro ao carregar usuário:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    carregarDados();
-    carregarServicosEProdutos();
-    carregarConfigFidelidade();
-  }, [id]);
-
-  useEffect(() => {
-    if (atendimento && atendimento.horaInicio && !atendimento.horaFim) {
-      const calcularTempo = () => {
-        const inicio = new Date(`${atendimento.data}T${atendimento.horaInicio}`);
-        const agora = new Date();
-        const diff = Math.floor((agora - inicio) / 60000);
-        const horas = Math.floor(diff / 60);
-        const minutos = diff % 60;
-        setTempoDecorrido(`${horas}h ${minutos}min`);
-      };
-
-      calcularTempo();
-      const interval = setInterval(calcularTempo, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [atendimento]);
-
-  useEffect(() => {
-    if (cliente?.id && fidelidadeConfig?.ativo) {
-      carregarPontosCliente(cliente.id);
-    }
-  }, [cliente, fidelidadeConfig]);
-
-  useEffect(() => {
-    if (fidelidadeConfig?.ativo && cliente) {
-      calcularPontosGanhos();
-    }
-  }, [itensServico, fidelidadeConfig, cliente]);
-
-  useEffect(() => {
-    calcularDescontoCupons();
-  }, [cuponsAplicados, itensServico, itensProduto]);
-
   // Função para registrar na auditoria com controle de duplicidade
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
@@ -534,6 +482,10 @@ function ModernAtendimento() {
       console.error('❌ Erro ao registrar auditoria:', error);
     }
   };
+
+  // ============================================
+  // FUNÇÕES DE CÁLCULO
+  // ============================================
 
   const calcularTotalServicos = () => {
     return itensServico.reduce((acc, item) => acc + (item.preco || 0), 0);
@@ -590,6 +542,82 @@ function ModernAtendimento() {
   const calcularSaldoRestante = () => {
     return calcularValorTotal() - calcularTotalPago();
   };
+
+  const getUnidadeSimbolo = (unidade) => {
+    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
+    return unidadeEncontrada?.simbolo || unidade;
+  };
+
+  const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
+    if (!produto) return 0;
+    const estoqueEmUnidadeVenda = produto.quantidadeEstoque * (produto.fatorConversao || 1);
+    return Math.floor(estoqueEmUnidadeVenda);
+  };
+
+  const converterParaEstoque = (produto, quantidadeVenda) => {
+    if (!produto) return 0;
+    return quantidadeVenda / (produto.fatorConversao || 1);
+  };
+
+  // ============================================
+  // FUNÇÕES DE CARREGAMENTO
+  // ============================================
+
+  // Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        const usuarioData = JSON.parse(usuarioStr);
+        setUsuario(usuarioData);
+        console.log('✅ Usuário carregado:', usuarioData);
+      } else {
+        console.warn('⚠️ Nenhum usuário encontrado no localStorage');
+        setUsuario({ id: 'sistema', nome: 'Sistema' });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregarDados();
+    carregarServicosEProdutos();
+    carregarConfigFidelidade();
+  }, [id]);
+
+  useEffect(() => {
+    if (atendimento && atendimento.horaInicio && !atendimento.horaFim) {
+      const calcularTempo = () => {
+        const inicio = new Date(`${atendimento.data}T${atendimento.horaInicio}`);
+        const agora = new Date();
+        const diff = Math.floor((agora - inicio) / 60000);
+        const horas = Math.floor(diff / 60);
+        const minutos = diff % 60;
+        setTempoDecorrido(`${horas}h ${minutos}min`);
+      };
+
+      calcularTempo();
+      const interval = setInterval(calcularTempo, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [atendimento]);
+
+  useEffect(() => {
+    if (cliente?.id && fidelidadeConfig?.ativo) {
+      carregarPontosCliente(cliente.id);
+    }
+  }, [cliente, fidelidadeConfig]);
+
+  useEffect(() => {
+    if (fidelidadeConfig?.ativo && cliente) {
+      calcularPontosGanhos();
+    }
+  }, [itensServico, fidelidadeConfig, cliente]);
+
+  useEffect(() => {
+    calcularDescontoCupons();
+  }, [cuponsAplicados, itensServico, itensProduto]);
 
   const carregarConfigFidelidade = async () => {
     try {
@@ -736,21 +764,9 @@ function ModernAtendimento() {
     }
   };
 
-  const getUnidadeSimbolo = (unidade) => {
-    const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
-    return unidadeEncontrada?.simbolo || unidade;
-  };
-
-  const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
-    if (!produto) return 0;
-    const estoqueEmUnidadeVenda = produto.quantidadeEstoque * (produto.fatorConversao || 1);
-    return Math.floor(estoqueEmUnidadeVenda);
-  };
-
-  const converterParaEstoque = (produto, quantidadeVenda) => {
-    if (!produto) return 0;
-    return quantidadeVenda / (produto.fatorConversao || 1);
-  };
+  // ============================================
+  // FUNÇÕES DE MANIPULAÇÃO DE ITENS
+  // ============================================
 
   const servicosFiltrados = servicosDisponiveis.filter(servico => 
     servico.nome?.toLowerCase().includes(buscaServico.toLowerCase()) ||
@@ -762,80 +778,6 @@ function ModernAtendimento() {
     produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
-
-  const handleAplicarCupom = (cupom) => {
-    if (cuponsAplicados.some(c => c.id === cupom.id)) {
-      toast.error('Este cupom já foi aplicado');
-      return;
-    }
-
-    // Verificar duplicidade na aplicação do cupom
-    if (verificarDuplicidade('aplicar_cupom', { cupomId: cupom.id })) {
-      toast.error('Operação já foi processada. Aguarde um momento.');
-      return;
-    }
-
-    setCuponsAplicados([...cuponsAplicados, cupom]);
-    cuponsProcessadosRef.current.add(cupom.id);
-    setMostrarValidadorCupom(false);
-    
-    toast.success(`Cupom ${cupom.codigo} aplicado com sucesso!`);
-    registrarAcaoProcessada('aplicar_cupom', { cupomId: cupom.id });
-    
-    registrarAuditoria(
-      'aplicar_cupom',
-      id,
-      `Cupom ${cupom.codigo} aplicado`,
-      { cupomId: cupom.id, valorDesconto: cupom.valor }
-    );
-  };
-
-  const handleRemoverCupom = (index) => {
-    const cupomRemovido = cuponsAplicados[index];
-    
-    if (verificarDuplicidade('remover_cupom', { cupomId: cupomRemovido.id })) {
-      toast.error('Operação já foi processada. Aguarde um momento.');
-      return;
-    }
-
-    const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
-    setCuponsAplicados(novosCupons);
-    cuponsProcessadosRef.current.delete(cupomRemovido.id);
-    
-    toast.info(`Cupom ${cupomRemovido.codigo} removido`);
-    registrarAcaoProcessada('remover_cupom', { cupomId: cupomRemovido.id });
-    
-    registrarAuditoria(
-      'remover_cupom',
-      id,
-      `Cupom ${cupomRemovido.codigo} removido`,
-      { cupomId: cupomRemovido.id }
-    );
-  };
-
-  const verificarCuponsProximosExpiracao = async () => {
-    try {
-      if (!cliente?.id) return;
-      
-      const cupons = await cupomService.verificarCuponsExpirados(cliente.id);
-      setCuponsProximosExpiracao(cupons);
-      
-      if (cupons.length > 0) {
-        toast.info(`${cupons.length} cupom(ns) próximo(s) de expirar!`, {
-          icon: '⏰',
-          duration: 5000
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao verificar cupons próximos de expirar:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (cliente?.id) {
-      verificarCuponsProximosExpiracao();
-    }
-  }, [cliente]);
 
   const handleAdicionarServico = () => {
     if (!servicoSelecionado) {
@@ -985,6 +927,87 @@ function ModernAtendimento() {
     setItensProduto(novosItens);
   };
 
+  // ============================================
+  // FUNÇÕES DE CUPONS
+  // ============================================
+
+  const handleAplicarCupom = (cupom) => {
+    if (cuponsAplicados.some(c => c.id === cupom.id)) {
+      toast.error('Este cupom já foi aplicado');
+      return;
+    }
+
+    if (verificarDuplicidade('aplicar_cupom', { cupomId: cupom.id })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
+    setCuponsAplicados([...cuponsAplicados, cupom]);
+    cuponsProcessadosRef.current.add(cupom.id);
+    setMostrarValidadorCupom(false);
+    
+    toast.success(`Cupom ${cupom.codigo} aplicado com sucesso!`);
+    registrarAcaoProcessada('aplicar_cupom', { cupomId: cupom.id });
+    
+    registrarAuditoria(
+      'aplicar_cupom',
+      id,
+      `Cupom ${cupom.codigo} aplicado`,
+      { cupomId: cupom.id, valorDesconto: cupom.valor }
+    );
+  };
+
+  const handleRemoverCupom = (index) => {
+    const cupomRemovido = cuponsAplicados[index];
+    
+    if (verificarDuplicidade('remover_cupom', { cupomId: cupomRemovido.id })) {
+      toast.error('Operação já foi processada. Aguarde um momento.');
+      return;
+    }
+
+    const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
+    setCuponsAplicados(novosCupons);
+    cuponsProcessadosRef.current.delete(cupomRemovido.id);
+    
+    toast.info(`Cupom ${cupomRemovido.codigo} removido`);
+    registrarAcaoProcessada('remover_cupom', { cupomId: cupomRemovido.id });
+    
+    registrarAuditoria(
+      'remover_cupom',
+      id,
+      `Cupom ${cupomRemovido.codigo} removido`,
+      { cupomId: cupomRemovido.id }
+    );
+  };
+
+  const verificarCuponsProximosExpiracao = async () => {
+    try {
+      if (!cliente?.id) return;
+      
+      const cupons = await cupomService.verificarCuponsExpirados(cliente.id);
+      setCuponsProximosExpiracao(cupons);
+      
+      if (cupons.length > 0) {
+        toast.info(`${cupons.length} cupom(ns) próximo(s) de expirar!`, {
+          icon: '⏰',
+          duration: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao verificar cupons próximos de expirar:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (cliente?.id) {
+      verificarCuponsProximosExpiracao();
+    }
+  }, [cliente]);
+
+  // ============================================
+  // FUNÇÕES DE ATENDIMENTO
+  // ============================================
+
   const handleConfirmarAtendimento = async () => {
     if (verificarDuplicidade('confirmar_atendimento', { id })) {
       toast.error('Operação já foi processada. Aguarde um momento.');
@@ -1035,6 +1058,10 @@ function ModernAtendimento() {
     }
   };
 
+  // ============================================
+  // FUNÇÕES DE PAGAMENTO
+  // ============================================
+
   const criarTransacaoFinanceira = async (pagamento) => {
     try {
       const transacao = {
@@ -1072,157 +1099,30 @@ function ModernAtendimento() {
     }
   };
 
-  const registrarUsoCupom = async (cupom) => {
-    try {
-      // Verificar se cupom já foi processado
-      if (cuponsProcessadosRef.current.has(cupom.id)) {
-        console.log(`🔄 Cupom ${cupom.codigo} já foi processado`);
-        return;
-      }
-
-      await cupomService.registrarUso(cupom.id, {
-        cupomCodigo: cupom.codigo,
-        atendimentoId: id,
-        clienteId: cliente?.id,
-        clienteNome: cliente?.nome,
-        valorDesconto: cupom.valorDescontoCalculado || 0,
-        valorTotal: calcularValorTotal(),
+  const handleOpenPagamentoDialog = (pagamento = null) => {
+    if (pagamento) {
+      setPagamentoEditando(pagamento);
+      setPagamentoForm({
+        formaPagamento: pagamento.formaPagamento || 'dinheiro',
+        valor: pagamento.valor,
+        parcelas: pagamento.parcelas || 1,
+        observacoes: pagamento.observacoes || ''
       });
-      
-      cuponsProcessadosRef.current.add(cupom.id);
-      console.log(`✅ Uso do cupom ${cupom.codigo} registrado`);
-    } catch (error) {
-      console.error('❌ Erro ao registrar uso do cupom:', error);
+    } else {
+      setPagamentoEditando(null);
+      setPagamentoForm({
+        formaPagamento: 'dinheiro',
+        valor: '',
+        parcelas: 1,
+        observacoes: ''
+      });
     }
+    setOpenPagamentoDialog(true);
   };
 
-  const adicionarPontosFidelidade = async () => {
-    if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
-
-    try {
-      // Verificar se pontos já foram processados para este atendimento
-      const pontosKey = `${id}_${cliente.id}`;
-      if (pontosProcessadosRef.current.has(pontosKey)) {
-        console.log('🔄 Pontos já foram processados para este atendimento');
-        return;
-      }
-
-      const pontuacaoData = {
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        quantidade: pontosGanhos,
-        tipo: 'credito',
-        motivo: `Atendimento finalizado - ${itensServico.map(s => s.nome).join(', ')}`,
-        data: new Date().toISOString(),
-        atendimentoId: id,
-        nivelNoMomento: nivelCliente,
-        multiplicadorAplicado: fidelidadeConfig.niveis?.[nivelCliente]?.multiplicador || 1,
-        bonusAplicados: bonusAplicados,
-        createdAt: Timestamp.now()
-      };
-
-      await firebaseService.add('pontuacao', pontuacaoData);
-      pontosProcessadosRef.current.add(pontosKey);
-      console.log('✅ Pontos de fidelidade adicionados:', pontosGanhos);
-      
-      setPontosCliente(prev => prev + pontosGanhos);
-
-      await registrarAuditoria(
-        'adicionar_pontos_fidelidade',
-        cliente.id,
-        `${pontosGanhos} pontos adicionados por atendimento`,
-        { atendimentoId: id, pontos: pontosGanhos, nivel: nivelCliente }
-      );
-      
-    } catch (error) {
-      console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
-    }
-  };
-
-  const processarIndicacao = async () => {
-    if (!cliente?.indicadoPor) {
-      console.log('ℹ️ Cliente não foi indicado por ninguém');
-      return;
-    }
-
-    try {
-      const configFidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
-      const config = configFidelidade[0] || { 
-        pontosIndicacao: 100,
-        bonusIndicacao: 100
-      };
-
-      const pontosBonus = config.pontosIndicacao || config.bonusIndicacao || 100;
-
-      const indicacoesExistentes = await firebaseService.query('indicacoes', [
-        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
-        { field: 'status', operator: '==', value: 'confirmada' }
-      ]);
-
-      const jaFoiConfirmada = indicacoesExistentes.length > 0;
-
-      if (jaFoiConfirmada) {
-        console.log('⚠️ Indicação já foi confirmada anteriormente');
-        return;
-      }
-
-      const indicacoesPendentes = await firebaseService.query('indicacoes', [
-        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
-        { field: 'status', operator: '==', value: 'pendente' }
-      ]);
-
-      if (indicacoesPendentes.length === 0) {
-        console.log('ℹ️ Nenhuma indicação pendente encontrada');
-        return;
-      }
-
-      const indicacao = indicacoesPendentes[0];
-
-      const clienteIndicador = await firebaseService.getById('clientes', indicacao.clienteId);
-      if (!clienteIndicador) {
-        console.error('❌ Cliente que indicou não encontrado');
-        return;
-      }
-
-      await firebaseService.update('indicacoes', indicacao.id, {
-        status: 'confirmada',
-        pontosGanhos: pontosBonus,
-        dataConfirmacao: new Date().toISOString(),
-        updatedAt: Timestamp.now()
-      });
-
-      const pontuacaoData = {
-        clienteId: indicacao.clienteId,
-        clienteNome: indicacao.clienteNome,
-        quantidade: pontosBonus,
-        tipo: 'credito',
-        motivo: `Bônus por indicação de ${cliente.nome}`,
-        data: new Date().toISOString(),
-        indicacaoId: indicacao.id,
-        atendimentoId: id,
-        createdAt: Timestamp.now()
-      };
-
-      await firebaseService.add('pontuacao', pontuacaoData);
-
-      await registrarAuditoria(
-        'confirmar_indicacao',
-        indicacao.id,
-        `Indicação confirmada: ${indicacao.clienteIndicadoNome} realizou primeiro atendimento`,
-        {
-          clienteIndicadorId: indicacao.clienteId,
-          clienteIndicadorNome: indicacao.clienteNome,
-          clienteIndicadoId: cliente.id,
-          clienteIndicadoNome: cliente.nome,
-          pontosBonus
-        }
-      );
-
-      toast.success(`🎉 ${pontosBonus} pontos creditados para ${indicacao.clienteNome} por indicação!`);
-
-    } catch (error) {
-      console.error('❌ Erro ao processar indicação:', error);
-    }
+  const handleClosePagamentoDialog = () => {
+    setOpenPagamentoDialog(false);
+    setPagamentoEditando(null);
   };
 
   const handleSalvarPagamento = async () => {
@@ -1373,33 +1273,345 @@ function ModernAtendimento() {
     }
   };
 
-  const handleOpenPagamentoDialog = (pagamento = null) => {
-    if (pagamento) {
-      setPagamentoEditando(pagamento);
-      setPagamentoForm({
-        formaPagamento: pagamento.formaPagamento || 'dinheiro',
-        valor: pagamento.valor,
-        parcelas: pagamento.parcelas || 1,
-        observacoes: pagamento.observacoes || ''
+  // ============================================
+  // FUNÇÕES DE FIDELIDADE
+  // ============================================
+
+  const registrarUsoCupom = async (cupom) => {
+    try {
+      if (cuponsProcessadosRef.current.has(cupom.id)) {
+        console.log(`🔄 Cupom ${cupom.codigo} já foi processado`);
+        return;
+      }
+
+      await cupomService.registrarUso(cupom.id, {
+        cupomCodigo: cupom.codigo,
+        atendimentoId: id,
+        clienteId: cliente?.id,
+        clienteNome: cliente?.nome,
+        valorDesconto: cupom.valorDescontoCalculado || 0,
+        valorTotal: calcularValorTotal(),
       });
-    } else {
-      setPagamentoEditando(null);
-      setPagamentoForm({
-        formaPagamento: 'dinheiro',
-        valor: '',
-        parcelas: 1,
-        observacoes: ''
-      });
+      
+      cuponsProcessadosRef.current.add(cupom.id);
+      console.log(`✅ Uso do cupom ${cupom.codigo} registrado`);
+    } catch (error) {
+      console.error('❌ Erro ao registrar uso do cupom:', error);
     }
-    setOpenPagamentoDialog(true);
   };
 
-  const handleClosePagamentoDialog = () => {
-    setOpenPagamentoDialog(false);
-    setPagamentoEditando(null);
+  const adicionarPontosFidelidade = async () => {
+    if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
+
+    try {
+      const pontosKey = `${id}_${cliente.id}`;
+      if (pontosProcessadosRef.current.has(pontosKey)) {
+        console.log('🔄 Pontos já foram processados para este atendimento');
+        return;
+      }
+
+      const pontuacaoData = {
+        clienteId: cliente.id,
+        clienteNome: cliente.nome,
+        quantidade: pontosGanhos,
+        tipo: 'credito',
+        motivo: `Atendimento finalizado - ${itensServico.map(s => s.nome).join(', ')}`,
+        data: new Date().toISOString(),
+        atendimentoId: id,
+        nivelNoMomento: nivelCliente,
+        multiplicadorAplicado: fidelidadeConfig.niveis?.[nivelCliente]?.multiplicador || 1,
+        bonusAplicados: bonusAplicados,
+        createdAt: Timestamp.now()
+      };
+
+      await firebaseService.add('pontuacao', pontuacaoData);
+      pontosProcessadosRef.current.add(pontosKey);
+      console.log('✅ Pontos de fidelidade adicionados:', pontosGanhos);
+      
+      setPontosCliente(prev => prev + pontosGanhos);
+
+      await registrarAuditoria(
+        'adicionar_pontos_fidelidade',
+        cliente.id,
+        `${pontosGanhos} pontos adicionados por atendimento`,
+        { atendimentoId: id, pontos: pontosGanhos, nivel: nivelCliente }
+      );
+      
+    } catch (error) {
+      console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
+    }
   };
 
-  // Função para gerar o texto do comprovante
+  const processarIndicacao = async () => {
+    if (!cliente?.indicadoPor) {
+      console.log('ℹ️ Cliente não foi indicado por ninguém');
+      return;
+    }
+
+    try {
+      const configFidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
+      const config = configFidelidade[0] || { 
+        pontosIndicacao: 100,
+        bonusIndicacao: 100
+      };
+
+      const pontosBonus = config.pontosIndicacao || config.bonusIndicacao || 100;
+
+      const indicacoesExistentes = await firebaseService.query('indicacoes', [
+        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
+        { field: 'status', operator: '==', value: 'confirmada' }
+      ]);
+
+      const jaFoiConfirmada = indicacoesExistentes.length > 0;
+
+      if (jaFoiConfirmada) {
+        console.log('⚠️ Indicação já foi confirmada anteriormente');
+        return;
+      }
+
+      const indicacoesPendentes = await firebaseService.query('indicacoes', [
+        { field: 'clienteIndicadoId', operator: '==', value: cliente.id },
+        { field: 'status', operator: '==', value: 'pendente' }
+      ]);
+
+      if (indicacoesPendentes.length === 0) {
+        console.log('ℹ️ Nenhuma indicação pendente encontrada');
+        return;
+      }
+
+      const indicacao = indicacoesPendentes[0];
+
+      const clienteIndicador = await firebaseService.getById('clientes', indicacao.clienteId);
+      if (!clienteIndicador) {
+        console.error('❌ Cliente que indicou não encontrado');
+        return;
+      }
+
+      await firebaseService.update('indicacoes', indicacao.id, {
+        status: 'confirmada',
+        pontosGanhos: pontosBonus,
+        dataConfirmacao: new Date().toISOString(),
+        updatedAt: Timestamp.now()
+      });
+
+      const pontuacaoData = {
+        clienteId: indicacao.clienteId,
+        clienteNome: indicacao.clienteNome,
+        quantidade: pontosBonus,
+        tipo: 'credito',
+        motivo: `Bônus por indicação de ${cliente.nome}`,
+        data: new Date().toISOString(),
+        indicacaoId: indicacao.id,
+        atendimentoId: id,
+        createdAt: Timestamp.now()
+      };
+
+      await firebaseService.add('pontuacao', pontuacaoData);
+
+      await registrarAuditoria(
+        'confirmar_indicacao',
+        indicacao.id,
+        `Indicação confirmada: ${indicacao.clienteIndicadoNome} realizou primeiro atendimento`,
+        {
+          clienteIndicadorId: indicacao.clienteId,
+          clienteIndicadorNome: indicacao.clienteNome,
+          clienteIndicadoId: cliente.id,
+          clienteIndicadoNome: cliente.nome,
+          pontosBonus
+        }
+      );
+
+      toast.success(`🎉 ${pontosBonus} pontos creditados para ${indicacao.clienteNome} por indicação!`);
+
+    } catch (error) {
+      console.error('❌ Erro ao processar indicação:', error);
+    }
+  };
+
+  // ============================================
+  // FUNÇÃO PRINCIPAL: FINALIZAR ATENDIMENTO
+  // ============================================
+
+  const handleFinalizarAtendimento = async () => {
+    if (verificarDuplicidade('finalizar_atendimento', { id })) {
+      toast.error('Atendimento já está sendo finalizado. Aguarde um momento.');
+      return;
+    }
+
+    if (processandoRef.current) {
+      toast.error('Já existe uma operação em andamento');
+      return;
+    }
+
+    if (atendimento.status === 'finalizado') {
+      toast.error('Este atendimento já foi finalizado');
+      return;
+    }
+
+    try {
+      processandoRef.current = true;
+      setSaving(true);
+      
+      const valorTotal = calcularValorTotal();
+      const totalPago = calcularTotalPago();
+      const saldoRestante = valorTotal - totalPago;
+      const MARGEM_ERRO = 0.01;
+  
+      if (Math.abs(saldoRestante) > MARGEM_ERRO) {
+        toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
+        return;
+      }
+  
+      console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
+  
+      // 1. Buscar o agendamento associado
+      let agendamentoId = null;
+      
+      if (atendimento.agendamentoId) {
+        agendamentoId = atendimento.agendamentoId;
+      } else {
+        const agendamentos = await firebaseService.query('agendamentos', [
+          { field: 'profissionalId', operator: '==', value: atendimento.profissionalId },
+          { field: 'data', operator: '==', value: atendimento.data },
+          { field: 'status', operator: '==', value: 'agendado' }
+        ]);
+  
+        const servicoId = atendimento.servicoId || itensServico[0]?.id;
+        const agendamentoCorrespondente = agendamentos.find(ag => {
+          if (ag.servicos && Array.isArray(ag.servicos)) {
+            return ag.servicos.some(s => s.id === servicoId);
+          }
+          return ag.servicoId === servicoId;
+        });
+  
+        if (agendamentoCorrespondente) {
+          agendamentoId = agendamentoCorrespondente.id;
+        }
+      }
+  
+      // 2. Atualizar o atendimento
+      const dadosAtendimento = {
+        status: 'finalizado',
+        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        valorTotal,
+        descontoTotal: descontoTotalCupons,
+        itensServico,
+        itensProduto,
+        cuponsAplicados,
+        pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0,
+        updatedAt: Timestamp.now()
+      };
+  
+      if (agendamentoId) {
+        dadosAtendimento.agendamentoId = agendamentoId;
+      }
+  
+      await firebaseService.update('atendimentos', id, dadosAtendimento);
+  
+      // 3. Registrar uso dos cupons
+      for (const cupom of cuponsAplicados) {
+        await registrarUsoCupom(cupom);
+      }
+  
+      // 4. Atualizar agendamento
+      if (agendamentoId) {
+        const agendamentoAtual = await firebaseService.getById('agendamentos', agendamentoId);
+        
+        if (agendamentoAtual) {
+          const dadosAgendamento = {
+            status: 'finalizado',
+            atendimentoRealizado: true,
+            atendimentoId: id,
+            updatedAt: Timestamp.now()
+          };
+  
+          if (agendamentoAtual.servicos && Array.isArray(agendamentoAtual.servicos)) {
+            const servicoRealizado = atendimento.servicoId || itensServico[0]?.id;
+            dadosAgendamento.servicosRealizados = agendamentoAtual.servicos.map(s => ({
+              ...s,
+              realizado: s.id === servicoRealizado
+            }));
+          }
+  
+          await firebaseService.update('agendamentos', agendamentoId, dadosAgendamento);
+        }
+      }
+  
+      // 5. Registrar comissão
+      const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
+      const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
+      const percentual = profissional?.comissao || 40;
+      const valorComissao = (calcularTotalServicos() * percentual) / 100;
+  
+      const comissaoData = {
+        atendimentoId: id,
+        profissionalId: atendimento.profissionalId,
+        profissionalNome: profissional?.nome || atendimento.profissionalNome,
+        servicoId: servicoPrincipal?.id || atendimento.servicoId,
+        servicoNome: servicoPrincipal?.nome || atendimento.servicoNome || 'Serviço',
+        valorAtendimento: calcularTotalServicos(),
+        percentual,
+        valor: valorComissao,
+        data: atendimento.data,
+        status: 'pendente',
+        dataRegistro: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+  
+      if (agendamentoId) {
+        comissaoData.agendamentoId = agendamentoId;
+      }
+  
+      await firebaseService.add('comissoes', comissaoData);
+  
+      // 6. Adicionar pontos de fidelidade
+      if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
+        await adicionarPontosFidelidade();
+      }
+  
+      // 7. Processar indicação
+      await processarIndicacao();
+  
+      // 8. Atualizar cliente
+      await firebaseService.update('clientes', cliente.id, {
+        ultimaVisita: new Date().toISOString().split('T')[0],
+        totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(),
+        updatedAt: Timestamp.now()
+      });
+
+      // 9. Registrar na auditoria
+      await registrarAuditoria(
+        'finalizar_atendimento',
+        id,
+        `Atendimento finalizado`,
+        { 
+          valorTotal, 
+          descontoTotal: descontoTotalCupons,
+          itensServico: itensServico.length, 
+          itensProduto: itensProduto.length,
+          cuponsAplicados: cuponsAplicados.length,
+          pagamentos: pagamentos.length,
+          pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0
+        }
+      );
+  
+      setActiveStep(3);
+      toast.success('Atendimento finalizado com sucesso!');
+      registrarAcaoProcessada('finalizar_atendimento', { id });
+      
+    } catch (error) {
+      console.error('❌ Erro ao finalizar atendimento:', error);
+      toast.error('Erro ao finalizar atendimento');
+    } finally {
+      processandoRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  // ============================================
+  // FUNÇÃO PARA GERAR COMPROVANTE
+  // ============================================
+
   const gerarTextoComprovante = (formato = 'texto') => {
     const subtotal = calcularSubtotal();
     const valorTotal = calcularValorTotal();
@@ -1413,7 +1625,7 @@ function ModernAtendimento() {
     const negritoInicio = formato === 'html' ? '<strong>' : '*';
     const negritoFim = formato === 'html' ? '</strong>' : '*';
     const quebraLinha = formato === 'html' ? '<br/>' : '\n';
-
+    
     let texto = '';
     
     // Cabeçalho
@@ -1581,6 +1793,10 @@ function ModernAtendimento() {
     }
   };
 
+  // ============================================
+  // FUNÇÕES DE NAVEGAÇÃO
+  // ============================================
+
   const handleVoltar = () => {
     navigate(-1);
   };
@@ -1600,6 +1816,10 @@ function ModernAtendimento() {
     }
     return new Date(timestamp).toLocaleTimeString('pt-BR');
   };
+
+  // ============================================
+  // RENDERIZAÇÃO
+  // ============================================
 
   if (loading) {
     return (
