@@ -66,16 +66,18 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   AccountBalance as AccountBalanceIcon,
-  Star as StarIcon, // 🔥 NOVO ÍCONE
-  EmojiEvents as TrophyIcon, // 🔥 NOVO ÍCONE
+  Star as StarIcon,
+  EmojiEvents as TrophyIcon,
+  PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from 'firebase/firestore';
 
-// 🔥 Lista de unidades de medida
+// Lista de unidades de medida
 const UNIDADES_MEDIDA = [
   { value: 'un', label: 'Unidade', simbolo: 'un' },
   { value: 'pç', label: 'Peça', simbolo: 'pç' },
@@ -97,7 +99,7 @@ const UNIDADES_MEDIDA = [
   { value: 'tb', label: 'Tablete', simbolo: 'tb' },
 ];
 
-// 🔥 Formas de pagamento
+// Formas de pagamento
 const FORMAS_PAGAMENTO = [
   { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
   { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
@@ -121,7 +123,7 @@ function ModernAtendimento() {
   const [profissional, setProfissional] = useState(null);
   const [observacoes, setObservacoes] = useState('');
   
-  // 🔥 Configurações de fidelidade
+  // Configurações de fidelidade
   const [fidelidadeConfig, setFidelidadeConfig] = useState(null);
   const [pontosCliente, setPontosCliente] = useState(0);
   const [nivelCliente, setNivelCliente] = useState('bronze');
@@ -137,10 +139,10 @@ function ModernAtendimento() {
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidadeProduto, setQuantidadeProduto] = useState(1);
   
-  // 🔥 NOVO: controle para item sem cobrança
+  // NOVO: controle para item sem cobrança
   const [itemSemCobranca, setItemSemCobranca] = useState(false);
   
-  // 🔥 NOVO: busca nos selects
+  // NOVO: busca nos selects
   const [buscaServico, setBuscaServico] = useState('');
   const [buscaProduto, setBuscaProduto] = useState('');
   
@@ -156,10 +158,23 @@ function ModernAtendimento() {
   });
 
   const [tempoDecorrido, setTempoDecorrido] = useState('');
+  const [usuario, setUsuario] = useState(null);
 
   // Listas de serviços e produtos disponíveis
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
+
+  // Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuario(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
 
   useEffect(() => {
     carregarDados();
@@ -185,19 +200,38 @@ function ModernAtendimento() {
     }
   }, [atendimento]);
 
-  // 🔥 Efeito para carregar pontos do cliente quando cliente for carregado
+  // Efeito para carregar pontos do cliente quando cliente for carregado
   useEffect(() => {
     if (cliente?.id && fidelidadeConfig?.ativo) {
       carregarPontosCliente(cliente.id);
     }
   }, [cliente, fidelidadeConfig]);
 
-  // 🔥 Efeito para calcular pontos ganhos quando itensServico mudar
+  // Efeito para calcular pontos ganhos quando itensServico mudar
   useEffect(() => {
     if (fidelidadeConfig?.ativo && cliente) {
       calcularPontosGanhos();
     }
   }, [itensServico, fidelidadeConfig, cliente]);
+
+  // Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'atendimentos',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
 
   // Calcular valor total dos serviços
   const calcularTotalServicos = () => {
@@ -227,7 +261,7 @@ function ModernAtendimento() {
     return calcularValorTotal() - calcularTotalPago();
   };
 
-  // 🔥 Carregar configurações de fidelidade
+  // Carregar configurações de fidelidade
   const carregarConfigFidelidade = async () => {
     try {
       const configs = await firebaseService.getAll('config_fidelidade').catch(() => []);
@@ -239,7 +273,7 @@ function ModernAtendimento() {
     }
   };
 
-  // 🔥 Carregar pontos do cliente
+  // Carregar pontos do cliente
   const carregarPontosCliente = async (clienteId) => {
     try {
       const pontuacoes = await firebaseService.query('pontuacao', [
@@ -265,7 +299,7 @@ function ModernAtendimento() {
     }
   };
 
-  // 🔥 Calcular pontos ganhos neste atendimento
+  // Calcular pontos ganhos neste atendimento
   const calcularPontosGanhos = () => {
     if (!fidelidadeConfig?.ativo) return;
 
@@ -338,6 +372,14 @@ function ModernAtendimento() {
       ]);
       setPagamentos(pagamentosData || []);
 
+      // Registrar acesso na auditoria
+      await registrarAuditoria(
+        'acesso_atendimento',
+        id,
+        `Acesso ao atendimento`,
+        { cliente: clienteData?.nome, profissional: profissionalData?.nome }
+      );
+
       // Verificar status para definir o step atual
       if (atendimentoData.status === 'finalizado') {
         setActiveStep(3);
@@ -348,6 +390,11 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados do atendimento');
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'carregar_atendimento',
+        atendimentoId: id
+      });
     } finally {
       setLoading(false);
     }
@@ -366,13 +413,13 @@ function ModernAtendimento() {
     }
   };
 
-  // 🔥 Função para obter o símbolo da unidade
+  // Função para obter o símbolo da unidade
   const getUnidadeSimbolo = (unidade) => {
     const unidadeEncontrada = UNIDADES_MEDIDA.find(u => u.value === unidade);
     return unidadeEncontrada?.simbolo || unidade;
   };
 
-  // 🔥 Função para calcular quantidade em estoque baseado na unidade de venda
+  // Função para calcular quantidade em estoque baseado na unidade de venda
   const calcularQuantidadeDisponivel = (produto, quantidadeVenda) => {
     if (!produto) return 0;
     
@@ -380,19 +427,19 @@ function ModernAtendimento() {
     return Math.floor(estoqueEmUnidadeVenda);
   };
 
-  // 🔥 Função para converter quantidade de venda para estoque
+  // Função para converter quantidade de venda para estoque
   const converterParaEstoque = (produto, quantidadeVenda) => {
     if (!produto) return 0;
     return quantidadeVenda / (produto.fatorConversao || 1);
   };
 
-  // 🔥 Filtrar serviços pela busca
+  // Filtrar serviços pela busca
   const servicosFiltrados = servicosDisponiveis.filter(servico => 
     servico.nome?.toLowerCase().includes(buscaServico.toLowerCase()) ||
     servico.categoria?.toLowerCase().includes(buscaServico.toLowerCase())
   );
 
-  // 🔥 Filtrar produtos pela busca
+  // Filtrar produtos pela busca
   const produtosFiltrados = produtosDisponiveis.filter(produto => 
     produto.nome?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
@@ -426,7 +473,7 @@ function ModernAtendimento() {
     toast.success('Serviço adicionado!');
   };
 
-  // 🔥 Adicionar produto ao ARRAY itensProduto (com unidades de medida)
+  // Adicionar produto ao ARRAY itensProduto (com unidades de medida)
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado) {
       toast.error('Selecione um produto');
@@ -508,7 +555,7 @@ function ModernAtendimento() {
     );
   };
 
-  // 🔥 Registrar movimentação de estoque
+  // Registrar movimentação de estoque
   const registrarMovimentacaoEstoque = async (produto, quantidade, unidade, tipo) => {
     try {
       const movimentacao = {
@@ -537,7 +584,7 @@ function ModernAtendimento() {
     setItensServico(novosItens);
   };
 
-  // 🔥 Remover produto do ARRAY itensProduto (com devolução ao estoque)
+  // Remover produto do ARRAY itensProduto (com devolução ao estoque)
   const handleRemoverProduto = (index) => {
     const itemRemovido = itensProduto[index];
     
@@ -583,17 +630,29 @@ function ModernAtendimento() {
       // Atualizar atendimento
       await firebaseService.update('atendimentos', id, dadosAtendimento);
 
+      await registrarAuditoria(
+        'confirmar_atendimento',
+        id,
+        `Atendimento confirmado`,
+        { valorTotal, itensServico: itensServico.length, itensProduto: itensProduto.length }
+      );
+
       setActiveStep(1);
       toast.success('Atendimento confirmado!');
     } catch (error) {
       console.error('Erro ao confirmar atendimento:', error);
       toast.error('Erro ao confirmar atendimento');
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'confirmar_atendimento',
+        atendimentoId: id
+      });
     } finally {
       setSaving(false);
     }
   };
 
-  // 🔥 Função para criar transação financeira
+  // Função para criar transação financeira
   const criarTransacaoFinanceira = async (pagamento) => {
     try {
       console.log('💰 CRIANDO TRANSAÇÃO FINANCEIRA - INÍCIO');
@@ -622,12 +681,12 @@ function ModernAtendimento() {
       const transacaoId = await firebaseService.add('transacoes', transacao);
       console.log('✅ Transação criada com ID:', transacaoId);
 
-      // 🔥 Verificar se a transação foi criada
-      setTimeout(async () => {
-        const transacoes = await firebaseService.getAll('transacoes');
-        const minhaTransacao = transacoes.find(t => t.atendimentoId === id);
-        console.log('🔍 Verificação - Transação encontrada:', minhaTransacao);
-      }, 2000);
+      await registrarAuditoria(
+        'criar_transacao',
+        transacaoId,
+        `Transação financeira criada para atendimento`,
+        { valor: pagamento.valor, formaPagamento: pagamento.formaPagamento }
+      );
 
       return transacaoId;
     } catch (error) {
@@ -636,7 +695,7 @@ function ModernAtendimento() {
     }
   };
 
-  // 🔥 Função para adicionar pontos de fidelidade
+  // Função para adicionar pontos de fidelidade
   const adicionarPontosFidelidade = async () => {
     if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
 
@@ -660,9 +719,22 @@ function ModernAtendimento() {
       
       // Atualizar saldo do cliente
       setPontosCliente(prev => prev + pontosGanhos);
+
+      await registrarAuditoria(
+        'adicionar_pontos_fidelidade',
+        cliente.id,
+        `${pontosGanhos} pontos adicionados por atendimento`,
+        { atendimentoId: id, pontos: pontosGanhos, nivel: nivelCliente }
+      );
       
     } catch (error) {
       console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'adicionar_pontos_fidelidade',
+        clienteId: cliente?.id,
+        atendimentoId: id
+      });
     }
   };
 
@@ -705,14 +777,30 @@ function ModernAtendimento() {
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
         pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
         setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
+        
+        await registrarAuditoria(
+          'atualizar_pagamento',
+          pagamentoEditando.id,
+          `Pagamento atualizado`,
+          { valor: pagamentoData.valor, formaPagamento: pagamentoData.formaPagamento }
+        );
+        
         toast.success('Pagamento atualizado!');
       } else {
         // Adicionar novo pagamento ao array
         pagamentoSalvo = await firebaseService.add('pagamentos', pagamentoData);
         setPagamentos([...pagamentos, pagamentoSalvo]);
+        
+        await registrarAuditoria(
+          'criar_pagamento',
+          pagamentoSalvo.id,
+          `Pagamento registrado`,
+          { valor: pagamentoData.valor, formaPagamento: pagamentoData.formaPagamento }
+        );
+        
         toast.success('Pagamento registrado!');
 
-        // 🔥 CRIAR TRANSAÇÃO FINANCEIRA AUTOMATICAMENTE
+        // CRIAR TRANSAÇÃO FINANCEIRA AUTOMATICAMENTE
         console.log('💰 Chamando criarTransacaoFinanceira para novo pagamento');
         await criarTransacaoFinanceira(pagamentoSalvo);
       }
@@ -721,6 +809,12 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('Erro ao salvar pagamento:', error);
       toast.error('Erro ao salvar pagamento');
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'salvar_pagamento',
+        atendimentoId: id,
+        dados: pagamentoForm
+      });
     }
   };
 
@@ -742,10 +836,23 @@ function ModernAtendimento() {
         await firebaseService.delete('pagamentos', pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
         
+        await registrarAuditoria(
+          'remover_pagamento',
+          pagamentoId,
+          `Pagamento removido`,
+          { atendimentoId: id }
+        );
+        
         toast.success('Pagamento e transações removidos!');
       } catch (error) {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
+        
+        await auditoriaService.registrarErro(error, {
+          acao: 'remover_pagamento',
+          pagamentoId,
+          atendimentoId: id
+        });
       }
     }
   };
@@ -931,7 +1038,7 @@ function ModernAtendimento() {
       const comissaoId = await firebaseService.add('comissoes', comissaoData);
       console.log('✅ Comissão registrada com ID:', comissaoId);
   
-      // 6. 🔥 ADICIONAR PONTOS DE FIDELIDADE
+      // 6. ADICIONAR PONTOS DE FIDELIDADE
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
         console.log('📌 Adicionando pontos de fidelidade:', pontosGanhos);
         await adicionarPontosFidelidade();
@@ -944,11 +1051,25 @@ function ModernAtendimento() {
         totalGasto: (cliente.totalGasto || 0) + calcularTotalServicos(), // Só serviços entram no total gasto
         updatedAt: Timestamp.now()
       });
+
+      // 8. Registrar na auditoria
+      await registrarAuditoria(
+        'finalizar_atendimento',
+        id,
+        `Atendimento finalizado`,
+        { 
+          valorTotal, 
+          itensServico: itensServico.length, 
+          itensProduto: itensProduto.length,
+          pagamentos: pagamentos.length,
+          pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0
+        }
+      );
   
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       
-      // 8. Verificar se a comissão foi criada
+      // 9. Verificar se a comissão foi criada
       setTimeout(async () => {
         const comissoes = await firebaseService.getAll('comissoes');
         const minhaComissao = comissoes.find(c => c.atendimentoId === id);
@@ -963,7 +1084,7 @@ function ModernAtendimento() {
           console.log('🔍 Verificação pós-finalização - Agendamento atualizado:', agendamento);
         }
 
-        // 🔥 Verificar pontos adicionados
+        // Verificar pontos adicionados
         if (fidelidadeConfig?.ativo) {
           const pontuacoes = await firebaseService.query('pontuacao', [
             { field: 'atendimentoId', operator: '==', value: id }
@@ -975,6 +1096,11 @@ function ModernAtendimento() {
     } catch (error) {
       console.error('❌ Erro ao finalizar atendimento:', error);
       toast.error('Erro ao finalizar atendimento');
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'finalizar_atendimento',
+        atendimentoId: id
+      });
     } finally {
       setSaving(false);
     }
@@ -1001,7 +1127,7 @@ function ModernAtendimento() {
           `💰 *Total: R$ ${valorTotal.toFixed(2)}*\n` +
           `💳 *Pago: R$ ${totalPago.toFixed(2)}*\n\n`;
 
-        // 🔥 Adicionar informações de fidelidade
+        // Adicionar informações de fidelidade
         if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
           mensagem += `⭐ *Fidelidade:*\n` +
             `• Pontos ganhos: ${pontosGanhos}\n` +
@@ -1012,6 +1138,14 @@ function ModernAtendimento() {
         mensagem += `Obrigado pela preferência!`;
         
         window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
+        
+        await registrarAuditoria(
+          'enviar_comprovante_whatsapp',
+          id,
+          `Comprovante enviado por WhatsApp`,
+          { cliente: cliente?.nome }
+        );
+        
         toast.success('WhatsApp aberto para envio!');
       } else if (metodo === 'email') {
         toast.success('Comprovante enviado por email!');
@@ -1159,7 +1293,7 @@ function ModernAtendimento() {
 
               <Divider sx={{ my: 2 }} />
 
-              {/* 🔥 Card de Fidelidade */}
+              {/* Card de Fidelidade */}
               {fidelidadeConfig?.ativo && (
                 <Box sx={{ mb: 3, p: 2, bgcolor: '#faf5ff', borderRadius: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -1900,7 +2034,7 @@ function ModernAtendimento() {
                           ))}
                         </Grid>
 
-                        {/* 🔥 Informações de fidelidade no comprovante */}
+                        {/* Informações de fidelidade no comprovante */}
                         {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
                           <Grid item xs={12}>
                             <Divider sx={{ my: 1 }} />
