@@ -50,14 +50,15 @@ import {
   Visibility as VisibilityIcon,
   History as HistoryIcon,
   Print as PrintIcon,
-  Star as StarIcon, // 🔥 NOVO ÍCONE
-  EmojiEvents as TrophyIcon, // 🔥 NOVO ÍCONE
-  PersonAdd as PersonAddIcon, // 🔥 NOVO ÍCONE
+  Star as StarIcon,
+  EmojiEvents as TrophyIcon,
+  PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from 'firebase/firestore';
 import { 
   masks, 
@@ -85,15 +86,16 @@ function ModernClientes() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
-  const [openIndicacaoDialog, setOpenIndicacaoDialog] = useState(false); // 🔥 NOVO
+  const [openIndicacaoDialog, setOpenIndicacaoDialog] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState(null);
-  const [clienteIndicado, setClienteIndicado] = useState(null); // 🔥 NOVO
+  const [clienteIndicado, setClienteIndicado] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [clientes, setClientes] = useState([]);
-  const [indicacoes, setIndicacoes] = useState([]); // 🔥 NOVO
+  const [indicacoes, setIndicacoes] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [usuario, setUsuario] = useState(null);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -118,13 +120,73 @@ function ModernClientes() {
       servicosPreferidos: [],
       notificacoes: true,
     },
-    // 🔥 NOVOS CAMPOS PARA INDICAÇÃO
     indicadoPor: '',
     indicadoPorNome: '',
     dataIndicacao: null,
+    totalPontos: 0,
+    nivelFidelidade: 'bronze',
   });
 
-  // 🔥 FUNÇÃO DE IMPRESSÃO CORRIGIDA
+  // Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuario(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
+
+  // Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'clientes',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
+  // Função para calcular nível de fidelidade baseado em pontos
+  const calcularNivelFidelidade = (pontos) => {
+    if (pontos >= 5000) return 'platina';
+    if (pontos >= 2000) return 'ouro';
+    if (pontos >= 500) return 'prata';
+    return 'bronze';
+  };
+
+  // Função para carregar pontuação do cliente
+  const carregarPontuacaoCliente = async (clienteId) => {
+    try {
+      const pontuacao = await firebaseService.query('pontuacao', [
+        { field: 'clienteId', operator: '==', value: clienteId }
+      ]);
+
+      const totalPontos = pontuacao.reduce((acc, p) => {
+        if (p.tipo === 'credito') return acc + p.quantidade;
+        if (p.tipo === 'debito') return acc - p.quantidade;
+        return acc;
+      }, 0);
+
+      return totalPontos;
+    } catch (error) {
+      console.error('Erro ao carregar pontuação:', error);
+      return 0;
+    }
+  };
+
+  // 🔥 FUNÇÃO DE IMPRESSÃO
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: selectedCliente 
@@ -137,6 +199,14 @@ function ModernClientes() {
     onAfterPrint: () => {
       setIsPrinting(false);
       toast.success('Impressão concluída!', { id: 'print' });
+      
+      if (selectedCliente) {
+        registrarAuditoria(
+          'imprimir_ficha_cliente',
+          selectedCliente.id,
+          `Ficha do cliente ${selectedCliente.nome} impressa`
+        );
+      }
     },
     onPrintError: (error) => {
       setIsPrinting(false);
@@ -151,7 +221,6 @@ function ModernClientes() {
       return;
     }
     
-    // Pequeno delay para garantir que o componente esteja renderizado
     setTimeout(() => {
       handlePrint();
     }, 100);
@@ -162,7 +231,7 @@ function ModernClientes() {
     carregarClientes();
   }, []);
 
-  // 🔥 Carregar indicações quando cliente é selecionado
+  // Carregar indicações quando cliente é selecionado
   useEffect(() => {
     if (selectedCliente?.id) {
       carregarIndicacoes(selectedCliente.id);
@@ -173,8 +242,28 @@ function ModernClientes() {
     try {
       setLoading(true);
       const data = await firebaseService.getAll('clientes');
-      setClientes(data || []);
+      
+      // Calcular pontuação para cada cliente
+      const clientesComPontos = await Promise.all(
+        (data || []).map(async (cliente) => {
+          const pontos = await carregarPontuacaoCliente(cliente.id);
+          return {
+            ...cliente,
+            totalPontos: pontos,
+            nivelFidelidade: calcularNivelFidelidade(pontos)
+          };
+        })
+      );
+      
+      setClientes(clientesComPontos);
       setError(null);
+
+      await registrarAuditoria(
+        'acesso_lista_clientes',
+        'lista',
+        'Acesso à lista de clientes',
+        { totalClientes: clientesComPontos.length }
+      );
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
       setError('Erro ao carregar clientes');
@@ -184,7 +273,7 @@ function ModernClientes() {
     }
   };
 
-  // 🔥 Carregar indicações do cliente
+  // Carregar indicações do cliente
   const carregarIndicacoes = async (clienteId) => {
     try {
       const indicacoesData = await firebaseService.query('indicacoes', [
@@ -231,6 +320,8 @@ function ModernClientes() {
       indicadoPor: '',
       indicadoPorNome: '',
       dataIndicacao: null,
+      totalPontos: 0,
+      nivelFidelidade: 'bronze',
     });
     setTabValue(0);
     setOpenDialog(true);
@@ -264,14 +355,30 @@ function ModernClientes() {
       indicadoPor: cliente.indicadoPor || '',
       indicadoPorNome: cliente.indicadoPorNome || '',
       dataIndicacao: cliente.dataIndicacao || null,
+      totalPontos: cliente.totalPontos || 0,
+      nivelFidelidade: cliente.nivelFidelidade || 'bronze',
     });
     setTabValue(0);
     setOpenDialog(true);
   };
 
-  const handleView = (cliente) => {
-    setSelectedCliente(cliente);
+  const handleView = async (cliente) => {
+    // Recarregar pontuação atualizada
+    const pontos = await carregarPontuacaoCliente(cliente.id);
+    const clienteAtualizado = {
+      ...cliente,
+      totalPontos: pontos,
+      nivelFidelidade: calcularNivelFidelidade(pontos)
+    };
+    
+    setSelectedCliente(clienteAtualizado);
     setOpenViewDialog(true);
+
+    await registrarAuditoria(
+      'visualizar_cliente',
+      cliente.id,
+      `Visualização do cliente ${cliente.nome}`
+    );
   };
 
   // 🔥 FUNÇÃO PARA ABRIR DIALOG DE INDICAÇÃO
@@ -306,7 +413,13 @@ function ModernClientes() {
 
       // Buscar configurações de fidelidade
       const configFidelidade = await firebaseService.getAll('config_fidelidade');
-      const config = configFidelidade[0] || { bonusIndicacao: 100 };
+      const config = configFidelidade[0] || { 
+        pontosPorReal: 1,
+        pontosAniversario: 50,
+        pontosIndicacao: 100 
+      };
+
+      const pontosBonus = config.pontosIndicacao || 100;
 
       const indicacaoData = {
         clienteId: selectedCliente.id, // Quem indicou
@@ -314,9 +427,9 @@ function ModernClientes() {
         clienteIndicadoId: clienteIndicado.id,
         clienteIndicadoNome: clienteIndicado.nome,
         dataIndicacao: new Date().toISOString(),
-        status: 'pendente', // pendente, confirmada, cancelada
+        status: 'pendente',
         pontosGanhos: 0,
-        pontosBonus: config.bonusIndicacao || 100,
+        pontosBonus: pontosBonus,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
@@ -331,7 +444,20 @@ function ModernClientes() {
         updatedAt: Timestamp.now()
       });
 
-      toast.success(`Indicação registrada! ${config.bonusIndicacao || 100} pontos serão creditados quando ${clienteIndicado.nome} realizar o primeiro atendimento.`);
+      await registrarAuditoria(
+        'registrar_indicacao',
+        selectedCliente.id,
+        `${selectedCliente.nome} indicou ${clienteIndicado.nome}`,
+        {
+          clienteIndicadorId: selectedCliente.id,
+          clienteIndicadorNome: selectedCliente.nome,
+          clienteIndicadoId: clienteIndicado.id,
+          clienteIndicadoNome: clienteIndicado.nome,
+          pontosBonus
+        }
+      );
+
+      toast.success(`Indicação registrada! ${pontosBonus} pontos serão creditados quando ${clienteIndicado.nome} realizar o primeiro atendimento.`);
       
       setOpenIndicacaoDialog(false);
       carregarIndicacoes(selectedCliente.id);
@@ -339,6 +465,12 @@ function ModernClientes() {
     } catch (err) {
       console.error('Erro ao registrar indicação:', err);
       toast.error('Erro ao registrar indicação');
+      
+      await auditoriaService.registrarErro(err, {
+        acao: 'registrar_indicacao',
+        clienteIndicadorId: selectedCliente?.id,
+        clienteIndicadoId: clienteIndicado?.id
+      });
     }
   };
 
@@ -350,8 +482,8 @@ function ModernClientes() {
 
       // Buscar configurações de fidelidade
       const configFidelidade = await firebaseService.getAll('config_fidelidade');
-      const config = configFidelidade[0] || { bonusIndicacao: 100 };
-      const pontosBonus = config.bonusIndicacao || 100;
+      const config = configFidelidade[0] || { pontosIndicacao: 100 };
+      const pontosBonus = config.pontosIndicacao || 100;
 
       // Atualizar status da indicação
       await firebaseService.update('indicacoes', indicacaoId, {
@@ -373,24 +505,56 @@ function ModernClientes() {
         createdAt: Timestamp.now()
       });
 
+      await registrarAuditoria(
+        'confirmar_indicacao',
+        indicacao.clienteId,
+        `Indicação confirmada: ${indicacao.clienteIndicadoNome}`,
+        {
+          indicacaoId,
+          pontosBonus,
+          clienteIndicadorId: indicacao.clienteId,
+          clienteIndicadoId: indicacao.clienteIndicadoId
+        }
+      );
+
       toast.success(`Indicação confirmada! ${pontosBonus} pontos creditados para ${indicacao.clienteNome}.`);
       carregarIndicacoes(selectedCliente.id);
       
     } catch (error) {
       console.error('Erro ao confirmar indicação:', error);
       toast.error('Erro ao confirmar indicação');
+      
+      await auditoriaService.registrarErro(error, {
+        acao: 'confirmar_indicacao',
+        indicacaoId
+      });
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
       try {
+        const cliente = clientes.find(c => c.id === id);
+        
         await firebaseService.delete('clientes', id);
         await carregarClientes();
+        
+        await registrarAuditoria(
+          'excluir_cliente',
+          id,
+          `Cliente ${cliente?.nome} excluído`,
+          { cliente }
+        );
+        
         toast.success('Cliente excluído com sucesso!');
       } catch (err) {
         console.error('Erro ao excluir cliente:', err);
         toast.error('Erro ao excluir cliente');
+        
+        await auditoriaService.registrarErro(err, {
+          acao: 'excluir_cliente',
+          clienteId: id
+        });
       }
     }
   };
@@ -432,16 +596,36 @@ function ModernClientes() {
       dataCadastro: selectedCliente ? selectedCliente.dataCadastro : hoje,
       ultimaVisita: selectedCliente ? selectedCliente.ultimaVisita : null,
       totalGasto: selectedCliente ? selectedCliente.totalGasto : 0,
+      totalPontos: formData.totalPontos || 0,
+      nivelFidelidade: calcularNivelFidelidade(formData.totalPontos || 0),
       updatedAt: agora,
     };
   
     try {
       if (selectedCliente) {
+        const clienteAntigo = { ...selectedCliente };
+        
         await firebaseService.update('clientes', selectedCliente.id, dadosParaSalvar);
+        
+        await registrarAuditoria(
+          'atualizar_cliente',
+          selectedCliente.id,
+          `Cliente ${formData.nome} atualizado`,
+          { dadosAntigos: clienteAntigo, dadosNovos: dadosParaSalvar }
+        );
+        
         toast.success('Cliente atualizado com sucesso!');
       } else {
         dadosParaSalvar.createdAt = agora;
-        await firebaseService.add('clientes', dadosParaSalvar);
+        const novoId = await firebaseService.add('clientes', dadosParaSalvar);
+        
+        await registrarAuditoria(
+          'criar_cliente',
+          novoId,
+          `Novo cliente criado: ${formData.nome}`,
+          { dados: dadosParaSalvar }
+        );
+        
         toast.success('Cliente cadastrado com sucesso!');
       }
       
@@ -455,6 +639,11 @@ function ModernClientes() {
       } else {
         toast.error('Erro ao salvar cliente');
       }
+      
+      await auditoriaService.registrarErro(err, {
+        acao: selectedCliente ? 'atualizar_cliente' : 'criar_cliente',
+        dados: formData
+      });
     }
   };
 
@@ -484,6 +673,26 @@ function ModernClientes() {
       case 'Regular': return '#e3f2fd';
       case 'Novo': return '#e8f5e8';
       default: return '#f5f5f5';
+    }
+  };
+
+  const getNivelCor = (nivel) => {
+    switch(nivel) {
+      case 'platina': return '#e5e4e2';
+      case 'ouro': return '#ffd700';
+      case 'prata': return '#c0c0c0';
+      case 'bronze': return '#cd7f32';
+      default: return '#cd7f32';
+    }
+  };
+
+  const getNivelBg = (nivel) => {
+    switch(nivel) {
+      case 'platina': return '#f0f0f0';
+      case 'ouro': return '#fff9e6';
+      case 'prata': return '#f5f5f5';
+      case 'bronze': return '#fff3e0';
+      default: return '#fff3e0';
     }
   };
 
@@ -595,13 +804,13 @@ function ModernClientes() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card sx={{ bgcolor: '#e8f5e9' }}>
+            <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
                 <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Total Gasto
+                  Pontos Totais
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                  R$ {clientes.reduce((acc, c) => acc + (c.totalGasto || 0), 0).toFixed(2)}
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {clientes.reduce((acc, c) => acc + (c.totalPontos || 0), 0)}
                 </Typography>
               </CardContent>
             </Card>
@@ -643,8 +852,8 @@ function ModernClientes() {
                 <TableCell><strong>Cliente</strong></TableCell>
                 <TableCell><strong>Contato</strong></TableCell>
                 <TableCell><strong>CPF</strong></TableCell>
-                <TableCell><strong>Última Visita</strong></TableCell>
-                <TableCell><strong>Total Gasto</strong></TableCell>
+                <TableCell><strong>Pontos</strong></TableCell>
+                <TableCell><strong>Nível</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
                 <TableCell align="center"><strong>Ações</strong></TableCell>
               </TableRow>
@@ -714,12 +923,23 @@ function ModernClientes() {
                         <Typography variant="body2">{cliente.cpf || '-'}</Typography>
                       </TableCell>
                       <TableCell>
-                        {cliente.ultimaVisita ? new Date(cliente.ultimaVisita).toLocaleDateString('pt-BR') : '-'}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <StarIcon sx={{ color: '#ff9800', fontSize: 16 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                            {cliente.totalPontos || 0}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
-                          R$ {cliente.totalGasto?.toFixed(2) || '0,00'}
-                        </Typography>
+                        <Chip
+                          label={cliente.nivelFidelidade?.toUpperCase()}
+                          size="small"
+                          sx={{
+                            bgcolor: getNivelBg(cliente.nivelFidelidade),
+                            color: getNivelCor(cliente.nivelFidelidade),
+                            fontWeight: 600,
+                          }}
+                        />
                       </TableCell>
                       <TableCell>
                         <Chip 
@@ -928,7 +1148,7 @@ function ModernClientes() {
                   </FormControl>
                 </Grid>
 
-                {/* 🔥 CAMPO DE INDICAÇÃO */}
+                {/* CAMPO DE INDICAÇÃO */}
                 <Grid item xs={12}>
                   <Autocomplete
                     options={clientes.filter(c => c.id !== (selectedCliente?.id || ''))}
@@ -1108,7 +1328,25 @@ function ModernClientes() {
                     }}
                   />
                   
-                  {/* 🔥 INFORMAÇÃO DE INDICAÇÃO */}
+                  {/* INFORMAÇÃO DE PONTOS */}
+                  <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <StarIcon fontSize="small" />
+                      Pontos de Fidelidade: {selectedCliente.totalPontos || 0}
+                    </Typography>
+                    <Chip
+                      label={selectedCliente.nivelFidelidade?.toUpperCase()}
+                      size="small"
+                      sx={{
+                        mt: 1,
+                        bgcolor: getNivelBg(selectedCliente.nivelFidelidade),
+                        color: getNivelCor(selectedCliente.nivelFidelidade),
+                        fontWeight: 600,
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* INFORMAÇÃO DE INDICAÇÃO */}
                   {selectedCliente.indicadoPorNome && (
                     <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
                       <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1187,7 +1425,7 @@ function ModernClientes() {
                   </Card>
                 </Grid>
 
-                {/* 🔥 SEÇÃO DE INDICAÇÕES FEITAS POR ESTE CLIENTE */}
+                {/* SEÇÃO DE INDICAÇÕES FEITAS POR ESTE CLIENTE */}
                 {indicacoes.length > 0 && (
                   <Grid item xs={12}>
                     <Card variant="outlined">
@@ -1258,7 +1496,7 @@ function ModernClientes() {
         </DialogActions>
       </Dialog>
 
-      {/* 🔥 DIALOG DE INDICAÇÃO */}
+      {/* DIALOG DE INDICAÇÃO */}
       <Dialog open={openIndicacaoDialog} onClose={() => setOpenIndicacaoDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
           <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -1287,6 +1525,12 @@ function ModernClientes() {
                       <Typography variant="caption" color="textSecondary">
                         {selectedCliente?.telefone}
                       </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        <StarIcon sx={{ color: '#ff9800', fontSize: 14 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                          {selectedCliente?.totalPontos || 0} pontos
+                        </Typography>
+                      </Box>
                     </Box>
                   </Box>
                 </Paper>
