@@ -91,10 +91,9 @@ import {
   Assignment as AssignmentIcon,
   Category as CategoryIcon,
   History as HistoryIcon,
-  Logs as LogsIcon,
   NotificationsActive as NotificationsActiveIcon,
   LocalShipping as ShippingIcon,
-  EmojiEvents as PrizeIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -270,7 +269,7 @@ function ModernConfiguracoes() {
       case 'entradas': return <InventoryIcon fontSize="small" />;
       case 'fornecedores': return <ShippingIcon fontSize="small" />;
       case 'indicacoes': return <GiftIcon fontSize="small" />;
-      case 'logs': return <LogsIcon fontSize="small" />;
+      case 'logs': return <HistoryIcon fontSize="small" />;
       case 'movimentacoes_estoque': return <InventoryIcon fontSize="small" />;
       case 'notificacoes': return <NotificationsActiveIcon fontSize="small" />;
       case 'pagamentos': return <MoneyIcon fontSize="small" />;
