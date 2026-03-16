@@ -5,6 +5,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
 import { lightTheme, darkTheme } from './theme'; // Importando os temas
+import { CircularProgress, Box } from '@mui/material';
 
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
@@ -13,7 +14,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { AuthClienteProvider } from './contexts/AuthClienteContext';
 
 // Services
-import { firebaseService } from './services/firebase';
+import firebaseService from './services/firebase'; // 🔥 USANDO O firebaseService
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -91,28 +92,41 @@ import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
 
+// Componente de Loading
+const AppLoading = () => (
+  <Box sx={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh',
+    bgcolor: '#faf5ff'
+  }}>
+    <CircularProgress size={60} thickness={4} sx={{ color: '#9c27b0' }} />
+  </Box>
+);
+
 // Componente para rotas do sistema (com sidebar)
 const SistemaLayout = ({ children, theme }) => (
-  <div style={{ display: 'flex', minHeight: '100vh' }}>
+  <Box sx={{ display: 'flex', minHeight: '100vh' }}>
     <ModernSidebar />
-    <div style={{ 
+    <Box sx={{ 
       flexGrow: 1, 
       display: 'flex', 
       flexDirection: 'column',
-      width: 'calc(100% - 300px)',
+      width: { xs: '100%', md: 'calc(100% - 300px)' },
     }}>
       <ModernHeader />
-      <main style={{ 
+      <Box component="main" sx={{ 
         flexGrow: 1, 
-        padding: '24px',
+        p: { xs: 2, md: 3 },
         backgroundColor: theme.palette.background.default,
         minHeight: 'calc(100vh - 64px)',
         overflow: 'auto'
       }}>
         {children}
-      </main>
-    </div>
-  </div>
+      </Box>
+    </Box>
+  </Box>
 );
 
 function App() {
@@ -125,14 +139,19 @@ function App() {
   useEffect(() => {
     const carregarConfiguracoes = async () => {
       try {
+        console.log('🔄 Carregando configurações do Firebase...');
         const configData = await firebaseService.getAll('configuracoes');
+        
         if (configData && configData.length > 0) {
           const config = configData[0];
           setConfiguracoes(config);
           setModoEscuro(config.tema?.modoEscuro || false);
+          console.log('✅ Configurações carregadas:', config);
+        } else {
+          console.log('ℹ️ Nenhuma configuração encontrada, usando modo claro padrão');
         }
       } catch (error) {
-        console.error('Erro ao carregar configurações:', error);
+        console.error('❌ Erro ao carregar configurações:', error);
       } finally {
         setLoading(false);
       }
@@ -154,17 +173,7 @@ function App() {
   }, []);
 
   if (loading) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        backgroundColor: modoEscuro ? '#121212' : '#faf5ff'
-      }}>
-        <GlobalLoading />
-      </div>
-    );
+    return <AppLoading />;
   }
 
   return (
@@ -182,6 +191,20 @@ function App() {
                   background: currentTheme.palette.background.paper,
                   color: currentTheme.palette.text.primary,
                   border: `1px solid ${currentTheme.palette.divider}`,
+                  borderRadius: 12,
+                  fontFamily: '"Poppins", "Roboto", "Arial", sans-serif',
+                },
+                success: {
+                  iconTheme: {
+                    primary: currentTheme.palette.primary.main,
+                    secondary: currentTheme.palette.background.paper,
+                  },
+                },
+                error: {
+                  iconTheme: {
+                    primary: currentTheme.palette.error?.main || '#f44336',
+                    secondary: currentTheme.palette.background.paper,
+                  },
                 },
               }}
             />
