@@ -103,7 +103,7 @@ import {
   EmojiEvents as TrophyIcon,
   Group as GroupIcon,
   Person as PersonIcon,
-  Money as MoneyIcon,
+  AttachMoney as MoneyIcon,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
   CalendarToday as CalendarIcon,
