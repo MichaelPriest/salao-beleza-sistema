@@ -1303,7 +1303,7 @@ function Indicacoes() {
               </DialogTitle>
               <DialogContent>
                 <Box sx={{ textAlign: 'center', py: 3 }}>
-                  <QRCodeCanvas  {/* CORRIGIDO: QRCodeCanvas em vez de QRCode */}
+                  <QRCodeCanvas
                     value={`${window.location.origin}/cadastro?indicacao=${indicacaoSelecionada.id}`}
                     size={256}
                     level="H"
