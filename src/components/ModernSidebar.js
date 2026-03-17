@@ -38,6 +38,7 @@ import {
   EventAvailable as EventAvailableIcon,
   EventBusy as EventBusyIcon,
   DateRange as DateRangeIcon,
+  Schedule as ScheduleIcon, // <-- ADICIONADO
   
   // Atendimentos
   Receipt as ReceiptIcon,
@@ -151,6 +152,12 @@ import {
   ShowChart as ShowChartIcon,
   Equalizer as EqualizerIcon,
   Analytics as AnalyticsIcon,
+  
+  // 🔥 ÍCONES PARA CAMPANHAS
+  Campaign as CampaignIcon,
+  
+  // 🔥 ÍCONES PARA CATEGORIAS
+  Category as CategoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -481,7 +488,7 @@ export const extraIcons = {
   equalizer: <EqualizerIcon />,
   campaign: <CampaignIcon />,
   category: <CategoryIcon />,
-  schedule: <ScheduleIcon />,
+  schedule: <ScheduleIcon />, // <-- ADICIONADO
 };
 
 // Componente Mobile Sidebar Otimizado
