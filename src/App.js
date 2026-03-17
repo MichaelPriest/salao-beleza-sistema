@@ -69,6 +69,7 @@ import MinhasComissoes from './pages/MinhasComissoes';
 
 // Pages de Cupons (NOVA)
 import GerenciarCupons from './pages/GerenciarCupons';
+import Campanhas from './pages/Campanhas';
 
 // Páginas do Cliente
 import ClienteLogin from './pages/ClienteLogin';
