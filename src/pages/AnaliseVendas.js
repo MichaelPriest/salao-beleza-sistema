@@ -62,7 +62,7 @@ import {
   Add as AddIcon,
   Category as CategoryIcon,
   Inventory as InventoryIcon,
-  AttachMoney as MoneyIcon,
+  Money as MoneyIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   ShowChart as ShowChartIcon,
