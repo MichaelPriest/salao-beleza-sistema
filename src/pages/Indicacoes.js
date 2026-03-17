@@ -986,6 +986,7 @@ function Indicacoes() {
                         
                         return (
                           <TableRow key={indicacao.id} hover>
+                            {/* Coluna 1: Indicado */}
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Avatar sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
@@ -999,12 +1000,32 @@ function Indicacoes() {
                                     {indicacao.clienteIndicadoEmail || indicacao.clienteIndicadoTelefone}
                                   </Typography>
                                 </Box>
+                              </Box>
+                            </TableCell>
+                    
+                            {/* Coluna 2: Indicador (NOVA) */}
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Avatar src={clienteIndicador?.foto} sx={{ width: 32, height: 32 }}>
+                                  {indicacao.clienteNome?.charAt(0)}
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                    {indicacao.clienteNome}
+                                  </Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {clienteIndicador?.email || indicacao.clienteEmail}
+                                  </Typography>
                                 </Box>
                               </Box>
                             </TableCell>
+                    
+                            {/* Coluna 3: Data */}
                             <TableCell>
                               {format(new Date(indicacao.dataCriacao), 'dd/MM/yyyy')}
                             </TableCell>
+                    
+                            {/* Coluna 4: Status */}
                             <TableCell>
                               <Chip
                                 size="small"
@@ -1017,11 +1038,15 @@ function Indicacoes() {
                                 }}
                               />
                             </TableCell>
+                    
+                            {/* Coluna 5: Pontos */}
                             <TableCell align="right">
                               <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
                                 {indicacao.status === 'confirmada' ? indicacao.pontosGanhos : 0}
                               </Typography>
                             </TableCell>
+                    
+                            {/* Coluna 6: Ações */}
                             <TableCell align="center">
                               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
                                 <Tooltip title="Ver detalhes">
@@ -1043,7 +1068,7 @@ function Indicacoes() {
                                     <QrCodeIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-
+                    
                                 <Tooltip title="Copiar link">
                                   <IconButton
                                     size="small"
@@ -1053,7 +1078,7 @@ function Indicacoes() {
                                     <CopyIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-
+                    
                                 {indicacao.status === 'pendente' && !verificarExpirada(indicacao) && (
                                   <Tooltip title="Reenviar convite">
                                     <IconButton
@@ -1065,7 +1090,7 @@ function Indicacoes() {
                                     </IconButton>
                                   </Tooltip>
                                 )}
-
+                    
                                 {isAdmin && indicacao.status === 'pendente' && (
                                   <>
                                     <Tooltip title="Confirmar">
