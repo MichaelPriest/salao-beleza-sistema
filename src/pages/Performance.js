@@ -241,7 +241,7 @@ const metricasDisponiveis = [
   { value: 'servicos', label: 'Serviços Realizados', icon: <AssignmentIcon />, cor: '#9c27b0' },
   { value: 'produtos', label: 'Produtos Vendidos', icon: <InventoryIcon />, cor: '#ff9800' },
   { value: 'taxa_ocupacao', label: 'Taxa de Ocupação', icon: <ScheduleIcon />, cor: '#00bcd4' },
-  { value: 'ticket_medio', label: 'Ticket Médio', icon: <Money />, cor: '#ff4081' },
+  { value: 'ticket_medio', label: 'Ticket Médio', icon: <MoneyIcon />, cor: '#ff4081' },
   { value: 'satisfacao', label: 'Satisfação', icon: <StarIcon />, cor: '#f44336' },
   { value: 'retencao', label: 'Taxa de Retenção', icon: <ThumbUpIcon />, cor: '#795548' },
 ];
@@ -942,7 +942,7 @@ function Performance() {
                       Ticket Médio
                     </Typography>
                     <Avatar sx={{ bgcolor: '#ff9800', width: 40, height: 40 }}>
-                      <Money />
+                      <MoneyIcon />
                     </Avatar>
                   </Box>
                   <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
