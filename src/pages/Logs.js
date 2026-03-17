@@ -109,7 +109,6 @@ import {
   VisibilityOff as VisibilityOffIcon,
   Save as SaveIcon,
   Settings as SettingsIcon,
-  SettingsApplications as SettingsIcon,
   Tune as TuneIcon,
   BugReport as BugIcon,
   Code as CodeIcon,
@@ -209,7 +208,7 @@ function Logs() {
     
     let interval;
     if (autoRefresh) {
-      interval = setInterval(carregarLogs, 30000); // Atualizar a cada 30 segundos
+      interval = setInterval(carregarLogs, 30000);
     }
     
     return () => clearInterval(interval);
@@ -223,31 +222,25 @@ function Logs() {
     try {
       setLoading(true);
       
-      // Buscar logs do Firebase
       let logsData = await firebaseService.getAll('logs').catch(() => []);
       
-      // Filtrar por data
       logsData = logsData.filter(log => {
         const dataLog = new Date(log.timestamp);
         return dataLog >= dataInicio && dataLog <= dataFim;
       });
 
-      // Filtrar por nível
       if (nivel !== 'todos') {
         logsData = logsData.filter(log => log.nivel === nivel);
       }
 
-      // Filtrar por categoria
       if (categoria !== 'todos') {
         logsData = logsData.filter(log => log.categoria === categoria);
       }
 
-      // Filtrar por usuário
       if (usuario !== 'todos') {
         logsData = logsData.filter(log => log.usuarioId === usuario);
       }
 
-      // Filtrar por texto
       if (filtro) {
         logsData = logsData.filter(log => 
           log.mensagem?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -256,12 +249,10 @@ function Logs() {
         );
       }
 
-      // Ordenar por data (mais recentes primeiro)
       logsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       setLogs(logsData);
 
-      // Calcular estatísticas
       const agora = new Date();
       const umaHoraAtras = subDays(agora, 1/24);
       const umDiaAtras = subDays(agora, 1);
@@ -332,7 +323,6 @@ function Logs() {
   const handleLimparLogs = async () => {
     if (window.confirm('Deseja realmente limpar todos os logs? Esta ação não pode ser desfeita.')) {
       try {
-        // Implementar lógica para limpar logs antigos
         toast.success('Logs limpos com sucesso!');
         carregarLogs();
       } catch (error) {
