@@ -139,22 +139,53 @@ function ModernClientes() {
     }
   }, []);
 
-  // Função para registrar na auditoria
+  // Função para registrar na auditoria - VERSÃO CORRIGIDA
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
+      // 🔥 Garantir que usuario não seja undefined
+      const usuarioId = usuario?.id || 'sistema';
+      const usuarioNome = usuario?.nome || 'Sistema';
+      
+      // 🔥 Remover undefined de todos os campos
+      const limparDados = (obj) => {
+        if (!obj) return {};
+        if (typeof obj !== 'object') return obj;
+        
+        const limpo = {};
+        Object.keys(obj).forEach(key => {
+          const valor = obj[key];
+          if (valor !== undefined && valor !== null) {
+            if (typeof valor === 'object') {
+              const valorLimpo = limparDados(valor);
+              if (Object.keys(valorLimpo).length > 0) {
+                limpo[key] = valorLimpo;
+              }
+            } else {
+              limpo[key] = valor;
+            }
+          }
+        });
+        return limpo;
+      };
+  
+      const dadosLimpos = limparDados(dados);
+  
       await auditoriaService.registrar(acao, {
         entidade: 'clientes',
         entidadeId,
         detalhes,
         dados: {
-          ...dados,
-          usuarioId: usuario?.id,
-          usuarioNome: usuario?.nome,
+          ...dadosLimpos,
+          usuarioId,
+          usuarioNome,
           timestamp: new Date().toISOString()
         }
       });
+      
+      console.log(`✅ Auditoria registrada: ${acao}`);
     } catch (error) {
-      console.error('Erro ao registrar auditoria:', error);
+      console.error('❌ Erro ao registrar auditoria:', error);
+      // Não interrompe o fluxo principal
     }
   };
 
