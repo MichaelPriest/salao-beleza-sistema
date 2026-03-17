@@ -112,6 +112,15 @@ const estilosCupom = [
   { value: 'luxo', label: 'Luxo', cor: '#9c27b0' },
 ];
 
+const tamanhosPapel = [
+  { value: 'A4', label: 'A4 (210x297mm)', largura: '210mm', padding: '15mm' },
+  { value: 'A5', label: 'A5 (148x210mm)', largura: '148mm', padding: '10mm' },
+  { value: 'Carta', label: 'Carta (216x279mm)', largura: '216mm', padding: '15mm' },
+  { value: 'termica_80mm', label: 'Térmica 80mm (80x297mm)', largura: '80mm', padding: '5mm' },
+  { value: 'termica_58mm', label: 'Térmica 58mm (58x297mm)', largura: '58mm', padding: '3mm' },
+  { value: 'termica_40mm', label: 'Térmica 40mm (40x297mm)', largura: '40mm', padding: '2mm' },
+];
+
 function GerenciarCupons() {
   const [loading, setLoading] = useState(true);
   const [cupons, setCupons] = useState([]);
@@ -144,8 +153,11 @@ function GerenciarCupons() {
     mostrarQrCode: true,
     mensagemPersonalizada: '',
     quantidade: 1,
-    disposicao: 'vertical', // 'vertical' ou 'horizontal'
-    tamanhoPapel: 'A4', // 'A4', 'A5', 'Carta'
+    disposicao: 'vertical',
+    tamanhoPapel: 'A4',
+    modoEconomico: false,
+    fonteTamanho: 'normal',
+    margemReduzida: false,
   });
 
   // Estado do formulário
@@ -420,6 +432,9 @@ function GerenciarCupons() {
       quantidade: 1,
       disposicao: 'vertical',
       tamanhoPapel: 'A4',
+      modoEconomico: false,
+      fonteTamanho: 'normal',
+      margemReduzida: false,
     });
     setOpenImpressaoDialog(true);
   };
@@ -428,75 +443,140 @@ function GerenciarCupons() {
     const corPrimaria = customizacao.corPrimaria;
     const corSecundaria = customizacao.corSecundaria;
     const fonte = configuracoes?.tema?.fonte || 'Poppins';
+    const isTermica = customizacao.tamanhoPapel.includes('termica');
+    const modoEconomico = customizacao.modoEconomico;
+    const fonteTamanho = customizacao.fonteTamanho;
+    const margemReduzida = customizacao.margemReduzida;
     
-    const larguraCupom = customizacao.disposicao === 'horizontal' ? '280px' : '380px';
-    const margem = customizacao.disposicao === 'horizontal' ? '0 auto' : '0 auto 20px auto';
+    // Ajustes para modo térmico
+    let larguraCupom = customizacao.disposicao === 'horizontal' ? '280px' : '380px';
+    let paddingCabecalho = '20px 20px 30px 20px';
+    let paddingCorpo = '25px 15px 15px 15px';
+    let fontSizeTitulo = '20px';
+    let fontSizeCodigo = '24px';
+    let fontSizeDesconto = '36px';
+    let fontSizeDescricao = '13px';
+    let mostrarBorda = true;
+    
+    if (isTermica) {
+      // Configurações para impressão térmica
+      larguraCupom = customizacao.tamanhoPapel === 'termica_80mm' ? '72mm' : 
+                     customizacao.tamanhoPapel === 'termica_58mm' ? '52mm' : '36mm';
+      
+      if (modoEconomico) {
+        paddingCabecalho = '10px 10px 15px 10px';
+        paddingCorpo = '12px 8px 8px 8px';
+        fontSizeTitulo = '14px';
+        fontSizeCodigo = '16px';
+        fontSizeDesconto = '20px';
+        fontSizeDescricao = '9px';
+        mostrarBorda = false;
+      } else {
+        paddingCabecalho = '15px 15px 20px 15px';
+        paddingCorpo = '15px 10px 10px 10px';
+        fontSizeTitulo = '16px';
+        fontSizeCodigo = '18px';
+        fontSizeDesconto = '24px';
+        fontSizeDescricao = '10px';
+      }
+    }
+    
+    // Ajuste de tamanho da fonte baseado na seleção
+    if (fonteTamanho === 'pequeno') {
+      fontSizeTitulo = parseInt(fontSizeTitulo) * 0.8 + 'px';
+      fontSizeCodigo = parseInt(fontSizeCodigo) * 0.8 + 'px';
+      fontSizeDesconto = parseInt(fontSizeDesconto) * 0.8 + 'px';
+      fontSizeDescricao = parseInt(fontSizeDescricao) * 0.8 + 'px';
+    } else if (fonteTamanho === 'grande') {
+      fontSizeTitulo = parseInt(fontSizeTitulo) * 1.2 + 'px';
+      fontSizeCodigo = parseInt(fontSizeCodigo) * 1.2 + 'px';
+      fontSizeDesconto = parseInt(fontSizeDesconto) * 1.2 + 'px';
+      fontSizeDescricao = parseInt(fontSizeDescricao) * 1.2 + 'px';
+    }
+    
+    const margem = customizacao.disposicao === 'horizontal' 
+      ? (margemReduzida ? '2px' : '5px') 
+      : (margemReduzida ? '0 0 5px 0' : '0 auto 15px auto');
     
     return `
       <div class="cupom-item" style="
         width: ${larguraCupom};
         background: white;
-        border-radius: 16px;
+        border-radius: ${mostrarBorda ? '12px' : '0'};
         overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        box-shadow: ${mostrarBorda ? '0 4px 20px rgba(0,0,0,0.1)' : 'none'};
+        border: ${!mostrarBorda ? '1px solid #ddd' : 'none'};
         position: relative;
         margin: ${margem};
         break-inside: avoid;
         page-break-inside: avoid;
         display: inline-block;
         vertical-align: top;
+        font-family: ${isTermica ? "'Courier New', monospace" : `'${fonte}', sans-serif`};
       ">
         <div style="
           background: ${corPrimaria}; 
           color: white; 
-          padding: 20px 20px 30px 20px; 
+          padding: ${paddingCabecalho};
           text-align: center; 
           position: relative;
           border-bottom-left-radius: 0;
           border-bottom-right-radius: 0;
         ">
-          <div style="
-            position: absolute; 
-            bottom: -15px; 
-            left: 0; 
-            right: 0; 
-            height: 30px; 
-            background: linear-gradient(135deg, transparent 50%, ${corPrimaria} 50%);
-            background-size: 30px 30px;
-            background-position: 0 0;
-          "></div>
-          ${customizacao.mostrarLogo && configuracoes?.salao?.logo ? `
-            <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: 100px; max-height: 50px; object-fit: contain; margin-bottom: 10px; background: white; padding: 5px; border-radius: 8px;">
+          ${!isTermica ? `
+            <div style="
+              position: absolute; 
+              bottom: -15px; 
+              left: 0; 
+              right: 0; 
+              height: 30px; 
+              background: linear-gradient(135deg, transparent 50%, ${corPrimaria} 50%);
+              background-size: 30px 30px;
+              background-position: 0 0;
+            "></div>
           ` : ''}
-          <div style="font-size: 20px; font-weight: bold; margin: 5px 0; position: relative; z-index: 2;">CUPOM DE DESCONTO</div>
+          
+          ${customizacao.mostrarLogo && configuracoes?.salao?.logo && !isTermica ? `
+            <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: ${isTermica ? '60px' : '100px'}; max-height: ${isTermica ? '30px' : '50px'}; object-fit: contain; margin-bottom: 5px; background: white; padding: 3px; border-radius: 4px;">
+          ` : ''}
+          
+          ${isTermica ? `
+            <div style="font-size: ${fontSizeTitulo}; font-weight: bold; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${configuracoes?.salao?.nome || 'CUPOM'}
+            </div>
+          ` : `
+            <div style="font-size: ${fontSizeTitulo}; font-weight: bold; margin: 5px 0; position: relative; z-index: 2;">
+              CUPOM DE DESCONTO
+            </div>
+          `}
         </div>
         
-        <div style="padding: 25px 15px 15px 15px; text-align: center;">
-          <div style="font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 5px 0; padding: 8px; background: #f5f5f5; border-radius: 8px; display: inline-block;">
+        <div style="padding: ${paddingCorpo}; text-align: center;">
+          <div style="font-size: ${fontSizeCodigo}; font-weight: bold; letter-spacing: 1px; margin: 3px 0; padding: ${isTermica ? '3px' : '8px'}; background: #f5f5f5; border-radius: ${isTermica ? '0' : '8px'}; display: inline-block; max-width: 100%; word-break: break-word;">
             ${cupomSelecionado?.codigo}
           </div>
           
-          <div style="font-size: 36px; font-weight: bold; color: ${corPrimaria}; margin: 15px 0;">
+          <div style="font-size: ${fontSizeDesconto}; font-weight: bold; color: ${corPrimaria}; margin: ${isTermica ? '5px 0' : '15px 0'};">
             ${cupomSelecionado?.tipo === 'percentual' 
               ? `${cupomSelecionado?.valor}% OFF` 
               : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
             ${cupomSelecionado?.tipo === 'percentual' && cupomSelecionado?.valorMaximoDesconto ? 
-              `<br><small style="font-size: 14px; color: #666;">Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
+              `<br><small style="font-size: ${parseInt(fontSizeDescricao) * 0.8}px; color: #666;">Limite R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
           </div>
           
-          <div style="color: #666; margin: 10px 0; line-height: 1.4; font-size: 13px;">
+          <div style="color: #666; margin: ${isTermica ? '5px 0' : '10px 0'}; line-height: 1.3; font-size: ${fontSizeDescricao};">
             ${cupomSelecionado?.descricao || 'Aproveite esta oferta especial!'}
           </div>
           
           ${cupomSelecionado?.dataFim ? `
-            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px;">
-              <strong style="color: ${corSecundaria};">Válido até:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
+            <div style="background: #f8f9fa; padding: ${isTermica ? '5px' : '10px'}; border-radius: ${isTermica ? '0' : '8px'}; margin: ${isTermica ? '5px 0' : '10px 0'}; font-size: ${parseInt(fontSizeDescricao) * 0.9}px;">
+              <strong style="color: ${corSecundaria};">Validade:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
             </div>
           ` : ''}
           
-          <div style="text-align: left; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 11px;">
+          <div style="text-align: left; background: #f8f9fa; padding: ${isTermica ? '5px' : '10px'}; border-radius: ${isTermica ? '0' : '8px'}; margin: ${isTermica ? '5px 0' : '10px 0'}; font-size: ${parseInt(fontSizeDescricao) * 0.9}px;">
             <strong>Regras:</strong>
-            <ul style="margin: 5px 0; padding-left: 15px;">
+            <ul style="margin: 3px 0; padding-left: 15px;">
               ${cupomSelecionado?.valorMinimo > 0 ? 
                 `<li>Mínimo: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
               ${cupomSelecionado?.usoMaximo ? 
@@ -506,32 +586,35 @@ function GerenciarCupons() {
             </ul>
           </div>
           
-          ${customizacao.mostrarQrCode ? `
+          ${customizacao.mostrarQrCode && !isTermica ? `
             <div style="margin: 10px 0;">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code" style="width: 100px; height: 100px;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=${isTermica ? '60x60' : '100x100'}&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code" style="width: ${isTermica ? '60px' : '100px'}; height: ${isTermica ? '60px' : '100px'};">
             </div>
           ` : ''}
           
           ${customizacao.mensagemPersonalizada ? `
-            <div style="font-style: italic; color: ${corSecundaria}; margin: 10px 0; padding: 8px; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; font-size: 12px;">
-              "${customizacao.mensagemPersonalizada}"
+            <div style="font-style: italic; color: ${corSecundaria}; margin: ${isTermica ? '5px 0' : '10px 0'}; padding: ${isTermica ? '3px' : '8px'}; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; font-size: ${parseInt(fontSizeDescricao) * 0.9}px;">
+              "${customizacao.mensagemPersonalizada.substring(0, isTermica ? 30 : 100)}${customizacao.mensagemPersonalizada.length > (isTermica ? 30 : 100) ? '...' : ''}"
             </div>
           ` : ''}
         </div>
         
-        <div style="background: #f8f9fa; padding: 12px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e0e0e0;">
+        <div style="background: #f8f9fa; padding: ${isTermica ? '5px' : '12px'}; text-align: center; font-size: ${parseInt(fontSizeDescricao) * 0.8}px; color: #999; border-top: 1px solid #e0e0e0;">
           <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
-          ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}` : ''}
+          ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp.substring(0, isTermica ? 15 : 30)}` : ''}
+          ${isTermica ? '' : '<br>*Apresente no atendimento'}
         </div>
       </div>
     `;
   };
-  
+
   const handleImprimirCupom = () => {
     const quantidade = customizacao.quantidade;
     const disposicao = customizacao.disposicao;
     const tamanhoPapel = customizacao.tamanhoPapel;
-    const fonte = configuracoes?.tema?.fonte || 'Poppins';
+    const isTermica = tamanhoPapel.includes('termica');
+    const modoEconomico = customizacao.modoEconomico;
+    const fonte = isTermica ? 'Courier New' : (configuracoes?.tema?.fonte || 'Poppins');
     
     // Gerar HTML para todos os cupons
     let cuponsHTML = '';
@@ -539,26 +622,33 @@ function GerenciarCupons() {
       cuponsHTML += gerarCupomHTML(i);
     }
     
+    // Encontrar configurações do papel selecionado
+    const papelConfig = tamanhosPapel.find(p => p.value === tamanhoPapel) || tamanhosPapel[0];
+    
     // Definir layout baseado na disposição
     const displayLayout = disposicao === 'horizontal' 
-      ? 'display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 10px;' 
+      ? 'display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 3mm;' 
       : 'display: block;';
     
-    // Definir largura máxima baseada no papel
-    let maxWidth = '1200px';
-    let padding = '15px';
-    let fontSize = '14px';
-    
-    if (tamanhoPapel === 'A4') {
-      maxWidth = '210mm';
-      padding = '15mm';
-    } else if (tamanhoPapel === 'A5') {
-      maxWidth = '148mm';
-      padding = '10mm';
-      fontSize = '12px';
-    } else if (tamanhoPapel === 'Carta') {
-      maxWidth = '216mm';
-      padding = '15mm';
+    // Configurações específicas para térmicas
+    let estiloImpressao = '';
+    if (isTermica) {
+      estiloImpressao = `
+        @page {
+          size: ${papelConfig.largura} auto;
+          margin: ${modoEconomico ? '1mm' : '2mm'};
+        }
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: ${modoEconomico ? '9px' : '11px'};
+          line-height: 1.2;
+        }
+        .cupom-item {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          margin-bottom: ${modoEconomico ? '2mm' : '3mm'};
+        }
+      `;
     }
     
     const janelaImpressao = window.open('', '_blank');
@@ -572,36 +662,37 @@ function GerenciarCupons() {
               box-sizing: border-box;
             }
             body { 
-              font-family: '${fonte}', sans-serif;
+              font-family: '${fonte}', ${isTermica ? 'monospace' : 'sans-serif'};
               margin: 0;
-              padding: ${padding};
+              padding: ${papelConfig.padding};
               background: #f5f5f5;
-              font-size: ${fontSize};
+              font-size: ${isTermica ? '11px' : '14px'};
             }
             .cupons-container {
               ${displayLayout}
-              max-width: ${maxWidth};
+              max-width: ${papelConfig.largura};
               margin: 0 auto;
             }
             .cupom-item {
               transition: transform 0.2s;
               ${disposicao === 'horizontal' ? 'flex: 0 0 auto;' : ''}
             }
+            ${estiloImpressao}
             @media print {
               body {
-                padding: 5mm;
+                padding: ${modoEconomico ? '1mm' : papelConfig.padding};
                 background: white;
               }
               .cupons-container {
                 display: ${disposicao === 'horizontal' ? 'flex' : 'block'};
                 flex-wrap: ${disposicao === 'horizontal' ? 'wrap' : 'nowrap'};
                 justify-content: flex-start;
-                gap: 5mm;
+                gap: ${modoEconomico ? '1mm' : '3mm'};
                 max-width: 100%;
               }
               .cupom-item {
                 box-shadow: none;
-                border: 1px solid #eee;
+                border: ${isTermica ? 'none' : '1px solid #eee'};
                 margin: 0;
                 page-break-inside: avoid;
                 break-inside: avoid;
@@ -657,59 +748,6 @@ function GerenciarCupons() {
     
     janelaImpressao.document.close();
     setOpenImpressaoDialog(false);
-  };
-
-  const handleDownloadPDF = () => {
-    // Criar uma nova janela para visualização antes de imprimir
-    const quantidade = customizacao.quantidade;
-    const disposicao = customizacao.disposicao;
-    const fonte = configuracoes?.tema?.fonte || 'Poppins';
-    
-    let cuponsHTML = '';
-    for (let i = 0; i < quantidade; i++) {
-      cuponsHTML += gerarCupomHTML(i);
-    }
-    
-    const displayLayout = disposicao === 'horizontal' 
-      ? 'display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;' 
-      : 'display: block;';
-    
-    const janelaVisualizacao = window.open('', '_blank');
-    
-    janelaVisualizacao.document.write(`
-      <html>
-        <head>
-          <title>Cupom ${cupomSelecionado?.codigo} - ${quantidade} cópia(s)</title>
-          <style>
-            body { 
-              font-family: '${fonte}', sans-serif;
-              margin: 0;
-              padding: 20px;
-              background: white;
-            }
-            .cupons-container {
-              ${displayLayout}
-              max-width: 1200px;
-              margin: 0 auto;
-            }
-            @media print {
-              body {
-                padding: 10px;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="cupons-container">
-            ${cuponsHTML}
-          </div>
-        </body>
-      </html>
-    `);
-    
-    janelaVisualizacao.document.close();
-    janelaVisualizacao.focus();
-    janelaVisualizacao.print();
   };
 
   const cuponsFiltrados = cupons.filter(cupom => {
@@ -1272,13 +1310,74 @@ function GerenciarCupons() {
                         label="Tamanho do Papel"
                         onChange={(e) => setCustomizacao({ ...customizacao, tamanhoPapel: e.target.value })}
                       >
-                        <MenuItem value="A4">A4 (210x297mm)</MenuItem>
-                        <MenuItem value="A5">A5 (148x210mm)</MenuItem>
-                        <MenuItem value="Carta">Carta (216x279mm)</MenuItem>
+                        <MenuItem value="A4">A4 (210x297mm) - Comum</MenuItem>
+                        <MenuItem value="A5">A5 (148x210mm) - Comum</MenuItem>
+                        <MenuItem value="Carta">Carta (216x279mm) - Comum</MenuItem>
+                        <MenuItem value="termica_80mm" sx={{ color: '#ff9800' }}>🖨️ Térmica 80mm (80x297mm)</MenuItem>
+                        <MenuItem value="termica_58mm" sx={{ color: '#ff9800' }}>🖨️ Térmica 58mm (58x297mm)</MenuItem>
+                        <MenuItem value="termica_40mm" sx={{ color: '#ff9800' }}>🖨️ Térmica 40mm (40x297mm)</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
                 </Grid>
+              </Grid>
+
+              {/* Opções para Impressoras Térmicas */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#ff9800' }}>
+                  ⚡ Opções para Impressoras Térmicas
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#fff9e6' }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={4}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Modo Econômico</InputLabel>
+                        <Select
+                          value={customizacao.modoEconomico ? 'sim' : 'nao'}
+                          label="Modo Econômico"
+                          onChange={(e) => setCustomizacao({ 
+                            ...customizacao, 
+                            modoEconomico: e.target.value === 'sim' 
+                          })}
+                        >
+                          <MenuItem value="nao">Normal (mais espaçado)</MenuItem>
+                          <MenuItem value="sim">Econômico (economiza papel)</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Tamanho da Fonte</InputLabel>
+                        <Select
+                          value={customizacao.fonteTamanho}
+                          label="Tamanho da Fonte"
+                          onChange={(e) => setCustomizacao({ ...customizacao, fonteTamanho: e.target.value })}
+                        >
+                          <MenuItem value="pequeno">Pequeno</MenuItem>
+                          <MenuItem value="normal">Normal</MenuItem>
+                          <MenuItem value="grande">Grande</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={customizacao.margemReduzida}
+                            onChange={(e) => setCustomizacao({ ...customizacao, margemReduzida: e.target.checked })}
+                          />
+                        }
+                        label="Margens Reduzidas"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Alert severity="info" sx={{ fontSize: '0.8rem' }}>
+                        <strong>Dica para térmicas:</strong> Use Modo Econômico + Fonte Pequena + Margens Reduzidas para economizar papel. 
+                        O QR Code será removido automaticamente em impressões térmicas para otimizar espaço.
+                      </Alert>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
               <Grid item xs={12}>
@@ -1313,7 +1412,13 @@ function GerenciarCupons() {
                     </Typography>
                   )}
                   <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
-                    {customizacao.quantidade} cópia(s) • Disposição: {customizacao.disposicao === 'vertical' ? 'Vertical' : 'Horizontal'} • Papel: {customizacao.tamanhoPapel}
+                    {customizacao.quantidade} cópia(s) • Disposição: {customizacao.disposicao === 'vertical' ? 'Vertical' : 'Horizontal'} • Papel: {
+                      customizacao.tamanhoPapel === 'A4' ? 'A4' :
+                      customizacao.tamanhoPapel === 'A5' ? 'A5' :
+                      customizacao.tamanhoPapel === 'Carta' ? 'Carta' :
+                      customizacao.tamanhoPapel === 'termica_80mm' ? 'Térmica 80mm' :
+                      customizacao.tamanhoPapel === 'termica_58mm' ? 'Térmica 58mm' : 'Térmica 40mm'
+                    }
                   </Typography>
                 </Paper>
               </Grid>
