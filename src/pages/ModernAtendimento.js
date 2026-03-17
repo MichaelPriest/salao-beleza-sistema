@@ -417,41 +417,53 @@ function ModernAtendimento() {
 
   // Função para gerar hash de uma ação
   const gerarHashAcao = (tipo, dados) => {
-    const str = `${tipo}_${JSON.stringify(dados)}_${Date.now()}`;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+    try {
+      const str = `${tipo}_${JSON.stringify(dados || {})}_${Date.now()}`;
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString();
+    } catch (error) {
+      return `${Date.now()}_${Math.random()}`;
     }
-    return Math.abs(hash).toString();
   };
 
   // Função para verificar duplicidade
   const verificarDuplicidade = (tipo, dados, intervaloMs = 3000) => {
-    const agora = Date.now();
-    const hash = gerarHashAcao(tipo, dados);
-    
-    if (ultimaAcaoRef.current.tipo === tipo && 
-        ultimaAcaoRef.current.hash === hash && 
-        agora - ultimaAcaoRef.current.timestamp < intervaloMs) {
-      console.warn(`⚠️ Ação duplicada detectada: ${tipo}`);
-      return true;
+    try {
+      const agora = Date.now();
+      const hash = gerarHashAcao(tipo, dados);
+      
+      if (ultimaAcaoRef.current.tipo === tipo && 
+          ultimaAcaoRef.current.hash === hash && 
+          agora - ultimaAcaoRef.current.timestamp < intervaloMs) {
+        console.warn(`⚠️ Ação duplicada detectada: ${tipo}`);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      return false;
     }
-    
-    return false;
   };
 
   // Função para registrar ação processada
   const registrarAcaoProcessada = (tipo, dados) => {
-    ultimaAcaoRef.current = {
-      tipo,
-      timestamp: Date.now(),
-      hash: gerarHashAcao(tipo, dados)
-    };
+    try {
+      ultimaAcaoRef.current = {
+        tipo,
+        timestamp: Date.now(),
+        hash: gerarHashAcao(tipo, dados)
+      };
+    } catch (error) {
+      // Ignora erro
+    }
   };
 
-  // Função para registrar na auditoria com controle de duplicidade
+  // 🔥 FUNÇÃO DE AUDITORIA CORRIGIDA - SEM ERROS DE UNDEFINED
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
       if (verificarDuplicidade('auditoria', { acao, entidadeId }, 5000)) {
@@ -459,30 +471,117 @@ function ModernAtendimento() {
         return;
       }
 
+      // 🔥 Função para limpar dados (remover undefined, null, funções)
+      const limparDados = (obj) => {
+        if (obj === undefined || obj === null) return null;
+        if (typeof obj !== 'object') return obj;
+        if (obj instanceof Date) return obj.toISOString();
+        if (obj instanceof Timestamp) return obj.toDate().toISOString();
+        
+        const limpo = {};
+        
+        Object.keys(obj).forEach(key => {
+          try {
+            const valor = obj[key];
+            
+            if (valor === undefined || valor === null) {
+              // Ignora undefined/null
+              return;
+            } else if (typeof valor === 'function') {
+              // Ignora funções
+              return;
+            } else if (typeof valor === 'object') {
+              // Recursivamente limpa objetos aninhados
+              const valorLimpo = limparDados(valor);
+              if (valorLimpo && Object.keys(valorLimpo).length > 0) {
+                limpo[key] = valorLimpo;
+              }
+            } else if (typeof valor === 'number' && isNaN(valor)) {
+              // Ignora NaN
+              return;
+            } else if (typeof valor === 'string' && valor === '') {
+              // Mantém string vazia
+              limpo[key] = '';
+            } else {
+              // Mantém valores válidos
+              limpo[key] = valor;
+            }
+          } catch (e) {
+            // Ignora erros ao processar chave
+          }
+        });
+        
+        return limpo;
+      };
+
       const usuarioId = usuario?.id || 'sistema';
       const usuarioNome = usuario?.nome || 'Sistema';
       
+      // 🔥 Garantir que todos os dados são seguros
+      const dadosSeguros = {
+        ...dados,
+        usuarioId,
+        usuarioNome,
+        timestamp: new Date().toISOString(),
+        hash: gerarHashAcao('auditoria', { acao, entidadeId })
+      };
+
+      // 🔥 Garantir que cliente não seja undefined
+      if (dadosSeguros.cliente === undefined) {
+        dadosSeguros.cliente = null;
+      } else if (dadosSeguros.cliente && typeof dadosSeguros.cliente === 'object') {
+        // Extrair apenas campos seguros do cliente
+        const clienteObj = dadosSeguros.cliente;
+        dadosSeguros.cliente = {
+          id: clienteObj.id || '',
+          nome: clienteObj.nome || '',
+          email: clienteObj.email || '',
+          telefone: clienteObj.telefone || ''
+        };
+      }
+
+      // 🔥 Garantir que profissional não seja undefined
+      if (dadosSeguros.profissional === undefined) {
+        dadosSeguros.profissional = null;
+      } else if (dadosSeguros.profissional && typeof dadosSeguros.profissional === 'object') {
+        const profObj = dadosSeguros.profissional;
+        dadosSeguros.profissional = {
+          id: profObj.id || '',
+          nome: profObj.nome || ''
+        };
+      }
+
+      // 🔥 Converter arrays para contagem (para evitar objetos grandes)
+      if (dadosSeguros.itensServico !== undefined && Array.isArray(dadosSeguros.itensServico)) {
+        dadosSeguros.quantidadeServicos = dadosSeguros.itensServico.length;
+        delete dadosSeguros.itensServico;
+      }
+      
+      if (dadosSeguros.itensProduto !== undefined && Array.isArray(dadosSeguros.itensProduto)) {
+        dadosSeguros.quantidadeProdutos = dadosSeguros.itensProduto.length;
+        delete dadosSeguros.itensProduto;
+      }
+
       const auditoriaData = {
-        acao,
+        acao: acao || 'acao_nao_especificada',
         entidade: 'atendimentos',
-        entidadeId,
-        detalhes,
-        dados: {
-          ...dados,
-          usuarioId,
-          usuarioNome,
-          timestamp: new Date().toISOString(),
-          hash: gerarHashAcao('auditoria', { acao, entidadeId })
-        },
+        entidadeId: entidadeId || id || 'sem_id',
+        detalhes: detalhes || '',
+        dados: limparDados(dadosSeguros) || {},
         data: Timestamp.now()
       };
 
-      console.log('📝 Registrando auditoria:', auditoriaData);
+      console.log('📝 Registrando auditoria:', JSON.stringify(auditoriaData, (key, value) => {
+        if (value && value._methodName) return undefined; // Remove funções do Firebase
+        return value;
+      }, 2).substring(0, 500)); // Limita log para não poluir
+
       await firebaseService.add('auditoria', auditoriaData);
       
       registrarAcaoProcessada('auditoria', { acao, entidadeId });
     } catch (error) {
-      console.error('❌ Erro ao registrar auditoria:', error);
+      console.error('❌ Erro ao registrar auditoria (não crítico):', error);
+      // Não interrompe o fluxo principal se auditoria falhar
     }
   };
 
@@ -746,11 +845,17 @@ function ModernAtendimento() {
         if (p.id) pagamentosProcessadosRef.current.add(p.id);
       });
 
+      // 🔥 Chamada de auditoria corrigida - passando dados seguros
       await registrarAuditoria(
         'acesso_atendimento',
         id,
         `Acesso ao atendimento`,
-        { cliente: clienteData?.nome, profissional: profissionalData?.nome }
+        { 
+          clienteId: clienteData?.id,
+          clienteNome: clienteData?.nome,
+          profissionalId: profissionalData?.id,
+          profissionalNome: profissionalData?.nome
+        }
       );
 
       if (atendimentoData.status === 'finalizado') {
@@ -1058,7 +1163,11 @@ function ModernAtendimento() {
         'confirmar_atendimento',
         id,
         `Atendimento confirmado`,
-        { valorTotal, itensServico: itensServico.length, itensProduto: itensProduto.length }
+        { 
+          valorTotal, 
+          quantidadeServicos: itensServico.length, 
+          quantidadeProdutos: itensProduto.length 
+        }
       );
 
       setActiveStep(1);
@@ -1082,14 +1191,14 @@ function ModernAtendimento() {
     try {
       const transacao = {
         tipo: 'receita',
-        descricao: `Atendimento - ${cliente?.nome}`,
+        descricao: `Atendimento - ${cliente?.nome || 'Cliente'}`,
         valor: pagamento.valor,
         data: new Date().toISOString().split('T')[0],
         dataVencimento: new Date().toISOString().split('T')[0],
         categoria: 'Serviços',
         formaPagamento: pagamento.formaPagamento,
         status: 'pago',
-        clienteId: cliente?.id,
+        clienteId: cliente?.id || null,
         atendimentoId: id,
         observacoes: `Pagamento referente ao atendimento ${id}. Forma: ${FORMAS_PAGAMENTO.find(f => f.value === pagamento.formaPagamento)?.label || pagamento.formaPagamento}${pagamento.parcelas > 1 ? ` em ${pagamento.parcelas}x` : ''}. ${pagamento.observacoes || ''}`,
         parcelas: pagamento.parcelas || 1,
@@ -1595,7 +1704,7 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
 
-      // 9. Registrar na auditoria
+      // 9. Registrar na auditoria (🔥 chamada corrigida)
       await registrarAuditoria(
         'finalizar_atendimento',
         id,
@@ -1603,11 +1712,15 @@ function ModernAtendimento() {
         { 
           valorTotal, 
           descontoTotal: descontoTotalCupons,
-          itensServico: itensServico.length, 
-          itensProduto: itensProduto.length,
-          cuponsAplicados: cuponsAplicados.length,
-          pagamentos: pagamentos.length,
-          pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0
+          quantidadeServicos: itensServico.length, 
+          quantidadeProdutos: itensProduto.length,
+          quantidadeCupons: cuponsAplicados.length,
+          quantidadePagamentos: pagamentos.length,
+          pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0,
+          clienteId: cliente?.id,
+          clienteNome: cliente?.nome,
+          profissionalId: profissional?.id,
+          profissionalNome: profissional?.nome
         }
       );
   
@@ -1840,7 +1953,7 @@ function ModernAtendimento() {
           'enviar_comprovante_whatsapp',
           id,
           `Comprovante enviado por WhatsApp`,
-          { cliente: cliente?.nome }
+          { clienteId: cliente?.id, clienteNome: cliente?.nome }
         );
         
         toast.success('WhatsApp aberto para envio!');
@@ -2040,6 +2153,8 @@ function ModernAtendimento() {
   const valorTotal = calcularValorTotal();
   const totalPago = calcularTotalPago();
   const saldoRestante = calcularSaldoRestante();
+
+  // ... (o restante do JSX continua igual)
 
   return (
     <Box>
