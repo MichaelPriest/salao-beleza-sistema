@@ -94,8 +94,71 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { usuariosService } from '../services/usuariosService';
+
+// ✅ Funções seguras para manipulação de datas
+const safeDate = (dateValue) => {
+  if (!dateValue) return null;
+  try {
+    // Se for Firestore Timestamp
+    if (dateValue?.toDate) {
+      const d = dateValue.toDate();
+      return isValid(d) ? d : null;
+    }
+    // Se for string
+    if (typeof dateValue === 'string') {
+      const d = new Date(dateValue);
+      return isValid(d) ? d : null;
+    }
+    // Se for número
+    if (typeof dateValue === 'number') {
+      const d = new Date(dateValue);
+      return isValid(d) ? d : null;
+    }
+    // Se já for Date
+    if (dateValue instanceof Date) {
+      return isValid(dateValue) ? dateValue : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const safeFormat = (dateValue, formatString = 'dd/MM/yyyy') => {
+  const date = safeDate(dateValue);
+  if (!date) return '-';
+  try {
+    return format(date, formatString);
+  } catch {
+    return '-';
+  }
+};
+
+const safeFormatDate = (dateValue) => {
+  const date = safeDate(dateValue);
+  if (!date) return '';
+  try {
+    return format(date, 'yyyy-MM-dd');
+  } catch {
+    return '';
+  }
+};
+
+const safeIsAfter = (date1, date2) => {
+  const d1 = safeDate(date1);
+  const d2 = safeDate(date2);
+  if (!d1 || !d2) return false;
+  return d1 >= d2;
+};
+
+const safeIsBefore = (date1, date2) => {
+  const d1 = safeDate(date1);
+  const d2 = safeDate(date2);
+  if (!d1 || !d2) return false;
+  return d1 <= d2;
+};
 
 const COLORS = [
   '#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', 
@@ -242,15 +305,15 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
     platina: { cor: '#e5e4e2', nome: 'Platina', proximo: null },
   };
 
-  const progresso = niveis[nivel].proximo 
+  const progresso = niveis[nivel]?.proximo 
     ? Math.min(100, (saldo / niveis[nivel].proximo) * 100)
     : 100;
 
   return (
-    <Card sx={{ bgcolor: '#faf5ff', border: `2px solid ${niveis[nivel].cor}` }}>
+    <Card sx={{ bgcolor: '#faf5ff', border: `2px solid ${niveis[nivel]?.cor || '#9c27b0'}` }}>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <Avatar sx={{ bgcolor: niveis[nivel].cor, width: 60, height: 60 }}>
+          <Avatar sx={{ bgcolor: niveis[nivel]?.cor || '#9c27b0', width: 60, height: 60 }}>
             <TrophyIcon sx={{ fontSize: 30 }} />
           </Avatar>
           <Box>
@@ -266,11 +329,11 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
         <Box sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Nível {nivel.toUpperCase()}
+              Nível {nivel?.toUpperCase() || 'BRONZE'}
             </Typography>
-            {niveis[nivel].proximo && (
+            {niveis[nivel]?.proximo && (
               <Typography variant="body2" color="textSecondary">
-                {pontosFaltantes} pts para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina'].nome}
+                {pontosFaltantes} pts para {niveis[nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina']?.nome}
               </Typography>
             )}
           </Box>
@@ -282,7 +345,7 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
               borderRadius: 4,
               bgcolor: '#e0e0e0',
               '& .MuiLinearProgress-bar': {
-                bgcolor: niveis[nivel].cor,
+                bgcolor: niveis[nivel]?.cor || '#9c27b0',
               },
             }}
           />
@@ -294,7 +357,7 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
           Últimos pontos
         </Typography>
         <List dense>
-          {ultimosPontos.slice(0, 3).map((ponto, index) => (
+          {(ultimosPontos || []).slice(0, 3).map((ponto, index) => (
             <ListItem key={index} sx={{ px: 0 }}>
               <ListItemAvatar>
                 <Avatar sx={{ bgcolor: ponto.tipo === 'credito' ? '#4caf50' : '#f44336', width: 24, height: 24 }}>
@@ -303,7 +366,7 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
               </ListItemAvatar>
               <ListItemText
                 primary={ponto.motivo}
-                secondary={format(new Date(ponto.data), 'dd/MM/yyyy')}
+                secondary={safeFormat(ponto.data, 'dd/MM/yyyy')}
                 primaryTypographyProps={{ variant: 'body2' }}
               />
               <Typography variant="body2" sx={{ fontWeight: 600, color: ponto.tipo === 'credito' ? '#4caf50' : '#f44336' }}>
@@ -318,7 +381,7 @@ const FidelidadeCard = ({ saldo, nivel, pontosFaltantes, ultimosPontos }) => {
           variant="outlined"
           startIcon={<GiftIcon />}
           onClick={() => window.location.href = '/fidelidade/recompensas'}
-          sx={{ mt: 1, borderColor: niveis[nivel].cor, color: niveis[nivel].cor }}
+          sx={{ mt: 1, borderColor: niveis[nivel]?.cor || '#9c27b0', color: niveis[nivel]?.cor || '#9c27b0' }}
         >
           Ver Recompensas
         </Button>
@@ -343,7 +406,7 @@ const ComissoesCard = ({ comissoes, totalPendente, totalPago }) => {
                 Pendente
               </Typography>
               <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPendente)}
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPendente || 0)}
               </Typography>
             </Paper>
           </Grid>
@@ -353,7 +416,7 @@ const ComissoesCard = ({ comissoes, totalPendente, totalPago }) => {
                 Recebido
               </Typography>
               <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPago)}
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPago || 0)}
               </Typography>
             </Paper>
           </Grid>
@@ -363,15 +426,15 @@ const ComissoesCard = ({ comissoes, totalPendente, totalPago }) => {
           Últimas comissões
         </Typography>
         <List dense>
-          {comissoes.slice(0, 5).map((comissao, index) => (
+          {(comissoes || []).slice(0, 5).map((comissao, index) => (
             <ListItem key={index} divider={index < 4}>
               <ListItemText
                 primary={comissao.descricao || 'Comissão de serviço'}
-                secondary={format(new Date(comissao.data), 'dd/MM/yyyy')}
+                secondary={safeFormat(comissao.data, 'dd/MM/yyyy')}
               />
               <Chip
                 size="small"
-                label={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comissao.valor)}
+                label={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comissao.valor || 0)}
                 color={comissao.status === 'pago' ? 'success' : 'warning'}
                 sx={{ fontWeight: 600 }}
               />
@@ -488,8 +551,8 @@ function ModernDashboard() {
         end = endOfYear(hoje);
         break;
       case 'custom':
-        start = customDateRange.start;
-        end = customDateRange.end;
+        start = safeDate(customDateRange.start) || customDateRange.start;
+        end = safeDate(customDateRange.end) || customDateRange.end;
         break;
       default:
         start = startOfMonth(hoje);
@@ -532,27 +595,28 @@ function ModernDashboard() {
   const calcularDadosAdmin = (start, end, hoje) => {
     // Faturamento
     const pagamentosPeriodo = (pagamentos || []).filter(p => {
-      const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
-      return dataPagamento >= start && dataPagamento <= end;
+      const dataPagamento = safeDate(p.data);
+      return dataPagamento && safeIsAfter(dataPagamento, start) && safeIsBefore(dataPagamento, end);
     });
 
     const faturamento = pagamentosPeriodo.reduce((acc, p) => acc + (p.valor || 0), 0);
 
     const pagamentosHoje = (pagamentos || []).filter(p => {
-      const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
-      return dataPagamento.toDateString() === hoje.toDateString();
+      const dataPagamento = safeDate(p.data);
+      return dataPagamento && dataPagamento.toDateString() === hoje.toDateString();
     });
     const faturamentoHoje = pagamentosHoje.reduce((acc, p) => acc + (p.valor || 0), 0);
 
     // Clientes
     const totalClientes = (clientes || []).length;
     const clientesNovosPeriodo = (clientes || []).filter(c => {
-      const dataCadastro = c.dataCadastro ? new Date(c.dataCadastro) : (c.createdAt?.toDate ? c.createdAt.toDate() : null);
-      return dataCadastro && dataCadastro >= start && dataCadastro <= end;
+      const dataCadastro = safeDate(c.dataCadastro) || safeDate(c.createdAt);
+      return dataCadastro && safeIsAfter(dataCadastro, start) && safeIsBefore(dataCadastro, end);
     }).length;
 
     // Agendamentos
-    const agendamentosHoje = (agendamentos || []).filter(a => a.data === format(hoje, 'yyyy-MM-dd'));
+    const hojeStr = safeFormatDate(hoje);
+    const agendamentosHoje = (agendamentos || []).filter(a => a.data === hojeStr);
     const agendamentosConfirmados = agendamentosHoje.filter(a => a.status === 'confirmado').length;
     const agendamentosPendentes = agendamentosHoje.filter(a => a.status === 'pendente').length;
 
@@ -563,7 +627,7 @@ function ModernDashboard() {
 
     // Ticket médio
     const atendimentosPeriodo = (atendimentos || []).filter(a => {
-      return a.data >= format(start, 'yyyy-MM-dd') && a.data <= format(end, 'yyyy-MM-dd');
+      return a.data >= safeFormatDate(start) && a.data <= safeFormatDate(end);
     });
     const ticketMedio = atendimentosPeriodo.length > 0 ? faturamento / atendimentosPeriodo.length : 0;
 
@@ -572,8 +636,8 @@ function ModernDashboard() {
 
     // Comissões
     const comissoesPeriodo = (comissoes || []).filter(c => {
-      const dataComissao = c.dataRegistro ? new Date(c.dataRegistro) : (c.createdAt?.toDate ? c.createdAt.toDate() : null);
-      return dataComissao && dataComissao >= start && dataComissao <= end;
+      const dataComissao = safeDate(c.dataRegistro) || safeDate(c.createdAt);
+      return dataComissao && safeIsAfter(dataComissao, start) && safeIsBefore(dataComissao, end);
     });
 
     const comissoesPendentes = comissoesPeriodo
@@ -596,7 +660,7 @@ function ModernDashboard() {
       agendamentosCancelados: agendamentosHoje.filter(a => a.status === 'cancelado').length,
       ticketMedio,
       servicosRealizadosMes,
-      produtosVendidosMes: 0, // Implementar se necessário
+      produtosVendidosMes: 0,
       comissoesPendentes,
       comissoesPagas,
     });
@@ -606,7 +670,8 @@ function ModernDashboard() {
   };
 
   const calcularDadosAtendente = (start, end, hoje) => {
-    const agendamentosHoje = (agendamentos || []).filter(a => a.data === format(hoje, 'yyyy-MM-dd'));
+    const hojeStr = safeFormatDate(hoje);
+    const agendamentosHoje = (agendamentos || []).filter(a => a.data === hojeStr);
     
     const agendamentosConfirmados = agendamentosHoje.filter(a => a.status === 'confirmado').length;
     const agendamentosPendentes = agendamentosHoje.filter(a => a.status === 'pendente').length;
@@ -623,7 +688,7 @@ function ModernDashboard() {
         const servico = servicos?.find(s => s.id === a.servicoId);
         return { ...a, cliente, servico };
       })
-      .sort((a, b) => a.horario.localeCompare(b.horario));
+      .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
 
     setStats({
       agendamentosHoje: agendamentosHoje.length,
@@ -643,8 +708,9 @@ function ModernDashboard() {
     
     if (!profissionalId) return;
 
+    const hojeStr = safeFormatDate(hoje);
     const agendamentosProfissional = (agendamentos || []).filter(a => 
-      a.profissionalId === profissionalId && a.data === format(hoje, 'yyyy-MM-dd')
+      a.profissionalId === profissionalId && a.data === hojeStr
     );
 
     const agendamentosConfirmados = agendamentosProfissional.filter(a => a.status === 'confirmado').length;
@@ -658,7 +724,7 @@ function ModernDashboard() {
         const servico = servicos?.find(s => s.id === a.servicoId);
         return { ...a, cliente, servico };
       })
-      .sort((a, b) => a.horario.localeCompare(b.horario));
+      .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
 
     // Comissões do profissional
     const minhasComissoes = (comissoes || []).filter(c => c.profissionalId === profissionalId);
@@ -674,8 +740,8 @@ function ModernDashboard() {
     // Atendimentos realizados no período
     const atendimentosRealizados = (atendimentos || []).filter(a => 
       a.profissionalId === profissionalId && 
-      a.data >= format(start, 'yyyy-MM-dd') && 
-      a.data <= format(end, 'yyyy-MM-dd')
+      a.data >= safeFormatDate(start) && 
+      a.data <= safeFormatDate(end)
     ).length;
 
     setStats({
@@ -723,26 +789,27 @@ function ModernDashboard() {
     else if (saldo >= 500) nivel = 'prata';
 
     const pontosProximoNivel = nivel === 'bronze' ? 500 : nivel === 'prata' ? 2000 : nivel === 'ouro' ? 5000 : null;
-    const pontosFaltantes = pontosProximoNivel ? pontosProximoNivel - saldo : 0;
+    const pontosFaltantes = pontosProximoNivel ? Math.max(0, pontosProximoNivel - saldo) : 0;
 
     // Agendamentos do cliente
     const meusAgendamentos = (agendamentos || []).filter(a => 
-      a.clienteId === clienteId && a.data >= format(start, 'yyyy-MM-dd')
+      a.clienteId === clienteId && a.data >= safeFormatDate(start)
     );
 
+    const hojeStr = safeFormatDate(hoje);
     const agendamentosFuturos = meusAgendamentos
-      .filter(a => a.data >= format(hoje, 'yyyy-MM-dd') && a.status !== 'cancelado')
+      .filter(a => a.data >= hojeStr && a.status !== 'cancelado')
       .map(a => {
         const servico = servicos?.find(s => s.id === a.servicoId);
         const profissional = profissionais?.find(p => p.id === a.profissionalId);
         return { ...a, servico, profissional };
       })
-      .sort((a, b) => a.data.localeCompare(b.data) || a.horario.localeCompare(b.horario));
+      .sort((a, b) => a.data.localeCompare(b.data) || (a.horario || '').localeCompare(b.horario || ''));
 
     // Histórico de atendimentos
     const historicoAtendimentos = (atendimentos || [])
       .filter(a => a.clienteId === clienteId)
-      .sort((a, b) => new Date(b.data) - new Date(a.data))
+      .sort((a, b) => (b.data || '').localeCompare(a.data || ''))
       .slice(0, 5);
 
     setStats({
@@ -758,7 +825,11 @@ function ModernDashboard() {
       saldo,
       nivel,
       pontosFaltantes,
-      ultimosPontos: minhasPontuacoes.sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, 5),
+      ultimosPontos: minhasPontuacoes.sort((a, b) => {
+        const dataA = safeDate(a.data) || new Date(0);
+        const dataB = safeDate(b.data) || new Date(0);
+        return dataB - dataA;
+      }).slice(0, 5),
     });
 
     setAppointments(agendamentosFuturos);
@@ -767,40 +838,48 @@ function ModernDashboard() {
   const gerarDadosGraficos = (start, end) => {
     // Receita por período
     const revenueByPeriod = [];
-    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    
+    if (!start || !end) return;
+
+    const startDate = safeDate(start);
+    const endDate = safeDate(end);
+    
+    if (!startDate || !endDate) return;
+
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     
     if (daysDiff <= 31) {
       for (let i = 0; i <= daysDiff; i++) {
-        const data = new Date(start);
+        const data = new Date(startDate);
         data.setDate(data.getDate() + i);
-        const dataStr = format(data, 'yyyy-MM-dd');
+        const dataStr = safeFormatDate(data);
         
         const pagamentosDia = (pagamentos || []).filter(p => {
-          const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
-          return format(dataPagamento, 'yyyy-MM-dd') === dataStr;
+          const dataPagamento = safeDate(p.data);
+          return dataPagamento && safeFormatDate(dataPagamento) === dataStr;
         });
         
         const total = pagamentosDia.reduce((acc, p) => acc + (p.valor || 0), 0);
         
         revenueByPeriod.push({
-          name: format(data, 'dd/MM'),
+          name: safeFormat(data, 'dd/MM'),
           valor: total,
         });
       }
     } else {
       const mesesMap = {};
       for (let i = 0; i <= daysDiff; i++) {
-        const data = new Date(start);
+        const data = new Date(startDate);
         data.setDate(data.getDate() + i);
-        const mesKey = format(data, 'MMM/yyyy');
+        const mesKey = safeFormat(data, 'MMM/yyyy');
         
         if (!mesesMap[mesKey]) {
           mesesMap[mesKey] = 0;
         }
         
         const pagamentosDia = (pagamentos || []).filter(p => {
-          const dataPagamento = p.data?.toDate ? p.data.toDate() : new Date(p.data);
-          return format(dataPagamento, 'yyyy-MM-dd') === format(data, 'yyyy-MM-dd');
+          const dataPagamento = safeDate(p.data);
+          return dataPagamento && safeFormatDate(dataPagamento) === safeFormatDate(data);
         });
         
         mesesMap[mesKey] += pagamentosDia.reduce((acc, p) => acc + (p.valor || 0), 0);
@@ -840,9 +919,10 @@ function ModernDashboard() {
     (pagamentos || []).forEach(p => {
       if (p.clienteId) {
         if (!clientSpending[p.clienteId]) {
+          const cliente = (clientes || []).find(c => c.id === p.clienteId);
           clientSpending[p.clienteId] = {
             id: p.clienteId,
-            nome: clientes?.find(c => c.id === p.clienteId)?.nome || 'Cliente',
+            nome: cliente?.nome || 'Cliente',
             total: 0,
             visitas: 0,
           };
@@ -945,13 +1025,13 @@ function ModernDashboard() {
                     label="De"
                     value={customDateRange.start}
                     onChange={(newValue) => setCustomDateRange({ ...customDateRange, start: newValue })}
-                    renderInput={(params) => <TextField {...params} size="small" />}
+                    slotProps={{ textField: { size: 'small' } }}
                   />
                   <DatePicker
                     label="Até"
                     value={customDateRange.end}
                     onChange={(newValue) => setCustomDateRange({ ...customDateRange, end: newValue })}
-                    renderInput={(params) => <TextField {...params} size="small" />}
+                    slotProps={{ textField: { size: 'small' } }}
                   />
                 </Box>
               </LocalizationProvider>
@@ -985,7 +1065,7 @@ function ModernDashboard() {
               value={formatarNumero(stats.totalClientes)}
               trend={trends.clientes}
               color="#ff4081"
-              subtitle={`+${stats.clientesNovosMes} neste período`}
+              subtitle={`+${stats.clientesNovosMes || 0} neste período`}
             />
           </Grid>
           
@@ -993,9 +1073,9 @@ function ModernDashboard() {
             <StatCard
               icon={<TrendingUp />}
               title="Taxa de Ocupação"
-              value={`${stats.taxaOcupacao}%`}
+              value={`${stats.taxaOcupacao || 0}%`}
               color="#7b1fa2"
-              subtitle={`${stats.agendamentosHoje} agendamentos hoje`}
+              subtitle={`${stats.agendamentosHoje || 0} agendamentos hoje`}
             />
           </Grid>
           
@@ -1018,12 +1098,12 @@ function ModernDashboard() {
                   Agendamentos Hoje
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {stats.agendamentosHoje}
+                  {stats.agendamentosHoje || 0}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                  <Chip size="small" label={`${stats.agendamentosConfirmados} confirmados`} color="success" />
-                  <Chip size="small" label={`${stats.agendamentosPendentes} pendentes`} color="warning" />
-                  <Chip size="small" label={`${stats.agendamentosCancelados} cancelados`} color="error" />
+                  <Chip size="small" label={`${stats.agendamentosConfirmados || 0} confirmados`} color="success" />
+                  <Chip size="small" label={`${stats.agendamentosPendentes || 0} pendentes`} color="warning" />
+                  <Chip size="small" label={`${stats.agendamentosCancelados || 0} cancelados`} color="error" />
                 </Box>
               </CardContent>
             </Card>
@@ -1502,7 +1582,7 @@ function ModernDashboard() {
                             {apt.servico?.nome}
                           </Typography>
                           <Typography variant="body2" color="textSecondary">
-                            {format(new Date(apt.data), "dd 'de' MMMM")} às {apt.horario}
+                            {apt.data && format(new Date(apt.data + 'T12:00:00'), "dd 'de' MMMM")} às {apt.horario}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
                             Profissional: {apt.profissional?.nome}
@@ -1553,14 +1633,18 @@ function ModernDashboard() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {stats.historicoAtendimentos.map((atend, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{format(new Date(atend.data), 'dd/MM/yyyy')}</TableCell>
-                            <TableCell>{atend.servico?.nome || '-'}</TableCell>
-                            <TableCell>{atend.profissional?.nome || '-'}</TableCell>
-                            <TableCell>{formatarMoeda(atend.valor)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {stats.historicoAtendimentos.map((atend, index) => {
+                          const servico = servicos?.find(s => s.id === atend.servicoId);
+                          const profissional = profissionais?.find(p => p.id === atend.profissionalId);
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>{safeFormat(atend.data, 'dd/MM/yyyy')}</TableCell>
+                              <TableCell>{servico?.nome || '-'}</TableCell>
+                              <TableCell>{profissional?.nome || '-'}</TableCell>
+                              <TableCell>{formatarMoeda(atend.valor)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
