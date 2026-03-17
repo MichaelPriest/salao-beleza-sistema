@@ -163,31 +163,6 @@ import {
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-const tiposBackup = [
-  { value: 'completo', label: 'Backup Completo', icon: <StorageIcon />, descricao: 'Todos os dados do sistema' },
-  { value: 'clientes', label: 'Apenas Clientes', icon: <PersonIcon />, descricao: 'Dados de clientes' },
-  { value: 'agendamentos', label: 'Agendamentos', icon: <CalendarIcon />, descricao: 'Histórico de agendamentos' },
-  { value: 'financeiro', label: 'Dados Financeiros', icon: <AttachMoneyIcon />, descricao: 'Transações e pagamentos' },
-  { value: 'produtos', label: 'Produtos e Estoque', icon: <InventoryIcon />, descricao: 'Catálogo e estoque' },
-  { value: 'configuracoes', label: 'Configurações', icon: <SettingsIcon />, descricao: 'Configurações do sistema' },
-];
-
-const frequencias = [
-  { value: 'manual', label: 'Manual' },
-  { value: 'diario', label: 'Diário' },
-  { value: 'semanal', label: 'Semanal' },
-  { value: 'quinzenal', label: 'Quinzenal' },
-  { value: 'mensal', label: 'Mensal' },
-];
-
-const statusBackup = [
-  { value: 'concluido', label: 'Concluído', color: '#4caf50', icon: <CheckCircleIcon /> },
-  { value: 'em_andamento', label: 'Em Andamento', color: '#2196f3', icon: <CloudSyncIcon /> },
-  { value: 'falha', label: 'Falha', color: '#f44336', icon: <ErrorIcon /> },
-  { value: 'cancelado', label: 'Cancelado', color: '#ff9800', icon: <CancelIcon /> },
-  { value: 'agendado', label: 'Agendado', color: '#9c27b0', icon: <ScheduleIcon /> },
-];
-
 function Backup() {
   const [loading, setLoading] = useState(true);
   const [backups, setBackups] = useState([]);
@@ -219,6 +194,34 @@ function Backup() {
     espacoDisponivel: 0,
   });
 
+  // ✅ CORREÇÃO: Mover as definições para DENTRO do componente
+  const tiposBackup = [
+    { value: 'completo', label: 'Backup Completo', icon: <StorageIcon />, descricao: 'Todos os dados do sistema' },
+    { value: 'clientes', label: 'Apenas Clientes', icon: <PersonIcon />, descricao: 'Dados de clientes' },
+    { value: 'agendamentos', label: 'Agendamentos', icon: <CalendarIcon />, descricao: 'Histórico de agendamentos' },
+    { value: 'financeiro', label: 'Dados Financeiros', icon: <MoneyIcon />, descricao: 'Transações e pagamentos' },
+    { value: 'produtos', label: 'Produtos e Estoque', icon: <InventoryIcon />, descricao: 'Catálogo e estoque' },
+    { value: 'configuracoes', label: 'Configurações', icon: <SettingsIcon />, descricao: 'Configurações do sistema' },
+  ];
+
+  const frequencias = [
+    { value: 'manual', label: 'Manual' },
+    { value: 'diario', label: 'Diário' },
+    { value: 'semanal', label: 'Semanal' },
+    { value: 'quinzenal', label: 'Quinzenal' },
+    { value: 'mensal', label: 'Mensal' },
+  ];
+
+  const statusBackup = [
+    { value: 'concluido', label: 'Concluído', color: '#4caf50', icon: <CheckIcon /> },
+    { value: 'em_andamento', label: 'Em Andamento', color: '#2196f3', icon: <CloudSyncIcon /> },
+    { value: 'falha', label: 'Falha', color: '#f44336', icon: <ErrorIcon /> },
+    { value: 'cancelado', label: 'Cancelado', color: '#ff9800', icon: <CancelIcon /> },
+    { value: 'agendado', label: 'Agendado', color: '#9c27b0', icon: <ScheduleIcon /> },
+  ];
+
+  // ... (resto do código permanece igual - todas as funções e o JSX)
+  
   useEffect(() => {
     carregarDados();
   }, []);
