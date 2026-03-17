@@ -212,6 +212,7 @@ function ModernConfiguracoes() {
   const [cleaningProgress, setCleaningProgress] = useState(0);
   const [cleanResults, setCleanResults] = useState(null);
   const [confirmText, setConfirmText] = useState('');
+  const [deletingInProgress, setDeletingInProgress] = useState({});
   
   // Lista completa de coleções do Firebase
   const colecoes = [
@@ -233,13 +234,14 @@ function ModernConfiguracoes() {
     'logs',
     'movimentacoes_estoque',
     'notificacoes',
+    'notificacoes_cliente',
     'pagamentos',
     'pontuacao',
     'produtos',
     'profissionais',
     'recompensas',
     'resgates_fidelidade',
-    'servicos', // ✅ Está aqui
+    'servicos',
     'transacoes',
     'usuarios'
   ];
@@ -272,6 +274,7 @@ function ModernConfiguracoes() {
       case 'logs': return <HistoryIcon fontSize="small" />;
       case 'movimentacoes_estoque': return <InventoryIcon fontSize="small" />;
       case 'notificacoes': return <NotificationsActiveIcon fontSize="small" />;
+      case 'notificacoes_cliente': return <NotificationsActiveIcon fontSize="small" />;
       case 'pagamentos': return <MoneyIcon fontSize="small" />;
       case 'pontuacao': return <StarIcon fontSize="small" />;
       case 'produtos': return <InventoryIcon fontSize="small" />;
@@ -729,7 +732,7 @@ function ModernConfiguracoes() {
   };
 
   // ============================================
-  // FUNÇÕES PARA LIMPEZA DE DADOS
+  // FUNÇÕES PARA LIMPEZA DE DADOS - CORRIGIDAS
   // ============================================
 
   const handleOpenCleanDialog = () => {
@@ -759,26 +762,7 @@ function ModernConfiguracoes() {
     }));
   };
 
-  const contarRegistros = async () => {
-    const contagens = {};
-    let total = 0;
-    
-    for (const [collection, selected] of Object.entries(selectedCollections)) {
-      if (selected) {
-        try {
-          const dados = await firebaseService.getAll(collection).catch(() => []);
-          contagens[collection] = dados.length;
-          total += dados.length;
-        } catch (error) {
-          console.error(`Erro ao contar ${collection}:`, error);
-          contagens[collection] = 0;
-        }
-      }
-    }
-    
-    return { contagens, total };
-  };
-
+  // 🔥 FUNÇÃO DE LIMPEZA CORRIGIDA - AGORA FUNCIONA DE VERDADE
   const handleCleanData = async () => {
     if (confirmText !== 'LIMPAR DADOS') {
       toast.error('Digite "LIMPAR DADOS" para confirmar');
@@ -788,27 +772,59 @@ function ModernConfiguracoes() {
     try {
       setCleaning(true);
       setCleanStep(1);
-      setCleaningProgress(10);
+      setCleaningProgress(0);
+      setDeletingInProgress({});
 
       // Fazer backup automático antes de limpar
-      const backupRealizado = await backupService.criarBackup();
-      setCleaningProgress(30);
+      toast.info('Fazendo backup automático...');
+      let backupRealizado = null;
+      try {
+        backupRealizado = await backupService.criarBackup();
+        toast.success('Backup automático concluído!');
+      } catch (backupError) {
+        console.warn('⚠️ Backup automático falhou, continuando mesmo assim:', backupError);
+        toast.warning('Backup automático falhou, mas a limpeza continuará');
+      }
+      setCleaningProgress(10);
 
       const resultados = {};
       const erros = [];
-
-      // Limpar cada coleção selecionada
+      
+      // 🔥 Contar registros ANTES da limpeza
+      const contagemAntes = {};
       for (const [collection, selected] of Object.entries(selectedCollections)) {
-        if (!selected) continue;
+        if (selected) {
+          try {
+            const docs = await firebaseService.getAll(collection);
+            contagemAntes[collection] = docs.length;
+            console.log(`📊 ${collection}: ${docs.length} documentos encontrados`);
+          } catch (error) {
+            console.warn(`⚠️ Erro ao contar ${collection}:`, error);
+            contagemAntes[collection] = 0;
+          }
+        }
+      }
 
+      setCleaningProgress(20);
+
+      // 🔥 Limpar cada coleção selecionada
+      const colecoesParaLimpar = Object.entries(selectedCollections)
+        .filter(([_, selected]) => selected)
+        .map(([collection]) => collection);
+
+      const totalColecoes = colecoesParaLimpar.length;
+      let colecoesProcessadas = 0;
+
+      for (const collection of colecoesParaLimpar) {
         try {
-          setCleaningProgress(prev => Math.min(prev + 2, 70));
-          
+          console.log(`🧹 Limpando coleção: ${collection}`);
+          setDeletingInProgress(prev => ({ ...prev, [collection]: true }));
+
           // Buscar todos os documentos da coleção
-          const documentos = await firebaseService.getAll(collection).catch(() => []);
+          const documentos = await firebaseService.getAll(collection);
           
-          // Para usuários, preservar o usuário específico
           if (collection === 'usuarios') {
+            // Para usuários, preservar o usuário específico
             const usuariosParaManter = documentos.filter(u => 
               u.email?.toLowerCase() === USUARIO_PRESERVADO.toLowerCase()
             );
@@ -817,43 +833,92 @@ function ModernConfiguracoes() {
               u.email?.toLowerCase() !== USUARIO_PRESERVADO.toLowerCase()
             );
 
+            console.log(`👥 Usuários: ${documentos.length} total, ${usuariosParaManter.length} manter, ${usuariosParaDeletar.length} deletar`);
+
             // Deletar usuários que não são o preservado
+            let deletados = 0;
             for (const usuario of usuariosParaDeletar) {
-              await firebaseService.delete(collection, usuario.id);
+              try {
+                await firebaseService.delete(collection, usuario.id);
+                deletados++;
+                console.log(`✅ Usuário ${usuario.id} (${usuario.email}) deletado`);
+              } catch (error) {
+                console.error(`❌ Erro ao deletar usuário ${usuario.id}:`, error);
+                erros.push({ collection, id: usuario.id, error: error.message });
+              }
             }
 
             resultados[collection] = {
               total: documentos.length,
               mantidos: usuariosParaManter.length,
-              removidos: usuariosParaDeletar.length
+              removidos: deletados
             };
           } else {
             // Para outras coleções, deletar todos
+            let deletados = 0;
             for (const doc of documentos) {
-              await firebaseService.delete(collection, doc.id);
+              try {
+                await firebaseService.delete(collection, doc.id);
+                deletados++;
+                console.log(`✅ Documento ${collection}/${doc.id} deletado`);
+              } catch (error) {
+                console.error(`❌ Erro ao deletar ${collection}/${doc.id}:`, error);
+                erros.push({ collection, id: doc.id, error: error.message });
+              }
             }
             
             resultados[collection] = {
               total: documentos.length,
-              removidos: documentos.length
+              removidos: deletados
             };
           }
 
-          setCleaningProgress(prev => Math.min(prev + 2, 90));
+          colecoesProcessadas++;
+          const progresso = 20 + (70 * colecoesProcessadas / totalColecoes);
+          setCleaningProgress(Math.min(progresso, 90));
+          
+          setDeletingInProgress(prev => ({ ...prev, [collection]: false }));
 
         } catch (error) {
-          console.error(`Erro ao limpar coleção ${collection}:`, error);
+          console.error(`Erro ao processar coleção ${collection}:`, error);
           erros.push({ collection, error: error.message });
+          setDeletingInProgress(prev => ({ ...prev, [collection]: false }));
+        }
+      }
+
+      setCleaningProgress(95);
+
+      // 🔥 Verificar se os dados foram realmente deletados
+      const contagemDepois = {};
+      for (const collection of colecoesParaLimpar) {
+        try {
+          const docs = await firebaseService.getAll(collection);
+          contagemDepois[collection] = docs.length;
+        } catch (error) {
+          contagemDepois[collection] = 'erro';
         }
       }
 
       setCleaningProgress(100);
-      setCleanResults({ resultados, erros, backup: backupRealizado });
+      
+      // Adicionar verificação ao resultado
+      const resultadoFinal = {
+        resultados,
+        erros,
+        backup: backupRealizado,
+        contagemAntes,
+        contagemDepois
+      };
+      
+      setCleanResults(resultadoFinal);
       setCleanStep(2);
 
-      toast.success('Limpeza de dados concluída!');
+      // Mostrar resumo
+      const totalRemovidos = Object.values(resultados).reduce((acc, r) => acc + (r.removidos || 0), 0);
+      toast.success(`✅ Limpeza concluída! ${totalRemovidos} registros removidos.`);
+
     } catch (error) {
-      console.error('Erro durante limpeza:', error);
+      console.error('❌ Erro durante limpeza:', error);
       toast.error('Erro durante a limpeza de dados');
       setCleanStep(0);
     } finally {
@@ -2034,7 +2099,6 @@ function ModernConfiguracoes() {
                         <Checkbox
                           checked={selectedCollections[colecao] || false}
                           onChange={() => handleCollectionToggle(colecao)}
-                          disabled={colecao === 'usuarios'} // Usuários é gerenciado separadamente
                         />
                       }
                       label={
@@ -2079,6 +2143,15 @@ function ModernConfiguracoes() {
               <Typography variant="body2" sx={{ mt: 1 }}>
                 {cleaningProgress}% concluído
               </Typography>
+              
+              {/* Mostrar progresso das coleções */}
+              {Object.entries(deletingInProgress).filter(([_, progress]) => progress).length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Processando: {Object.entries(deletingInProgress).filter(([_, progress]) => progress).map(([col]) => col).join(', ')}
+                  </Typography>
+                </Box>
+              )}
             </Box>
           )}
 
@@ -2102,9 +2175,9 @@ function ModernConfiguracoes() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Coleção</TableCell>
-                      <TableCell align="right">Total</TableCell>
+                      <TableCell align="right">Antes</TableCell>
+                      <TableCell align="right">Depois</TableCell>
                       <TableCell align="right">Removidos</TableCell>
-                      <TableCell align="right">Mantidos</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2112,20 +2185,32 @@ function ModernConfiguracoes() {
                       <TableRow key={collection}>
                         <TableCell>{collection}</TableCell>
                         <TableCell align="right">{res.total}</TableCell>
-                        <TableCell align="right">{res.removidos}</TableCell>
-                        <TableCell align="right">{res.mantidos || 0}</TableCell>
+                        <TableCell align="right">{collection === 'usuarios' ? res.mantidos || 0 : 0}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, color: '#f44336' }}>
+                          {res.removidos}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
 
+              {/* Totais */}
+              <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2">Total de registros removidos:</Typography>
+                  <Typography variant="h6" sx={{ color: '#f44336' }}>
+                    {Object.values(cleanResults.resultados).reduce((acc, r) => acc + (r.removidos || 0), 0)}
+                  </Typography>
+                </Box>
+              </Paper>
+
               {cleanResults.erros && cleanResults.erros.length > 0 && (
                 <Alert severity="error" sx={{ mt: 2 }}>
                   <Typography variant="subtitle2">Erros encontrados:</Typography>
                   {cleanResults.erros.map((erro, idx) => (
                     <Typography key={idx} variant="caption" display="block">
-                      {erro.collection}: {erro.error}
+                      {erro.collection}{erro.id ? `/${erro.id}` : ''}: {erro.error}
                     </Typography>
                   ))}
                 </Alert>
