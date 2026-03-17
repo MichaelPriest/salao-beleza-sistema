@@ -67,9 +67,26 @@ import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
 
-// Pages de Cupons (NOVA)
+// Pages de Cupons e Marketing (NOVAS)
 import GerenciarCupons from './pages/GerenciarCupons';
 import Campanhas from './pages/Campanhas';
+import AnaliseCupons from './pages/AnaliseCupons';
+
+// Pages de Disponibilidade (NOVA)
+import Disponibilidade from './pages/Disponibilidade';
+
+// Pages de Categorias (NOVA)
+import CategoriasProdutos from './pages/CategoriasProdutos';
+
+// Pages de Análise de Vendas (NOVA)
+import AnaliseVendas from './pages/AnaliseVendas';
+
+// Pages de Performance (NOVA)
+import Performance from './pages/Performance';
+
+// Pages de Backup e Logs (NOVAS)
+import Backup from './pages/Backup';
+import Logs from './pages/Logs';
 
 // Páginas do Cliente
 import ClienteLogin from './pages/ClienteLogin';
@@ -546,11 +563,103 @@ function App() {
                   </PrivateRoute>
                 } />
 
-                {/* 🔥 NOVA ROTA PARA GERENCIAR CUPONS */}
+                {/* =========================================== */}
+                {/* NOVAS ROTAS - MARKETING E PROMOÇÕES */}
+                {/* =========================================== */}
+                
+                {/* CUPONS DE DESCONTO */}
                 <Route path="/cupons" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <GerenciarCupons />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* CAMPANHAS */}
+                <Route path="/campanhas" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Campanhas />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* ANÁLISE DE CUPONS */}
+                <Route path="/analise-cupons" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <AnaliseCupons />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* =========================================== */}
+                {/* NOVAS ROTAS - PROFISSIONAIS */}
+                {/* =========================================== */}
+                
+                {/* DISPONIBILIDADE DE PROFISSIONAIS */}
+                <Route path="/disponibilidade" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Disponibilidade />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* =========================================== */}
+                {/* NOVAS ROTAS - ESTOQUE */}
+                {/* =========================================== */}
+                
+                {/* CATEGORIAS DE PRODUTOS */}
+                <Route path="/categorias-produtos" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <CategoriasProdutos />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* =========================================== */}
+                {/* NOVAS ROTAS - RELATÓRIOS */}
+                {/* =========================================== */}
+                
+                {/* ANÁLISE DE VENDAS */}
+                <Route path="/analise-vendas" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <AnaliseVendas />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* PERFORMANCE */}
+                <Route path="/performance" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Performance />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* =========================================== */}
+                {/* NOVAS ROTAS - ADMINISTRAÇÃO */}
+                {/* =========================================== */}
+                
+                {/* BACKUP */}
+                <Route path="/backup" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Backup />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* LOGS DO SISTEMA */}
+                <Route path="/logs" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Logs />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
