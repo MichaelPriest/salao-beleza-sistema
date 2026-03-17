@@ -78,6 +78,84 @@ import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { useReactToPrint } from 'react-to-print';
 
+// ✅ Função segura para obter a data no formato YYYY-MM-DD
+const getDataString = (data) => {
+  if (!data) return '';
+  try {
+    if (typeof data === 'string') {
+      return data.split('T')[0];
+    }
+    if (data instanceof Date) {
+      return data.toISOString().split('T')[0];
+    }
+    if (data?.toDate) {
+      return data.toDate().toISOString().split('T')[0];
+    }
+    return '';
+  } catch (error) {
+    console.warn('Erro ao formatar data:', error);
+    return '';
+  }
+};
+
+// ✅ Função segura para comparar datas
+const compararData = (logData, dataReferencia) => {
+  try {
+    if (!logData) return false;
+    
+    let logDataStr = '';
+    if (typeof logData === 'string') {
+      logDataStr = logData.split('T')[0];
+    } else if (logData instanceof Date) {
+      logDataStr = logData.toISOString().split('T')[0];
+    } else if (logData?.toDate) {
+      logDataStr = logData.toDate().toISOString().split('T')[0];
+    } else {
+      return false;
+    }
+    
+    return logDataStr === dataReferencia;
+  } catch (error) {
+    console.warn('Erro ao comparar datas:', error);
+    return false;
+  }
+};
+
+// ✅ Função segura para verificar se data é maior ou igual
+const dataMaiorOuIgual = (logData, dataReferencia) => {
+  try {
+    if (!logData || !dataReferencia) return false;
+    
+    const logDate = new Date(logData);
+    const refDate = new Date(dataReferencia);
+    
+    if (isNaN(logDate.getTime()) || isNaN(refDate.getTime())) return false;
+    
+    return logDate >= refDate;
+  } catch (error) {
+    console.warn('Erro ao comparar datas:', error);
+    return false;
+  }
+};
+
+// ✅ Função segura para verificar intervalo de datas
+const dataNoIntervalo = (logData, inicio, fim) => {
+  try {
+    if (!logData || !inicio || !fim) return false;
+    
+    const logDate = new Date(logData);
+    const inicioDate = new Date(inicio);
+    const fimDate = new Date(fim + 'T23:59:59');
+    
+    if (isNaN(logDate.getTime()) || isNaN(inicioDate.getTime()) || isNaN(fimDate.getTime())) return false;
+    
+    return logDate >= inicioDate && logDate <= fimDate;
+  } catch (error) {
+    console.warn('Erro ao verificar intervalo:', error);
+    return false;
+  }
+};
+
 // Componente de Impressão
 const RelatorioAuditoria = React.forwardRef(({ logs, filtros, estatisticas, config }, ref) => {
   const logo = config?.salao?.logo || '';
@@ -237,12 +315,8 @@ function Auditoria() {
   const [filtroUsuario, setFiltroUsuario] = useState('todos');
   const [filtroEntidade, setFiltroEntidade] = useState('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
-  const [dataInicio, setDataInicio] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [dataFim, setDataFim] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [dataInicio, setDataInicio] = useState(getDataString(new Date()));
+  const [dataFim, setDataFim] = useState(getDataString(new Date()));
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [logSelecionado, setLogSelecionado] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -295,22 +369,24 @@ function Auditoria() {
   };
 
   const calcularEstatisticas = () => {
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = getDataString(new Date());
     const seteDiasAtras = subDays(new Date(), 7).toISOString();
     const trintaDiasAtras = subDays(new Date(), 30).toISOString();
 
     const stats = {
       total: logs.length,
-      hoje: logs.filter(log => log.data?.split('T')[0] === hoje).length,
-      semana: logs.filter(log => log.data >= seteDiasAtras).length,
-      mes: logs.filter(log => log.data >= trintaDiasAtras).length,
+      hoje: logs.filter(log => compararData(log.data, hoje)).length,
+      semana: logs.filter(log => dataMaiorOuIgual(log.data, seteDiasAtras)).length,
+      mes: logs.filter(log => dataMaiorOuIgual(log.data, trintaDiasAtras)).length,
       porAcao: {},
       porUsuario: {},
     };
 
     logs.forEach(log => {
-      stats.porAcao[log.acao] = (stats.porAcao[log.acao] || 0) + 1;
-      if (log.usuario) {
+      if (log?.acao) {
+        stats.porAcao[log.acao] = (stats.porAcao[log.acao] || 0) + 1;
+      }
+      if (log?.usuario) {
         stats.porUsuario[log.usuario] = (stats.porUsuario[log.usuario] || 0) + 1;
       }
     });
@@ -320,7 +396,7 @@ function Auditoria() {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `auditoria_${new Date().toISOString().split('T')[0]}`,
+    documentTitle: `auditoria_${getDataString(new Date())}`,
     onBeforeGetContent: () => {
       toast.loading('Preparando impressão...', { id: 'print' });
     },
@@ -353,7 +429,7 @@ function Auditoria() {
       const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `auditoria_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `auditoria_${getDataString(new Date())}.json`;
       link.click();
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
@@ -368,7 +444,7 @@ function Auditoria() {
       const data = logsFiltrados.map(log => [
         log.data ? new Date(log.data).toLocaleString('pt-BR') : '',
         log.usuario || 'Sistema',
-        acoesColors[log.acao]?.label || log.acao,
+        acoesColors[log.acao]?.label || log.acao || '-',
         log.entidade || '-',
         log.entidadeId || '-',
         log.ip || '-',
@@ -376,13 +452,13 @@ function Auditoria() {
       ]);
 
       const csvContent = [headers, ...data]
-        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .map(row => row.map(cell => `"${cell || ''}"`).join(','))
         .join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `auditoria_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `auditoria_${getDataString(new Date())}.csv`;
       link.click();
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
@@ -396,10 +472,12 @@ function Auditoria() {
 
     try {
       const noventaDiasAtras = subDays(new Date(), 90).toISOString();
-      const logsAntigos = logs.filter(log => log.data < noventaDiasAtras);
+      const logsAntigos = logs.filter(log => dataMaiorOuIgual(noventaDiasAtras, log.data) === false);
       
       for (const log of logsAntigos) {
-        await firebaseService.delete('auditoria', log.id);
+        if (log?.id) {
+          await firebaseService.delete('auditoria', log.id);
+        }
       }
       
       toast.success(`${logsAntigos.length} logs antigos removidos!`);
@@ -410,17 +488,19 @@ function Auditoria() {
     }
   };
 
-  // ✅ CORREÇÃO: Função de filtro com verificações de tipo
+  // ✅ FILTRO CORRIGIDO - sem usar .split diretamente
   const logsFiltrados = logs.filter(log => {
-    // Garantir que log existe
     if (!log) return false;
 
     // Filtrar por texto - com verificações de tipo
+    const textoBusca = filtro.toLowerCase();
     const matchesTexto = filtro === '' || 
-      (typeof log.usuario === 'string' && log.usuario.toLowerCase().includes(filtro.toLowerCase())) ||
-      (typeof log.detalhes === 'string' && log.detalhes.toLowerCase().includes(filtro.toLowerCase())) ||
+      (typeof log.usuario === 'string' && log.usuario.toLowerCase().includes(textoBusca)) ||
+      (typeof log.detalhes === 'string' && log.detalhes.toLowerCase().includes(textoBusca)) ||
       (typeof log.ip === 'string' && log.ip.includes(filtro)) ||
-      (typeof log.entidadeId === 'string' && log.entidadeId.includes(filtro));
+      (typeof log.entidadeId === 'string' && log.entidadeId.includes(filtro)) ||
+      (typeof log.acao === 'string' && log.acao.toLowerCase().includes(textoBusca)) ||
+      (typeof log.entidade === 'string' && log.entidade.toLowerCase().includes(textoBusca));
 
     // Filtrar por ação
     const matchesAcao = filtroAcao === 'todos' || log.acao === filtroAcao;
@@ -433,30 +513,26 @@ function Auditoria() {
     // Filtrar por entidade
     const matchesEntidade = filtroEntidade === 'todos' || log.entidade === filtroEntidade;
 
-    // Filtrar por período - com verificações de data
+    // Filtrar por período - usando funções seguras
     let matchesPeriodo = true;
+    
     if (filtroPeriodo !== 'todos' && log.data) {
       try {
-        const logDate = new Date(log.data);
+        const hoje = getDataString(new Date());
         
         if (filtroPeriodo === 'hoje') {
-          const hoje = new Date().toISOString().split('T')[0];
-          matchesPeriodo = log.data.split('T')[0] === hoje;
+          matchesPeriodo = compararData(log.data, hoje);
         } else if (filtroPeriodo === 'ontem') {
-          const ontem = subDays(new Date(), 1).toISOString().split('T')[0];
-          matchesPeriodo = log.data.split('T')[0] === ontem;
+          const ontem = getDataString(subDays(new Date(), 1));
+          matchesPeriodo = compararData(log.data, ontem);
         } else if (filtroPeriodo === 'semana') {
           const seteDiasAtras = subDays(new Date(), 7);
-          matchesPeriodo = logDate >= seteDiasAtras;
+          matchesPeriodo = dataMaiorOuIgual(log.data, seteDiasAtras);
         } else if (filtroPeriodo === 'mes') {
           const trintaDiasAtras = subDays(new Date(), 30);
-          matchesPeriodo = logDate >= trintaDiasAtras;
-        } else if (filtroPeriodo === 'personalizado') {
-          if (dataInicio && dataFim) {
-            const inicio = new Date(dataInicio);
-            const fim = new Date(dataFim + 'T23:59:59');
-            matchesPeriodo = logDate >= inicio && logDate <= fim;
-          }
+          matchesPeriodo = dataMaiorOuIgual(log.data, trintaDiasAtras);
+        } else if (filtroPeriodo === 'personalizado' && dataInicio && dataFim) {
+          matchesPeriodo = dataNoIntervalo(log.data, dataInicio, dataFim);
         }
       } catch (error) {
         console.warn('Erro ao processar data do log:', error);
@@ -469,8 +545,8 @@ function Auditoria() {
 
   // Ordenar por data (mais recentes primeiro)
   const logsOrdenados = [...logsFiltrados].sort((a, b) => {
-    if (!a.data) return 1;
-    if (!b.data) return -1;
+    if (!a?.data) return 1;
+    if (!b?.data) return -1;
     try {
       return new Date(b.data) - new Date(a.data);
     } catch {
@@ -514,7 +590,7 @@ function Auditoria() {
         <AnimatePresence>
           {logsOrdenados.slice(0, 20).map((log, index) => (
             <motion.div
-              key={log.id || index}
+              key={log?.id || index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -524,29 +600,29 @@ function Auditoria() {
                 button
                 onClick={() => handleOpenDetalhes(log)}
                 sx={{
-                  bgcolor: log.acao === 'erro' ? '#ffebee' : 'white',
+                  bgcolor: log?.acao === 'erro' ? '#ffebee' : 'white',
                   borderBottom: '1px solid #f0f0f0',
                 }}
               >
                 <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: acoesColors[log.acao]?.color || '#999' }}>
-                    {acoesColors[log.acao]?.icon || <InfoIcon />}
+                  <Avatar sx={{ bgcolor: acoesColors[log?.acao]?.color || '#999' }}>
+                    {acoesColors[log?.acao]?.icon || <InfoIcon />}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Typography variant="subtitle2">
-                        {log.usuario || 'Sistema'}
+                        {log?.usuario || 'Sistema'}
                       </Typography>
                       <Chip
-                        label={acoesColors[log.acao]?.label || log.acao}
+                        label={acoesColors[log?.acao]?.label || log?.acao || '-'}
                         size="small"
                         sx={{
                           height: 20,
                           fontSize: '0.6rem',
-                          bgcolor: `${acoesColors[log.acao]?.color}20`,
-                          color: acoesColors[log.acao]?.color,
+                          bgcolor: `${acoesColors[log?.acao]?.color}20`,
+                          color: acoesColors[log?.acao]?.color,
                         }}
                       />
                     </Box>
@@ -554,10 +630,10 @@ function Auditoria() {
                   secondary={
                     <>
                       <Typography variant="caption" display="block">
-                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
+                        {log?.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        {log.detalhes}
+                        {log?.detalhes}
                       </Typography>
                     </>
                   }
@@ -1007,31 +1083,31 @@ function Auditoria() {
                 </TableHead>
                 <TableBody>
                   {logsOrdenados.slice(0, 100).map((log, index) => (
-                    <TableRow key={log.id || index} hover>
+                    <TableRow key={log?.id || index} hover>
                       <TableCell>
-                        {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
+                        {log?.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Avatar sx={{ width: 24, height: 24, bgcolor: '#9c27b0' }}>
-                            {log.usuario?.charAt(0) || 'S'}
+                            {log?.usuario?.charAt(0) || 'S'}
                           </Avatar>
-                          {log.usuario || 'Sistema'}
+                          {log?.usuario || 'Sistema'}
                         </Box>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          icon={acoesColors[log.acao]?.icon}
-                          label={acoesColors[log.acao]?.label || log.acao}
+                          icon={acoesColors[log?.acao]?.icon}
+                          label={acoesColors[log?.acao]?.label || log?.acao || '-'}
                           size="small"
                           sx={{
-                            bgcolor: `${acoesColors[log.acao]?.color}20`,
-                            color: acoesColors[log.acao]?.color,
+                            bgcolor: `${acoesColors[log?.acao]?.color}20`,
+                            color: acoesColors[log?.acao]?.color,
                           }}
                         />
                       </TableCell>
-                      <TableCell>{log.entidade || '-'}</TableCell>
-                      <TableCell>{log.ip || '-'}</TableCell>
+                      <TableCell>{log?.entidade || '-'}</TableCell>
+                      <TableCell>{log?.ip || '-'}</TableCell>
                       <TableCell align="center">
                         <IconButton size="small" onClick={() => handleOpenDetalhes(log)}>
                           <VisibilityIcon />
