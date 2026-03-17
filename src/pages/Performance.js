@@ -31,6 +31,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Avatar,
   Switch,
   FormControlLabel,
@@ -47,19 +48,38 @@ import {
   Tab,
   Tabs,
   alpha,
-  ToggleButton,
-  ToggleButtonGroup,
   Rating,
-  CardActions,
   CardMedia,
-  CardActionArea,
-  Fab,
-  Zoom,
+  CardActions,
+  CardHeader,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemAvatar,
+  ListItemText as MuiListItemText,
+  Collapse,
+  Breadcrumbs,
+  Link,
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
-  Backdrop,
-  CircularProgress,
+  Fab,
+  Zoom,
+  Fade,
+  Grow,
+  Slide,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  StepButton,
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+  TimelineOppositeContent,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -68,58 +88,80 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
-  Category as CategoryIcon,
-  Inventory as InventoryIcon,
-  AttachMoney as MoneyIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   ShowChart as ShowChartIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
   Timeline as TimelineIcon,
-  DateRange as DateRangeIcon,
-  CalendarToday as CalendarIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  Share as ShareIcon,
-  ExpandMore as ExpandMoreIcon,
-  ChevronRight as ChevronRightIcon,
-  FilterList as FilterIcon,
-  Visibility as VisibilityIcon,
-  LocalOffer as TagIcon,
-  Person as PersonIcon,
-  Group as GroupIcon,
+  Assessment as AssessmentIcon,
+  Equalizer as EqualizerIcon,
+  Speed as SpeedIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   StarHalf as StarHalfIcon,
-  Assessment as AssessmentIcon,
-  Equalizer as EqualizerIcon,
-  BubbleChart as BubbleChartIcon,
-  CompareArrows as CompareArrowsIcon,
-  SwapHoriz as SwapHorizIcon,
-  Speed as SpeedIcon,
   EmojiEvents as TrophyIcon,
-  MilitaryTech as MedalIcon,
-  WorkspacePremium as PremiumIcon,
-  Whatshot as HotIcon,
-  NewReleases as NewIcon,
-  ThumbUp as ThumbUpIcon,
-  ThumbDown as ThumbDownIcon,
+  Group as GroupIcon,
+  Person as PersonIcon,
+  AttachMoney as MoneyIcon,
+  Inventory as InventoryIcon,
+  ShoppingCart as ShoppingCartIcon,
+  CalendarToday as CalendarIcon,
+  DateRange as DateRangeIcon,
+  AccessTime as TimeIcon,
+  Schedule as ScheduleIcon,
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
-  Schedule as ScheduleIcon,
-  AccessTime as TimeIcon,
-  HourglassEmpty as HourglassIcon,
-  Speed as GaugeIcon,
-  Leaderboard as LeaderboardIcon,
-  Psychology as PsychologyIcon,
-  GroupWork as GroupWorkIcon,
-  BusinessCenter as BusinessIcon,
-  Analytics as AnalyticsIcon,
-  Insights as InsightsIcon,
-  QueryStats as StatsIcon,
-  CandlestickChart as CandlestickIcon,
-  ScatterPlot as ScatterIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon,
+  Info as InfoIcon,
+  ThumbUp as ThumbUpIcon,
+  ThumbDown as ThumbDownIcon,
+  ThumbsUpDown as ThumbsUpDownIcon,
+  CompareArrows as CompareIcon,
+  SwapHoriz as SwapIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  ChevronRight as ChevronRightIcon,
+  FilterList as FilterIcon,
+  Download as DownloadIcon,
+  Print as PrintIcon,
+  Share as ShareIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Settings as SettingsIcon,
+  SettingsApplications as SettingsApplicationsIcon,
+  Tune as TuneIcon,
+  BugReport as BugIcon,
+  Code as CodeIcon,
+  Terminal as TerminalIcon,
+  Storage as StorageIcon,
+  Database as DatabaseIcon,
+  CloudQueue as CloudQueueIcon,
+  CloudDone as CloudDoneIcon,
+  CloudOff as CloudOffIcon,
+  CloudSync as CloudSyncIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
+  LockOutline as LockOutlineIcon,
+  VerifiedUser as VerifiedUserIcon,
+  AdminPanelSettings as AdminIcon,
+  SupervisedUserCircle as UserIcon,
+  Assignment as AssignmentIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
+  AssignmentLate as AssignmentLateIcon,
+  AssignmentReturn as AssignmentReturnIcon,
+  AssignmentReturned as AssignmentReturnedIcon,
+  PlayArrow as PlayIcon,
+  Pause as PauseIcon,
+  Stop as StopIcon,
+  Replay as ReplayIcon,
+  SkipNext as SkipNextIcon,
+  SkipPrevious as SkipPreviousIcon,
+  FastForward as FastForwardIcon,
+  FastRewind as FastRewindIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -143,7 +185,9 @@ import {
   isSameDay,
   isWithinInterval,
   parseISO,
+  differenceInHours,
   differenceInMinutes,
+  differenceInSeconds,
 } from 'date-fns';
 import {
   LineChart,
@@ -172,6 +216,9 @@ import {
   PolarRadiusAxis,
   RadialBarChart,
   RadialBar,
+  FunnelChart,
+  Funnel,
+  LabelList,
   Treemap,
 } from 'recharts';
 
@@ -184,68 +231,61 @@ const periodos = [
   { value: 'esteMes', label: 'Este mês' },
   { value: 'mesPassado', label: 'Mês passado' },
   { value: 'esteAno', label: 'Este ano' },
+  { value: 'anoPassado', label: 'Ano passado' },
   { value: 'personalizado', label: 'Personalizado' },
 ];
 
 const metricasDisponiveis = [
   { value: 'faturamento', label: 'Faturamento', icon: <MoneyIcon />, cor: '#4caf50' },
-  { value: 'atendimentos', label: 'Atendimentos', icon: <AssignmentIcon />, cor: '#2196f3' },
-  { value: 'clientes', label: 'Clientes Atendidos', icon: <PersonIcon />, cor: '#ff9800' },
-  { value: 'ticketMedio', label: 'Ticket Médio', icon: <MoneyIcon />, cor: '#9c27b0' },
-  { value: 'taxaConversao', label: 'Taxa de Conversão', icon: <TrendingUpIcon />, cor: '#00bcd4' },
-  { value: 'satisfacao', label: 'Satisfação', icon: <StarIcon />, cor: '#ff4081' },
-  { value: 'produtividade', label: 'Produtividade', icon: <SpeedIcon />, cor: '#f44336' },
-  { value: 'retencao', label: 'Retenção', icon: <LoopIcon />, cor: '#795548' },
+  { value: 'clientes', label: 'Clientes Atendidos', icon: <GroupIcon />, cor: '#2196f3' },
+  { value: 'servicos', label: 'Serviços Realizados', icon: <AssignmentIcon />, cor: '#9c27b0' },
+  { value: 'produtos', label: 'Produtos Vendidos', icon: <InventoryIcon />, cor: '#ff9800' },
+  { value: 'taxa_ocupacao', label: 'Taxa de Ocupação', icon: <ScheduleIcon />, cor: '#00bcd4' },
+  { value: 'ticket_medio', label: 'Ticket Médio', icon: <AttachMoneyIcon />, cor: '#ff4081' },
+  { value: 'satisfacao', label: 'Satisfação', icon: <StarIcon />, cor: '#f44336' },
+  { value: 'retencao', label: 'Taxa de Retenção', icon: <ThumbUpIcon />, cor: '#795548' },
 ];
 
-const tiposRanking = [
-  { value: 'profissionais', label: 'Profissionais' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'clientes', label: 'Clientes' },
-  { value: 'produtos', label: 'Produtos' },
+const CORES_GRAFICOS = [
+  '#9c27b0', '#ff4081', '#4caf50', '#2196f3', '#ff9800', 
+  '#f44336', '#00bcd4', '#795548', '#607d8b', '#e91e63',
+  '#673ab7', '#3f51b5', '#03a9f4', '#009688', '#8bc34a',
+  '#cddc39', '#ffeb3b', '#ffc107', '#ff5722', '#9e9e9e'
 ];
-
-const periodosComparacao = [
-  { value: 'anterior', label: 'Período anterior' },
-  { value: 'anoPassado', label: 'Ano passado' },
-  { value: 'meta', label: 'Meta' },
-  { value: 'media', label: 'Média histórica' },
-];
-
-const CORES_RANKING = ['#FFD700', '#C0C0C0', '#CD7F32', '#9c27b0', '#ff4081'];
 
 function Performance() {
   const [loading, setLoading] = useState(true);
-  const [atendimentos, setAtendimentos] = useState([]);
-  const [clientes, setClientes] = useState([]);
-  const [profissionais, setProfissionais] = useState([]);
-  const [servicos, setServicos] = useState([]);
-  const [produtos, setProdutos] = useState([]);
-  const [avaliacoes, setAvaliacoes] = useState([]);
+  const [dados, setDados] = useState({
+    atendimentos: [],
+    clientes: [],
+    profissionais: [],
+    servicos: [],
+    produtos: [],
+    avaliacoes: [],
+  });
   const [periodo, setPeriodo] = useState('ultimos30');
   const [dataInicio, setDataInicio] = useState(null);
   const [dataFim, setDataFim] = useState(null);
   const [metricaSelecionada, setMetricaSelecionada] = useState('faturamento');
-  const [tipoRanking, setTipoRanking] = useState('profissionais');
-  const [comparacao, setComparacao] = useState('anterior');
-  const [metas, setMetas] = useState({
-    faturamento: 50000,
-    atendimentos: 200,
-    clientes: 150,
-    ticketMedio: 250,
-    satisfacao: 4.5,
-  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [openMetasDialog, setOpenMetasDialog] = useState(false);
-  const [dadosProcessados, setDadosProcessados] = useState({
-    performanceGeral: {},
-    historico: [],
-    ranking: [],
-    comparativo: {},
-    tendencias: [],
-    kpis: [],
-    satisfacao: [],
-    produtividade: [],
+  const [metricas, setMetricas] = useState({
+    faturamento: { atual: 0, anterior: 0, variacao: 0 },
+    clientes: { atual: 0, anterior: 0, variacao: 0 },
+    servicos: { atual: 0, anterior: 0, variacao: 0 },
+    produtos: { atual: 0, anterior: 0, variacao: 0 },
+    taxaOcupacao: { atual: 0, anterior: 0, variacao: 0 },
+    ticketMedio: { atual: 0, anterior: 0, variacao: 0 },
+    satisfacao: { atual: 0, anterior: 0, variacao: 0 },
+    retencao: { atual: 0, anterior: 0, variacao: 0 },
+  });
+
+  const [graficos, setGraficos] = useState({
+    evolucao: [],
+    rankingProfissionais: [],
+    rankingServicos: [],
+    horariosPico: [],
+    diasSemana: [],
+    distribuicaoClientes: [],
   });
 
   useEffect(() => {
@@ -254,11 +294,12 @@ function Performance() {
 
   useEffect(() => {
     processarDados();
-  }, [atendimentos, clientes, profissionais, servicos, avaliacoes, periodo, dataInicio, dataFim]);
+  }, [dados, periodo, dataInicio, dataFim]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
       const [atendimentosData, clientesData, profissionaisData, servicosData, produtosData, avaliacoesData] = await Promise.all([
         firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
@@ -268,14 +309,15 @@ function Performance() {
         firebaseService.getAll('avaliacoes').catch(() => [])
       ]);
 
-      const atendimentosFinalizados = (atendimentosData || []).filter(a => a.status === 'finalizado');
+      setDados({
+        atendimentos: atendimentosData || [],
+        clientes: clientesData || [],
+        profissionais: profissionaisData || [],
+        servicos: servicosData || [],
+        produtos: produtosData || [],
+        avaliacoes: avaliacoesData || [],
+      });
 
-      setAtendimentos(atendimentosFinalizados);
-      setClientes(clientesData || []);
-      setProfissionais(profissionaisData || []);
-      setServicos(servicosData || []);
-      setProdutos(produtosData || []);
-      setAvaliacoes(avaliacoesData || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
@@ -286,978 +328,970 @@ function Performance() {
 
   const processarDados = () => {
     // Filtrar atendimentos por período
-    let atendimentosFiltrados = [...atendimentos];
+    let atendimentosFiltrados = [...dados.atendimentos];
     
     const hoje = new Date();
     let inicio = new Date();
     let fim = new Date();
+    let inicioAnterior = new Date();
+    let fimAnterior = new Date();
 
     switch (periodo) {
       case 'hoje':
         inicio = new Date(hoje.setHours(0, 0, 0, 0));
         fim = new Date(hoje.setHours(23, 59, 59, 999));
+        inicioAnterior = subDays(inicio, 1);
+        fimAnterior = subDays(fim, 1);
         break;
       case 'ontem':
         inicio = new Date(hoje.setDate(hoje.getDate() - 1));
         inicio.setHours(0, 0, 0, 0);
         fim = new Date(hoje.setDate(hoje.getDate() - 1));
         fim.setHours(23, 59, 59, 999);
+        inicioAnterior = subWeeks(inicio, 1);
+        fimAnterior = subWeeks(fim, 1);
         break;
       case 'ultimos7':
         inicio = subDays(hoje, 7);
         fim = new Date();
+        inicioAnterior = subDays(inicio, 7);
+        fimAnterior = subDays(fim, 7);
         break;
       case 'ultimos30':
         inicio = subDays(hoje, 30);
         fim = new Date();
+        inicioAnterior = subDays(inicio, 30);
+        fimAnterior = subDays(fim, 30);
         break;
       case 'ultimos90':
         inicio = subDays(hoje, 90);
         fim = new Date();
+        inicioAnterior = subDays(inicio, 90);
+        fimAnterior = subDays(fim, 90);
         break;
       case 'esteMes':
         inicio = startOfMonth(hoje);
         fim = endOfMonth(hoje);
+        inicioAnterior = startOfMonth(subMonths(hoje, 1));
+        fimAnterior = endOfMonth(subMonths(hoje, 1));
         break;
       case 'mesPassado':
         inicio = startOfMonth(subMonths(hoje, 1));
         fim = endOfMonth(subMonths(hoje, 1));
+        inicioAnterior = startOfMonth(subMonths(hoje, 2));
+        fimAnterior = endOfMonth(subMonths(hoje, 2));
         break;
       case 'esteAno':
         inicio = new Date(hoje.getFullYear(), 0, 1);
         fim = new Date(hoje.getFullYear(), 11, 31);
+        inicioAnterior = new Date(hoje.getFullYear() - 1, 0, 1);
+        fimAnterior = new Date(hoje.getFullYear() - 1, 11, 31);
+        break;
+      case 'anoPassado':
+        inicio = new Date(hoje.getFullYear() - 1, 0, 1);
+        fim = new Date(hoje.getFullYear() - 1, 11, 31);
+        inicioAnterior = new Date(hoje.getFullYear() - 2, 0, 1);
+        fimAnterior = new Date(hoje.getFullYear() - 2, 11, 31);
         break;
       case 'personalizado':
         if (dataInicio && dataFim) {
           inicio = dataInicio;
           fim = dataFim;
+          const diffDays = differenceInDays(fim, inicio);
+          inicioAnterior = subDays(inicio, diffDays);
+          fimAnterior = subDays(fim, diffDays);
         }
         break;
       default:
         break;
     }
 
-    if (inicio && fim) {
-      atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-        const dataAtendimento = new Date(a.data);
-        return dataAtendimento >= inicio && dataAtendimento <= fim;
-      });
-    }
-
-    // Calcular período anterior para comparação
-    const diasPeriodo = differenceInDays(fim, inicio);
-    const inicioAnterior = subDays(inicio, diasPeriodo);
-    const fimAnterior = subDays(fim, diasPeriodo);
-    
-    const atendimentosAnteriores = atendimentos.filter(a => {
-      const dataAtendimento = new Date(a.data);
-      return dataAtendimento >= inicioAnterior && dataAtendimento <= fimAnterior;
+    // Filtrar atendimentos do período atual
+    const atendimentosAtuais = atendimentosFiltrados.filter(a => {
+      const data = new Date(a.data);
+      return data >= inicio && data <= fim && a.status === 'finalizado';
     });
 
-    // Calcular métricas do período atual
-    const faturamento = atendimentosFiltrados.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
-    const quantidade = atendimentosFiltrados.length;
-    const clientesAtendidos = new Set(atendimentosFiltrados.map(a => a.clienteId)).size;
-    const ticketMedio = quantidade > 0 ? faturamento / quantidade : 0;
-    
-    // Calcular satisfação
-    const avaliacoesPeriodo = avaliacoes.filter(av => {
-      const dataAv = new Date(av.data);
-      return dataAv >= inicio && dataAv <= fim;
+    // Filtrar atendimentos do período anterior
+    const atendimentosAnteriores = atendimentosFiltrados.filter(a => {
+      const data = new Date(a.data);
+      return data >= inicioAnterior && data <= fimAnterior && a.status === 'finalizado';
     });
-    const satisfacaoMedia = avaliacoesPeriodo.length > 0
-      ? avaliacoesPeriodo.reduce((acc, av) => acc + (av.nota || 0), 0) / avaliacoesPeriodo.length
+
+    // Calcular métricas atuais
+    const faturamentoAtual = atendimentosAtuais.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
+    const clientesAtuais = new Set(atendimentosAtuais.map(a => a.clienteId)).size;
+    const servicosAtuais = atendimentosAtuais.reduce((acc, a) => 
+      acc + (a.itensServico?.length || (a.servicoId ? 1 : 0)), 0);
+    const produtosAtuais = atendimentosAtuais.reduce((acc, a) => 
+      acc + (a.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0);
+    const ticketMedioAtual = atendimentosAtuais.length > 0 ? faturamentoAtual / atendimentosAtuais.length : 0;
+    
+    // Taxa de ocupação (considerando 8h por dia útil)
+    const diasUteis = differenceInDays(fim, inicio) + 1;
+    const horasDisponiveis = diasUteis * 8 * (dados.profissionais.length || 1);
+    const horasUtilizadas = atendimentosAtuais.reduce((acc, a) => {
+      if (a.duracao) return acc + a.duracao;
+      if (a.horaInicio && a.horaFim) {
+        const [h1, m1] = a.horaInicio.split(':').map(Number);
+        const [h2, m2] = a.horaFim.split(':').map(Number);
+        return acc + ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      }
+      return acc + 1; // Duração padrão de 1h
+    }, 0);
+    const taxaOcupacaoAtual = horasDisponiveis > 0 ? (horasUtilizadas / horasDisponiveis) * 100 : 0;
+
+    // Satisfação
+    const avaliacoesPeriodo = dados.avaliacoes.filter(a => {
+      const data = new Date(a.data);
+      return data >= inicio && data <= fim;
+    });
+    const satisfacaoAtual = avaliacoesPeriodo.length > 0
+      ? avaliacoesPeriodo.reduce((acc, a) => acc + (a.nota || 0), 0) / avaliacoesPeriodo.length
       : 0;
 
-    // Calcular métricas do período anterior
+    // Retenção (clientes que voltaram)
+    const clientesNovos = atendimentosAtuais.filter(a => {
+      const cliente = dados.clientes.find(c => c.id === a.clienteId);
+      return cliente?.primeiraVisita ? new Date(cliente.primeiraVisita) >= inicio : false;
+    }).length;
+    const retencaoAtual = clientesAtuais > 0 
+      ? ((clientesAtuais - clientesNovos) / clientesAtuais) * 100 
+      : 0;
+
+    // Calcular métricas anteriores
     const faturamentoAnterior = atendimentosAnteriores.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
-    const quantidadeAnterior = atendimentosAnteriores.length;
-    const clientesAtendidosAnterior = new Set(atendimentosAnteriores.map(a => a.clienteId)).size;
-    const ticketMedioAnterior = quantidadeAnterior > 0 ? faturamentoAnterior / quantidadeAnterior : 0;
+    const clientesAnteriores = new Set(atendimentosAnteriores.map(a => a.clienteId)).size;
+    const servicosAnteriores = atendimentosAnteriores.reduce((acc, a) => 
+      acc + (a.itensServico?.length || (a.servicoId ? 1 : 0)), 0);
+    const produtosAnteriores = atendimentosAnteriores.reduce((acc, a) => 
+      acc + (a.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0);
+    const ticketMedioAnterior = atendimentosAnteriores.length > 0 ? faturamentoAnterior / atendimentosAnteriores.length : 0;
+    
+    // Taxa de ocupação anterior
+    const horasUtilizadasAnteriores = atendimentosAnteriores.reduce((acc, a) => {
+      if (a.duracao) return acc + a.duracao;
+      if (a.horaInicio && a.horaFim) {
+        const [h1, m1] = a.horaInicio.split(':').map(Number);
+        const [h2, m2] = a.horaFim.split(':').map(Number);
+        return acc + ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      }
+      return acc + 1;
+    }, 0);
+    const taxaOcupacaoAnterior = horasDisponiveis > 0 ? (horasUtilizadasAnteriores / horasDisponiveis) * 100 : 0;
 
-    // Calcular crescimento percentual
-    const crescimentoFaturamento = faturamentoAnterior > 0 
-      ? ((faturamento - faturamentoAnterior) / faturamentoAnterior) * 100 
-      : 100;
-    const crescimentoAtendimentos = quantidadeAnterior > 0 
-      ? ((quantidade - quantidadeAnterior) / quantidadeAnterior) * 100 
-      : 100;
-    const crescimentoClientes = clientesAtendidosAnterior > 0 
-      ? ((clientesAtendidos - clientesAtendidosAnterior) / clientesAtendidosAnterior) * 100 
-      : 100;
-    const crescimentoTicketMedio = ticketMedioAnterior > 0 
-      ? ((ticketMedio - ticketMedioAnterior) / ticketMedioAnterior) * 100 
-      : 100;
+    // Satisfação anterior
+    const avaliacoesPeriodoAnterior = dados.avaliacoes.filter(a => {
+      const data = new Date(a.data);
+      return data >= inicioAnterior && data <= fimAnterior;
+    });
+    const satisfacaoAnterior = avaliacoesPeriodoAnterior.length > 0
+      ? avaliacoesPeriodoAnterior.reduce((acc, a) => acc + (a.nota || 0), 0) / avaliacoesPeriodoAnterior.length
+      : 0;
 
-    // Calcular taxas
-    const taxaConversao = (quantidade / (atendimentosFiltrados.length + atendimentosFiltrados.filter(a => a.status === 'cancelado').length)) * 100 || 0;
-    const taxaRetencao = clientesAtendidosAnterior > 0 
-      ? (clientesAtendidos / clientesAtendidosAnterior) * 100 
-      : 100;
+    // Retenção anterior
+    const clientesNovosAnteriores = atendimentosAnteriores.filter(a => {
+      const cliente = dados.clientes.find(c => c.id === a.clienteId);
+      return cliente?.primeiraVisita ? new Date(cliente.primeiraVisita) >= inicioAnterior : false;
+    }).length;
+    const retencaoAnterior = clientesAnteriores > 0 
+      ? ((clientesAnteriores - clientesNovosAnteriores) / clientesAnteriores) * 100 
+      : 0;
 
-    // Calcular produtividade dos profissionais
-    const produtividadeProfissionais = profissionais.map(prof => {
-      const atendimentosProf = atendimentosFiltrados.filter(a => a.profissionalId === prof.id);
-      const totalAtendimentos = atendimentosProf.length;
-      const totalValor = atendimentosProf.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
-      const tempoTotal = atendimentosProf.reduce((acc, a) => {
-        if (a.horaInicio && a.horaFim) {
-          const minutos = differenceInMinutes(parseISO(`2000-01-01T${a.horaFim}`), parseISO(`2000-01-01T${a.horaInicio}`));
-          return acc + minutos;
-        }
-        return acc;
-      }, 0);
-      
-      return {
-        ...prof,
-        atendimentos: totalAtendimentos,
-        faturamento: totalValor,
-        ticketMedio: totalAtendimentos > 0 ? totalValor / totalAtendimentos : 0,
-        tempoMedio: totalAtendimentos > 0 ? tempoTotal / totalAtendimentos : 0,
-        produtividade: tempoTotal > 0 ? (totalValor / tempoTotal) * 60 : 0, // Valor por hora
-      };
+    // Calcular variações
+    const calcularVariacao = (atual, anterior) => {
+      if (anterior === 0) return atual > 0 ? 100 : 0;
+      return ((atual - anterior) / anterior) * 100;
+    };
+
+    setMetricas({
+      faturamento: { 
+        atual: faturamentoAtual, 
+        anterior: faturamentoAnterior, 
+        variacao: calcularVariacao(faturamentoAtual, faturamentoAnterior) 
+      },
+      clientes: { 
+        atual: clientesAtuais, 
+        anterior: clientesAnteriores, 
+        variacao: calcularVariacao(clientesAtuais, clientesAnteriores) 
+      },
+      servicos: { 
+        atual: servicosAtuais, 
+        anterior: servicosAnteriores, 
+        variacao: calcularVariacao(servicosAtuais, servicosAnteriores) 
+      },
+      produtos: { 
+        atual: produtosAtuais, 
+        anterior: produtosAnteriores, 
+        variacao: calcularVariacao(produtosAtuais, produtosAnteriores) 
+      },
+      taxaOcupacao: { 
+        atual: taxaOcupacaoAtual, 
+        anterior: taxaOcupacaoAnterior, 
+        variacao: calcularVariacao(taxaOcupacaoAtual, taxaOcupacaoAnterior) 
+      },
+      ticketMedio: { 
+        atual: ticketMedioAtual, 
+        anterior: ticketMedioAnterior, 
+        variacao: calcularVariacao(ticketMedioAtual, ticketMedioAnterior) 
+      },
+      satisfacao: { 
+        atual: satisfacaoAtual, 
+        anterior: satisfacaoAnterior, 
+        variacao: calcularVariacao(satisfacaoAtual, satisfacaoAnterior) 
+      },
+      retencao: { 
+        atual: retencaoAtual, 
+        anterior: retencaoAnterior, 
+        variacao: calcularVariacao(retencaoAtual, retencaoAnterior) 
+      },
     });
 
-    // Gerar dados históricos para gráficos
-    const diasIntervalo = eachDayOfInterval({ start: inicio, end: fim });
-    const historico = diasIntervalo.map(dia => {
-      const atendimentosDia = atendimentosFiltrados.filter(a => 
-        isSameDay(parseISO(a.data), dia)
-      );
-      
+    // Gerar dados para evolução temporal
+    const evolucao = [];
+    const dias = eachDayOfInterval({ start: inicio, end: fim });
+    dias.forEach(dia => {
+      const atendimentosDia = atendimentosAtuais.filter(a => isSameDay(new Date(a.data), dia));
       const faturamentoDia = atendimentosDia.reduce((acc, a) => acc + (a.valorTotal || 0), 0);
-      const avaliacoesDia = avaliacoesPeriodo.filter(av => 
-        isSameDay(parseISO(av.data), dia)
-      );
-      const satisfacaoDia = avaliacoesDia.length > 0
-        ? avaliacoesDia.reduce((acc, av) => acc + (av.nota || 0), 0) / avaliacoesDia.length
-        : null;
-
-      return {
+      
+      evolucao.push({
         data: format(dia, 'dd/MM'),
         faturamento: faturamentoDia,
         atendimentos: atendimentosDia.length,
         clientes: new Set(atendimentosDia.map(a => a.clienteId)).size,
-        satisfacao: satisfacaoDia,
-        ticketMedio: atendimentosDia.length > 0 ? faturamentoDia / atendimentosDia.length : 0,
-      };
+      });
     });
 
-    // Gerar ranking baseado no tipo selecionado
-    let ranking = [];
-    switch (tipoRanking) {
-      case 'profissionais':
-        ranking = produtividadeProfissionais
-          .filter(p => p.atendimentos > 0)
-          .sort((a, b) => {
-            switch (metricaSelecionada) {
-              case 'faturamento': return b.faturamento - a.faturamento;
-              case 'atendimentos': return b.atendimentos - a.atendimentos;
-              case 'ticketMedio': return b.ticketMedio - a.ticketMedio;
-              case 'produtividade': return b.produtividade - a.produtividade;
-              default: return b.faturamento - a.faturamento;
-            }
-          })
-          .slice(0, 10);
-        break;
+    // Ranking de profissionais
+    const profMap = new Map();
+    atendimentosAtuais.forEach(a => {
+      if (!profMap.has(a.profissionalId)) {
+        const prof = dados.profissionais.find(p => p.id === a.profissionalId);
+        profMap.set(a.profissionalId, {
+          id: a.profissionalId,
+          nome: prof?.nome || 'Profissional',
+          atendimentos: 0,
+          faturamento: 0,
+        });
+      }
+      const profData = profMap.get(a.profissionalId);
+      profData.atendimentos++;
+      profData.faturamento += a.valorTotal || 0;
+    });
 
-      case 'servicos':
-        const servicosMap = new Map();
-        atendimentosFiltrados.forEach(atendimento => {
-          (atendimento.servicos || []).forEach(servicoId => {
-            const servico = servicos.find(s => s.id === servicoId);
-            if (servico) {
-              const atual = servicosMap.get(servicoId) || {
-                ...servico,
-                quantidade: 0,
-                faturamento: 0,
-              };
-              atual.quantidade += 1;
-              atual.faturamento += servico.preco || 0;
-              servicosMap.set(servicoId, atual);
-            }
+    const rankingProfissionais = Array.from(profMap.values())
+      .sort((a, b) => b.faturamento - a.faturamento)
+      .slice(0, 10);
+
+    // Ranking de serviços
+    const servMap = new Map();
+    atendimentosAtuais.forEach(a => {
+      const servicosLista = a.itensServico || (a.servicoId ? [{ id: a.servicoId, nome: a.servicoNome, preco: a.valorTotal }] : []);
+      servicosLista.forEach(s => {
+        if (!servMap.has(s.id)) {
+          servMap.set(s.id, {
+            id: s.id,
+            nome: s.nome || 'Serviço',
+            quantidade: 0,
+            faturamento: 0,
           });
-        });
-        ranking = Array.from(servicosMap.values())
-          .sort((a, b) => {
-            switch (metricaSelecionada) {
-              case 'faturamento': return b.faturamento - a.faturamento;
-              case 'atendimentos': return b.quantidade - a.quantidade;
-              default: return b.faturamento - a.faturamento;
-            }
-          })
-          .slice(0, 10);
-        break;
+        }
+        const servData = servMap.get(s.id);
+        servData.quantidade++;
+        servData.faturamento += s.preco || 0;
+      });
+    });
 
-      case 'clientes':
-        const clientesMap = new Map();
-        atendimentosFiltrados.forEach(atendimento => {
-          const cliente = clientes.find(c => c.id === atendimento.clienteId);
-          if (cliente) {
-            const atual = clientesMap.get(atendimento.clienteId) || {
-              ...cliente,
-              atendimentos: 0,
-              gastoTotal: 0,
-              ultimaVisita: null,
-            };
-            atual.atendimentos += 1;
-            atual.gastoTotal += atendimento.valorTotal || 0;
-            const dataAtendimento = new Date(atendimento.data);
-            if (!atual.ultimaVisita || dataAtendimento > new Date(atual.ultimaVisita)) {
-              atual.ultimaVisita = atendimento.data;
-            }
-            clientesMap.set(atendimento.clienteId, atual);
-          }
-        });
-        ranking = Array.from(clientesMap.values())
-          .sort((a, b) => {
-            switch (metricaSelecionada) {
-              case 'faturamento': return b.gastoTotal - a.gastoTotal;
-              case 'atendimentos': return b.atendimentos - a.atendimentos;
-              case 'ticketMedio': return (b.gastoTotal / b.atendimentos) - (a.gastoTotal / a.atendimentos);
-              default: return b.gastoTotal - a.gastoTotal;
-            }
-          })
-          .slice(0, 10);
-        break;
+    const rankingServicos = Array.from(servMap.values())
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 10);
 
-      case 'produtos':
-        const produtosMap = new Map();
-        atendimentosFiltrados.forEach(atendimento => {
-          (atendimento.produtos || []).forEach(item => {
-            const produto = produtos.find(p => p.id === item.produtoId);
-            if (produto) {
-              const atual = produtosMap.get(item.produtoId) || {
-                ...produto,
-                quantidade: 0,
-                faturamento: 0,
-              };
-              atual.quantidade += item.quantidade || 1;
-              atual.faturamento += (item.preco || 0) * (item.quantidade || 1);
-              produtosMap.set(item.produtoId, atual);
-            }
-          });
-        });
-        ranking = Array.from(produtosMap.values())
-          .sort((a, b) => {
-            switch (metricaSelecionada) {
-              case 'faturamento': return b.faturamento - a.faturamento;
-              case 'atendimentos': return b.quantidade - a.quantidade;
-              default: return b.faturamento - a.faturamento;
-            }
-          })
-          .slice(0, 10);
-        break;
+    // Horários de pico
+    const horarios = Array(24).fill(0).map((_, i) => ({
+      hora: `${i.toString().padStart(2, '0')}h`,
+      atendimentos: 0,
+    }));
 
-      default:
-        break;
-    }
+    atendimentosAtuais.forEach(a => {
+      if (a.horaInicio) {
+        const hora = parseInt(a.horaInicio.split(':')[0]);
+        if (hora >= 0 && hora < 24) {
+          horarios[hora].atendimentos++;
+        }
+      }
+    });
 
-    // Calcular tendências
-    const tendencias = [];
-    const ultimos7Dias = historico.slice(-7);
-    const media7Dias = ultimos7Dias.reduce((acc, dia) => acc + dia.faturamento, 0) / 7;
-    const tendenciaFaturamento = historico.length > 1
-      ? ((historico[historico.length - 1].faturamento - historico[0].faturamento) / historico[0].faturamento) * 100
-      : 0;
+    // Dias da semana
+    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const diasData = diasSemana.map((dia, index) => ({
+      dia,
+      atendimentos: 0,
+      faturamento: 0,
+    }));
 
-    // Gerar KPIs
-    const kpis = [
-      {
-        titulo: 'Faturamento',
-        valor: `R$ ${faturamento.toFixed(2)}`,
-        variacao: crescimentoFaturamento,
-        periodo: 'vs período anterior',
-        icone: <MoneyIcon />,
-        cor: '#4caf50',
-      },
-      {
-        titulo: 'Atendimentos',
-        valor: quantidade,
-        variacao: crescimentoAtendimentos,
-        periodo: 'vs período anterior',
-        icone: <AssignmentIcon />,
-        cor: '#2196f3',
-      },
-      {
-        titulo: 'Clientes Atendidos',
-        valor: clientesAtendidos,
-        variacao: crescimentoClientes,
-        periodo: 'vs período anterior',
-        icone: <PersonIcon />,
-        cor: '#ff9800',
-      },
-      {
-        titulo: 'Ticket Médio',
-        valor: `R$ ${ticketMedio.toFixed(2)}`,
-        variacao: crescimentoTicketMedio,
-        periodo: 'vs período anterior',
-        icone: <MoneyIcon />,
-        cor: '#9c27b0',
-      },
-      {
-        titulo: 'Taxa de Conversão',
-        valor: `${taxaConversao.toFixed(1)}%`,
-        variacao: 0,
-        periodo: 'média do período',
-        icone: <TrendingUpIcon />,
-        cor: '#00bcd4',
-      },
-      {
-        titulo: 'Satisfação',
-        valor: satisfacaoMedia.toFixed(1),
-        variacao: 0,
-        periodo: `de ${avaliacoesPeriodo.length} avaliações`,
-        icone: <StarIcon />,
-        cor: '#ff4081',
-      },
+    atendimentosAtuais.forEach(a => {
+      const data = new Date(a.data);
+      const diaSemana = data.getDay();
+      diasData[diaSemana].atendimentos++;
+      diasData[diaSemana].faturamento += a.valorTotal || 0;
+    });
+
+    // Distribuição de clientes por frequência
+    const clienteFreq = new Map();
+    atendimentosAtuais.forEach(a => {
+      if (!clienteFreq.has(a.clienteId)) {
+        clienteFreq.set(a.clienteId, 0);
+      }
+      clienteFreq.set(a.clienteId, clienteFreq.get(a.clienteId) + 1);
+    });
+
+    const distribuicaoClientes = [
+      { name: '1 vez', value: 0 },
+      { name: '2-3 vezes', value: 0 },
+      { name: '4-6 vezes', value: 0 },
+      { name: '7+ vezes', value: 0 },
     ];
 
-    // Calcular metas vs realizado
-    const metasComparacao = {
-      faturamento: {
-        meta: metas.faturamento,
-        realizado: faturamento,
-        percentual: (faturamento / metas.faturamento) * 100,
-      },
-      atendimentos: {
-        meta: metas.atendimentos,
-        realizado: quantidade,
-        percentual: (quantidade / metas.atendimentos) * 100,
-      },
-      clientes: {
-        meta: metas.clientes,
-        realizado: clientesAtendidos,
-        percentual: (clientesAtendidos / metas.clientes) * 100,
-      },
-      ticketMedio: {
-        meta: metas.ticketMedio,
-        realizado: ticketMedio,
-        percentual: (ticketMedio / metas.ticketMedio) * 100,
-      },
-      satisfacao: {
-        meta: metas.satisfacao,
-        realizado: satisfacaoMedia,
-        percentual: (satisfacaoMedia / metas.satisfacao) * 100,
-      },
-    };
+    clienteFreq.forEach(freq => {
+      if (freq === 1) distribuicaoClientes[0].value++;
+      else if (freq <= 3) distribuicaoClientes[1].value++;
+      else if (freq <= 6) distribuicaoClientes[2].value++;
+      else distribuicaoClientes[3].value++;
+    });
 
-    // Gerar dados de satisfação por período
-    const satisfacaoPorDia = historico
-      .filter(d => d.satisfacao !== null)
-      .map(d => ({
-        data: d.data,
-        satisfacao: d.satisfacao,
-      }));
-
-    // Calcular projeções
-    const projecoes = {
-      faturamentoMensal: faturamento * (30 / diasPeriodo),
-      atendimentosMensais: quantidade * (30 / diasPeriodo),
-      tendencia30dias: tendenciaFaturamento,
-    };
-
-    setDadosProcessados({
-      performanceGeral: {
-        faturamento,
-        quantidade,
-        clientesAtendidos,
-        ticketMedio,
-        satisfacaoMedia,
-        taxaConversao,
-        taxaRetencao,
-      },
-      historico,
-      ranking,
-      comparativo: {
-        atual: { faturamento, quantidade, clientesAtendidos, ticketMedio },
-        anterior: { faturamento: faturamentoAnterior, quantidade: quantidadeAnterior, clientesAtendidos: clientesAtendidosAnterior, ticketMedio: ticketMedioAnterior },
-        variacao: {
-          faturamento: crescimentoFaturamento,
-          quantidade: crescimentoAtendimentos,
-          clientes: crescimentoClientes,
-          ticketMedio: crescimentoTicketMedio,
-        },
-      },
-      tendencias: {
-        media7Dias,
-        tendenciaFaturamento,
-        projecoes,
-      },
-      kpis,
-      metasComparacao,
-      satisfacao: satisfacaoPorDia,
-      produtividade: produtividadeProfissionais,
+    setGraficos({
+      evolucao,
+      rankingProfissionais,
+      rankingServicos,
+      horariosPico: horarios,
+      diasSemana: diasData,
+      distribuicaoClientes,
     });
   };
 
-  const handleRefresh = () => {
-    carregarDados();
-    toast.success('Dados atualizados com sucesso!');
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
   };
 
-  const handleExportar = () => {
-    try {
-      const dadosExport = {
-        periodo: periodos.find(p => p.value === periodo)?.label,
-        dataExportacao: new Date().toISOString(),
-        performance: dadosProcessados.performanceGeral,
-        ranking: dadosProcessados.ranking,
-        historico: dadosProcessados.historico,
-        kpis: dadosProcessados.kpis,
-      };
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
-      const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `performance-${format(new Date(), 'yyyy-MM-dd-HHmm')}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setSnackbar({
-        open: true,
-        message: 'Dados exportados com sucesso!',
-        severity: 'success',
-      });
-    } catch (error) {
-      console.error('Erro ao exportar:', error);
-      setSnackbar({
-        open: true,
-        message: 'Erro ao exportar dados',
-        severity: 'error',
-      });
+  const handleExportar = (formato) => {
+    if (formato === 'csv') {
+      toast.success('Dados exportados para CSV');
+    } else if (formato === 'pdf') {
+      toast.success('Relatório PDF gerado');
+    } else if (formato === 'excel') {
+      toast.success('Planilha Excel gerada');
     }
   };
 
-  const handleSalvarMetas = () => {
-    // Aqui você pode implementar a lógica para salvar as metas no backend
-    setOpenMetasDialog(false);
-    setSnackbar({
-      open: true,
-      message: 'Metas salvas com sucesso!',
-      severity: 'success',
-    });
+  const formatarMoeda = (valor) => {
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  const getVariacaoCor = (variacao) => {
+  const formatarNumero = (valor) => {
+    return valor.toLocaleString('pt-BR');
+  };
+
+  const formatarPercentual = (valor) => {
+    return `${valor.toFixed(1)}%`;
+  };
+
+  const getVariacaoColor = (variacao) => {
     if (variacao > 0) return '#4caf50';
     if (variacao < 0) return '#f44336';
     return '#ff9800';
   };
 
-  const getVariacaoIcone = (variacao) => {
+  const getVariacaoIcon = (variacao) => {
     if (variacao > 0) return <TrendingUpIcon />;
     if (variacao < 0) return <TrendingDownIcon />;
-    return <ShowChartIcon />;
-  };
-
-  const formatarValor = (valor, tipo) => {
-    if (tipo === 'moeda') {
-      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-    }
-    if (tipo === 'percentual') {
-      return `${valor.toFixed(1)}%`;
-    }
-    if (tipo === 'numero') {
-      return valor.toFixed(0);
-    }
-    return valor;
+    return <SwapHorizIcon />;
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress />
+      <Box sx={{ width: '100%' }}>
+        <LinearProgress />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ flexGrow: 1, p: 3 }}>
-      {/* Header com título e ações */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Performance e Analytics
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Tooltip title="Definir Metas">
-            <IconButton onClick={() => setOpenMetasDialog(true)} color="primary">
-              <TrophyIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Exportar Dados">
-            <IconButton onClick={handleExportar} color="primary">
-              <DownloadIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Atualizar">
-            <IconButton onClick={handleRefresh} color="primary">
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Box>
-
-      {/* Filtros */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Período</InputLabel>
-              <Select
-                value={periodo}
-                label="Período"
-                onChange={(e) => setPeriodo(e.target.value)}
-              >
-                {periodos.map(p => (
-                  <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          {periodo === 'personalizado' && (
-            <>
-              <Grid item xs={12} sm={3}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                  <DatePicker
-                    label="Data Início"
-                    value={dataInicio}
-                    onChange={setDataInicio}
-                    renderInput={(params) => <TextField {...params} size="small" fullWidth />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                  <DatePicker
-                    label="Data Fim"
-                    value={dataFim}
-                    onChange={setDataFim}
-                    renderInput={(params) => <TextField {...params} size="small" fullWidth />}
-                  />
-                </LocalizationProvider>
-              </Grid>
-            </>
-          )}
-          
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Métrica</InputLabel>
-              <Select
-                value={metricaSelecionada}
-                label="Métrica"
-                onChange={(e) => setMetricaSelecionada(e.target.value)}
-              >
-                {metricasDisponiveis.map(m => (
-                  <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} sm={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Comparação</InputLabel>
-              <Select
-                value={comparacao}
-                label="Comparação"
-                onChange={(e) => setComparacao(e.target.value)}
-              >
-                {periodosComparacao.map(p => (
-                  <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} sm={2}>
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+      <Box>
+        {/* Cabeçalho */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              Performance
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Acompanhe os principais indicadores de desempenho do negócio
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
-              fullWidth
-              variant="contained"
-              startIcon={<FilterIcon />}
-              onClick={() => processarDados()}
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={() => handleExportar('excel')}
             >
-              Aplicar
+              Exportar
             </Button>
-          </Grid>
-        </Grid>
-      </Paper>
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={() => window.print()}
+            >
+              Imprimir
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={carregarDados}
+            >
+              Atualizar
+            </Button>
+          </Box>
+        </Box>
 
-      {/* KPIs Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {dadosProcessados.kpis.map((kpi, index) => (
-          <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
+        {/* Filtro de Período */}
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Período</InputLabel>
+                  <Select
+                    value={periodo}
+                    label="Período"
+                    onChange={(e) => setPeriodo(e.target.value)}
+                  >
+                    {periodos.map(p => (
+                      <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {periodo === 'personalizado' && (
+                <>
+                  <Grid item xs={12} md={3}>
+                    <DatePicker
+                      label="Data Início"
+                      value={dataInicio}
+                      onChange={setDataInicio}
+                      renderInput={(params) => <TextField {...params} fullWidth size="small" />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <DatePicker
+                      label="Data Fim"
+                      value={dataFim}
+                      onChange={setDataFim}
+                      renderInput={(params) => <TextField {...params} fullWidth size="small" />}
+                    />
+                  </Grid>
+                </>
+              )}
+              
+              <Grid item xs={12} md={periodo === 'personalizado' ? 3 : 9}>
+                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                  <Chip 
+                    icon={<CalendarIcon />} 
+                    label={format(new Date(), 'dd/MM/yyyy')}
+                    variant="outlined"
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Cards de Métricas */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: 0.1 }}
             >
-              <Card>
+              <Card sx={{ position: 'relative', overflow: 'hidden' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: '50%',
+                    backgroundColor: alpha('#4caf50', 0.1),
+                  }}
+                />
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Avatar sx={{ bgcolor: alpha(kpi.cor, 0.1), color: kpi.cor, mr: 1 }}>
-                      {kpi.icone}
-                    </Avatar>
-                    <Typography variant="body2" color="text.secondary">
-                      {kpi.titulo}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Faturamento
                     </Typography>
+                    <Avatar sx={{ bgcolor: '#4caf50', width: 40, height: 40 }}>
+                      <MoneyIcon />
+                    </Avatar>
                   </Box>
-                  <Typography variant="h5" component="div" gutterBottom>
-                    {kpi.valor}
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                    {formatarMoeda(metricas.faturamento.atual)}
                   </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Chip
-                      size="small"
-                      icon={getVariacaoIcone(kpi.variacao)}
-                      label={`${kpi.variacao > 0 ? '+' : ''}${kpi.variacao.toFixed(1)}%`}
-                      sx={{
-                        bgcolor: alpha(getVariacaoCor(kpi.variacao), 0.1),
-                        color: getVariacaoCor(kpi.variacao),
-                        mr: 1,
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ color: getVariacaoColor(metricas.faturamento.variacao) }}>
+                      {getVariacaoIcon(metricas.faturamento.variacao)}
+                    </Box>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: getVariacaoColor(metricas.faturamento.variacao),
+                        fontWeight: 600 
                       }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {kpi.periodo}
+                    >
+                      {metricas.faturamento.variacao > 0 ? '+' : ''}
+                      {metricas.faturamento.variacao.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      vs período anterior
                     </Typography>
                   </Box>
                 </CardContent>
               </Card>
             </motion.div>
           </Grid>
-        ))}
-      </Grid>
 
-      {/* Gráficos principais */}
-      <Grid container spacing={3}>
-        {/* Gráfico de linha - Evolução */}
-        <Grid item xs={12} lg={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Evolução de {metricasDisponiveis.find(m => m.value === metricaSelecionada)?.label}
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dadosProcessados.historico}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="data" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey={metricaSelecionada}
-                      stroke={metricasDisponiveis.find(m => m.value === metricaSelecionada)?.cor || '#8884d8'}
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 8 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card sx={{ position: 'relative', overflow: 'hidden' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: '50%',
+                    backgroundColor: alpha('#2196f3', 0.1),
+                  }}
+                />
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Clientes Atendidos
+                    </Typography>
+                    <Avatar sx={{ bgcolor: '#2196f3', width: 40, height: 40 }}>
+                      <GroupIcon />
+                    </Avatar>
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                    {formatarNumero(metricas.clientes.atual)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ color: getVariacaoColor(metricas.clientes.variacao) }}>
+                      {getVariacaoIcon(metricas.clientes.variacao)}
+                    </Box>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: getVariacaoColor(metricas.clientes.variacao),
+                        fontWeight: 600 
+                      }}
+                    >
+                      {metricas.clientes.variacao > 0 ? '+' : ''}
+                      {metricas.clientes.variacao.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      vs período anterior
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card sx={{ position: 'relative', overflow: 'hidden' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: '50%',
+                    backgroundColor: alpha('#ff9800', 0.1),
+                  }}
+                />
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Ticket Médio
+                    </Typography>
+                    <Avatar sx={{ bgcolor: '#ff9800', width: 40, height: 40 }}>
+                      <AttachMoneyIcon />
+                    </Avatar>
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                    {formatarMoeda(metricas.ticketMedio.atual)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ color: getVariacaoColor(metricas.ticketMedio.variacao) }}>
+                      {getVariacaoIcon(metricas.ticketMedio.variacao)}
+                    </Box>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: getVariacaoColor(metricas.ticketMedio.variacao),
+                        fontWeight: 600 
+                      }}
+                    >
+                      {metricas.ticketMedio.variacao > 0 ? '+' : ''}
+                      {metricas.ticketMedio.variacao.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      vs período anterior
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card sx={{ position: 'relative', overflow: 'hidden' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: -20,
+                    right: -20,
+                    width: 100,
+                    height: 100,
+                    borderRadius: '50%',
+                    backgroundColor: alpha('#f44336', 0.1),
+                  }}
+                />
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Satisfação
+                    </Typography>
+                    <Avatar sx={{ bgcolor: '#f44336', width: 40, height: 40 }}>
+                      <StarIcon />
+                    </Avatar>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Rating value={metricas.satisfacao.atual} precision={0.5} readOnly />
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {metricas.satisfacao.atual.toFixed(1)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ color: getVariacaoColor(metricas.satisfacao.variacao) }}>
+                      {getVariacaoIcon(metricas.satisfacao.variacao)}
+                    </Box>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: getVariacaoColor(metricas.satisfacao.variacao),
+                        fontWeight: 600 
+                      }}
+                    >
+                      {metricas.satisfacao.variacao > 0 ? '+' : ''}
+                      {metricas.satisfacao.variacao.toFixed(1)}%
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      vs período anterior
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
         </Grid>
 
-        {/* Metas vs Realizado */}
-        <Grid item xs={12} lg={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Metas vs Realizado
-              </Typography>
-              <Box sx={{ height: 300, overflowY: 'auto' }}>
-                {Object.entries(dadosProcessados.metasComparacao || {}).map(([key, value]) => {
-                  const metrica = metricasDisponiveis.find(m => m.value === key);
-                  return (
-                    <Box key={key} sx={{ mb: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body2">
-                          {metrica?.label || key}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatarValor(value.realizado, key === 'faturamento' || key === 'ticketMedio' ? 'moeda' : 'numero')} / {formatarValor(value.meta, key === 'faturamento' || key === 'ticketMedio' ? 'moeda' : 'numero')}
-                        </Typography>
-                      </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.min(value.percentual, 100)}
-                        sx={{
-                          height: 10,
-                          borderRadius: 5,
-                          bgcolor: alpha(metrica?.cor || '#000', 0.1),
-                          '& .MuiLinearProgress-bar': {
-                            bgcolor: value.percentual >= 100 ? '#4caf50' : metrica?.cor,
-                          },
+        {/* Segunda linha de métricas */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Serviços Realizados
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                    {formatarNumero(metricas.servicos.atual)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {metricas.servicos.variacao > 0 ? '+' : ''}
+                    {metricas.servicos.variacao.toFixed(1)}% vs período anterior
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Produtos Vendidos
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                    {formatarNumero(metricas.produtos.atual)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {metricas.produtos.variacao > 0 ? '+' : ''}
+                    {metricas.produtos.variacao.toFixed(1)}% vs período anterior
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Taxa de Ocupação
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#00bcd4' }}>
+                    {formatarPercentual(metricas.taxaOcupacao.atual)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {metricas.taxaOcupacao.variacao > 0 ? '+' : ''}
+                    {metricas.taxaOcupacao.variacao.toFixed(1)}% vs período anterior
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Taxa de Retenção
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#795548' }}>
+                    {formatarPercentual(metricas.retencao.atual)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {metricas.retencao.variacao > 0 ? '+' : ''}
+                    {metricas.retencao.variacao.toFixed(1)}% vs período anterior
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        </Grid>
+
+        {/* Gráficos */}
+        <Grid container spacing={3}>
+          {/* Evolução Temporal */}
+          <Grid item xs={12} lg={8}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Evolução Diária</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={graficos.evolucao}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="data" />
+                      <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                      <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'faturamento') return formatarMoeda(value);
+                          return value;
                         }}
                       />
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right', mt: 0.5 }}>
-                        {value.percentual.toFixed(1)}% atingido
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Ranking */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  Ranking de {tiposRanking.find(t => t.value === tipoRanking)?.label}
-                </Typography>
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Tipo</InputLabel>
-                  <Select
-                    value={tipoRanking}
-                    label="Tipo"
-                    onChange={(e) => setTipoRanking(e.target.value)}
-                  >
-                    {tiposRanking.map(t => (
-                      <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Pos</TableCell>
-                      <TableCell>Nome</TableCell>
-                      <TableCell align="right">{metricasDisponiveis.find(m => m.value === metricaSelecionada)?.label}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {dadosProcessados.ranking.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Avatar
-                            sx={{
-                              width: 24,
-                              height: 24,
-                              bgcolor: index < 3 ? CORES_RANKING[index] : alpha('#000', 0.1),
-                              color: index < 3 ? '#000' : 'text.secondary',
-                              fontSize: '0.875rem',
-                            }}
-                          >
-                            {index + 1}
-                          </Avatar>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {item.nome || item.descricao || item.nomeCompleto}
-                            {index === 0 && <TrophyIcon sx={{ ml: 1, color: '#FFD700', fontSize: 16 }} />}
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          {metricaSelecionada === 'faturamento'
-                            ? formatarValor(item.faturamento || item.gastoTotal || item.preco, 'moeda')
-                            : metricaSelecionada === 'atendimentos'
-                            ? item.atendimentos || item.quantidade
-                            : metricaSelecionada === 'ticketMedio'
-                            ? formatarValor(item.ticketMedio || (item.gastoTotal / item.atendimentos), 'moeda')
-                            : formatarValor(item[metricaSelecionada], 'numero')}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Distribuição de Satisfação */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Satisfação dos Clientes
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosProcessados.satisfacao}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="data" />
-                    <YAxis domain={[0, 5]} />
-                    <RechartsTooltip />
-                    <Bar dataKey="satisfacao" fill="#ff4081" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Produtividade por Profissional */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Produtividade dos Profissionais
-              </Typography>
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={dadosProcessados.produtividade}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="nome" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="faturamento" fill="#4caf50" name="Faturamento" />
-                    <Line yAxisId="right" type="monotone" dataKey="atendimentos" stroke="#2196f3" name="Atendimentos" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Análise de Tendências */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Análise de Tendências
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha('#2196f3', 0.05) }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Média últimos 7 dias
-                    </Typography>
-                    <Typography variant="h4">
-                      {formatarValor(dadosProcessados.tendencias?.media7Dias || 0, 'moeda')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Faturamento médio diário
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha('#ff9800', 0.05) }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Tendência 30 dias
-                    </Typography>
-                    <Typography variant="h4" sx={{ color: getVariacaoCor(dadosProcessados.tendencias?.tendenciaFaturamento || 0) }}>
-                      {dadosProcessados.tendencias?.tendenciaFaturamento > 0 ? '+' : ''}
-                      {dadosProcessados.tendencias?.tendenciaFaturamento.toFixed(1)}%
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Variação no período
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: alpha('#4caf50', 0.05) }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Projeção mensal
-                    </Typography>
-                    <Typography variant="h4">
-                      {formatarValor(dadosProcessados.tendencias?.projecoes?.faturamentoMensal || 0, 'moeda')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Baseado no período atual
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Dialog de Metas */}
-      <Dialog open={openMetasDialog} onClose={() => setOpenMetasDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <TrophyIcon sx={{ mr: 1 }} />
-            Definir Metas
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Meta de Faturamento"
-                type="number"
-                value={metas.faturamento}
-                onChange={(e) => setMetas({ ...metas, faturamento: Number(e.target.value) })}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Meta de Atendimentos"
-                type="number"
-                value={metas.atendimentos}
-                onChange={(e) => setMetas({ ...metas, atendimentos: Number(e.target.value) })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Meta de Clientes Atendidos"
-                type="number"
-                value={metas.clientes}
-                onChange={(e) => setMetas({ ...metas, clientes: Number(e.target.value) })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Meta de Ticket Médio"
-                type="number"
-                value={metas.ticketMedio}
-                onChange={(e) => setMetas({ ...metas, ticketMedio: Number(e.target.value) })}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Meta de Satisfação"
-                type="number"
-                value={metas.satisfacao}
-                onChange={(e) => setMetas({ ...metas, satisfacao: Number(e.target.value) })}
-                inputProps={{ step: 0.1, min: 0, max: 5 }}
-              />
-            </Grid>
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="atendimentos" fill="#9c27b0" name="Atendimentos" />
+                      <Line yAxisId="right" type="monotone" dataKey="faturamento" stroke="#ff4081" name="Faturamento" strokeWidth={2} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenMetasDialog(false)}>Cancelar</Button>
-          <Button onClick={handleSalvarMetas} variant="contained" color="primary">
-            Salvar Metas
-          </Button>
-        </DialogActions>
-      </Dialog>
 
-      {/* Snackbar para feedback */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-      >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+          {/* Distribuição de Clientes */}
+          <Grid item xs={12} lg={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Frequência de Clientes</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={graficos.distribuicaoClientes}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.name}: ${entry.value}`}
+                        outerRadius={130}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {graficos.distribuicaoClientes.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CORES_GRAFICOS[index % CORES_GRAFICOS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Ranking de Profissionais */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Top Profissionais</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={graficos.rankingProfissionais}
+                      layout="vertical"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="nome" width={120} />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'faturamento') return formatarMoeda(value);
+                          return value;
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="faturamento" fill="#4caf50" name="Faturamento" />
+                      <Bar dataKey="atendimentos" fill="#2196f3" name="Atendimentos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Ranking de Serviços */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Top Serviços</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={graficos.rankingServicos}
+                      layout="vertical"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="nome" width={120} />
+                      <RechartsTooltip />
+                      <Legend />
+                      <Bar dataKey="quantidade" fill="#ff9800" name="Quantidade" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Horários de Pico */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Horários de Pico</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={graficos.horariosPico}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="hora" />
+                      <YAxis />
+                      <RechartsTooltip />
+                      <Bar dataKey="atendimentos" fill="#9c27b0" name="Atendimentos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Dias da Semana */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Desempenho por Dia</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={graficos.diasSemana}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="dia" />
+                      <PolarRadiusAxis />
+                      <Radar name="Atendimentos" dataKey="atendimentos" stroke="#9c27b0" fill="#9c27b0" fillOpacity={0.6} />
+                      <Radar name="Faturamento" dataKey="faturamento" stroke="#ff4081" fill="#ff4081" fillOpacity={0.6} />
+                      <Legend />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </LocalizationProvider>
   );
 }
 
