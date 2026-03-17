@@ -429,13 +429,12 @@ function GerenciarCupons() {
     const corSecundaria = customizacao.corSecundaria;
     const fonte = configuracoes?.tema?.fonte || 'Poppins';
     
-    const larguraCupom = customizacao.disposicao === 'horizontal' ? '300px' : '400px';
-    const margem = customizacao.disposicao === 'horizontal' ? '10px' : '20px auto';
+    const larguraCupom = customizacao.disposicao === 'horizontal' ? '280px' : '380px';
+    const margem = customizacao.disposicao === 'horizontal' ? '0 auto' : '0 auto 20px auto';
     
     return `
       <div class="cupom-item" style="
-        max-width: ${larguraCupom};
-        width: 100%;
+        width: ${larguraCupom};
         background: white;
         border-radius: 16px;
         overflow: hidden;
@@ -444,98 +443,90 @@ function GerenciarCupons() {
         margin: ${margem};
         break-inside: avoid;
         page-break-inside: avoid;
+        display: inline-block;
+        vertical-align: top;
       ">
-        ${customizacao.estilo === 'moderno' ? `
-          <div style="border: 2px solid ${corPrimaria}; border-radius: 16px;">
-        ` : ''}
-        ${customizacao.estilo === 'elegante' ? `
-          <div style="border: 1px solid #e0e0e0; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
-        ` : ''}
-        ${customizacao.estilo === 'vibrante' ? `
-          <div style="background: linear-gradient(135deg, ${corPrimaria}10, ${corSecundaria}10);">
-        ` : ''}
-        ${customizacao.estilo === 'luxo' ? `
-          <div style="border: 1px solid gold; box-shadow: 0 0 30px rgba(255,215,0,0.2);">
-        ` : ''}
-        
-        <div style="background: ${corPrimaria}; color: white; padding: 20px; text-align: center; position: relative;">
-          <div style="position: absolute; bottom: -10px; left: 0; right: 0; height: 20px; background: linear-gradient(to bottom right, transparent 49%, ${corPrimaria} 50%);"></div>
+        <div style="
+          background: ${corPrimaria}; 
+          color: white; 
+          padding: 20px 20px 30px 20px; 
+          text-align: center; 
+          position: relative;
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+        ">
+          <div style="
+            position: absolute; 
+            bottom: -15px; 
+            left: 0; 
+            right: 0; 
+            height: 30px; 
+            background: linear-gradient(135deg, transparent 50%, ${corPrimaria} 50%);
+            background-size: 30px 30px;
+            background-position: 0 0;
+          "></div>
           ${customizacao.mostrarLogo && configuracoes?.salao?.logo ? `
-            <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: 120px; max-height: 60px; object-fit: contain; margin-bottom: 10px;">
+            <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: 100px; max-height: 50px; object-fit: contain; margin-bottom: 10px; background: white; padding: 5px; border-radius: 8px;">
           ` : ''}
-          <div style="font-size: 24px; font-weight: bold; margin: 10px 0 5px;">CUPOM DE DESCONTO</div>
+          <div style="font-size: 20px; font-weight: bold; margin: 5px 0; position: relative; z-index: 2;">CUPOM DE DESCONTO</div>
         </div>
         
-        <div style="padding: 30px 20px; text-align: center;">
-          <div style="font-size: 28px; font-weight: bold; letter-spacing: 2px; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">
+        <div style="padding: 25px 15px 15px 15px; text-align: center;">
+          <div style="font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 5px 0; padding: 8px; background: #f5f5f5; border-radius: 8px; display: inline-block;">
             ${cupomSelecionado?.codigo}
           </div>
           
-          <div style="font-size: 48px; font-weight: bold; color: ${corPrimaria}; margin: 20px 0;">
+          <div style="font-size: 36px; font-weight: bold; color: ${corPrimaria}; margin: 15px 0;">
             ${cupomSelecionado?.tipo === 'percentual' 
               ? `${cupomSelecionado?.valor}% OFF` 
               : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
             ${cupomSelecionado?.tipo === 'percentual' && cupomSelecionado?.valorMaximoDesconto ? 
-              `<br><small style="font-size: 18px; color: #666;">Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
+              `<br><small style="font-size: 14px; color: #666;">Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
           </div>
           
-          <div style="color: #666; margin: 20px 0; line-height: 1.6;">
+          <div style="color: #666; margin: 10px 0; line-height: 1.4; font-size: 13px;">
             ${cupomSelecionado?.descricao || 'Aproveite esta oferta especial!'}
           </div>
           
           ${cupomSelecionado?.dataFim ? `
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 14px;">
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px;">
               <strong style="color: ${corSecundaria};">Válido até:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
             </div>
           ` : ''}
           
-          <div style="text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 13px;">
-            <strong>Regras do cupom:</strong>
-            <ul style="margin: 10px 0; padding-left: 20px;">
+          <div style="text-align: left; background: #f8f9fa; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 11px;">
+            <strong>Regras:</strong>
+            <ul style="margin: 5px 0; padding-left: 15px;">
               ${cupomSelecionado?.valorMinimo > 0 ? 
-                `<li>Valor mínimo da compra: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
+                `<li>Mínimo: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
               ${cupomSelecionado?.usoMaximo ? 
-                `<li>Limite de ${cupomSelecionado.usoMaximo} uso(s) total(is)</li>` : ''}
-              ${cupomSelecionado?.usoMaximoPorCliente > 1 ? 
-                `<li>Máximo de ${cupomSelecionado.usoMaximoPorCliente} uso(s) por cliente</li>` : ''}
+                `<li>Limite: ${cupomSelecionado.usoMaximo} uso(s)</li>` : ''}
               ${cupomSelecionado?.primeiroAcesso ? 
-                '<li>Válido apenas para primeiro atendimento</li>' : ''}
-              ${cupomSelecionado?.clientesElegiveis === 'novos' ? 
-                '<li>Válido apenas para novos clientes</li>' : ''}
-              ${cupomSelecionado?.clientesElegiveis === 'vip' ? 
-                '<li>Válido apenas para clientes VIP</li>' : ''}
+                '<li>Primeiro atendimento</li>' : ''}
             </ul>
           </div>
           
           ${customizacao.mostrarQrCode ? `
-            <div style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; display: inline-block;">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code" style="width: 120px; height: 120px;">
+            <div style="margin: 10px 0;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code" style="width: 100px; height: 100px;">
             </div>
           ` : ''}
           
           ${customizacao.mensagemPersonalizada ? `
-            <div style="font-style: italic; color: ${corSecundaria}; margin: 20px 0; padding: 10px; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc;">
+            <div style="font-style: italic; color: ${corSecundaria}; margin: 10px 0; padding: 8px; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; font-size: 12px;">
               "${customizacao.mensagemPersonalizada}"
             </div>
           ` : ''}
         </div>
         
-        <div style="background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #e0e0e0;">
-          <div style="margin-bottom: 10px;">
-            <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
-            ${configuracoes?.salao?.contato?.telefone ? `Tel: ${configuracoes.salao.contato.telefone}<br>` : ''}
-            ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}<br>` : ''}
-            ${configuracoes?.salao?.endereco?.cidade ? `${configuracoes.salao.endereco.cidade} - ${configuracoes.salao.endereco.estado}` : ''}
-          </div>
-          <div>*Apresente este cupom no momento do atendimento</div>
+        <div style="background: #f8f9fa; padding: 12px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #e0e0e0;">
+          <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
+          ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}` : ''}
         </div>
-        
-        ${customizacao.estilo !== 'classico' ? '</div>' : ''}
-        ${customizacao.estilo !== 'classico' ? '</div>' : ''}
       </div>
     `;
   };
-
+  
   const handleImprimirCupom = () => {
     const quantidade = customizacao.quantidade;
     const disposicao = customizacao.disposicao;
@@ -550,8 +541,25 @@ function GerenciarCupons() {
     
     // Definir layout baseado na disposição
     const displayLayout = disposicao === 'horizontal' 
-      ? 'display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;' 
+      ? 'display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 10px;' 
       : 'display: block;';
+    
+    // Definir largura máxima baseada no papel
+    let maxWidth = '1200px';
+    let padding = '15px';
+    let fontSize = '14px';
+    
+    if (tamanhoPapel === 'A4') {
+      maxWidth = '210mm';
+      padding = '15mm';
+    } else if (tamanhoPapel === 'A5') {
+      maxWidth = '148mm';
+      padding = '10mm';
+      fontSize = '12px';
+    } else if (tamanhoPapel === 'Carta') {
+      maxWidth = '216mm';
+      padding = '15mm';
+    }
     
     const janelaImpressao = window.open('', '_blank');
     
@@ -560,38 +568,44 @@ function GerenciarCupons() {
         <head>
           <title>Cupom ${cupomSelecionado?.codigo} - ${quantidade} cópia(s)</title>
           <style>
+            * {
+              box-sizing: border-box;
+            }
             body { 
               font-family: '${fonte}', sans-serif;
               margin: 0;
-              padding: 20px;
+              padding: ${padding};
               background: #f5f5f5;
+              font-size: ${fontSize};
             }
             .cupons-container {
               ${displayLayout}
-              max-width: ${tamanhoPapel === 'A4' ? '1200px' : tamanhoPapel === 'A5' ? '600px' : '1000px'};
+              max-width: ${maxWidth};
               margin: 0 auto;
             }
             .cupom-item {
               transition: transform 0.2s;
+              ${disposicao === 'horizontal' ? 'flex: 0 0 auto;' : ''}
             }
             @media print {
               body {
-                padding: 0;
+                padding: 5mm;
                 background: white;
               }
               .cupons-container {
                 display: ${disposicao === 'horizontal' ? 'flex' : 'block'};
                 flex-wrap: ${disposicao === 'horizontal' ? 'wrap' : 'nowrap'};
-                justify-content: center;
-                gap: 20px;
+                justify-content: flex-start;
+                gap: 5mm;
                 max-width: 100%;
               }
               .cupom-item {
                 box-shadow: none;
                 border: 1px solid #eee;
-                margin: 0 auto 20px auto;
+                margin: 0;
                 page-break-inside: avoid;
                 break-inside: avoid;
+                ${disposicao === 'horizontal' ? 'flex: 0 0 auto;' : ''}
               }
               .no-print {
                 display: none !important;
