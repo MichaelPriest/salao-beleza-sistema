@@ -1225,7 +1225,7 @@ function Campanhas() {
 
                   <Grid item xs={12} md={4}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <AttachMoneyIcon sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
+                      <Money sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
                       <Typography variant="h4" sx={{ fontWeight: 700 }}>
                         R$ {(campanhaSelecionada.faturamentoReal || 0).toFixed(2)}
                       </Typography>
