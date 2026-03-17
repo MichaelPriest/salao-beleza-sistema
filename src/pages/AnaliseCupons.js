@@ -7,7 +7,7 @@ import {
   Typography,
   Grid,
   Button,
-  TextField, // ← ADICIONADO!
+  TextField,
   Paper,
   IconButton,
   Chip,
@@ -55,7 +55,7 @@ import {
   Visibility as VisibilityIcon,
   History as HistoryIcon,
   Percent as PercentIcon,
-  AttachMoney as MoneyIcon, // ← CORRIGIDO: AttachMoney em vez de Money
+  AttachMoney as MoneyIcon,
   LocalOffer as TagIcon,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
@@ -82,10 +82,20 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { cupomService } from '../services/cupomService';
+import { auditoriaService } from '../services/auditoriaService'; // 🔥 ADICIONADO
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
+import {
+  format,
+  subDays,
+  startOfDay,
+  endOfDay,
+  eachDayOfInterval,
+  isWithinInterval,
+  parseISO,
+} from 'date-fns';
 import {
   LineChart,
   Line,
@@ -104,7 +114,6 @@ import {
   AreaChart,
   ComposedChart,
 } from 'recharts';
-import { exportToCSV, exportToPDF } from '../utils/exportUtils';
 
 const periodos = [
   { value: 'hoje', label: 'Hoje' },
@@ -132,6 +141,9 @@ function AnaliseCupons() {
   const [tabValue, setTabValue] = useState(0);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [cupomSelecionado, setCupomSelecionado] = useState(null);
+  
+  // 🔥 Estado para usuário atual
+  const [usuario, setUsuario] = useState(null);
 
   // Dados processados para gráficos
   const [dadosGrafico, setDadosGrafico] = useState({
@@ -143,6 +155,18 @@ function AnaliseCupons() {
     topClientes: [],
   });
 
+  // 🔥 Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuario(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -151,18 +175,63 @@ function AnaliseCupons() {
     processarDados();
   }, [cupons, usos, periodo, dataInicio, dataFim, filtroCupom]);
 
+  // 🔥 Função para registrar auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'analise_cupons',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando dados de análise de cupons');
+      
       const [cuponsData, usosData, clientesData] = await Promise.all([
         cupomService.listarCupons(),
         firebaseService.getAll('usos_cupons').catch(() => []),
         firebaseService.getAll('clientes').catch(() => [])
       ]);
+      
       setCupons(cuponsData || []);
       setUsos(usosData || []);
       setClientes(clientesData || []);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_analise_cupons',
+        'analise',
+        'Análise de cupons carregada',
+        { totalCupons: cuponsData?.length, totalUsos: usosData?.length }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Dados de análise carregados', {
+        totalCupons: cuponsData?.length,
+        totalUsos: usosData?.length
+      });
+      
+      toast.success('Dados carregados!');
     } catch (error) {
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar dados de análise', {
+        error: error.message
+      });
+      
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
     } finally {
@@ -170,13 +239,174 @@ function AnaliseCupons() {
     }
   };
 
+  // Função para processar dados
   const processarDados = () => {
-    // ... (todo o código permanece igual)
-    // [MANTER TODO O CÓDIGO EXISTENTE]
+    try {
+      // Definir intervalo de datas
+      let inicio = null;
+      let fim = new Date();
+
+      if (periodo === 'hoje') {
+        inicio = startOfDay(new Date());
+      } else if (periodo === 'ontem') {
+        inicio = startOfDay(subDays(new Date(), 1));
+        fim = endOfDay(subDays(new Date(), 1));
+      } else if (periodo === 'ultimos7') {
+        inicio = subDays(new Date(), 7);
+      } else if (periodo === 'ultimos30') {
+        inicio = subDays(new Date(), 30);
+      } else if (periodo === 'esteMes') {
+        inicio = startOfDay(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+      } else if (periodo === 'mesPassado') {
+        inicio = startOfDay(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+        fim = endOfDay(new Date(new Date().getFullYear(), new Date().getMonth(), 0));
+      } else if (periodo === 'personalizado' && dataInicio && dataFim) {
+        inicio = startOfDay(new Date(dataInicio));
+        fim = endOfDay(new Date(dataFim));
+      }
+
+      // Filtrar usos pelo período
+      let usosFiltrados = usos;
+      if (inicio && fim) {
+        usosFiltrados = usos.filter(uso => {
+          const dataUso = uso.data ? new Date(uso.data) : null;
+          return dataUso && dataUso >= inicio && dataUso <= fim;
+        });
+      }
+
+      // Filtrar por cupom específico
+      if (filtroCupom !== 'todos') {
+        usosFiltrados = usosFiltrados.filter(uso => uso.cupomId === filtroCupom);
+      }
+
+      // Filtrar por cliente
+      if (filtroCliente) {
+        usosFiltrados = usosFiltrados.filter(uso => 
+          uso.clienteNome?.toLowerCase().includes(filtroCliente.toLowerCase())
+        );
+      }
+
+      // Processar usos por dia
+      const usosPorDia = {};
+      usosFiltrados.forEach(uso => {
+        if (uso.data) {
+          const dataStr = format(new Date(uso.data), 'dd/MM');
+          usosPorDia[dataStr] = (usosPorDia[dataStr] || 0) + 1;
+        }
+      });
+
+      const dadosUsosPorDia = Object.entries(usosPorDia).map(([data, usos]) => ({
+        data,
+        usos
+      })).sort((a, b) => {
+        const [diaA, mesA] = a.data.split('/').map(Number);
+        const [diaB, mesB] = b.data.split('/').map(Number);
+        return mesA === mesB ? diaA - diaB : mesA - mesB;
+      });
+
+      // Processar cupons mais usados
+      const usosPorCupom = {};
+      usosFiltrados.forEach(uso => {
+        if (uso.cupomId) {
+          usosPorCupom[uso.cupomId] = (usosPorCupom[uso.cupomId] || 0) + 1;
+        }
+      });
+
+      const cuponsMaisUsados = Object.entries(usosPorCupom)
+        .map(([cupomId, qtd]) => {
+          const cupom = cupons.find(c => c.id === cupomId) || { codigo: 'Desconhecido', tipo: 'fixo', valor: 0 };
+          return {
+            id: cupomId,
+            nome: cupom.codigo,
+            tipo: cupom.tipo,
+            valor: cupom.valor,
+            usos: qtd
+          };
+        })
+        .sort((a, b) => b.usos - a.usos)
+        .slice(0, 10);
+
+      // Processar tipos de cupom
+      const tiposCupom = {};
+      usosFiltrados.forEach(uso => {
+        const cupom = cupons.find(c => c.id === uso.cupomId);
+        const tipo = cupom?.tipo || 'desconhecido';
+        tiposCupom[tipo] = (tiposCupom[tipo] || 0) + 1;
+      });
+
+      const dadosTiposCupom = Object.entries(tiposCupom).map(([tipo, qtd]) => ({
+        name: tipo === 'percentual' ? 'Percentual' :
+              tipo === 'fixo' ? 'Valor Fixo' :
+              tipo === 'frete' ? 'Frete Grátis' :
+              tipo === 'produto' ? 'Produto' : 'Outros',
+        value: qtd
+      }));
+
+      // Processar horários de uso
+      const horariosUso = {};
+      usosFiltrados.forEach(uso => {
+        if (uso.data) {
+          const hora = format(new Date(uso.data), 'HH:00');
+          horariosUso[hora] = (horariosUso[hora] || 0) + 1;
+        }
+      });
+
+      const dadosHorariosUso = Object.entries(horariosUso)
+        .map(([hora, qtd]) => ({ hora, usos: qtd }))
+        .sort((a, b) => a.hora.localeCompare(b.hora));
+
+      // Processar desempenho financeiro
+      const desempenho = dadosUsosPorDia.map(item => {
+        const usosNoDia = usosFiltrados.filter(uso => {
+          return uso.data && format(new Date(uso.data), 'dd/MM') === item.data;
+        });
+        
+        const valorTotal = usosNoDia.reduce((acc, uso) => acc + (uso.valorDesconto || 0), 0);
+        
+        return {
+          data: item.data,
+          valor: valorTotal
+        };
+      });
+
+      // Processar top clientes
+      const usosPorCliente = {};
+      usosFiltrados.forEach(uso => {
+        const clienteNome = uso.clienteNome || 'Desconhecido';
+        usosPorCliente[clienteNome] = (usosPorCliente[clienteNome] || 0) + 1;
+      });
+
+      const topClientes = Object.entries(usosPorCliente)
+        .map(([nome, usos]) => ({ nome, usos }))
+        .sort((a, b) => b.usos - a.usos)
+        .slice(0, 10);
+
+      setDadosGrafico({
+        usosPorDia: dadosUsosPorDia,
+        cuponsMaisUsados,
+        tiposCupom: dadosTiposCupom,
+        horariosUso: dadosHorariosUso,
+        desempenho,
+        topClientes,
+      });
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Dados processados para análise', {
+        totalUsosFiltrados: usosFiltrados.length,
+        periodo: periodo
+      });
+
+    } catch (error) {
+      console.error('Erro ao processar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      firebaseService.log('error', 'Erro ao processar dados de análise', {
+        error: error.message
+      });
+    }
   };
 
   const calcularMetricas = () => {
-    // ... (todo o código permanece igual)
     const totalUsos = usos.length;
     const totalDescontos = usos.reduce((acc, uso) => acc + (uso.valorDesconto || 0), 0);
     const mediaDesconto = totalUsos > 0 ? totalDescontos / totalUsos : 0;
@@ -194,22 +424,106 @@ function AnaliseCupons() {
 
   const metricas = calcularMetricas();
 
-  const handleExportar = (formato) => {
-    if (formato === 'csv') {
-      exportToCSV(usos, 'analise-cupons');
-      toast.success('Dados exportados para CSV');
-    } else if (formato === 'pdf') {
-      exportToPDF('relatorio-cupons', 'Análise de Cupons');
-      toast.success('Relatório PDF gerado');
+  const handleExportar = async (formato) => {
+    try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Exportando dados para ${formato}`);
+      
+      if (formato === 'csv') {
+        const dadosExport = usos.map(uso => {
+          const cupom = cupons.find(c => c.id === uso.cupomId);
+          return {
+            Data: uso.data ? new Date(uso.data).toLocaleDateString('pt-BR') : '',
+            Cupom: cupom?.codigo || '',
+            Cliente: uso.clienteNome || '',
+            'Valor Original': uso.valorOriginal || 0,
+            Desconto: uso.valorDesconto || 0,
+            'Valor Final': uso.valorFinal || 0,
+          };
+        });
+
+        const csvContent = [
+          Object.keys(dadosExport[0] || {}).join(','),
+          ...dadosExport.map(row => Object.values(row).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `analise-cupons-${format(new Date(), 'yyyyMMdd')}.csv`;
+        link.click();
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'exportar_analise_cupons',
+          'exportacao',
+          `Dados exportados para CSV`,
+          { totalRegistros: usos.length }
+        );
+        
+        toast.success('Dados exportados para CSV');
+      } else if (formato === 'json') {
+        const dadosExport = {
+          exportadoEm: new Date().toISOString(),
+          metricas,
+          usos,
+          cupons
+        };
+        
+        const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `analise-cupons-${format(new Date(), 'yyyyMMdd')}.json`;
+        link.click();
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'exportar_analise_cupons',
+          'exportacao',
+          `Dados exportados para JSON`,
+          { totalRegistros: usos.length }
+        );
+        
+        toast.success('Dados exportados para JSON');
+      }
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao exportar dados', {
+        error: error.message,
+        formato
+      });
+      
+      toast.error('Erro ao exportar dados');
     }
   };
 
-  const handleVerDetalhesCupom = (cupomId) => {
+  const handleVerDetalhesCupom = async (cupomId) => {
     const cupom = cupons.find(c => c.id === cupomId);
     if (cupom) {
       setCupomSelecionado(cupom);
       setOpenDetalhesDialog(true);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'visualizar_detalhes_cupom',
+        cupomId,
+        `Detalhes do cupom ${cupom.codigo} visualizados`
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Detalhes de cupom visualizados', {
+        cupomId,
+        cupomCodigo: cupom.codigo
+      });
     }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual de dados');
+    await carregarDados();
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -251,15 +565,15 @@ function AnaliseCupons() {
             </Button>
             <Button
               variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={() => window.print()}
+              startIcon={<FileDownloadIcon />}
+              onClick={() => handleExportar('json')}
             >
-              Imprimir
+              Exportar JSON
             </Button>
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={carregarDados}
+              onClick={handleRefresh}
             >
               Atualizar
             </Button>
@@ -508,11 +822,9 @@ function AnaliseCupons() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="data" />
                     <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
                     <Bar yAxisId="left" dataKey="valor" fill="#4caf50" name="Valor dos Descontos (R$)" />
-                    <Line yAxisId="right" type="monotone" dataKey="valor" stroke="#ff9800" name="Tendência" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </Box>
@@ -604,6 +916,17 @@ function AnaliseCupons() {
                       </TableRow>
                     );
                   })}
+                  
+                  {dadosGrafico.cuponsMaisUsados.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <TagIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                        <Typography variant="body1" color="textSecondary">
+                          Nenhum dado encontrado
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -705,7 +1028,7 @@ function AnaliseCupons() {
                             .slice(0, 5)
                             .map((uso, idx) => (
                               <TableRow key={idx}>
-                                <TableCell>{new Date(uso.data).toLocaleDateString('pt-BR')}</TableCell>
+                                <TableCell>{uso.data ? new Date(uso.data).toLocaleDateString('pt-BR') : '-'}</TableCell>
                                 <TableCell>{uso.clienteNome || 'N/A'}</TableCell>
                                 <TableCell align="right">R$ {(uso.valorOriginal || 0).toFixed(2)}</TableCell>
                                 <TableCell align="right" sx={{ color: '#4caf50' }}>
@@ -714,6 +1037,13 @@ function AnaliseCupons() {
                                 <TableCell align="right">R$ {(uso.valorFinal || 0).toFixed(2)}</TableCell>
                               </TableRow>
                             ))}
+                          {usos.filter(u => u.cupomId === cupomSelecionado.id).length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={5} align="center" sx={{ py: 2 }}>
+                                Nenhum uso registrado
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
