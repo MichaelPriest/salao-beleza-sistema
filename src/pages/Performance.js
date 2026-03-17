@@ -119,7 +119,7 @@ import {
   ThumbDown as ThumbDownIcon,
   ThumbsUpDown as ThumbsUpDownIcon,
   CompareArrows as CompareIcon,
-  SwapHoriz as SwapIcon,
+  SwapHoriz as SwapHorizIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   ChevronRight as ChevronRightIcon,
