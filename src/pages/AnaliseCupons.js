@@ -54,7 +54,7 @@ import {
   Visibility as VisibilityIcon,
   History as HistoryIcon,
   Percent as PercentIcon,
-  AttachMoney as MoneyIcon,
+  Money as MoneyIcon,
   LocalOffer as TagIcon,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
