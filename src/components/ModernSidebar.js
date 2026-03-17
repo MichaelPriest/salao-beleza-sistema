@@ -268,7 +268,7 @@ const menuGroups = [
       { 
         text: 'Comissões', 
         icon: <MoneyIcon />, 
-        path: '/comissoes', 
+        path: '/minhas-comissoes', 
         permission: 'visualizar_comissoes',
         cargos: ['admin', 'gerente', 'profissional']
       },
