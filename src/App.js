@@ -75,6 +75,8 @@ import AnaliseCupons from './pages/AnaliseCupons';
 // Pages de Disponibilidade (NOVA)
 import Disponibilidade from './pages/Disponibilidade';
 
+import Indicacoes from './pages/Indicacoes';
+
 // Pages de Categorias (NOVA)
 import CategoriasProdutos from './pages/CategoriasProdutos';
 
@@ -400,7 +402,16 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                
+
+                {/* Indicações */}  
+                <Route path="/indicacoes" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <Indicacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+
                 {/* HISTÓRICO FIDELIDADE */}
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
