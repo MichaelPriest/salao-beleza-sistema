@@ -33,111 +33,42 @@ import {
   TableRow,
   TablePagination,
   Avatar,
-  Switch,
-  FormControlLabel,
   Autocomplete,
   Badge,
-  Checkbox,
-  ListItemText,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Radio,
-  RadioGroup,
-  Slider,
-  Tab,
-  Tabs,
   alpha,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  StepButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemAvatar,
-  ListItemText as MuiListItemText,
-  Collapse,
-  Breadcrumbs,
-  Link,
-  CardActions,
-  CardHeader,
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
   Fab,
   Zoom,
-  Fade,
-  Grow,
-  Slide,
   useMediaQuery,
   useTheme,
-  BottomNavigation,
-  BottomNavigationAction,
   SwipeableDrawer,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   Add as AddIcon,
   PersonAdd as PersonAddIcon,
-  EmojiEvents as TrophyIcon,
-  Star as StarIcon,
-  AttachMoney as MoneyIcon,
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
   Schedule as ScheduleIcon,
-  History as HistoryIcon,
-  TrendingUp as TrendingUpIcon,
-  People as PeopleIcon,
-  Person as PersonIcon,
   FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  Share as ShareIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
-  MoreVert as MoreVertIcon,
   Info as InfoIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
   WhatsApp as WhatsAppIcon,
-  Email as EmailIcon,
   ContentCopy as CopyIcon,
   QrCode as QrCodeIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import {
   format,
   subDays,
-  subMonths,
-  subWeeks,
   startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  eachMonthOfInterval,
-  differenceInDays,
-  isSameDay,
-  isWithinInterval,
-  parseISO,
-  differenceInHours,
-  differenceInMinutes,
 } from 'date-fns';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';  // CORRIGIDO: importação nomeada
 
 const statusIndicacao = [
   { value: 'pendente', label: 'Pendente', color: '#ff9800', icon: <ScheduleIcon /> },
@@ -193,7 +124,6 @@ function Indicacoes() {
   
   // Mobile states
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [bottomNavValue, setBottomNavValue] = useState(0);
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -233,7 +163,6 @@ function Indicacoes() {
       if (configs && configs.length > 0) {
         setConfig(configs[0]);
       } else {
-        // Configurações padrão
         setConfig({
           pontosIndicacao: 100,
           diasValidadeIndicacao: 30,
@@ -253,11 +182,9 @@ function Indicacoes() {
         firebaseService.getAll('clientes').catch(() => [])
       ]);
 
-      // Filtrar por permissão do usuário
       let indicacoesFiltradas = indicacoesData || [];
       
       if (!isAdmin && usuario?.clienteId) {
-        // Cliente só vê suas próprias indicações
         indicacoesFiltradas = indicacoesFiltradas.filter(i => 
           i.clienteId === usuario.clienteId
         );
@@ -345,13 +272,11 @@ function Indicacoes() {
         return;
       }
 
-      // Verificar se o cliente indicador está logado
       if (!usuario?.clienteId && !isAdmin) {
         mostrarSnackbar('Você precisa estar logado como cliente para fazer indicações', 'error');
         return;
       }
 
-      // Calcular data de expiração
       const dataAtual = new Date();
       const diasValidade = config?.diasValidadeIndicacao || 30;
       const dataExpiracao = new Date();
@@ -362,7 +287,7 @@ function Indicacoes() {
         clienteNome: isAdmin && formData.clienteId 
           ? clientes.find(c => c.id === formData.clienteId)?.nome || 'Cliente'
           : usuario?.nome || 'Cliente',
-        clienteIndicadoId: null, // Será preenchido quando o cliente se cadastrar
+        clienteIndicadoId: null,
         clienteIndicadoNome: formData.clienteNome,
         clienteIndicadoEmail: formData.clienteEmail,
         clienteIndicadoTelefone: formData.clienteTelefone,
@@ -409,7 +334,6 @@ function Indicacoes() {
         updatedAt: new Date().toISOString(),
       });
 
-      // Adicionar pontos ao cliente que indicou
       if (indicacao.pontosGanhos > 0) {
         const pontuacaoData = {
           clienteId: indicacao.clienteId,
@@ -451,15 +375,12 @@ function Indicacoes() {
 
   const handleReenviarConvite = async (indicacao) => {
     try {
-      // Gerar link de convite
       const link = `${window.location.origin}/cadastro?indicacao=${indicacao.id}`;
       
       if (indicacao.clienteIndicadoTelefone) {
-        // Enviar WhatsApp
         const mensagem = `Olá! Você foi indicado(a) para conhecer nosso salão. Use este link para se cadastrar e ganhar benefícios: ${link}`;
         window.open(`https://wa.me/55${indicacao.clienteIndicadoTelefone.replace(/\D/g, '')}?text=${encodeURIComponent(mensagem)}`, '_blank');
       } else if (indicacao.clienteIndicadoEmail) {
-        // Simular envio de email
         toast.success('Convite enviado por email (simulação)');
       }
 
@@ -980,13 +901,12 @@ function Indicacoes() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedIndicacoes.map((indicacao, index) => {
+                      {paginatedIndicacoes.map((indicacao) => {
                         const statusInfo = getStatusInfo(indicacao.status);
                         const clienteIndicador = getClienteInfo(indicacao.clienteId);
                         
                         return (
                           <TableRow key={indicacao.id} hover>
-                            {/* Coluna 1: Indicado */}
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Avatar sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}>
@@ -1002,8 +922,6 @@ function Indicacoes() {
                                 </Box>
                               </Box>
                             </TableCell>
-                    
-                            {/* Coluna 2: Indicador (NOVA) */}
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Avatar src={clienteIndicador?.foto} sx={{ width: 32, height: 32 }}>
@@ -1019,13 +937,9 @@ function Indicacoes() {
                                 </Box>
                               </Box>
                             </TableCell>
-                    
-                            {/* Coluna 3: Data */}
                             <TableCell>
                               {format(new Date(indicacao.dataCriacao), 'dd/MM/yyyy')}
                             </TableCell>
-                    
-                            {/* Coluna 4: Status */}
                             <TableCell>
                               <Chip
                                 size="small"
@@ -1038,15 +952,11 @@ function Indicacoes() {
                                 }}
                               />
                             </TableCell>
-                    
-                            {/* Coluna 5: Pontos */}
                             <TableCell align="right">
                               <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
                                 {indicacao.status === 'confirmada' ? indicacao.pontosGanhos : 0}
                               </Typography>
                             </TableCell>
-                    
-                            {/* Coluna 6: Ações */}
                             <TableCell align="center">
                               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
                                 <Tooltip title="Ver detalhes">
@@ -1068,7 +978,7 @@ function Indicacoes() {
                                     <QrCodeIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                    
+
                                 <Tooltip title="Copiar link">
                                   <IconButton
                                     size="small"
@@ -1078,7 +988,7 @@ function Indicacoes() {
                                     <CopyIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                    
+
                                 {indicacao.status === 'pendente' && !verificarExpirada(indicacao) && (
                                   <Tooltip title="Reenviar convite">
                                     <IconButton
@@ -1090,7 +1000,7 @@ function Indicacoes() {
                                     </IconButton>
                                   </Tooltip>
                                 )}
-                    
+
                                 {isAdmin && indicacao.status === 'pendente' && (
                                   <>
                                     <Tooltip title="Confirmar">
@@ -1357,18 +1267,16 @@ function Indicacoes() {
                   )}
 
                   {indicacaoSelecionada.observacoes && (
-                    <>
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Observações
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="textSecondary">
+                        Observações
+                      </Typography>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                        <Typography variant="body2">
+                          {indicacaoSelecionada.observacoes}
                         </Typography>
-                        <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-                          <Typography variant="body2">
-                            {indicacaoSelecionada.observacoes}
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    </>
+                      </Paper>
+                    </Grid>
                   )}
                 </Grid>
               </DialogContent>
@@ -1395,7 +1303,7 @@ function Indicacoes() {
               </DialogTitle>
               <DialogContent>
                 <Box sx={{ textAlign: 'center', py: 3 }}>
-                  <QRCode
+                  <QRCodeCanvas  {/* CORRIGIDO: QRCodeCanvas em vez de QRCode */}
                     value={`${window.location.origin}/cadastro?indicacao=${indicacaoSelecionada.id}`}
                     size={256}
                     level="H"
