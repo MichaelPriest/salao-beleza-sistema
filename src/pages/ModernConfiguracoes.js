@@ -732,7 +732,7 @@ function ModernConfiguracoes() {
   };
 
   // ============================================
-  // FUNÇÕES PARA LIMPEZA DE DADOS - CORRIGIDAS
+  // FUNÇÕES PARA LIMPEZA DE DADOS - CORRIGIDAS (SEM toast.info)
   // ============================================
 
   const handleOpenCleanDialog = () => {
@@ -762,7 +762,7 @@ function ModernConfiguracoes() {
     }));
   };
 
-  // 🔥 FUNÇÃO DE LIMPEZA CORRIGIDA - AGORA FUNCIONA DE VERDADE
+  // 🔥 FUNÇÃO DE LIMPEZA CORRIGIDA - SEM toast.info
   const handleCleanData = async () => {
     if (confirmText !== 'LIMPAR DADOS') {
       toast.error('Digite "LIMPAR DADOS" para confirmar');
@@ -775,22 +775,29 @@ function ModernConfiguracoes() {
       setCleaningProgress(0);
       setDeletingInProgress({});
 
-      // Fazer backup automático antes de limpar
-      toast.info('Fazendo backup automático...');
+      // Fazer backup automático antes de limpar (sem toast.info)
+      toast('🔄 Fazendo backup automático...', {
+        icon: '⏳',
+        duration: 3000
+      });
+      
       let backupRealizado = null;
       try {
         backupRealizado = await backupService.criarBackup();
-        toast.success('Backup automático concluído!');
+        toast.success('✅ Backup automático concluído!');
       } catch (backupError) {
         console.warn('⚠️ Backup automático falhou, continuando mesmo assim:', backupError);
-        toast.warning('Backup automático falhou, mas a limpeza continuará');
+        toast('⚠️ Backup automático falhou, mas a limpeza continuará', {
+          icon: '⚠️',
+          duration: 5000
+        });
       }
       setCleaningProgress(10);
 
       const resultados = {};
       const erros = [];
       
-      // 🔥 Contar registros ANTES da limpeza
+      // Contar registros ANTES da limpeza
       const contagemAntes = {};
       for (const [collection, selected] of Object.entries(selectedCollections)) {
         if (selected) {
@@ -807,7 +814,7 @@ function ModernConfiguracoes() {
 
       setCleaningProgress(20);
 
-      // 🔥 Limpar cada coleção selecionada
+      // Limpar cada coleção selecionada
       const colecoesParaLimpar = Object.entries(selectedCollections)
         .filter(([_, selected]) => selected)
         .map(([collection]) => collection);
@@ -888,7 +895,7 @@ function ModernConfiguracoes() {
 
       setCleaningProgress(95);
 
-      // 🔥 Verificar se os dados foram realmente deletados
+      // Verificar se os dados foram realmente deletados
       const contagemDepois = {};
       for (const collection of colecoesParaLimpar) {
         try {
