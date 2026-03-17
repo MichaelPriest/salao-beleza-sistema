@@ -13,11 +13,11 @@ import {
   where,
   orderBy,
   Timestamp,
-  setDoc // 🔥 IMPORTANTE: ADICIONAR setDoc
+  setDoc
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-// Suas configurações do Firebase (substitua com os dados do seu projeto)
+// Suas configurações do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA",
   authDomain: "fluted-sentry-305001.firebaseapp.com",
@@ -80,7 +80,7 @@ export const firebaseService = {
     }
   },
 
-  // 🔥 NOVO: Adicionar/atualizar documento com ID específico
+  // Adicionar/atualizar documento com ID específico
   set: async (collectionName, id, data) => {
     try {
       const docRef = doc(db, collectionName, id);
@@ -89,7 +89,6 @@ export const firebaseService = {
         updatedAt: Timestamp.now()
       };
       
-      // Se não tiver createdAt, adicionar
       if (!data.createdAt) {
         dataWithTimestamps.createdAt = Timestamp.now();
       }
@@ -137,7 +136,6 @@ export const firebaseService = {
       let q = collection(db, collectionName);
       
       if (conditions.length > 0) {
-        // Validar que nenhum valor é undefined
         const constraints = conditions
           .filter(({ value }) => value !== undefined && value !== null)
           .map(({ field, operator, value }) => where(field, operator, value));
@@ -162,9 +160,78 @@ export const firebaseService = {
     }
   },
 
-  // Gerar ID único (opcional)
+  // Gerar ID único
   generateId: (collectionName) => {
     return doc(collection(db, collectionName)).id;
+  },
+
+  // 🔥 NOVA FUNÇÃO: Registrar log técnico
+  log: async (nivel, mensagem, dados = {}) => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      let usuario = null;
+      try {
+        usuario = usuarioStr ? JSON.parse(usuarioStr) : null;
+      } catch (e) {
+        // Ignora erro de parsing
+      }
+
+      const logData = {
+        nivel, // 'info', 'warning', 'error', 'success', 'debug'
+        mensagem,
+        ...dados,
+        usuarioId: usuario?.id || null,
+        usuarioNome: usuario?.nome || 'Sistema',
+        timestamp: new Date().toISOString(),
+        data: Timestamp.now()
+      };
+      
+      // Salvar no Firestore (opcional - pode desativar se quiser só console)
+      await firebaseService.add('logs', logData).catch(err => {
+        console.warn('Erro ao salvar log no Firestore:', err);
+      });
+      
+      // Também mostrar no console
+      const cor = {
+        info: '#2196f3',
+        success: '#4caf50',
+        warning: '#ff9800',
+        error: '#f44336',
+        debug: '#9c27b0'
+      }[nivel] || '#666';
+      
+      console.log(`%c[${nivel.toUpperCase()}] ${mensagem}`, `color: ${cor}; font-weight: bold;`, dados);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao registrar log:', error);
+      return false;
+    }
+  },
+
+  // 🔥 Função helper para log de info
+  info: (mensagem, dados = {}) => {
+    return firebaseService.log('info', mensagem, dados);
+  },
+
+  // 🔥 Função helper para log de sucesso
+  success: (mensagem, dados = {}) => {
+    return firebaseService.log('success', mensagem, dados);
+  },
+
+  // 🔥 Função helper para log de warning
+  warning: (mensagem, dados = {}) => {
+    return firebaseService.log('warning', mensagem, dados);
+  },
+
+  // 🔥 Função helper para log de erro
+  error: (mensagem, dados = {}) => {
+    return firebaseService.log('error', mensagem, dados);
+  },
+
+  // 🔥 Função helper para log de debug
+  debug: (mensagem, dados = {}) => {
+    return firebaseService.log('debug', mensagem, dados);
   }
 };
 
