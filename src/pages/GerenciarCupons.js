@@ -46,6 +46,7 @@ import {
   AccordionDetails,
   Radio,
   RadioGroup,
+  Slider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -67,6 +68,8 @@ import {
   Print as PrintIcon,
   Palette as PaletteIcon,
   ExpandMore as ExpandMoreIcon,
+  ContentCopy as CopyIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -76,7 +79,6 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import QRCode from 'qrcode.react';
 
 const tiposCupom = [
   { value: 'percentual', label: 'Percentual', icon: <PercentIcon /> },
@@ -141,6 +143,9 @@ function GerenciarCupons() {
     mostrarLogo: true,
     mostrarQrCode: true,
     mensagemPersonalizada: '',
+    quantidade: 1,
+    disposicao: 'vertical', // 'vertical' ou 'horizontal'
+    tamanhoPapel: 'A4', // 'A4', 'A5', 'Carta'
   });
 
   // Estado do formulário
@@ -412,284 +417,285 @@ function GerenciarCupons() {
       mostrarLogo: cupom.customizacao?.mostrarLogo !== false,
       mostrarQrCode: cupom.customizacao?.mostrarQrCode !== false,
       mensagemPersonalizada: cupom.customizacao?.mensagemPersonalizada || '',
+      quantidade: 1,
+      disposicao: 'vertical',
+      tamanhoPapel: 'A4',
     });
     setOpenImpressaoDialog(true);
   };
 
-  const handleImprimirCupom = () => {
-    const janelaImpressao = window.open('', '_blank');
+  const gerarCupomHTML = (index = 0) => {
     const corPrimaria = customizacao.corPrimaria;
     const corSecundaria = customizacao.corSecundaria;
     const fonte = configuracoes?.tema?.fonte || 'Poppins';
     
+    const larguraCupom = customizacao.disposicao === 'horizontal' ? '300px' : '400px';
+    const margem = customizacao.disposicao === 'horizontal' ? '10px' : '20px auto';
+    
+    return `
+      <div class="cupom-item" style="
+        max-width: ${larguraCupom};
+        width: 100%;
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        position: relative;
+        margin: ${margem};
+        break-inside: avoid;
+        page-break-inside: avoid;
+      ">
+        ${customizacao.estilo === 'moderno' ? `
+          <div style="border: 2px solid ${corPrimaria}; border-radius: 16px;">
+        ` : ''}
+        ${customizacao.estilo === 'elegante' ? `
+          <div style="border: 1px solid #e0e0e0; box-shadow: 0 10px 30px rgba(0,0,0,0.05);">
+        ` : ''}
+        ${customizacao.estilo === 'vibrante' ? `
+          <div style="background: linear-gradient(135deg, ${corPrimaria}10, ${corSecundaria}10);">
+        ` : ''}
+        ${customizacao.estilo === 'luxo' ? `
+          <div style="border: 1px solid gold; box-shadow: 0 0 30px rgba(255,215,0,0.2);">
+        ` : ''}
+        
+        <div style="background: ${corPrimaria}; color: white; padding: 20px; text-align: center; position: relative;">
+          <div style="position: absolute; bottom: -10px; left: 0; right: 0; height: 20px; background: linear-gradient(to bottom right, transparent 49%, ${corPrimaria} 50%);"></div>
+          ${customizacao.mostrarLogo && configuracoes?.salao?.logo ? `
+            <img src="${configuracoes.salao.logo}" alt="Logo" style="max-width: 120px; max-height: 60px; object-fit: contain; margin-bottom: 10px;">
+          ` : ''}
+          <div style="font-size: 24px; font-weight: bold; margin: 10px 0 5px;">CUPOM DE DESCONTO</div>
+        </div>
+        
+        <div style="padding: 30px 20px; text-align: center;">
+          <div style="font-size: 28px; font-weight: bold; letter-spacing: 2px; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block;">
+            ${cupomSelecionado?.codigo}
+          </div>
+          
+          <div style="font-size: 48px; font-weight: bold; color: ${corPrimaria}; margin: 20px 0;">
+            ${cupomSelecionado?.tipo === 'percentual' 
+              ? `${cupomSelecionado?.valor}% OFF` 
+              : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
+            ${cupomSelecionado?.tipo === 'percentual' && cupomSelecionado?.valorMaximoDesconto ? 
+              `<br><small style="font-size: 18px; color: #666;">Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
+          </div>
+          
+          <div style="color: #666; margin: 20px 0; line-height: 1.6;">
+            ${cupomSelecionado?.descricao || 'Aproveite esta oferta especial!'}
+          </div>
+          
+          ${cupomSelecionado?.dataFim ? `
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 14px;">
+              <strong style="color: ${corSecundaria};">Válido até:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
+            </div>
+          ` : ''}
+          
+          <div style="text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 13px;">
+            <strong>Regras do cupom:</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+              ${cupomSelecionado?.valorMinimo > 0 ? 
+                `<li>Valor mínimo da compra: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
+              ${cupomSelecionado?.usoMaximo ? 
+                `<li>Limite de ${cupomSelecionado.usoMaximo} uso(s) total(is)</li>` : ''}
+              ${cupomSelecionado?.usoMaximoPorCliente > 1 ? 
+                `<li>Máximo de ${cupomSelecionado.usoMaximoPorCliente} uso(s) por cliente</li>` : ''}
+              ${cupomSelecionado?.primeiroAcesso ? 
+                '<li>Válido apenas para primeiro atendimento</li>' : ''}
+              ${cupomSelecionado?.clientesElegiveis === 'novos' ? 
+                '<li>Válido apenas para novos clientes</li>' : ''}
+              ${cupomSelecionado?.clientesElegiveis === 'vip' ? 
+                '<li>Válido apenas para clientes VIP</li>' : ''}
+            </ul>
+          </div>
+          
+          ${customizacao.mostrarQrCode ? `
+            <div style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; display: inline-block;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code" style="width: 120px; height: 120px;">
+            </div>
+          ` : ''}
+          
+          ${customizacao.mensagemPersonalizada ? `
+            <div style="font-style: italic; color: ${corSecundaria}; margin: 20px 0; padding: 10px; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc;">
+              "${customizacao.mensagemPersonalizada}"
+            </div>
+          ` : ''}
+        </div>
+        
+        <div style="background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #e0e0e0;">
+          <div style="margin-bottom: 10px;">
+            <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
+            ${configuracoes?.salao?.contato?.telefone ? `Tel: ${configuracoes.salao.contato.telefone}<br>` : ''}
+            ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}<br>` : ''}
+            ${configuracoes?.salao?.endereco?.cidade ? `${configuracoes.salao.endereco.cidade} - ${configuracoes.salao.endereco.estado}` : ''}
+          </div>
+          <div>*Apresente este cupom no momento do atendimento</div>
+        </div>
+        
+        ${customizacao.estilo !== 'classico' ? '</div>' : ''}
+        ${customizacao.estilo !== 'classico' ? '</div>' : ''}
+      </div>
+    `;
+  };
+
+  const handleImprimirCupom = () => {
+    const quantidade = customizacao.quantidade;
+    const disposicao = customizacao.disposicao;
+    const tamanhoPapel = customizacao.tamanhoPapel;
+    const fonte = configuracoes?.tema?.fonte || 'Poppins';
+    
+    // Gerar HTML para todos os cupons
+    let cuponsHTML = '';
+    for (let i = 0; i < quantidade; i++) {
+      cuponsHTML += gerarCupomHTML(i);
+    }
+    
+    // Definir layout baseado na disposição
+    const displayLayout = disposicao === 'horizontal' 
+      ? 'display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;' 
+      : 'display: block;';
+    
+    const janelaImpressao = window.open('', '_blank');
+    
     janelaImpressao.document.write(`
       <html>
         <head>
-          <title>Cupom ${cupomSelecionado?.codigo}</title>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.react/3.1.0/qrcode.react.min.js"></script>
+          <title>Cupom ${cupomSelecionado?.codigo} - ${quantidade} cópia(s)</title>
           <style>
             body { 
               font-family: '${fonte}', sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
               margin: 0;
               padding: 20px;
               background: #f5f5f5;
             }
-            .cupom-container {
-              max-width: 400px;
-              width: 100%;
-              background: white;
-              border-radius: 16px;
-              overflow: hidden;
-              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-              position: relative;
+            .cupons-container {
+              ${displayLayout}
+              max-width: ${tamanhoPapel === 'A4' ? '1200px' : tamanhoPapel === 'A5' ? '600px' : '1000px'};
+              margin: 0 auto;
             }
-            ${customizacao.estilo === 'moderno' ? `
-              .cupom-container {
-                border: 2px solid ${corPrimaria};
-              }
-            ` : ''}
-            ${customizacao.estilo === 'elegante' ? `
-              .cupom-container {
-                border: 1px solid #e0e0e0;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-              }
-            ` : ''}
-            ${customizacao.estilo === 'vibrante' ? `
-              .cupom-container {
-                background: linear-gradient(135deg, ${corPrimaria}10, ${corSecundaria}10);
-              }
-            ` : ''}
-            ${customizacao.estilo === 'luxo' ? `
-              .cupom-container {
-                border: 1px solid gold;
-                box-shadow: 0 0 30px rgba(255,215,0,0.2);
-              }
-            ` : ''}
-            .cupom-header {
-              background: ${corPrimaria};
-              color: white;
-              padding: 20px;
-              text-align: center;
-              position: relative;
-            }
-            .cupom-header::after {
-              content: '';
-              position: absolute;
-              bottom: -10px;
-              left: 0;
-              right: 0;
-              height: 20px;
-              background: linear-gradient(to bottom right, transparent 49%, ${corPrimaria} 50%);
-            }
-            .logo {
-              max-width: 120px;
-              max-height: 60px;
-              object-fit: contain;
-              margin-bottom: 10px;
-            }
-            .cupom-titulo {
-              font-size: 24px;
-              font-weight: bold;
-              margin: 10px 0 5px;
-            }
-            .cupom-codigo {
-              font-size: 28px;
-              font-weight: bold;
-              letter-spacing: 2px;
-              margin: 10px 0;
-              padding: 10px;
-              background: rgba(255,255,255,0.2);
-              border-radius: 8px;
-              display: inline-block;
-            }
-            .cupom-body {
-              padding: 30px 20px;
-              text-align: center;
-            }
-            .desconto {
-              font-size: 48px;
-              font-weight: bold;
-              color: ${corPrimaria};
-              margin: 20px 0;
-            }
-            .desconto small {
-              font-size: 18px;
-              color: #666;
-            }
-            .descricao {
-              color: #666;
-              margin: 20px 0;
-              line-height: 1.6;
-            }
-            .validade {
-              background: #f8f9fa;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              font-size: 14px;
-            }
-            .validade strong {
-              color: ${corSecundaria};
-            }
-            .regras {
-              text-align: left;
-              background: #f8f9fa;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              font-size: 13px;
-            }
-            .regras ul {
-              margin: 10px 0;
-              padding-left: 20px;
-            }
-            .regras li {
-              margin: 5px 0;
-            }
-            .qr-code {
-              margin: 20px 0;
-              padding: 20px;
-              background: white;
-              border-radius: 8px;
-              display: inline-block;
-            }
-            .qr-code img {
-              width: 120px;
-              height: 120px;
-            }
-            .mensagem-personalizada {
-              font-style: italic;
-              color: ${corSecundaria};
-              margin: 20px 0;
-              padding: 10px;
-              border-top: 1px dashed #ccc;
-              border-bottom: 1px dashed #ccc;
-            }
-            .cupom-footer {
-              background: #f8f9fa;
-              padding: 20px;
-              text-align: center;
-              font-size: 12px;
-              color: #999;
-              border-top: 1px solid #e0e0e0;
-            }
-            .info-empresa {
-              margin-bottom: 10px;
+            .cupom-item {
+              transition: transform 0.2s;
             }
             @media print {
               body {
                 padding: 0;
                 background: white;
               }
-              .cupom-container {
+              .cupons-container {
+                display: ${disposicao === 'horizontal' ? 'flex' : 'block'};
+                flex-wrap: ${disposicao === 'horizontal' ? 'wrap' : 'nowrap'};
+                justify-content: center;
+                gap: 20px;
+                max-width: 100%;
+              }
+              .cupom-item {
                 box-shadow: none;
+                border: 1px solid #eee;
+                margin: 0 auto 20px auto;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .no-print {
+                display: none !important;
               }
             }
           </style>
         </head>
         <body>
-          <div class="cupom-container">
-            <div class="cupom-header">
-              ${customizacao.mostrarLogo && configuracoes?.salao?.logo ? `
-                <img src="${configuracoes.salao.logo}" alt="Logo" class="logo">
-              ` : ''}
-              <div class="cupom-titulo">CUPOM DE DESCONTO</div>
-            </div>
-            
-            <div class="cupom-body">
-              <div class="cupom-codigo">${cupomSelecionado?.codigo}</div>
-              
-              <div class="desconto">
-                ${cupomSelecionado?.tipo === 'percentual' 
-                  ? `${cupomSelecionado?.valor}% OFF` 
-                  : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
-                ${cupomSelecionado?.tipo === 'percentual' && cupomSelecionado?.valorMaximoDesconto ? 
-                  `<br><small>Limitado a R$ ${cupomSelecionado.valorMaximoDesconto.toFixed(2)}</small>` : ''}
-              </div>
-              
-              <div class="descricao">
-                ${cupomSelecionado?.descricao || 'Aproveite esta oferta especial!'}
-              </div>
-              
-              ${cupomSelecionado?.dataFim ? `
-                <div class="validade">
-                  <strong>Válido até:</strong> ${new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR')}
-                </div>
-              ` : ''}
-              
-              <div class="regras">
-                <strong>Regras do cupom:</strong>
-                <ul>
-                  ${cupomSelecionado?.valorMinimo > 0 ? 
-                    `<li>Valor mínimo da compra: R$ ${cupomSelecionado.valorMinimo.toFixed(2)}</li>` : ''}
-                  ${cupomSelecionado?.usoMaximo ? 
-                    `<li>Limite de ${cupomSelecionado.usoMaximo} uso(s) total(is)</li>` : ''}
-                  ${cupomSelecionado?.usoMaximoPorCliente > 1 ? 
-                    `<li>Máximo de ${cupomSelecionado.usoMaximoPorCliente} uso(s) por cliente</li>` : ''}
-                  ${cupomSelecionado?.primeiroAcesso ? 
-                    '<li>Válido apenas para primeiro atendimento</li>' : ''}
-                  ${cupomSelecionado?.clientesElegiveis === 'novos' ? 
-                    '<li>Válido apenas para novos clientes</li>' : ''}
-                  ${cupomSelecionado?.clientesElegiveis === 'vip' ? 
-                    '<li>Válido apenas para clientes VIP</li>' : ''}
-                </ul>
-              </div>
-              
-              ${customizacao.mostrarQrCode ? `
-                <div class="qr-code">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code">
-                </div>
-              ` : ''}
-              
-              ${customizacao.mensagemPersonalizada ? `
-                <div class="mensagem-personalizada">
-                  "${customizacao.mensagemPersonalizada}"
-                </div>
-              ` : ''}
-            </div>
-            
-            <div class="cupom-footer">
-              <div class="info-empresa">
-                <strong>${configuracoes?.salao?.nome || 'BeautyPro'}</strong><br>
-                ${configuracoes?.salao?.contato?.telefone ? `Tel: ${configuracoes.salao.contato.telefone}<br>` : ''}
-                ${configuracoes?.salao?.contato?.whatsapp ? `WhatsApp: ${configuracoes.salao.contato.whatsapp}<br>` : ''}
-                ${configuracoes?.salao?.endereco?.cidade ? `${configuracoes.salao.endereco.cidade} - ${configuracoes.salao.endereco.estado}` : ''}
-              </div>
-              <div>
-                *Apresente este cupom no momento do atendimento
-              </div>
-            </div>
+          <div class="cupons-container">
+            ${cuponsHTML}
           </div>
-          <div style="text-align: center; margin-top: 20px;">
+          <div class="no-print" style="text-align: center; margin-top: 30px; padding: 20px;">
             <button onclick="window.print()" style="
-              background: ${corPrimaria};
+              background: ${customizacao.corPrimaria};
               color: white;
               border: none;
-              padding: 10px 20px;
-              border-radius: 5px;
+              padding: 12px 30px;
+              border-radius: 8px;
               cursor: pointer;
-              margin-right: 10px;
+              margin-right: 15px;
               font-family: ${fonte};
-            ">🖨️ Imprimir Cupom</button>
+              font-size: 16px;
+              font-weight: bold;
+            ">🖨️ Imprimir ${quantidade} Cupom(ns)</button>
             <button onclick="window.close()" style="
               background: #f44336;
               color: white;
               border: none;
-              padding: 10px 20px;
-              border-radius: 5px;
+              padding: 12px 30px;
+              border-radius: 8px;
               cursor: pointer;
               font-family: ${fonte};
+              font-size: 16px;
+              font-weight: bold;
             ">✖️ Fechar</button>
+          </div>
+          <script>
+            // Impedir que os botões apareçam na impressão
+            window.onbeforeprint = function() {
+              document.querySelectorAll('.no-print').forEach(el => el.style.display = 'none');
+            };
+            window.onafterprint = function() {
+              document.querySelectorAll('.no-print').forEach(el => el.style.display = 'block');
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    
+    janelaImpressao.document.close();
+    setOpenImpressaoDialog(false);
+  };
+
+  const handleDownloadPDF = () => {
+    // Criar uma nova janela para visualização antes de imprimir
+    const quantidade = customizacao.quantidade;
+    const disposicao = customizacao.disposicao;
+    const fonte = configuracoes?.tema?.fonte || 'Poppins';
+    
+    let cuponsHTML = '';
+    for (let i = 0; i < quantidade; i++) {
+      cuponsHTML += gerarCupomHTML(i);
+    }
+    
+    const displayLayout = disposicao === 'horizontal' 
+      ? 'display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;' 
+      : 'display: block;';
+    
+    const janelaVisualizacao = window.open('', '_blank');
+    
+    janelaVisualizacao.document.write(`
+      <html>
+        <head>
+          <title>Cupom ${cupomSelecionado?.codigo} - ${quantidade} cópia(s)</title>
+          <style>
+            body { 
+              font-family: '${fonte}', sans-serif;
+              margin: 0;
+              padding: 20px;
+              background: white;
+            }
+            .cupons-container {
+              ${displayLayout}
+              max-width: 1200px;
+              margin: 0 auto;
+            }
+            @media print {
+              body {
+                padding: 10px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cupons-container">
+            ${cuponsHTML}
           </div>
         </body>
       </html>
     `);
-    janelaImpressao.document.close();
-    setOpenImpressaoDialog(false);
+    
+    janelaVisualizacao.document.close();
+    janelaVisualizacao.focus();
+    janelaVisualizacao.print();
   };
 
   const cuponsFiltrados = cupons.filter(cupom => {
@@ -1064,7 +1070,7 @@ function GerenciarCupons() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <PaletteIcon />
               <Typography variant="h6">
-                Customizar Cupom - {cupomSelecionado?.codigo}
+                Customizar e Imprimir Cupom - {cupomSelecionado?.codigo}
               </Typography>
             </Box>
           </DialogTitle>
@@ -1207,6 +1213,65 @@ function GerenciarCupons() {
               </Grid>
 
               <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Configurações de Impressão
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={4}>
+                    <Typography gutterBottom>Quantidade de cópias</Typography>
+                    <Slider
+                      value={customizacao.quantidade}
+                      onChange={(e, newValue) => setCustomizacao({ ...customizacao, quantidade: newValue })}
+                      min={1}
+                      max={50}
+                      step={1}
+                      marks={[
+                        { value: 1, label: '1' },
+                        { value: 10, label: '10' },
+                        { value: 25, label: '25' },
+                        { value: 50, label: '50' },
+                      ]}
+                      valueLabelDisplay="auto"
+                    />
+                    <Typography align="center">{customizacao.quantidade} cópia(s)</Typography>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Disposição</InputLabel>
+                      <Select
+                        value={customizacao.disposicao}
+                        label="Disposição"
+                        onChange={(e) => setCustomizacao({ ...customizacao, disposicao: e.target.value })}
+                      >
+                        <MenuItem value="vertical">Vertical (um abaixo do outro)</MenuItem>
+                        <MenuItem value="horizontal">Horizontal (lado a lado)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Tamanho do Papel</InputLabel>
+                      <Select
+                        value={customizacao.tamanhoPapel}
+                        label="Tamanho do Papel"
+                        onChange={(e) => setCustomizacao({ ...customizacao, tamanhoPapel: e.target.value })}
+                      >
+                        <MenuItem value="A4">A4 (210x297mm)</MenuItem>
+                        <MenuItem value="A5">A5 (148x210mm)</MenuItem>
+                        <MenuItem value="Carta">Carta (216x279mm)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+              </Grid>
+
+              <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Prévia do Cupom
@@ -1233,6 +1298,9 @@ function GerenciarCupons() {
                       "{customizacao.mensagemPersonalizada}"
                     </Typography>
                   )}
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+                    {customizacao.quantidade} cópia(s) • Disposição: {customizacao.disposicao === 'vertical' ? 'Vertical' : 'Horizontal'} • Papel: {customizacao.tamanhoPapel}
+                  </Typography>
                 </Paper>
               </Grid>
             </Grid>
@@ -1245,7 +1313,7 @@ function GerenciarCupons() {
               startIcon={<PrintIcon />}
               sx={{ bgcolor: '#4caf50' }}
             >
-              Imprimir Cupom
+              Visualizar e Imprimir
             </Button>
           </DialogActions>
         </Dialog>
