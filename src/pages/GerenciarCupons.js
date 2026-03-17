@@ -44,17 +44,13 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Slider,
-  ColorPicker,
   Radio,
   RadioGroup,
-  FormHelperText,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  ContentCut as CutIcon,
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
   Schedule as ScheduleIcon,
@@ -62,22 +58,14 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
-  Visibility as VisibilityIcon,
   History as HistoryIcon,
   Percent as PercentIcon,
   AttachMoney as MoneyIcon,
   LocalOffer as TagIcon,
   Inventory as InventoryIcon,
   ShoppingCart as ShoppingCartIcon,
-  Person as PersonIcon,
-  DateRange as DateRangeIcon,
-  AccessTime as TimeIcon,
-  Star as StarIcon,
   Print as PrintIcon,
   Palette as PaletteIcon,
-  QrCode as QrCodeIcon,
-  Download as DownloadIcon,
-  Share as ShareIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -153,7 +141,6 @@ function GerenciarCupons() {
     mostrarLogo: true,
     mostrarQrCode: true,
     mensagemPersonalizada: '',
-    imagemFundo: null,
   });
 
   // Estado do formulário
@@ -439,6 +426,7 @@ function GerenciarCupons() {
       <html>
         <head>
           <title>Cupom ${cupomSelecionado?.codigo}</title>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode.react/3.1.0/qrcode.react.min.js"></script>
           <style>
             body { 
               font-family: '${fonte}', sans-serif;
@@ -569,6 +557,10 @@ function GerenciarCupons() {
               border-radius: 8px;
               display: inline-block;
             }
+            .qr-code img {
+              width: 120px;
+              height: 120px;
+            }
             .mensagem-personalizada {
               font-style: italic;
               color: ${corSecundaria};
@@ -649,7 +641,7 @@ function GerenciarCupons() {
               
               ${customizacao.mostrarQrCode ? `
                 <div class="qr-code">
-                  <QRCode value="${cupomSelecionado?.codigo}" size={120} />
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(cupomSelecionado?.codigo || '')}" alt="QR Code">
                 </div>
               ` : ''}
               
@@ -737,12 +729,17 @@ function GerenciarCupons() {
 
   const formatarData = (data) => {
     if (!data) return '';
-    return new Date(data).toLocaleDateString('pt-BR');
+    if (data.toDate) {
+      return data.toDate().toLocaleDateString('pt-BR') + ' ' + 
+             data.toDate().toLocaleTimeString('pt-BR');
+    }
+    return new Date(data).toLocaleDateString('pt-BR') + ' ' + 
+           new Date(data).toLocaleTimeString('pt-BR');
   };
 
-  const formatarHora = (data) => {
-    if (!data) return '';
-    return new Date(data).toLocaleTimeString('pt-BR');
+  const formatarMoeda = (valor) => {
+    if (!valor && valor !== 0) return 'R$ 0,00';
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   if (loading) {
@@ -894,7 +891,7 @@ function GerenciarCupons() {
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {cupom.tipo === 'percentual' ? `${cupom.valor}%` : `R$ ${cupom.valor?.toFixed(2)}`}
+                        {cupom.tipo === 'percentual' ? `${cupom.valor}%` : formatarMoeda(cupom.valor)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -1035,15 +1032,13 @@ function GerenciarCupons() {
                   <TableBody>
                     {historicoUsos.map((uso, index) => (
                       <TableRow key={index}>
-                        <TableCell>
-                          {formatarData(uso.data)} {formatarHora(uso.data)}
-                        </TableCell>
+                        <TableCell>{formatarData(uso.data)}</TableCell>
                         <TableCell>{uso.clienteNome || 'N/A'}</TableCell>
-                        <TableCell align="right">R$ {uso.valorOriginal?.toFixed(2)}</TableCell>
+                        <TableCell align="right">{formatarMoeda(uso.valorOriginal || uso.valorTotal)}</TableCell>
                         <TableCell align="right" sx={{ color: '#4caf50' }}>
-                          - R$ {uso.descontoAplicado?.toFixed(2)}
+                          - {formatarMoeda(uso.descontoAplicado || uso.valorDesconto)}
                         </TableCell>
-                        <TableCell align="right">R$ {uso.valorFinal?.toFixed(2)}</TableCell>
+                        <TableCell align="right">{formatarMoeda(uso.valorFinal)}</TableCell>
                         <TableCell>
                           <Chip
                             label={`#${uso.atendimentoId?.slice(-6) || 'N/A'}`}
@@ -1229,7 +1224,7 @@ function GerenciarCupons() {
                       <Typography variant="h6" sx={{ color: customizacao.corPrimaria }}>
                         {cupomSelecionado?.tipo === 'percentual' 
                           ? `${cupomSelecionado?.valor}% OFF` 
-                          : `R$ ${cupomSelecionado?.valor?.toFixed(2)} OFF`}
+                          : formatarMoeda(cupomSelecionado?.valor)}
                       </Typography>
                     </Box>
                   </Box>
