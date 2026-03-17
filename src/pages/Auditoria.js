@@ -410,31 +410,58 @@ function Auditoria() {
     }
   };
 
-  // Filtrar logs
+  // ✅ CORREÇÃO: Função de filtro com verificações de tipo
   const logsFiltrados = logs.filter(log => {
-    const matchesTexto = filtro === '' || 
-      (log.usuario && log.usuario.toLowerCase().includes(filtro.toLowerCase())) ||
-      (log.detalhes && log.detalhes.toLowerCase().includes(filtro.toLowerCase())) ||
-      (log.ip && log.ip.includes(filtro)) ||
-      (log.entidadeId && log.entidadeId.includes(filtro));
+    // Garantir que log existe
+    if (!log) return false;
 
+    // Filtrar por texto - com verificações de tipo
+    const matchesTexto = filtro === '' || 
+      (typeof log.usuario === 'string' && log.usuario.toLowerCase().includes(filtro.toLowerCase())) ||
+      (typeof log.detalhes === 'string' && log.detalhes.toLowerCase().includes(filtro.toLowerCase())) ||
+      (typeof log.ip === 'string' && log.ip.includes(filtro)) ||
+      (typeof log.entidadeId === 'string' && log.entidadeId.includes(filtro));
+
+    // Filtrar por ação
     const matchesAcao = filtroAcao === 'todos' || log.acao === filtroAcao;
-    const matchesUsuario = filtroUsuario === 'todos' || log.usuario === filtroUsuario;
+
+    // Filtrar por usuário
+    const matchesUsuario = filtroUsuario === 'todos' || 
+      (filtroUsuario === 'Sistema' && !log.usuario) ||
+      log.usuario === filtroUsuario;
+
+    // Filtrar por entidade
     const matchesEntidade = filtroEntidade === 'todos' || log.entidade === filtroEntidade;
 
+    // Filtrar por período - com verificações de data
     let matchesPeriodo = true;
-    if (filtroPeriodo === 'hoje') {
-      matchesPeriodo = log.data?.split('T')[0] === new Date().toISOString().split('T')[0];
-    } else if (filtroPeriodo === 'ontem') {
-      const ontem = subDays(new Date(), 1).toISOString().split('T')[0];
-      matchesPeriodo = log.data?.split('T')[0] === ontem;
-    } else if (filtroPeriodo === 'semana') {
-      matchesPeriodo = log.data >= subDays(new Date(), 7).toISOString();
-    } else if (filtroPeriodo === 'mes') {
-      matchesPeriodo = log.data >= subDays(new Date(), 30).toISOString();
-    } else if (filtroPeriodo === 'personalizado') {
-      matchesPeriodo = log.data >= new Date(dataInicio).toISOString() && 
-                       log.data <= new Date(dataFim + 'T23:59:59').toISOString();
+    if (filtroPeriodo !== 'todos' && log.data) {
+      try {
+        const logDate = new Date(log.data);
+        
+        if (filtroPeriodo === 'hoje') {
+          const hoje = new Date().toISOString().split('T')[0];
+          matchesPeriodo = log.data.split('T')[0] === hoje;
+        } else if (filtroPeriodo === 'ontem') {
+          const ontem = subDays(new Date(), 1).toISOString().split('T')[0];
+          matchesPeriodo = log.data.split('T')[0] === ontem;
+        } else if (filtroPeriodo === 'semana') {
+          const seteDiasAtras = subDays(new Date(), 7);
+          matchesPeriodo = logDate >= seteDiasAtras;
+        } else if (filtroPeriodo === 'mes') {
+          const trintaDiasAtras = subDays(new Date(), 30);
+          matchesPeriodo = logDate >= trintaDiasAtras;
+        } else if (filtroPeriodo === 'personalizado') {
+          if (dataInicio && dataFim) {
+            const inicio = new Date(dataInicio);
+            const fim = new Date(dataFim + 'T23:59:59');
+            matchesPeriodo = logDate >= inicio && logDate <= fim;
+          }
+        }
+      } catch (error) {
+        console.warn('Erro ao processar data do log:', error);
+        matchesPeriodo = false;
+      }
     }
 
     return matchesTexto && matchesAcao && matchesUsuario && matchesEntidade && matchesPeriodo;
@@ -444,7 +471,11 @@ function Auditoria() {
   const logsOrdenados = [...logsFiltrados].sort((a, b) => {
     if (!a.data) return 1;
     if (!b.data) return -1;
-    return new Date(b.data) - new Date(a.data);
+    try {
+      return new Date(b.data) - new Date(a.data);
+    } catch {
+      return 0;
+    }
   });
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -483,7 +514,7 @@ function Auditoria() {
         <AnimatePresence>
           {logsOrdenados.slice(0, 20).map((log, index) => (
             <motion.div
-              key={log.id}
+              key={log.id || index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -504,7 +535,7 @@ function Auditoria() {
                 </ListItemAvatar>
                 <ListItemText
                   primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Typography variant="subtitle2">
                         {log.usuario || 'Sistema'}
                       </Typography>
@@ -976,7 +1007,7 @@ function Auditoria() {
                 </TableHead>
                 <TableBody>
                   {logsOrdenados.slice(0, 100).map((log, index) => (
-                    <TableRow key={log.id} hover>
+                    <TableRow key={log.id || index} hover>
                       <TableCell>
                         {log.data ? new Date(log.data).toLocaleString('pt-BR') : '-'}
                       </TableCell>
