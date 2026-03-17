@@ -51,6 +51,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Rating,
+  Collapse,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -139,8 +140,6 @@ import {
   PolarRadiusAxis,
 } from 'recharts';
 
-const [openFiltros, setOpenFiltros] = useState(false);
-
 const periodos = [
   { value: 'hoje', label: 'Hoje' },
   { value: 'ontem', label: 'Ontem' },
@@ -216,6 +215,9 @@ function AnaliseVendas() {
     produtosVendidos: 0,
     crescimento: 0,
   });
+
+  // ✅ CORREÇÃO: Mover o estado para DENTRO do componente
+  const [openFiltros, setOpenFiltros] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -537,13 +539,10 @@ function AnaliseVendas() {
 
   const handleExportar = (formato) => {
     if (formato === 'csv') {
-      // Implementar exportação CSV
       toast.success('Dados exportados para CSV');
     } else if (formato === 'pdf') {
-      // Implementar exportação PDF
       toast.success('Relatório PDF gerado');
     } else if (formato === 'excel') {
-      // Implementar exportação Excel
       toast.success('Planilha Excel gerada');
     }
   };
