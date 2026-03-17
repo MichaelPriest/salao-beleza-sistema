@@ -61,7 +61,7 @@ import {
   Visibility as VisibilityIcon,
   History as HistoryIcon,
   Percent as PercentIcon,
-  Money as MoneyIcon,
+  AttachMoney as MoneyIcon,
   LocalOffer as TagIcon,
   Campaign as CampaignIcon,
   BarChart as BarChartIcon,
