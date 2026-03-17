@@ -1,4 +1,4 @@
-// src/pages/Backup.js (corrigido)
+// src/pages/Backup.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -88,7 +88,6 @@ import {
   CloudDone as CloudDoneIcon,
   CloudQueue as CloudQueueIcon,
   Storage as StorageIcon,
-  Database as DatabaseIcon,
   Folder as FolderIcon,
   FolderOpen as FolderOpenIcon,
   FolderShared as FolderSharedIcon,
@@ -114,7 +113,6 @@ import {
   Stop as StopIcon,
   Pause as PauseIcon,
   Settings as SettingsIcon,
-  SettingsApplications as SettingsApplicationsIcon,
   Tune as TuneIcon,
   History as HistoryIcon,
   RestorePage as RestorePageIcon,
@@ -131,6 +129,11 @@ import {
   LockOpen as LockOpenIcon,
   LockOutline as LockOutlineIcon,
   VerifiedUser as VerifiedUserIcon,
+  Person as PersonIcon,
+  CalendarToday as CalendarIcon,
+  AttachMoney as MoneyIcon,
+  Inventory as InventoryIcon,
+  SettingsApplications as SettingsApplicationsIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -161,10 +164,10 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
 const tiposBackup = [
-  { value: 'completo', label: 'Backup Completo', icon: <DatabaseIcon />, descricao: 'Todos os dados do sistema' },
+  { value: 'completo', label: 'Backup Completo', icon: <StorageIcon />, descricao: 'Todos os dados do sistema' },
   { value: 'clientes', label: 'Apenas Clientes', icon: <PersonIcon />, descricao: 'Dados de clientes' },
   { value: 'agendamentos', label: 'Agendamentos', icon: <CalendarIcon />, descricao: 'Histórico de agendamentos' },
-  { value: 'financeiro', label: 'Dados Financeiros', icon: <MoneyIcon />, descricao: 'Transações e pagamentos' },
+  { value: 'financeiro', label: 'Dados Financeiros', icon: <AttachMoneyIcon />, descricao: 'Transações e pagamentos' },
   { value: 'produtos', label: 'Produtos e Estoque', icon: <InventoryIcon />, descricao: 'Catálogo e estoque' },
   { value: 'configuracoes', label: 'Configurações', icon: <SettingsIcon />, descricao: 'Configurações do sistema' },
 ];
