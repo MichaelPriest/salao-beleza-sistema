@@ -33,6 +33,18 @@ import {
   LinearProgress,
   Tooltip,
   Divider,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Badge,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -49,6 +61,20 @@ import {
   Business as BusinessIcon,
   PlayArrow as PlayIcon,
   Block as BlockIcon,
+  ExpandMore as ExpandMoreIcon,
+  Receipt as ReceiptIcon,
+  LocalOffer as CouponIcon,
+  Star as StarIcon,
+  Person as PersonIcon,
+  CalendarToday as CalendarIcon,
+  AccessTime as TimeIcon,
+  LocationOn as LocationIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  Language as WebIcon,
+  Instagram as InstagramIcon,
+  Facebook as FacebookIcon,
+  QrCode as QrCodeIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -64,7 +90,6 @@ import logo from '../assets/logo.png';
 const getClienteData = (clienteId, clientes) => {
   if (!clienteId || !clientes) return null;
   
-  // Buscar cliente pelo ID (pode ser o uid do Firebase Auth ou o id do documento)
   const cliente = clientes.find(c => 
     c.id === clienteId || 
     c.uid === clienteId || 
@@ -73,13 +98,13 @@ const getClienteData = (clienteId, clientes) => {
   
   if (!cliente) return null;
   
-  // Retornar objeto padronizado com todos os campos necessários
   return {
     id: cliente.id || cliente.uid || cliente.googleUid,
     nome: cliente.nome || cliente.displayName || 'Cliente',
     telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
     email: cliente.email || '',
-    cpf: cliente.cpf || '',
+    cpf: cliente.cpf || cliente.documento || '',
+    rg: cliente.rg || '',
     foto: cliente.foto || cliente.photoURL || cliente.avatar || null,
     dataNascimento: cliente.dataNascimento || '',
     genero: cliente.genero || '',
@@ -90,7 +115,12 @@ const getClienteData = (clienteId, clientes) => {
     bairro: cliente.bairro || '',
     cidade: cliente.cidade || '',
     estado: cliente.estado || '',
-    status: cliente.status || 'Ativo'
+    status: cliente.status || 'Ativo',
+    observacoes: cliente.observacoes || '',
+    indicadoPor: cliente.indicadoPor || '',
+    indicadoPorNome: cliente.indicadoPorNome || '',
+    nivel: cliente.nivel || 'bronze',
+    pontos: cliente.pontos || 0,
   };
 };
 
@@ -108,8 +138,11 @@ const getProfissionalData = (profissionalId, profissionais) => {
   return {
     id: profissional.id || profissional.uid,
     nome: profissional.nome || profissional.displayName || 'Profissional',
-    especialidade: profissional.especialidade || '',
-    foto: profissional.foto || profissional.photoURL || null
+    especialidade: profissional.especialidade || profissional.cargo || '',
+    foto: profissional.foto || profissional.photoURL || null,
+    telefone: profissional.telefone || '',
+    email: profissional.email || '',
+    comissao: profissional.comissao || 40,
   };
 };
 
@@ -123,6 +156,7 @@ function ModernAtendimentos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openFilter, setOpenFilter] = useState(false);
   const [openDetails, setOpenDetails] = useState(false);
+  const [openPrintDialog, setOpenPrintDialog] = useState(false);
   const [selectedAtendimento, setSelectedAtendimento] = useState(null);
   const [config, setConfig] = useState(null);
   const [filtros, setFiltros] = useState({
@@ -136,9 +170,25 @@ function ModernAtendimentos() {
   const [clientes, setClientes] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
+  const [produtos, setProdutos] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
+  const [cupons, setCupons] = useState([]);
+  const [fidelidade, setFidelidade] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Estado para opções de impressão
+  const [printOptions, setPrintOptions] = useState({
+    incluirLogo: true,
+    incluirEndereco: true,
+    incluirContato: true,
+    incluirRedesSociais: true,
+    incluirFidelidade: true,
+    incluirCupons: true,
+    incluirQRCode: true,
+    incluirAssinatura: true,
+    formato: 'A4',
+  });
 
   // Carregar dados do usuário
   useEffect(() => {
@@ -153,12 +203,15 @@ function ModernAtendimentos() {
     try {
       setLoading(true);
       
-      const [atendimentosData, clientesData, profissionaisData, servicosData, pagamentosData, configData] = await Promise.all([
+      const [atendimentosData, clientesData, profissionaisData, servicosData, produtosData, pagamentosData, cuponsData, fidelidadeData, configData] = await Promise.all([
         firebaseService.getAll('atendimentos'),
         firebaseService.getAll('clientes'),
         firebaseService.getAll('profissionais'),
         firebaseService.getAll('servicos'),
+        firebaseService.getAll('produtos'),
         firebaseService.getAll('pagamentos'),
+        firebaseService.getAll('cupons'),
+        firebaseService.getAll('pontuacao'),
         carregarConfiguracoes()
       ]);
 
@@ -166,7 +219,10 @@ function ModernAtendimentos() {
       setClientes(clientesData || []);
       setProfissionais(profissionaisData || []);
       setServicos(servicosData || []);
+      setProdutos(produtosData || []);
       setPagamentos(pagamentosData || []);
+      setCupons(cuponsData || []);
+      setFidelidade(fidelidadeData || []);
       setConfig(configData);
 
       console.log('✅ Dados carregados do Firebase');
@@ -193,17 +249,14 @@ function ModernAtendimentos() {
   const filtrarAtendimentosPorUsuario = (atendimentosList) => {
     if (!usuario) return atendimentosList;
 
-    // Cliente: ver apenas seus próprios atendimentos
     if (cargo === 'cliente' && usuario.clienteId) {
       return atendimentosList.filter(a => a.clienteId === usuario.clienteId);
     }
 
-    // Profissional: ver apenas seus atendimentos
     if (cargo === 'profissional' && usuario.profissionalId) {
       return atendimentosList.filter(a => a.profissionalId === usuario.profissionalId);
     }
 
-    // Admin, Gerente, Atendente: ver todos
     return atendimentosList;
   };
 
@@ -222,7 +275,8 @@ function ModernAtendimentos() {
           id: item.id,
           nome: item.nome,
           preco: item.preco,
-          principal: item.principal || false
+          principal: item.principal || false,
+          duracao: item.duracao || 0
         });
       });
     } 
@@ -233,7 +287,8 @@ function ModernAtendimentos() {
           id: servico.id,
           nome: servico.nome,
           preco: servico.preco,
-          principal: true
+          principal: true,
+          duracao: servico.duracao || 0
         });
       }
     }
@@ -244,6 +299,17 @@ function ModernAtendimentos() {
   // Função para obter o pagamento do atendimento
   const getPagamentoAtendimento = (atendimentoId) => {
     return pagamentos?.find(p => p.atendimentoId === atendimentoId);
+  };
+
+  // Função para obter cupons aplicados
+  const getCuponsAplicados = (atendimento) => {
+    if (!atendimento.cuponsAplicados) return [];
+    return atendimento.cuponsAplicados;
+  };
+
+  // Função para obter pontos de fidelidade do atendimento
+  const getPontosFidelidade = (atendimento) => {
+    return fidelidade?.filter(f => f.atendimentoId === atendimento.id) || [];
   };
 
   // Calcular valor total do atendimento
@@ -261,6 +327,24 @@ function ModernAtendimentos() {
         acc + ((item.preco || 0) * (item.quantidade || 1)), 0);
     }
     
+    if (atendimento.descontoTotal) {
+      total -= atendimento.descontoTotal;
+    }
+    
+    return total;
+  };
+
+  // Calcular subtotal (sem descontos)
+  const calcularSubtotal = (atendimento) => {
+    let total = 0;
+    const servicos = getTodosServicos(atendimento);
+    total += servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
+    
+    if (atendimento.itensProduto && atendimento.itensProduto.length > 0) {
+      total += atendimento.itensProduto.reduce((acc, item) => 
+        acc + ((item.preco || 0) * (item.quantidade || 1)), 0);
+    }
+    
     return total;
   };
 
@@ -268,6 +352,15 @@ function ModernAtendimentos() {
   const getServicosResumo = (atendimento) => {
     const servicos = getTodosServicos(atendimento);
     return servicos.map(s => s.nome).join(', ');
+  };
+
+  // Calcular duração total
+  const calcularDuracaoTotal = (atendimento) => {
+    const servicos = getTodosServicos(atendimento);
+    const totalMinutos = servicos.reduce((acc, s) => acc + (s.duracao || 0), 0);
+    const horas = Math.floor(totalMinutos / 60);
+    const minutos = totalMinutos % 60;
+    return `${horas}h ${minutos}min`;
   };
 
   // Calcular estatísticas baseado no cargo
@@ -305,11 +398,11 @@ function ModernAtendimentos() {
     const matchesSearch = searchTerm === '' || 
       cliente?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profissional?.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      servicosResumo.toLowerCase().includes(searchTerm.toLowerCase());
+      servicosResumo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      atendimento.id?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filtros.status === 'todos' || atendimento.status === filtros.status;
     
-    // Para profissionais, o filtro de profissional não se aplica
     const matchesProfissional = cargo === 'profissional' || 
       filtros.profissional === 'todos' || 
       atendimento.profissionalId === filtros.profissional;
@@ -328,7 +421,6 @@ function ModernAtendimentos() {
   });
 
   const handleFinalizar = (id) => {
-    // Profissionais e clientes não podem iniciar/finalizar? Profissionais podem continuar
     if (cargo === 'cliente') {
       toast.error('Você não tem permissão para acessar esta funcionalidade');
       return;
@@ -386,110 +478,264 @@ function ModernAtendimentos() {
     }
   };
 
-  const handleImprimir = (atendimento) => {
-    // Clientes podem imprimir? Talvez sim
+  const handleOpenPrintDialog = (atendimento) => {
+    setSelectedAtendimento(atendimento);
+    setOpenPrintDialog(true);
+  };
+
+  const handleImprimir = () => {
+    const atendimento = selectedAtendimento;
     const cliente = getClienteData(atendimento.clienteId, clientes);
     const profissional = getProfissionalData(atendimento.profissionalId, profissionais);
     const todosServicos = getTodosServicos(atendimento);
     const produtos = atendimento.itensProduto || [];
+    const subtotal = calcularSubtotal(atendimento);
     const valorTotal = calcularValorTotal(atendimento);
     const pagamento = getPagamentoAtendimento(atendimento.id);
+    const cuponsAplicados = getCuponsAplicados(atendimento);
+    const pontosFidelidade = getPontosFidelidade(atendimento);
+    const data = new Date();
     
     // Dados da empresa
     const empresa = config?.salao || {
       nome: 'Serena',
-      cnpj: '3971163300015',
-      endereco: { logradouro: '', bairro: '', cidade: '', estado: '', cep: '' },
-      contato: { telefone: '', email: '' }
+      cnpj: '39.711.633/0001-5',
+      ie: '123.456.789.012',
+      nomeFantasia: 'Serena Beauty',
+      endereco: { 
+        logradouro: 'Rua Exemplo, 123', 
+        bairro: 'Centro', 
+        cidade: 'São Paulo', 
+        estado: 'SP', 
+        cep: '01000-000' 
+      },
+      contato: { 
+        telefone: '(11) 99999-9999', 
+        email: 'contato@serena.com',
+        whatsapp: '(11) 99999-9999',
+        instagram: '@serenabeauty',
+        facebook: '/serenabeauty',
+        site: 'www.serena.com'
+      }
     };
 
-    const logoUrl = logo || '';
+    const logoUrl = logo || empresa.logo || '';
+
+    const getFormaPagamentoLabel = (forma) => {
+      const formas = {
+        'dinheiro': 'Dinheiro',
+        'cartao_credito': 'Cartão de Crédito',
+        'cartao_debito': 'Cartão de Débito',
+        'pix': 'PIX',
+        'boleto': 'Boleto',
+        'transferencia': 'Transferência',
+        'credito_loja': 'Crédito na Loja'
+      };
+      return formas[forma] || forma;
+    };
 
     const estilo = `
       <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+        
+        body { 
+          font-family: 'Arial', sans-serif; 
+          margin: 0; 
+          padding: 20px; 
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+        }
+        
+        .print-container {
+          max-width: ${printOptions.formato === 'A4' ? '210mm' : printOptions.formato === 'A5' ? '148mm' : '80mm'};
+          width: 100%;
+          background: white;
+          margin: 0 auto;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .content {
+          padding: ${printOptions.formato.includes('termica') ? '5mm' : '15mm'};
+        }
+        
         .header { 
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 30px; 
+          margin-bottom: 20px; 
           border-bottom: 2px solid #9c27b0; 
-          padding-bottom: 20px;
+          padding-bottom: 15px;
         }
+        
         .logo-container {
           display: flex;
           align-items: center;
           gap: 15px;
         }
+        
         .logo {
-          max-height: 60px;
-          max-width: 150px;
+          max-height: ${printOptions.formato.includes('termica') ? '40px' : '60px'};
+          max-width: ${printOptions.formato.includes('termica') ? '100px' : '150px'};
         }
+        
         .empresa-info {
           text-align: right;
+          font-size: ${printOptions.formato.includes('termica') ? '10px' : '12px'};
         }
+        
         .empresa-nome { 
           color: #9c27b0; 
-          font-size: 24px; 
+          font-size: ${printOptions.formato.includes('termica') ? '16px' : '24px'}; 
           font-weight: bold; 
           margin: 0; 
         }
+        
         .empresa-detalhe { 
           color: #666; 
-          font-size: 12px; 
-          margin: 5px 0; 
+          font-size: ${printOptions.formato.includes('termica') ? '8px' : '11px'}; 
+          margin: 2px 0; 
         }
+        
         .titulo { 
           color: #9c27b0; 
-          font-size: 18px; 
-          margin: 20px 0 10px; 
+          font-size: ${printOptions.formato.includes('termica') ? '14px' : '18px'}; 
+          margin: 15px 0 10px; 
+          text-align: center;
+          font-weight: bold;
         }
+        
         .info-grid { 
           display: grid; 
           grid-template-columns: repeat(2, 1fr); 
           gap: 10px; 
-          margin: 20px 0; 
+          margin: 15px 0; 
+          font-size: ${printOptions.formato.includes('termica') ? '10px' : '12px'};
         }
+        
         .info-item { 
-          margin: 5px 0; 
+          margin: 3px 0; 
         }
+        
         .info-label { 
           color: #666; 
-          font-size: 12px; 
+          font-size: ${printOptions.formato.includes('termica') ? '8px' : '10px'}; 
+          margin-bottom: 2px;
         }
+        
         .info-value { 
           font-weight: bold; 
           margin: 0; 
+          font-size: ${printOptions.formato.includes('termica') ? '10px' : '14px'};
         }
+        
         table { 
           width: 100%; 
           border-collapse: collapse; 
-          margin: 20px 0; 
+          margin: 15px 0; 
+          font-size: ${printOptions.formato.includes('termica') ? '9px' : '12px'};
         }
+        
         th { 
           background-color: #9c27b0; 
           color: white; 
-          padding: 10px; 
+          padding: ${printOptions.formato.includes('termica') ? '5px' : '8px'}; 
           text-align: left; 
+          font-size: ${printOptions.formato.includes('termica') ? '9px' : '12px'};
         }
+        
         td { 
-          padding: 10px; 
+          padding: ${printOptions.formato.includes('termica') ? '5px' : '8px'}; 
           border-bottom: 1px solid #ddd; 
         }
-        .total { 
-          font-size: 18px; 
-          font-weight: bold; 
-          color: #9c27b0; 
+        
+        .total-section { 
           margin-top: 20px; 
           text-align: right; 
+          border-top: 2px solid #9c27b0; 
+          padding-top: 15px; 
         }
+        
+        .total { 
+          font-size: ${printOptions.formato.includes('termica') ? '14px' : '18px'}; 
+          font-weight: bold; 
+          color: #9c27b0; 
+        }
+        
+        .subtotal {
+          font-size: ${printOptions.formato.includes('termica') ? '11px' : '14px'};
+          color: #666;
+        }
+        
+        .desconto {
+          color: #4caf50;
+          font-weight: bold;
+        }
+        
+        .pagamento-info {
+          margin-top: 10px;
+          font-size: ${printOptions.formato.includes('termica') ? '10px' : '12px'};
+        }
+        
         .footer { 
-          margin-top: 50px; 
+          margin-top: 30px; 
           text-align: center; 
           color: #666; 
-          font-size: 12px; 
+          font-size: ${printOptions.formato.includes('termica') ? '8px' : '10px'}; 
           border-top: 1px solid #ddd; 
-          padding-top: 20px; 
+          padding-top: 15px; 
+        }
+        
+        .redes-sociais {
+          margin-top: 10px;
+          font-size: ${printOptions.formato.includes('termica') ? '8px' : '10px'};
+        }
+        
+        .qr-code {
+          text-align: center;
+          margin: 15px 0;
+        }
+        
+        .qr-code img {
+          width: ${printOptions.formato.includes('termica') ? '60px' : '100px'};
+          height: ${printOptions.formato.includes('termica') ? '60px' : '100px'};
+        }
+        
+        .assinatura {
+          margin-top: 30px;
+          text-align: center;
+        }
+        
+        .assinatura-linha {
+          width: 200px;
+          border-top: 1px solid #000;
+          margin: 20px auto 5px;
+        }
+        
+        .cupom-item {
+          background: #f3e5f5;
+          padding: 5px;
+          margin: 3px 0;
+          border-radius: 3px;
+          font-size: ${printOptions.formato.includes('termica') ? '8px' : '11px'};
+        }
+        
+        @media print {
+          body {
+            background: white;
+            padding: 0;
+          }
+          .print-container {
+            box-shadow: none;
+            max-width: 100%;
+          }
+          .no-print {
+            display: none !important;
+          }
         }
       </style>
     `;
@@ -497,122 +743,257 @@ function ModernAtendimentos() {
     const conteudo = `
       <html>
         <head>
-          <title>Comprovante de Atendimento</title>
+          <title>Comprovante de Atendimento #${atendimento.id?.slice(-6) || '000000'}</title>
           ${estilo}
         </head>
         <body>
-          <div class="header">
-            <div class="logo-container">
-              <img src="${logoUrl}" alt="Logo" class="logo" onerror="this.style.display='none'">
-              <div>
-                <h1 class="empresa-nome">${empresa.nome || 'Serena'}</h1>
-                ${empresa.nomeFantasia ? `<p class="empresa-detalhe">${empresa.nomeFantasia}</p>` : ''}
+          <div class="print-container">
+            <div class="content">
+              <!-- Cabeçalho -->
+              <div class="header">
+                <div class="logo-container">
+                  ${printOptions.incluirLogo && logoUrl ? `
+                    <img src="${logoUrl}" alt="Logo" class="logo" onerror="this.style.display='none'">
+                  ` : ''}
+                  <div>
+                    <h1 class="empresa-nome">${empresa.nome || 'Serena'}</h1>
+                    ${empresa.nomeFantasia && printOptions.formato !== 'termica' ? `
+                      <p class="empresa-detalhe">${empresa.nomeFantasia}</p>
+                    ` : ''}
+                  </div>
+                </div>
+                <div class="empresa-info">
+                  ${empresa.cnpj ? `<p class="empresa-detalhe">CNPJ: ${empresa.cnpj}</p>` : ''}
+                  ${empresa.ie ? `<p class="empresa-detalhe">IE: ${empresa.ie}</p>` : ''}
+                  ${printOptions.incluirEndereco && empresa.endereco?.logradouro ? `
+                    <p class="empresa-detalhe">
+                      ${empresa.endereco.logradouro}${empresa.endereco.numero ? `, ${empresa.endereco.numero}` : ''}
+                      ${empresa.endereco.bairro ? `<br>${empresa.endereco.bairro}` : ''}
+                      ${empresa.endereco.cidade ? `<br>${empresa.endereco.cidade} - ${empresa.endereco.estado}` : ''}
+                      ${empresa.endereco.cep ? `<br>CEP: ${empresa.endereco.cep}` : ''}
+                    </p>
+                  ` : ''}
+                </div>
+              </div>
+
+              <!-- Título -->
+              <h2 class="titulo">COMPROVANTE DE ATENDIMENTO</h2>
+              <p style="text-align: center; font-size: 12px; color: #666; margin-bottom: 15px;">
+                #${atendimento.id?.slice(-6) || '000000'}
+              </p>
+              
+              <!-- Informações do Cliente e Profissional -->
+              <div class="info-grid">
+                <div class="info-item">
+                  <p class="info-label">Cliente</p>
+                  <p class="info-value">${cliente?.nome || 'N/A'}</p>
+                  ${cliente?.cpf ? `<p class="empresa-detalhe">CPF: ${cliente.cpf}</p>` : ''}
+                  ${printOptions.incluirContato && cliente?.telefone ? `
+                    <p class="empresa-detalhe">Tel: ${cliente.telefone}</p>
+                  ` : ''}
+                  ${cliente?.email ? `<p class="empresa-detalhe">Email: ${cliente.email}</p>` : ''}
+                </div>
+                <div class="info-item">
+                  <p class="info-label">Profissional</p>
+                  <p class="info-value">${profissional?.nome || 'N/A'}</p>
+                  ${profissional?.especialidade ? `
+                    <p class="empresa-detalhe">${profissional.especialidade}</p>
+                  ` : ''}
+                </div>
+                <div class="info-item">
+                  <p class="info-label">Data</p>
+                  <p class="info-value">${new Date(atendimento.data).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div class="info-item">
+                  <p class="info-label">Horário</p>
+                  <p class="info-value">${atendimento.horaInicio || ''} - ${atendimento.horaFim || ''}</p>
+                </div>
+                <div class="info-item">
+                  <p class="info-label">Duração</p>
+                  <p class="info-value">${calcularDuracaoTotal(atendimento)}</p>
+                </div>
+                <div class="info-item">
+                  <p class="info-label">Status</p>
+                  <p class="info-value" style="color: ${atendimento.status === 'finalizado' ? '#4caf50' : '#ff9800'}">
+                    ${atendimento.status === 'finalizado' ? 'Finalizado' : 
+                      atendimento.status === 'em_andamento' ? 'Em Andamento' : 
+                      atendimento.status === 'agendado' ? 'Agendado' : 'Cancelado'}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Serviços -->
+              <h3 class="titulo" style="font-size: 14px; text-align: left;">Serviços Realizados</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Serviço</th>
+                    <th align="right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${todosServicos.map(s => `
+                    <tr>
+                      <td>${s.nome} ${s.principal ? '(Principal)' : ''}</td>
+                      <td align="right">R$ ${(s.preco || 0).toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+
+              <!-- Produtos -->
+              ${produtos.length > 0 ? `
+                <h3 class="titulo" style="font-size: 14px; text-align: left;">Produtos Utilizados</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th align="right">Qtd</th>
+                      <th align="right">Preço Unit.</th>
+                      <th align="right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${produtos.map(p => `
+                      <tr>
+                        <td>${p.nome}</td>
+                        <td align="right">${p.quantidadeVenda || p.quantidade || 1}</td>
+                        <td align="right">R$ ${(p.preco || 0).toFixed(2)}</td>
+                        <td align="right">R$ ${((p.preco || 0) * (p.quantidadeVenda || p.quantidade || 1)).toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : ''}
+
+              <!-- Cupons Aplicados -->
+              ${printOptions.incluirCupons && cuponsAplicados.length > 0 ? `
+                <h3 class="titulo" style="font-size: 14px; text-align: left;">Cupons Aplicados</h3>
+                ${cuponsAplicados.map(cupom => `
+                  <div class="cupom-item">
+                    <strong>${cupom.codigo}</strong> - ${cupom.descricao || ''}
+                    <span style="float: right; color: #4caf50;">-R$ ${(cupom.valorDescontoCalculado || cupom.valor || 0).toFixed(2)}</span>
+                  </div>
+                `).join('')}
+              ` : ''}
+
+              <!-- Resumo Financeiro -->
+              <div class="total-section">
+                <p class="subtotal">Subtotal: R$ ${subtotal.toFixed(2)}</p>
+                ${(atendimento.descontoTotal || 0) > 0 ? `
+                  <p class="desconto">Descontos: -R$ ${(atendimento.descontoTotal || 0).toFixed(2)}</p>
+                ` : ''}
+                <p class="total">Total: R$ ${valorTotal.toFixed(2)}</p>
+                
+                ${pagamento ? `
+                  <div class="pagamento-info">
+                    <p><strong>Forma de Pagamento:</strong> ${getFormaPagamentoLabel(pagamento.formaPagamento)}</p>
+                    ${pagamento.parcelas > 1 ? `<p><strong>Parcelas:</strong> ${pagamento.parcelas}x</p>` : ''}
+                    ${pagamento.observacoes ? `<p><strong>Obs:</strong> ${pagamento.observacoes}</p>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Pontos de Fidelidade -->
+              ${printOptions.incluirFidelidade && pontosFidelidade.length > 0 ? `
+                <div style="margin-top: 20px; padding: 10px; background: #fff3e0; border-radius: 5px;">
+                  <p style="font-weight: bold; color: #ff9800;">⭐ Fidelidade</p>
+                  ${pontosFidelidade.map(p => `
+                    <p style="font-size: 12px; margin: 2px 0;">
+                      +${p.quantidade} pontos - ${p.motivo || 'Atendimento'}
+                    </p>
+                  `).join('')}
+                  <p style="font-size: 12px; margin-top: 5px;">
+                    <strong>Saldo atual:</strong> ${(cliente?.pontos || 0) + pontosFidelidade.reduce((acc, p) => acc + p.quantidade, 0)} pontos
+                  </p>
+                </div>
+              ` : ''}
+
+              <!-- Observações -->
+              ${atendimento.observacoes ? `
+                <div style="margin-top: 20px;">
+                  <p class="info-label">Observações</p>
+                  <p style="font-size: 12px;">${atendimento.observacoes}</p>
+                </div>
+              ` : ''}
+
+              <!-- QR Code -->
+              ${printOptions.incluirQRCode && !printOptions.formato.includes('termica') ? `
+                <div class="qr-code">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(atendimento.id || '')}" alt="QR Code">
+                  <p style="font-size: 10px; color: #666;">ID: ${atendimento.id?.slice(-6) || '000000'}</p>
+                </div>
+              ` : ''}
+
+              <!-- Assinatura -->
+              ${printOptions.incluirAssinatura ? `
+                <div class="assinatura">
+                  <div class="assinatura-linha"></div>
+                  <p style="font-size: 12px;">Assinatura do Cliente</p>
+                </div>
+              ` : ''}
+
+              <!-- Redes Sociais -->
+              ${printOptions.incluirRedesSociais && !printOptions.formato.includes('termica') ? `
+                <div class="redes-sociais">
+                  ${empresa.contato?.instagram ? `<p>📱 Instagram: ${empresa.contato.instagram}</p>` : ''}
+                  ${empresa.contato?.facebook ? `<p>📘 Facebook: ${empresa.contato.facebook}</p>` : ''}
+                  ${empresa.contato?.site ? `<p>🌐 Site: ${empresa.contato.site}</p>` : ''}
+                </div>
+              ` : ''}
+
+              <!-- Rodapé -->
+              <div class="footer">
+                <p>Documento gerado em ${data.toLocaleString('pt-BR')}</p>
+                <p>Obrigado pela preferência! Volte sempre.</p>
+                ${printOptions.incluirContato && empresa.contato?.whatsapp ? `
+                  <p>WhatsApp: ${empresa.contato.whatsapp}</p>
+                ` : ''}
               </div>
             </div>
-            <div class="empresa-info">
-              ${empresa.cnpj ? `<p class="empresa-detalhe">CNPJ: ${empresa.cnpj}</p>` : ''}
-              ${empresa.endereco?.logradouro ? `<p class="empresa-detalhe">${empresa.endereco.logradouro}</p>` : ''}
-              ${empresa.contato?.telefone ? `<p class="empresa-detalhe">Tel: ${empresa.contato.telefone}</p>` : ''}
-            </div>
           </div>
-
-          <h2 class="titulo">COMPROVANTE DE ATENDIMENTO</h2>
           
-          <div class="info-grid">
-            <div class="info-item">
-              <p class="info-label">Cliente</p>
-              <p class="info-value">${cliente?.nome || 'N/A'}</p>
-              <p class="info-label">Telefone: ${cliente?.telefone || ''}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Profissional</p>
-              <p class="info-value">${profissional?.nome || 'N/A'}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Data</p>
-              <p class="info-value">${new Date(atendimento.data).toLocaleDateString('pt-BR')}</p>
-            </div>
-            <div class="info-item">
-              <p class="info-label">Horário</p>
-              <p class="info-value">${atendimento.horaInicio || ''} - ${atendimento.horaFim || ''}</p>
-            </div>
+          <!-- Botões de controle (não aparecem na impressão) -->
+          <div class="no-print" style="text-align: center; margin-top: 30px; padding: 20px;">
+            <button onclick="window.print()" style="
+              background: #9c27b0;
+              color: white;
+              border: none;
+              padding: 12px 30px;
+              border-radius: 8px;
+              cursor: pointer;
+              margin-right: 15px;
+              font-size: 16px;
+              font-weight: bold;
+            ">🖨️ Imprimir</button>
+            <button onclick="window.close()" style="
+              background: #f44336;
+              color: white;
+              border: none;
+              padding: 12px 30px;
+              border-radius: 8px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: bold;
+            ">✖️ Fechar</button>
           </div>
-
-          <h3 class="titulo">Serviços Realizados</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Serviço</th>
-                <th align="right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${todosServicos.map(s => `
-                <tr>
-                  <td>${s.nome} ${s.principal ? '(Principal)' : ''}</td>
-                  <td align="right">R$ ${(s.preco || 0).toFixed(2)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          ${produtos.length > 0 ? `
-            <h3 class="titulo">Produtos Utilizados</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Produto</th>
-                  <th align="right">Qtd</th>
-                  <th align="right">Preço Unit.</th>
-                  <th align="right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${produtos.map(p => `
-                  <tr>
-                    <td>${p.nome}</td>
-                    <td align="right">${p.quantidade}</td>
-                    <td align="right">R$ ${(p.preco || 0).toFixed(2)}</td>
-                    <td align="right">R$ ${((p.preco || 0) * (p.quantidade || 1)).toFixed(2)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : ''}
-
-          <div class="total">
-            <p>Total: R$ ${valorTotal.toFixed(2)}</p>
-            ${pagamento ? `
-              <p style="font-size: 14px; color: #666;">
-                Forma de Pagamento: ${
-                  pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                  pagamento.formaPagamento === 'cartao_credito' ? 'Cartão de Crédito' :
-                  pagamento.formaPagamento === 'cartao_debito' ? 'Cartão de Débito' :
-                  pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento
-                }
-                ${pagamento.parcelas > 1 ? ` (${pagamento.parcelas}x)` : ''}
-              </p>
-            ` : ''}
-          </div>
-
-          ${atendimento.observacoes ? `
-            <div style="margin-top: 20px;">
-              <p class="info-label">Observações</p>
-              <p>${atendimento.observacoes}</p>
-            </div>
-          ` : ''}
-
-          <div class="footer">
-            <p>Documento gerado em ${new Date().toLocaleString('pt-BR')}</p>
-            <p>Obrigado pela preferência!</p>
-          </div>
+          
+          <script>
+            window.onbeforeprint = function() {
+              document.querySelectorAll('.no-print').forEach(el => el.style.display = 'none');
+            };
+            window.onafterprint = function() {
+              document.querySelectorAll('.no-print').forEach(el => el.style.display = 'block');
+            };
+          </script>
         </body>
       </html>
     `;
     
     const janela = window.open('', '_blank');
     janela.document.write(conteudo);
-    janela.print();
+    janela.document.close();
+    setOpenPrintDialog(false);
   };
 
   const getStatusColor = (status) => {
@@ -653,6 +1034,25 @@ function ModernAtendimentos() {
     const horas = Math.floor(diff / 60);
     const minutos = diff % 60;
     return `${horas}h ${minutos}min`;
+  };
+
+  const handleEnviarWhatsApp = (atendimento) => {
+    const cliente = getClienteData(atendimento.clienteId, clientes);
+    if (!cliente?.telefone) {
+      toast.error('Cliente não possui telefone cadastrado');
+      return;
+    }
+    
+    const numero = cliente.telefone.replace(/\D/g, '');
+    const valorTotal = calcularValorTotal(atendimento);
+    const servicos = getServicosResumo(atendimento);
+    
+    const mensagem = `Olá ${cliente.nome}! Seu atendimento foi realizado com sucesso! 🎉\n\n` +
+      `📋 *Serviços:* ${servicos}\n` +
+      `💰 *Valor:* R$ ${valorTotal.toFixed(2)}\n\n` +
+      `Obrigado pela preferência! 🙏`;
+    
+    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
   };
 
   if (loading) {
@@ -908,7 +1308,7 @@ function ModernAtendimentos() {
                 variant="outlined"
                 placeholder={cargo === 'cliente' 
                   ? "Buscar em seus atendimentos..." 
-                  : "Buscar por cliente, profissional ou serviço..."
+                  : "Buscar por cliente, profissional, serviço ou ID..."
                 }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -995,7 +1395,16 @@ function ModernAtendimentos() {
                           </Box>
                         </TableCell>
                         {cargo !== 'cliente' && (
-                          <TableCell>{profissional?.nome || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {profissional?.nome || 'N/A'}
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {profissional?.especialidade || ''}
+                              </Typography>
+                            </Box>
+                          </TableCell>
                         )}
                         <TableCell>
                           <Typography variant="body2">
@@ -1024,6 +1433,11 @@ function ModernAtendimentos() {
                           <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
                             R$ {valorTotal.toFixed(2)}
                           </Typography>
+                          {(atendimento.descontoTotal || 0) > 0 && (
+                            <Typography variant="caption" sx={{ color: '#ff9800', display: 'block' }}>
+                              Desconto: R$ {atendimento.descontoTotal.toFixed(2)}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -1069,14 +1483,25 @@ function ModernAtendimentos() {
                             )}
 
                             {atendimento.status === 'finalizado' && (
-                              <Tooltip title="Imprimir">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleImprimir(atendimento)}
-                                >
-                                  <PrintIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                              <>
+                                <Tooltip title="Imprimir">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenPrintDialog(atendimento)}
+                                  >
+                                    <PrintIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Enviar WhatsApp">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEnviarWhatsApp(atendimento)}
+                                    sx={{ color: '#25D366' }}
+                                  >
+                                    <WhatsAppIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
                             )}
 
                             {(cargo === 'admin' || cargo === 'gerente') && atendimento.status === 'finalizado' && (
@@ -1144,10 +1569,33 @@ function ModernAtendimentos() {
         {selectedAtendimento && (
           <>
             <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-              Detalhes do Atendimento
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6">Detalhes do Atendimento</Typography>
+                <Chip
+                  icon={getStatusIcon(selectedAtendimento.status)}
+                  label={getStatusLabel(selectedAtendimento.status)}
+                  size="small"
+                  sx={{ bgcolor: 'white', color: '#9c27b0', fontWeight: 'bold' }}
+                />
+              </Box>
             </DialogTitle>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
+                {/* Cabeçalho com IDs */}
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      ID do Atendimento: {selectedAtendimento.id}
+                    </Typography>
+                    {selectedAtendimento.agendamentoId && (
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        ID do Agendamento: {selectedAtendimento.agendamentoId}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Cliente */}
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
@@ -1162,21 +1610,73 @@ function ModernAtendimentos() {
                       <Typography variant="body1" sx={{ fontWeight: 600 }}>
                         {getClienteData(selectedAtendimento.clienteId, clientes)?.nome}
                       </Typography>
-                      <Typography variant="caption" color="textSecondary">
+                      <Typography variant="caption" color="textSecondary" display="block">
                         {getClienteData(selectedAtendimento.clienteId, clientes)?.telefone}
                       </Typography>
+                      {getClienteData(selectedAtendimento.clienteId, clientes)?.email && (
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          {getClienteData(selectedAtendimento.clienteId, clientes)?.email}
+                        </Typography>
+                      )}
+                      {getClienteData(selectedAtendimento.clienteId, clientes)?.indicadoPorNome && (
+                        <Chip
+                          size="small"
+                          label={`Indicado por: ${getClienteData(selectedAtendimento.clienteId, clientes)?.indicadoPorNome}`}
+                          sx={{ mt: 0.5, bgcolor: '#fff3e0', fontSize: '0.7rem', height: 20 }}
+                        />
+                      )}
                     </Box>
                   </Box>
                 </Grid>
+
+                {/* Profissional */}
                 {cargo !== 'cliente' && (
                   <Grid item xs={12} md={6}>
                     <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600, mt: 1 }}>
-                      {getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.nome}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                      <Avatar 
+                        src={getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.foto}
+                        sx={{ width: 48, height: 48, bgcolor: '#ff9800' }}
+                      >
+                        {!getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.foto && 
+                         getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.nome?.charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                          {getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.nome}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          {getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.especialidade}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          Comissão: {getProfissionalData(selectedAtendimento.profissionalId, profissionais)?.comissao}%
+                        </Typography>
+                      </Box>
+                    </Box>
                   </Grid>
                 )}
-                
+
+                {/* Data e Hora */}
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="textSecondary">Data</Typography>
+                  <Typography variant="body1">
+                    {new Date(selectedAtendimento.data).toLocaleDateString('pt-BR')}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
+                  <Typography variant="body1">
+                    {selectedAtendimento.horaInicio} - {selectedAtendimento.horaFim || 'Em andamento'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="textSecondary">Duração</Typography>
+                  <Typography variant="body1">
+                    {calcularDuracao(selectedAtendimento.horaInicio, selectedAtendimento.horaFim)}
+                  </Typography>
+                </Grid>
+
+                {/* Serviços */}
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" color="textSecondary" gutterBottom>
                     Serviços Realizados
@@ -1186,6 +1686,7 @@ function ModernAtendimentos() {
                       <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         <Typography variant="body2">
                           {item.nome} {item.principal && '(Principal)'}
+                          {item.duracao > 0 && ` - ${item.duracao}min`}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           R$ {(item.preco || 0).toFixed(2)}
@@ -1201,16 +1702,51 @@ function ModernAtendimentos() {
                         </Typography>
                         {selectedAtendimento.itensProduto.map((item, idx) => (
                           <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                            <Typography variant="body2">{item.nome} x{item.quantidade}</Typography>
+                            <Typography variant="body2">
+                              {item.nome} x{item.quantidadeVenda || item.quantidade || 1}
+                              {item.semCobranca && <Chip size="small" label="Cortesia" sx={{ ml: 1, height: 16, fontSize: '0.6rem' }} />}
+                            </Typography>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}
+                              {item.semCobranca ? 'Grátis' : `R$ ${((item.preco || 0) * (item.quantidadeVenda || item.quantidade || 1)).toFixed(2)}`}
                             </Typography>
                           </Box>
                         ))}
                       </>
                     )}
-                    
+
+                    {/* Cupons Aplicados */}
+                    {selectedAtendimento.cuponsAplicados && selectedAtendimento.cuponsAplicados.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                          Cupons Aplicados
+                        </Typography>
+                        {selectedAtendimento.cuponsAplicados.map((cupom, idx) => (
+                          <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body2">
+                              <CouponIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                              {cupom.codigo} - {cupom.descricao || ''}
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                              -R$ {(cupom.valorDescontoCalculado || cupom.valor || 0).toFixed(2)}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </>
+                    )}
+
+                    {/* Resumo Financeiro */}
                     <Divider sx={{ my: 2 }} />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2">Subtotal:</Typography>
+                      <Typography variant="body2">R$ {calcularSubtotal(selectedAtendimento).toFixed(2)}</Typography>
+                    </Box>
+                    {(selectedAtendimento.descontoTotal || 0) > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, color: '#4caf50' }}>
+                        <Typography variant="body2">Descontos:</Typography>
+                        <Typography variant="body2">- R$ {(selectedAtendimento.descontoTotal || 0).toFixed(2)}</Typography>
+                      </Box>
+                    )}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Total</Typography>
                       <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 700 }}>
@@ -1220,65 +1756,84 @@ function ModernAtendimentos() {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">Data</Typography>
-                  <Typography variant="body1">
-                    {new Date(selectedAtendimento.data).toLocaleDateString('pt-BR')}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
-                  <Typography variant="body1">
-                    {selectedAtendimento.horaInicio} - {selectedAtendimento.horaFim || 'Em andamento'}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">Duração</Typography>
-                  <Typography variant="body1">
-                    {calcularDuracao(selectedAtendimento.horaInicio, selectedAtendimento.horaFim)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="textSecondary">Status</Typography>
-                  <Chip
-                    icon={getStatusIcon(selectedAtendimento.status)}
-                    label={getStatusLabel(selectedAtendimento.status)}
-                    color={getStatusColor(selectedAtendimento.status)}
-                  />
-                </Grid>
-                
-                {/* Mostrar forma de pagamento se existir */}
-                {pagamentos && (
-                  (() => {
-                    const pagamento = getPagamentoAtendimento(selectedAtendimento.id);
-                    return pagamento ? (
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" color="textSecondary">Forma de Pagamento</Typography>
-                        <Chip
-                          label={
-                            pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                            pagamento.formaPagamento === 'cartao_credito' ? 'Cartão de Crédito' :
-                            pagamento.formaPagamento === 'cartao_debito' ? 'Cartão de Débito' :
-                            pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento
-                          }
-                          size="small"
-                          color="primary"
-                          sx={{ mt: 0.5 }}
-                        />
-                        {pagamento.parcelas > 1 && (
-                          <Typography variant="caption" display="block" color="textSecondary">
-                            {pagamento.parcelas}x
-                          </Typography>
-                        )}
-                      </Grid>
-                    ) : null;
-                  })()
-                )}
+                {/* Pagamento */}
+                {pagamentos && (() => {
+                  const pagamento = getPagamentoAtendimento(selectedAtendimento.id);
+                  return pagamento ? (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="textSecondary">Forma de Pagamento</Typography>
+                      <Paper variant="outlined" sx={{ p: 2, mt: 1 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <Chip
+                              label={
+                                pagamento.formaPagamento === 'dinheiro' ? 'Dinheiro' :
+                                pagamento.formaPagamento === 'cartao_credito' ? 'Cartão de Crédito' :
+                                pagamento.formaPagamento === 'cartao_debito' ? 'Cartão de Débito' :
+                                pagamento.formaPagamento === 'pix' ? 'PIX' : pagamento.formaPagamento
+                              }
+                              color="primary"
+                              size="small"
+                            />
+                            {pagamento.parcelas > 1 && (
+                              <Typography variant="body2" sx={{ mt: 1 }}>
+                                <strong>Parcelas:</strong> {pagamento.parcelas}x
+                              </Typography>
+                            )}
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="body2">
+                              <strong>Valor pago:</strong> R$ {pagamento.valor?.toFixed(2)}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {pagamento.data?.toDate ? pagamento.data.toDate().toLocaleString('pt-BR') : new Date(pagamento.data).toLocaleString('pt-BR')}
+                            </Typography>
+                          </Grid>
+                          {pagamento.observacoes && (
+                            <Grid item xs={12}>
+                              <Typography variant="body2">
+                                <strong>Obs:</strong> {pagamento.observacoes}
+                              </Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Paper>
+                    </Grid>
+                  ) : null;
+                })()}
 
+                {/* Fidelidade */}
+                {fidelidade && (() => {
+                  const pontos = getPontosFidelidade(selectedAtendimento);
+                  return pontos.length > 0 ? (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="textSecondary">Pontos de Fidelidade</Typography>
+                      <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#fff3e0' }}>
+                        {pontos.map((p, idx) => (
+                          <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="body2">
+                              <StarIcon sx={{ fontSize: 14, color: '#ff9800', mr: 0.5, verticalAlign: 'middle' }} />
+                              {p.motivo || 'Atendimento'}
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                              +{p.quantidade} pontos
+                            </Typography>
+                          </Box>
+                        ))}
+                        <Divider sx={{ my: 1 }} />
+                        <Typography variant="body2">
+                          <strong>Saldo atual:</strong> {(getClienteData(selectedAtendimento.clienteId, clientes)?.pontos || 0) + pontos.reduce((acc, p) => acc + p.quantidade, 0)} pontos
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ) : null;
+                })()}
+
+                {/* Observações */}
                 <Grid item xs={12}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" color="textSecondary">Observações</Typography>
-                  <Typography variant="body1">
+                  <Typography variant="body1" sx={{ mt: 1 }}>
                     {selectedAtendimento.observacoes || 'Sem observações'}
                   </Typography>
                 </Grid>
@@ -1311,20 +1866,171 @@ function ModernAtendimentos() {
                 </Button>
               )}
               {selectedAtendimento.status === 'finalizado' && (
-                <Button
-                  variant="contained"
-                  color="info"
-                  onClick={() => {
-                    setOpenDetails(false);
-                    handleImprimir(selectedAtendimento);
-                  }}
-                >
-                  Imprimir
-                </Button>
+                <>
+                  <Button
+                    variant="contained"
+                    color="info"
+                    onClick={() => {
+                      setOpenDetails(false);
+                      handleOpenPrintDialog(selectedAtendimento);
+                    }}
+                  >
+                    Imprimir
+                  </Button>
+                  <Button
+                    variant="contained"
+                    sx={{ bgcolor: '#25D366', color: 'white' }}
+                    onClick={() => {
+                      setOpenDetails(false);
+                      handleEnviarWhatsApp(selectedAtendimento);
+                    }}
+                  >
+                    WhatsApp
+                  </Button>
+                </>
               )}
             </DialogActions>
           </>
         )}
+      </Dialog>
+
+      {/* Dialog de Opções de Impressão */}
+      <Dialog open={openPrintDialog} onClose={() => setOpenPrintDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PrintIcon />
+            <Typography variant="h6">Opções de Impressão</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Formato do Papel</InputLabel>
+                <Select
+                  value={printOptions.formato}
+                  label="Formato do Papel"
+                  onChange={(e) => setPrintOptions({ ...printOptions, formato: e.target.value })}
+                >
+                  <MenuItem value="A4">A4 (210x297mm)</MenuItem>
+                  <MenuItem value="A5">A5 (148x210mm)</MenuItem>
+                  <MenuItem value="termica_80mm">Térmica 80mm</MenuItem>
+                  <MenuItem value="termica_58mm">Térmica 58mm</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>O que incluir no comprovante:</Typography>
+            </Grid>
+
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirLogo}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirLogo: e.target.checked })}
+                  />
+                }
+                label="Logo da Empresa"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirEndereco}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirEndereco: e.target.checked })}
+                  />
+                }
+                label="Endereço"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirContato}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirContato: e.target.checked })}
+                  />
+                }
+                label="Contato"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirRedesSociais}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirRedesSociais: e.target.checked })}
+                  />
+                }
+                label="Redes Sociais"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirFidelidade}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirFidelidade: e.target.checked })}
+                  />
+                }
+                label="Pontos de Fidelidade"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirCupons}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirCupons: e.target.checked })}
+                  />
+                }
+                label="Cupons Aplicados"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirQRCode}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirQRCode: e.target.checked })}
+                  />
+                }
+                label="QR Code"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={printOptions.incluirAssinatura}
+                    onChange={(e) => setPrintOptions({ ...printOptions, incluirAssinatura: e.target.checked })}
+                  />
+                }
+                label="Campo de Assinatura"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <strong>Dica:</strong> Para impressoras térmicas, recomenda-se desativar o QR Code e as redes sociais para economizar papel.
+              </Alert>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenPrintDialog(false)}>Cancelar</Button>
+          <Button
+            onClick={handleImprimir}
+            variant="contained"
+            startIcon={<PrintIcon />}
+            sx={{ bgcolor: '#4caf50' }}
+          >
+            Imprimir
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Dialog de Filtros - Apenas para não-clientes */}
