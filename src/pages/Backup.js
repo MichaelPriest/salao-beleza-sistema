@@ -159,9 +159,49 @@ import {
   parseISO,
   differenceInHours,
   differenceInMinutes,
+  isValid,
 } from 'date-fns';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+
+// ✅ Função segura para criar data
+const safeDate = (dateValue) => {
+  if (!dateValue) return null;
+  try {
+    // Se for Firestore Timestamp
+    if (dateValue?.toDate) {
+      const d = dateValue.toDate();
+      return isValid(d) ? d : null;
+    }
+    // Se for string ou número
+    const d = new Date(dateValue);
+    return isValid(d) ? d : null;
+  } catch {
+    return null;
+  }
+};
+
+// ✅ Função segura para formatar data
+const safeFormat = (dateValue, formatString = 'dd/MM/yyyy') => {
+  const date = safeDate(dateValue);
+  if (!date) return '-';
+  try {
+    return format(date, formatString);
+  } catch {
+    return '-';
+  }
+};
+
+// ✅ Função segura para formatar data com hora
+const safeFormatDateTime = (dateValue) => {
+  const date = safeDate(dateValue);
+  if (!date) return '-';
+  try {
+    return format(date, 'dd/MM/yyyy HH:mm');
+  } catch {
+    return '-';
+  }
+};
 
 function Backup() {
   const [loading, setLoading] = useState(true);
@@ -194,7 +234,6 @@ function Backup() {
     espacoDisponivel: 0,
   });
 
-  // ✅ CORREÇÃO: Mover as definições para DENTRO do componente
   const tiposBackup = [
     { value: 'completo', label: 'Backup Completo', icon: <StorageIcon />, descricao: 'Todos os dados do sistema' },
     { value: 'clientes', label: 'Apenas Clientes', icon: <PersonIcon />, descricao: 'Dados de clientes' },
@@ -220,8 +259,6 @@ function Backup() {
     { value: 'agendado', label: 'Agendado', color: '#9c27b0', icon: <ScheduleIcon /> },
   ];
 
-  // ... (resto do código permanece igual - todas as funções e o JSX)
-  
   useEffect(() => {
     carregarDados();
   }, []);
@@ -234,9 +271,12 @@ function Backup() {
         firebaseService.getAll('configuracoes').catch(() => [])
       ]);
 
-      const backupsOrdenados = (backupsData || []).sort((a, b) => 
-        new Date(b.dataCriacao) - new Date(a.dataCriacao)
-      );
+      // ✅ Ordenar com datas seguras
+      const backupsOrdenados = (backupsData || []).sort((a, b) => {
+        const dataA = safeDate(a.dataCriacao)?.getTime() || 0;
+        const dataB = safeDate(b.dataCriacao)?.getTime() || 0;
+        return dataB - dataA;
+      });
 
       setBackups(backupsOrdenados);
       setConfiguracoes(configData[0] || null);
@@ -246,14 +286,20 @@ function Backup() {
       const ultimoBackup = backupsOrdenados[0] || null;
       
       const hoje = new Date().toDateString();
-      const backupsHoje = backupsOrdenados.filter(b => 
-        new Date(b.dataCriacao).toDateString() === hoje
-      ).length;
+      
+      // ✅ Filtrar backups de hoje com datas seguras
+      const backupsHoje = backupsOrdenados.filter(b => {
+        const data = safeDate(b.dataCriacao);
+        return data && data.toDateString() === hoje;
+      }).length;
 
       const inicioSemana = startOfWeek(new Date());
-      const backupsSemana = backupsOrdenados.filter(b => 
-        new Date(b.dataCriacao) >= inicioSemana
-      ).length;
+      
+      // ✅ Filtrar backups da semana com datas seguras
+      const backupsSemana = backupsOrdenados.filter(b => {
+        const data = safeDate(b.dataCriacao);
+        return data && data >= inicioSemana;
+      }).length;
 
       setEstatisticas({
         totalBackups,
@@ -337,10 +383,11 @@ function Backup() {
         }
       }
 
+      const agora = new Date();
       const metadata = {
-        nome: `backup_${format(new Date(), 'yyyyMMdd_HHmmss')}`,
+        nome: `backup_${safeFormat(agora, 'yyyyMMdd_HHmmss')}`,
         tipo: tipoBackup,
-        dataCriacao: new Date().toISOString(),
+        dataCriacao: agora.toISOString(),
         versao: '2.0.0',
         collections: collections,
         registros: Object.values(dados).reduce((acc, curr) => acc + (curr.length || 0), 0),
@@ -462,7 +509,7 @@ function Backup() {
     try {
       const configBackup = {
         frequencia,
-        dataAgendamento: dataAgendamento?.toISOString(),
+        dataAgendamento: dataAgendamento ? safeDate(dataAgendamento)?.toISOString() : null,
         horaAgendamento,
         tipo: tipoBackup,
         destino,
@@ -472,9 +519,11 @@ function Backup() {
         ultimaConfiguracao: new Date().toISOString(),
       };
 
-      await firebaseService.update('configuracoes', configuracoes.id, {
-        backup: configBackup,
-      });
+      if (configuracoes?.id) {
+        await firebaseService.update('configuracoes', configuracoes.id, {
+          backup: configBackup,
+        });
+      }
 
       mostrarSnackbar('Configurações salvas com sucesso!');
       setOpenConfigDialog(false);
@@ -493,16 +542,17 @@ function Backup() {
   };
 
   const formatarTempo = (data) => {
-    if (!data) return 'Nunca';
+    const date = safeDate(data);
+    if (!date) return 'Nunca';
+    
     const agora = new Date();
-    const backupDate = new Date(data);
-    const diffHoras = differenceInHours(agora, backupDate);
-    const diffMinutos = differenceInMinutes(agora, backupDate);
+    const diffHoras = differenceInHours(agora, date);
+    const diffMinutos = differenceInMinutes(agora, date);
 
     if (diffHoras < 24) {
       return `Há ${diffHoras} hora(s) e ${diffMinutos % 60} minuto(s)`;
     } else {
-      return `Em ${format(backupDate, 'dd/MM/yyyy HH:mm')}`;
+      return `Em ${safeFormat(date, 'dd/MM/yyyy HH:mm')}`;
     }
   };
 
@@ -706,10 +756,10 @@ function Backup() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {format(new Date(backup.dataCriacao), 'dd/MM/yyyy')}
+                            {safeFormat(backup.dataCriacao, 'dd/MM/yyyy')}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {format(new Date(backup.dataCriacao), 'HH:mm')}
+                            {safeFormat(backup.dataCriacao, 'HH:mm')}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -877,7 +927,12 @@ function Backup() {
                         label="Data do Agendamento"
                         value={dataAgendamento}
                         onChange={setDataAgendamento}
-                        renderInput={(params) => <TextField {...params} fullWidth />}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            size: 'small',
+                          }
+                        }}
                       />
                     </Grid>
                     <Grid item xs={12} md={6}>
@@ -888,6 +943,7 @@ function Backup() {
                         value={horaAgendamento}
                         onChange={(e) => setHoraAgendamento(e.target.value)}
                         InputLabelProps={{ shrink: true }}
+                        size="small"
                       />
                     </Grid>
                   </>
@@ -945,6 +1001,7 @@ function Backup() {
                         type="password"
                         value={senhaBackup}
                         onChange={(e) => setSenhaBackup(e.target.value)}
+                        size="small"
                       />
                     </Grid>
                     <Grid item xs={12} md={6}>
@@ -956,6 +1013,7 @@ function Backup() {
                         onChange={(e) => setConfirmarSenha(e.target.value)}
                         error={senhaBackup !== confirmarSenha}
                         helperText={senhaBackup !== confirmarSenha ? 'Senhas não conferem' : ''}
+                        size="small"
                       />
                     </Grid>
                   </>
@@ -1011,7 +1069,7 @@ function Backup() {
                   {backupSelecionado?.nome}
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
-                  Criado em: {format(new Date(backupSelecionado?.dataCriacao), 'dd/MM/yyyy HH:mm')}
+                  Criado em: {safeFormatDateTime(backupSelecionado?.dataCriacao)}
                 </Typography>
                 <Typography variant="caption" color="textSecondary" display="block">
                   Tipo: {tiposBackup.find(t => t.value === backupSelecionado?.tipo)?.label}
@@ -1051,7 +1109,7 @@ function Backup() {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel>Frequência de Backup</InputLabel>
                   <Select
                     value={frequencia}
@@ -1072,7 +1130,12 @@ function Backup() {
                       label="Data Início"
                       value={dataAgendamento}
                       onChange={setDataAgendamento}
-                      renderInput={(params) => <TextField {...params} fullWidth />}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          size: 'small',
+                        }
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -1083,13 +1146,14 @@ function Backup() {
                       value={horaAgendamento}
                       onChange={(e) => setHoraAgendamento(e.target.value)}
                       InputLabelProps={{ shrink: true }}
+                      size="small"
                     />
                   </Grid>
                 </>
               )}
 
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel>Tipo Padrão</InputLabel>
                   <Select
                     value={tipoBackup}
@@ -1104,7 +1168,7 @@ function Backup() {
               </Grid>
 
               <Grid item xs={12}>
-                <FormControl fullWidth>
+                <FormControl fullWidth size="small">
                   <InputLabel>Destino Padrão</InputLabel>
                   <Select
                     value={destino}
