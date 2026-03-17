@@ -30,6 +30,14 @@ import {
   MenuItem,
   Avatar,
   Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Checkbox,
+  FormGroup,
+  FormControlLabel,
+  Collapse,
 } from '@mui/material';
 import {
   CalendarToday as CalendarIcon,
@@ -42,8 +50,12 @@ import {
   Person as PersonIcon,
   AccessTime as TimeIcon,
   Info as InfoIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Delete as DeleteIcon,
+  AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
@@ -60,8 +72,9 @@ function ClienteAgendamentos() {
   const [openCancelDialog, setOpenCancelDialog] = useState(false);
   const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
   const [selectedAgendamento, setSelectedAgendamento] = useState(null);
+  const [selectedServicos, setSelectedServicos] = useState([]);
+  const [servicoExpandido, setServicoExpandido] = useState(false);
   const [formData, setFormData] = useState({
-    servicoId: '',
     profissionalId: '',
     data: '',
     horario: '',
@@ -84,7 +97,6 @@ function ClienteAgendamentos() {
     try {
       setLoading(true);
       
-      // 🔥 Usar UID do Firebase ou ID do documento
       const uid = firebaseUser?.uid || cliente?.id;
       console.log('📌 Buscando agendamentos para clienteId:', uid);
       
@@ -103,7 +115,6 @@ function ClienteAgendamentos() {
       ]);
 
       console.log('✅ Agendamentos encontrados:', agendamentosData?.length || 0);
-      console.log('📋 Dados dos agendamentos:', agendamentosData);
       
       setAgendamentos(agendamentosData || []);
       setServicos(servicosData || []);
@@ -118,49 +129,97 @@ function ClienteAgendamentos() {
   };
 
   const handleNovoAgendamento = () => {
-    // Pré-selecionar data para amanhã
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     const dataFormatada = amanha.toISOString().split('T')[0];
     
+    setSelectedServicos([]);
     setFormData({
-      servicoId: '',
       profissionalId: '',
       data: dataFormatada,
       horario: '',
       observacoes: '',
     });
+    setServicoExpandido(true);
     setOpenDialog(true);
+  };
+
+  const handleToggleServico = (servico) => {
+    const currentIndex = selectedServicos.findIndex(s => s.id === servico.id);
+    const newSelectedServicos = [...selectedServicos];
+
+    if (currentIndex === -1) {
+      newSelectedServicos.push({
+        id: servico.id,
+        nome: servico.nome,
+        preco: servico.preco,
+        duracao: servico.duracao
+      });
+    } else {
+      newSelectedServicos.splice(currentIndex, 1);
+    }
+
+    setSelectedServicos(newSelectedServicos);
+  };
+
+  const handleSelectAllServicos = () => {
+    if (selectedServicos.length === servicos.length) {
+      setSelectedServicos([]);
+    } else {
+      setSelectedServicos(servicos.map(s => ({
+        id: s.id,
+        nome: s.nome,
+        preco: s.preco,
+        duracao: s.duracao
+      })));
+    }
+  };
+
+  const calcularTotal = () => {
+    return selectedServicos.reduce((total, servico) => total + (servico.preco || 0), 0);
+  };
+
+  const calcularDuracaoTotal = () => {
+    return selectedServicos.reduce((total, servico) => total + (servico.duracao || 0), 0);
   };
 
   const handleSalvarAgendamento = async () => {
     try {
-      if (!formData.servicoId || !formData.data || !formData.horario) {
+      if (selectedServicos.length === 0) {
+        toast.error('Selecione pelo menos um serviço');
+        return;
+      }
+
+      if (!formData.data || !formData.horario) {
         toast.error('Preencha todos os campos obrigatórios');
         return;
       }
 
-      const servico = servicos.find(s => s.id === formData.servicoId);
-      const profissional = profissionais.find(p => p.id === formData.profissionalId);
-      
       const hoje = new Date().toISOString().split('T')[0];
       if (formData.data < hoje) {
         toast.error('Não é possível agendar para datas passadas');
         return;
       }
 
-      // 🔥 Usar UID do Firebase para o clienteId
       const uid = firebaseUser?.uid || cliente?.id;
+      const profissional = profissionais.find(p => p.id === formData.profissionalId);
 
       const novoAgendamento = {
         clienteId: uid,
         clienteNome: cliente.nome,
         clienteEmail: cliente.email,
         clienteTelefone: cliente.telefone,
-        servicoId: formData.servicoId,
-        servicoNome: servico?.nome,
-        servicoPreco: servico?.preco,
-        servicoDuracao: servico?.duracao,
+        servicos: selectedServicos.map(s => ({
+          id: s.id,
+          nome: s.nome,
+          preco: s.preco,
+          duracao: s.duracao
+        })),
+        servicosIds: selectedServicos.map(s => s.id),
+        servicosNomes: selectedServicos.map(s => s.nome).join(', '),
+        quantidadeServicos: selectedServicos.length,
+        valorTotal: calcularTotal(),
+        duracaoTotal: calcularDuracaoTotal(),
         profissionalId: formData.profissionalId || null,
         profissionalNome: profissional?.nome || null,
         data: formData.data,
@@ -254,12 +313,19 @@ function ClienteAgendamentos() {
     }
   };
 
+  const formatarMoeda = (valor) => {
+    if (!valor) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor);
+  };
+
   const isDataValida = (data) => {
     const hoje = new Date().toISOString().split('T')[0];
     return data >= hoje;
   };
 
-  // 🔥 FILTRAGEM CORRIGIDA - case insensitive
   const agendamentosFuturos = agendamentos.filter(a => {
     const status = a.status?.toLowerCase() || '';
     return status !== 'cancelado' && status !== 'finalizado';
@@ -268,11 +334,7 @@ function ClienteAgendamentos() {
   const agendamentosPassados = agendamentos.filter(a => {
     const status = a.status?.toLowerCase() || '';
     return status === 'cancelado' || status === 'finalizado';
-  }).sort((a, b) => b.data.localeCompare(a.data));
-
-  console.log('📊 Total agendamentos:', agendamentos.length);
-  console.log('📊 Agendamentos futuros:', agendamentosFuturos.length);
-  console.log('📊 Agendamentos passados:', agendamentosPassados.length);
+  }).sort((b, a) => b.data.localeCompare(a.data));
 
   if (loading) {
     return (
@@ -363,89 +425,117 @@ function ClienteAgendamentos() {
 
           {agendamentosFuturos.length > 0 ? (
             <Grid container spacing={2}>
-              {agendamentosFuturos.map((agendamento, index) => (
-                <Grid item xs={12} key={agendamento.id || index}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <Paper 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2,
-                        borderLeft: '4px solid',
-                        borderLeftColor: 
-                          agendamento.status?.toLowerCase() === 'confirmado' ? '#4caf50' :
-                          agendamento.status?.toLowerCase() === 'pendente' ? '#ff9800' : '#9c27b0',
-                      }}
+              {agendamentosFuturos.map((agendamento, index) => {
+                const profissional = profissionais.find(p => 
+                  p.id === agendamento.profissionalId || 
+                  p.uid === agendamento.profissionalId
+                );
+                
+                return (
+                  <Grid item xs={12} key={agendamento.id || index}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
                     >
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={3}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CalendarIcon sx={{ color: '#9c27b0' }} />
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {formatarData(agendamento.data)}
+                      <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                          p: 2,
+                          borderLeft: '4px solid',
+                          borderLeftColor: 
+                            agendamento.status?.toLowerCase() === 'confirmado' ? '#4caf50' :
+                            agendamento.status?.toLowerCase() === 'pendente' ? '#ff9800' : '#9c27b0',
+                        }}
+                      >
+                        <Grid container spacing={2} alignItems="center">
+                          <Grid item xs={12} sm={3}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <CalendarIcon sx={{ color: '#9c27b0' }} />
+                              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                {formatarData(agendamento.data)}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                              <TimeIcon sx={{ color: '#ff4081', fontSize: 16 }} />
+                              <Typography variant="body2" color="textSecondary">
+                                {agendamento.horario}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                              {agendamento.quantidadeServicos > 1 
+                                ? `${agendamento.quantidadeServicos} serviços` 
+                                : agendamento.servicosNomes || agendamento.servicoNome}
                             </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                            <TimeIcon sx={{ color: '#ff4081', fontSize: 16 }} />
-                            <Typography variant="body2" color="textSecondary">
-                              {agendamento.horario}
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                              {agendamento.servicos?.map((servico, idx) => (
+                                <Chip
+                                  key={idx}
+                                  label={servico.nome}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.7rem' }}
+                                />
+                              ))}
+                            </Box>
+                            <Typography variant="caption" color="textSecondary">
+                              Profissional: {agendamento.profissionalNome || 'A definir'}
                             </Typography>
-                          </Box>
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {agendamento.servicoNome || 'Serviço'}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            Profissional: {agendamento.profissionalNome || 'A definir'}
-                          </Typography>
-                          {agendamento.observacoes && (
-                            <Typography variant="caption" color="textSecondary" display="block">
-                              Obs: {agendamento.observacoes}
-                            </Typography>
-                          )}
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={2}>
-                          <Chip
-                            icon={getStatusIcon(agendamento.status)}
-                            label={getStatusLabel(agendamento.status)}
-                            color={getStatusColor(agendamento.status)}
-                            size="small"
-                          />
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={3}>
-                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => handleVerDetalhes(agendamento)}
-                              sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
-                            >
-                              Detalhes
-                            </Button>
-                            {agendamento.status?.toLowerCase() === 'pendente' && (
+                            {agendamento.observacoes && (
+                              <Typography variant="caption" color="textSecondary" display="block">
+                                Obs: {agendamento.observacoes}
+                              </Typography>
+                            )}
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={2}>
+                            <Box>
+                              <Chip
+                                icon={getStatusIcon(agendamento.status)}
+                                label={getStatusLabel(agendamento.status)}
+                                color={getStatusColor(agendamento.status)}
+                                size="small"
+                                sx={{ mb: 1 }}
+                              />
+                              {agendamento.valorTotal > 0 && (
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                                  {formatarMoeda(agendamento.valorTotal)}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Grid>
+                          
+                          <Grid item xs={12} sm={3}>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                               <Button
                                 size="small"
                                 variant="outlined"
-                                color="error"
-                                onClick={() => handleCancelarAgendamento(agendamento)}
+                                onClick={() => handleVerDetalhes(agendamento)}
+                                sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
                               >
-                                Cancelar
+                                Detalhes
                               </Button>
-                            )}
-                          </Box>
+                              {agendamento.status?.toLowerCase() === 'pendente' && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="error"
+                                  onClick={() => handleCancelarAgendamento(agendamento)}
+                                >
+                                  Cancelar
+                                </Button>
+                              )}
+                            </Box>
+                          </Grid>
                         </Grid>
-                      </Grid>
-                    </Paper>
-                  </motion.div>
-                </Grid>
-              ))}
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+                );
+              })}
             </Grid>
           ) : (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
@@ -480,8 +570,9 @@ function ClienteAgendamentos() {
                   <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                     <TableCell>Data</TableCell>
                     <TableCell>Horário</TableCell>
-                    <TableCell>Serviço</TableCell>
+                    <TableCell>Serviço(s)</TableCell>
                     <TableCell>Profissional</TableCell>
+                    <TableCell>Valor</TableCell>
                     <TableCell>Status</TableCell>
                   </TableRow>
                 </TableHead>
@@ -498,13 +589,13 @@ function ClienteAgendamentos() {
                         <TableCell>{agendamento.horario || '--:--'}</TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {agendamento.servicoNome || 'Serviço'}
+                            {agendamento.quantidadeServicos > 1 
+                              ? `${agendamento.quantidadeServicos} serviços` 
+                              : agendamento.servicosNomes || agendamento.servicoNome}
                           </Typography>
-                          {agendamento.servicoPreco && (
-                            <Typography variant="caption" color="textSecondary">
-                              R$ {agendamento.servicoPreco.toFixed(2)}
-                            </Typography>
-                          )}
+                          <Typography variant="caption" color="textSecondary">
+                            {agendamento.servicos?.map(s => s.nome).join(', ') || agendamento.servicoNome}
+                          </Typography>
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -518,6 +609,15 @@ function ClienteAgendamentos() {
                               {agendamento.profissionalNome || 'Não informado'}
                             </Typography>
                           </Box>
+                        </TableCell>
+                        <TableCell>
+                          {agendamento.valorTotal > 0 ? (
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {formatarMoeda(agendamento.valorTotal)}
+                            </Typography>
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -545,7 +645,7 @@ function ClienteAgendamentos() {
       </Card>
 
       {/* Dialog de Novo Agendamento */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AddIcon />
@@ -554,28 +654,134 @@ function ClienteAgendamentos() {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Seção de Serviços */}
             <Grid item xs={12}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Serviço *</InputLabel>
-                <Select
-                  value={formData.servicoId}
-                  label="Serviço *"
-                  onChange={(e) => setFormData({ ...formData, servicoId: e.target.value })}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}>
+                <Box 
+                  sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setServicoExpandido(!servicoExpandido)}
                 >
-                  {servicos.map(servico => (
-                    <MenuItem key={servico.id} value={servico.id}>
-                      <Box>
-                        <Typography variant="body2">{servico.nome}</Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          R$ {servico.preco?.toFixed(2)} • {servico.duracao} min
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                      Serviços * ({selectedServicos.length} selecionados)
+                    </Typography>
+                    {selectedServicos.length > 0 && (
+                      <Chip
+                        label={`Total: ${formatarMoeda(calcularTotal())}`}
+                        size="small"
+                        sx={{ bgcolor: '#9c27b0', color: 'white' }}
+                      />
+                    )}
+                  </Box>
+                  <IconButton size="small">
+                    {servicoExpandido ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                </Box>
+
+                <Collapse in={servicoExpandido}>
+                  <Box sx={{ mt: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={selectedServicos.length === servicos.length}
+                            indeterminate={selectedServicos.length > 0 && selectedServicos.length < servicos.length}
+                            onChange={handleSelectAllServicos}
+                          />
+                        }
+                        label="Selecionar todos"
+                      />
+                      <Typography variant="caption" color="textSecondary">
+                        {selectedServicos.length} de {servicos.length} selecionados
+                      </Typography>
+                    </Box>
+
+                    <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                      {servicos.map((servico) => {
+                        const isSelected = selectedServicos.some(s => s.id === servico.id);
+                        return (
+                          <ListItem 
+                            key={servico.id}
+                            button
+                            onClick={() => handleToggleServico(servico)}
+                            sx={{
+                              bgcolor: isSelected ? '#f3e5f5' : 'transparent',
+                              '&:hover': { bgcolor: '#f3e5f5' },
+                              borderRadius: 1,
+                              mb: 0.5
+                            }}
+                          >
+                            <Checkbox
+                              edge="start"
+                              checked={isSelected}
+                              tabIndex={-1}
+                              disableRipple
+                            />
+                            <ListItemText
+                              primary={
+                                <Typography variant="body2" sx={{ fontWeight: isSelected ? 600 : 400 }}>
+                                  {servico.nome}
+                                </Typography>
+                              }
+                              secondary={
+                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {formatarMoeda(servico.preco)}
+                                  </Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    • {servico.duracao} min
+                                  </Typography>
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                        );
+                      })}
+                    </List>
+
+                    {selectedServicos.length > 0 && (
+                      <Paper variant="outlined" sx={{ p: 2, mt: 2, bgcolor: '#f5f5f5' }}>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Resumo dos serviços selecionados:
                         </Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                          {selectedServicos.map((servico, idx) => (
+                            <Chip
+                              key={idx}
+                              label={servico.nome}
+                              onDelete={() => handleToggleServico(servico)}
+                              deleteIcon={<DeleteIcon />}
+                              size="small"
+                              sx={{ bgcolor: '#9c27b0', color: 'white' }}
+                            />
+                          ))}
+                        </Box>
+                        <Divider sx={{ my: 1 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2">Duração total:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {calcularDuracaoTotal()} minutos
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="body2">Valor total:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                            {formatarMoeda(calcularTotal())}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    )}
+                  </Box>
+                </Collapse>
+              </Paper>
             </Grid>
 
+            {/* Profissional */}
             <Grid item xs={12}>
               <FormControl fullWidth size="small">
                 <InputLabel>Profissional</InputLabel>
@@ -604,6 +810,7 @@ function ClienteAgendamentos() {
               </FormControl>
             </Grid>
 
+            {/* Data e Horário */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -634,6 +841,7 @@ function ClienteAgendamentos() {
               </FormControl>
             </Grid>
 
+            {/* Observações */}
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -655,7 +863,7 @@ function ClienteAgendamentos() {
             variant="contained"
             sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
           >
-            Solicitar Agendamento
+            Solicitar Agendamento {selectedServicos.length > 0 && `(${formatarMoeda(calcularTotal())})`}
           </Button>
         </DialogActions>
       </Dialog>
@@ -678,8 +886,13 @@ function ClienteAgendamentos() {
                 <strong>Data:</strong> {formatarData(selectedAgendamento.data)} às {selectedAgendamento.horario}
               </Typography>
               <Typography variant="body2">
-                <strong>Serviço:</strong> {selectedAgendamento.servicoNome}
+                <strong>Serviço(s):</strong> {selectedAgendamento.servicosNomes || selectedAgendamento.servicoNome}
               </Typography>
+              {selectedAgendamento.valorTotal > 0 && (
+                <Typography variant="body2">
+                  <strong>Valor:</strong> {formatarMoeda(selectedAgendamento.valorTotal)}
+                </Typography>
+              )}
             </Paper>
           )}
         </DialogContent>
@@ -713,18 +926,45 @@ function ClienteAgendamentos() {
                   <Typography variant="caption" color="textSecondary">Horário</Typography>
                   <Typography variant="body2">{selectedAgendamento.horario}</Typography>
                 </Grid>
+                
                 <Grid item xs={12}>
                   <Divider />
                 </Grid>
+                
                 <Grid item xs={12}>
-                  <Typography variant="caption" color="textSecondary">Serviço</Typography>
-                  <Typography variant="body2">{selectedAgendamento.servicoNome}</Typography>
-                  {selectedAgendamento.servicoPreco && (
-                    <Typography variant="caption" color="textSecondary">
-                      R$ {selectedAgendamento.servicoPreco.toFixed(2)}
-                    </Typography>
-                  )}
+                  <Typography variant="caption" color="textSecondary">Serviço(s)</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                    {selectedAgendamento.servicos?.map((servico, idx) => (
+                      <Chip
+                        key={idx}
+                        label={servico.nome}
+                        size="small"
+                        sx={{ bgcolor: '#f3e5f5' }}
+                      />
+                    )) || (
+                      <Chip
+                        label={selectedAgendamento.servicoNome}
+                        size="small"
+                        sx={{ bgcolor: '#f3e5f5' }}
+                      />
+                    )}
+                  </Box>
                 </Grid>
+                
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Duração total</Typography>
+                  <Typography variant="body2">
+                    {selectedAgendamento.duracaoTotal || selectedAgendamento.servicoDuracao || 0} minutos
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="textSecondary">Valor total</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                    {formatarMoeda(selectedAgendamento.valorTotal || selectedAgendamento.servicoPreco)}
+                  </Typography>
+                </Grid>
+                
                 <Grid item xs={12}>
                   <Typography variant="caption" color="textSecondary">Profissional</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
@@ -739,15 +979,18 @@ function ClienteAgendamentos() {
                     </Typography>
                   </Box>
                 </Grid>
+                
                 {selectedAgendamento.observacoes && (
                   <Grid item xs={12}>
                     <Typography variant="caption" color="textSecondary">Observações</Typography>
                     <Typography variant="body2">{selectedAgendamento.observacoes}</Typography>
                   </Grid>
                 )}
+                
                 <Grid item xs={12}>
                   <Divider />
                 </Grid>
+                
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Status</Typography>
                   <Chip
@@ -757,6 +1000,7 @@ function ClienteAgendamentos() {
                     sx={{ mt: 0.5 }}
                   />
                 </Grid>
+                
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Solicitado em</Typography>
                   <Typography variant="body2">
