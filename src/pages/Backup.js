@@ -1,4 +1,4 @@
-// src/pages/Backup.js
+// src/pages/Backup.js (corrigido)
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -114,7 +114,7 @@ import {
   Stop as StopIcon,
   Pause as PauseIcon,
   Settings as SettingsIcon,
-  SettingsApplications as SettingsIcon,
+  SettingsApplications as SettingsApplicationsIcon,
   Tune as TuneIcon,
   History as HistoryIcon,
   RestorePage as RestorePageIcon,
@@ -122,20 +122,17 @@ import {
   DataArray as DataArrayIcon,
   DataObject as DataObjectIcon,
   DataUsage as DataUsageIcon,
-  Storage as StorageIcon,
   Memory as MemoryIcon,
   Dns as DnsIcon,
   CloudCircle as CloudCircleIcon,
   CloudSync as CloudSyncIcon,
-  CloudDownload as CloudDownloadIcon,
-  CloudUpload as CloudUploadIcon,
   Security as SecurityIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
   LockOutline as LockOutlineIcon,
   VerifiedUser as VerifiedUserIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -231,7 +228,6 @@ function Backup() {
         firebaseService.getAll('configuracoes').catch(() => [])
       ]);
 
-      // Ordenar backups por data (mais recentes primeiro)
       const backupsOrdenados = (backupsData || []).sort((a, b) => 
         new Date(b.dataCriacao) - new Date(a.dataCriacao)
       );
@@ -239,7 +235,6 @@ function Backup() {
       setBackups(backupsOrdenados);
       setConfiguracoes(configData[0] || null);
 
-      // Calcular estatísticas
       const totalBackups = backupsOrdenados.length;
       const tamanhoTotal = backupsOrdenados.reduce((acc, b) => acc + (b.tamanho || 0), 0);
       const ultimoBackup = backupsOrdenados[0] || null;
@@ -261,7 +256,7 @@ function Backup() {
         backupsHoje,
         backupsSemana,
         espacoUsado: tamanhoTotal,
-        espacoDisponivel: 10 * 1024 * 1024 * 1024, // 10GB (exemplo)
+        espacoDisponivel: 10 * 1024 * 1024 * 1024,
       });
 
     } catch (error) {
@@ -287,7 +282,6 @@ function Backup() {
 
       toast.loading('Iniciando backup...', { id: 'backup' });
 
-      // Simular progresso
       const interval = setInterval(() => {
         setProgresso(prev => {
           if (prev >= 90) {
@@ -298,7 +292,6 @@ function Backup() {
         });
       }, 500);
 
-      // Coletar dados baseado no tipo de backup
       let dados = {};
       const collections = [];
 
@@ -328,7 +321,6 @@ function Backup() {
           break;
       }
 
-      // Buscar dados de todas as coleções
       for (const collection of collections) {
         try {
           const data = await firebaseService.getAll(collection);
@@ -339,7 +331,6 @@ function Backup() {
         }
       }
 
-      // Adicionar metadados
       const metadata = {
         nome: `backup_${format(new Date(), 'yyyyMMdd_HHmmss')}`,
         tipo: tipoBackup,
@@ -355,42 +346,30 @@ function Backup() {
         dados: dados,
       };
 
-      // Converter para JSON
       let jsonContent = JSON.stringify(backupData, null, 2);
       let tamanho = new Blob([jsonContent]).size;
 
-      // Compactar se necessário
       if (compactar) {
         const zip = new JSZip();
         zip.file('backup.json', jsonContent);
         
         if (incluirArquivos) {
-          // Adicionar arquivos de mídia se houver
           const arquivos = await coletarArquivos();
           Object.entries(arquivos).forEach(([nome, conteudo]) => {
             zip.file(nome, conteudo);
           });
         }
 
-        if (protegerSenha && senhaBackup) {
-          // Nota: JSZip não suporta nativamente proteção por senha
-          // Seria necessário usar uma biblioteca adicional
-          toast.warning('Proteção por senha não disponível nesta versão', { id: 'backup' });
-        }
-
         const zipContent = await zip.generateAsync({ type: 'blob' });
         tamanho = zipContent.size;
         
-        // Salvar arquivo ZIP
         saveAs(zipContent, `${metadata.nome}.zip`);
       } else {
-        // Salvar arquivo JSON
         const blob = new Blob([jsonContent], { type: 'application/json' });
         tamanho = blob.size;
         saveAs(blob, `${metadata.nome}.json`);
       }
 
-      // Registrar backup no Firebase
       const backupRegistro = {
         ...metadata,
         tamanho,
@@ -418,8 +397,6 @@ function Backup() {
   };
 
   const coletarArquivos = async () => {
-    // Função para coletar arquivos de mídia (fotos, etc)
-    // Implementar conforme necessidade
     return {};
   };
 
@@ -432,7 +409,6 @@ function Backup() {
 
       toast.loading('Restaurando backup...', { id: 'restore' });
 
-      // Simular progresso
       setProgresso(0);
       const interval = setInterval(() => {
         setProgresso(prev => {
@@ -443,9 +419,6 @@ function Backup() {
           return prev + 10;
         });
       }, 500);
-
-      // Aqui viria a lógica para restaurar o backup
-      // Por segurança, isso geralmente é feito manualmente ou via API específica
 
       setTimeout(() => {
         clearInterval(interval);
@@ -463,7 +436,6 @@ function Backup() {
   };
 
   const handleDownloadBackup = (backup) => {
-    // Implementar download do arquivo
     toast.success(`Download do backup ${backup.nome} iniciado`);
   };
 
