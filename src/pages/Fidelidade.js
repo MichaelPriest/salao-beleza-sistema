@@ -87,6 +87,7 @@ import { Timestamp } from 'firebase/firestore';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 
 // Função utilitária para formatar data com segurança
 const formatDate = (date, formatString = 'dd/MM/yyyy') => {
@@ -563,6 +564,7 @@ const HistoricoItem = ({ item }) => {
 
 // Componente Principal
 function Fidelidade() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -579,6 +581,7 @@ function Fidelidade() {
   const [openRecompensaDialog, setOpenRecompensaDialog] = useState(false);
   const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
   const [openDetalhesRecompensa, setOpenDetalhesRecompensa] = useState(false);
+  const [openConfigDialog, setOpenConfigDialog] = useState(false); // ✅ Adicionado para configurações
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [pontosForm, setPontosForm] = useState({
     quantidade: '',
@@ -610,7 +613,7 @@ function Fidelidade() {
       if (usuarioStr) {
         const user = JSON.parse(usuarioStr);
         setUsuario(user);
-        setIsAdmin(user.cargo === 'admin' || user.permissoes?.includes('admin'));
+        setIsAdmin(user.cargo === 'admin' || user.cargo === 'gerente' || user.permissoes?.includes('admin'));
       }
     } catch (e) {
       console.error('Erro ao carregar usuário:', e);
@@ -726,6 +729,12 @@ function Fidelidade() {
       setLoading(false);
     }
   }, [clientes, pontuacao, resgates, configuracoes, recompensasData, usuario, isAdmin]);
+
+  // ✅ FUNÇÃO handleConfigChange ADICIONADA
+  const handleConfigChange = () => {
+    // Abrir o modal de configurações
+    setOpenConfigDialog(true);
+  };
 
   const handleAdicionarPontos = async () => {
     try {
@@ -1022,7 +1031,7 @@ function Fidelidade() {
           <Zoom in={true}>
             <Fab
               size={isMobile ? "medium" : "large"}
-              onClick={handleConfigChange}
+              onClick={handleConfigChange} // ✅ Agora a função existe!
               sx={{ 
                 bgcolor: '#9c27b0',
                 '&:hover': { bgcolor: '#7b1fa2' },
@@ -1356,6 +1365,89 @@ function Fidelidade() {
           </Button>
         </Box>
       </SwipeableDrawer>
+
+      {/* Dialog de Configurações */}
+      <Dialog 
+        open={openConfigDialog} 
+        onClose={() => setOpenConfigDialog(false)}
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Configurações de Fidelidade
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Pontos por Real"
+                type="number"
+                value={config.pontosPorReal}
+                onChange={(e) => setConfig({ ...config, pontosPorReal: parseFloat(e.target.value) })}
+                size="small"
+                InputProps={{
+                  inputProps: { min: 0.1, step: 0.1 }
+                }}
+                helperText="Quantos pontos o cliente ganha por R$ 1,00 gasto"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Pontos de Aniversário"
+                type="number"
+                value={config.pontosAniversario}
+                onChange={(e) => setConfig({ ...config, pontosAniversario: parseInt(e.target.value) })}
+                size="small"
+                InputProps={{
+                  inputProps: { min: 0 }
+                }}
+                helperText="Pontos extras no aniversário do cliente"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Pontos por Indicação"
+                type="number"
+                value={config.pontosIndicacao}
+                onChange={(e) => setConfig({ ...config, pontosIndicacao: parseInt(e.target.value) })}
+                size="small"
+                InputProps={{
+                  inputProps: { min: 0 }
+                }}
+                helperText="Pontos ganhos por indicar um novo cliente"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Alert severity="info">
+                As alterações serão aplicadas apenas em novas movimentações.
+              </Alert>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenConfigDialog(false)}>Cancelar</Button>
+          <Button 
+            onClick={async () => {
+              // Salvar configurações
+              if (configuracoes && configuracoes.length > 0) {
+                await firebaseService.update('config_fidelidade', configuracoes[0].id, config);
+                mostrarSnackbar('Configurações salvas!');
+              } else {
+                await firebaseService.add('config_fidelidade', config);
+                mostrarSnackbar('Configurações criadas!');
+              }
+              setOpenConfigDialog(false);
+            }}
+            variant="contained"
+            sx={{ bgcolor: '#9c27b0' }}
+          >
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog de Pontos */}
       <Dialog 
