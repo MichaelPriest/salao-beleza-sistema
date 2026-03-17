@@ -55,7 +55,6 @@ import {
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
   Schedule as ScheduleIcon,
-  Timer as TimerIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
@@ -64,18 +63,11 @@ import {
   Percent as PercentIcon,
   AttachMoney as MoneyIcon,
   LocalOffer as TagIcon,
-  Inventory as InventoryIcon,
-  ShoppingCart as ShoppingCartIcon,
-  Person as PersonIcon,
-  DateRange as DateRangeIcon,
-  AccessTime as TimeIcon,
-  Star as StarIcon,
   Campaign as CampaignIcon,
   BarChart as BarChartIcon,
   TrendingUp as TrendingUpIcon,
   People as PeopleIcon,
   ContentCopy as CopyIcon,
-  Share as ShareIcon,
   ExpandMore as ExpandMoreIcon,
   Analytics as AnalyticsIcon,
   PlayArrow as PlayArrowIcon,
@@ -88,31 +80,6 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { Line, Bar, Pie } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-  ArcElement,
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  ChartTooltip,
-  Legend,
-  ArcElement
-);
 
 const statusCampanha = [
   { value: 'rascunho', label: 'Rascunho', color: '#999' },
@@ -148,7 +115,6 @@ function Campanhas() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [tabValue, setTabValue] = useState(0);
   
-  // Estado do formulário
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
@@ -178,8 +144,6 @@ function Campanhas() {
       sms: false,
       push: false,
     },
-    criadoPor: '',
-    criadoPorNome: '',
   });
 
   useEffect(() => {
@@ -257,8 +221,6 @@ function Campanhas() {
           sms: false,
           push: false,
         },
-        criadoPor: campanha.criadoPor || '',
-        criadoPorNome: campanha.criadoPorNome || '',
       });
     } else {
       setCampanhaEditando(null);
@@ -291,8 +253,6 @@ function Campanhas() {
           sms: false,
           push: false,
         },
-        criadoPor: usuario?.id,
-        criadoPorNome: usuario?.nome,
       });
     }
     setOpenDialog(true);
@@ -337,15 +297,19 @@ function Campanhas() {
     }));
   };
 
+  // FUNÇÃO handleConfigChange ADICIONADA para resolver o erro
+  const handleConfigChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSalvar = async () => {
     try {
       if (!formData.nome) {
         mostrarSnackbar('Nome da campanha é obrigatório', 'error');
-        return;
-      }
-
-      if (!formData.dataInicio) {
-        mostrarSnackbar('Data de início é obrigatória', 'error');
         return;
       }
 
@@ -382,7 +346,7 @@ function Campanhas() {
         status: novoStatus,
         atualizadoEm: new Date().toISOString()
       });
-      mostrarSnackbar(`Campanha ${statusCampanha.find(s => s.value === novoStatus)?.label} com sucesso!`);
+      mostrarSnackbar(`Status alterado com sucesso!`);
       carregarDados();
     } catch (error) {
       console.error('Erro ao alterar status:', error);
