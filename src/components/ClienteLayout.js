@@ -41,11 +41,17 @@ import {
   EmojiEvents as TrophyIcon,
   Redeem as RedeemIcon,
   Info as InfoIcon,
+  // 🔥 NOVOS ÍCONES PARA ANAMNESE
+  Assignment as AssignmentIcon,
+  Quiz as QuizIcon,
+  Checklist as ChecklistIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
+import { firebaseService } from '../services/firebase';
 
+// 🔥 MENU ATUALIZADO COM OPÇÃO DE ANAMNESE
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/cliente/dashboard' },
   { text: 'Agendamentos', icon: <CalendarIcon />, path: '/cliente/agendamentos' },
@@ -53,7 +59,9 @@ const menuItems = [
   { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
-  { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' }, // NOVO
+  { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
+  // 🔥 NOVO ITEM DE MENU PARA ANAMNESE
+  { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
 ];
 
 function ClienteLayout() {
@@ -69,10 +77,14 @@ function ClienteLayout() {
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
+  
+  // 🔥 ESTADO PARA FORMULÁRIOS PENDENTES
+  const [formulariosPendentes, setFormulariosPendentes] = useState(0);
 
   useEffect(() => {
     if (cliente) {
       carregarNotificacoes();
+      verificarFormulariosPendentes();
       
       // Inscrever para receber atualizações em tempo real
       const unsubscribe = notificacoesPushService.inscrever((notificacao) => {
@@ -87,6 +99,49 @@ function ClienteLayout() {
       return unsubscribe;
     }
   }, [cliente]);
+
+  // 🔥 VERIFICAR FORMULÁRIOS PENDENTES
+  const verificarFormulariosPendentes = async () => {
+    if (!cliente?.id) return;
+    
+    try {
+      const uid = firebaseUser?.uid || cliente?.id;
+      
+      // Buscar agendamentos futuros do cliente
+      const hoje = new Date().toISOString().split('T')[0];
+      const agendamentos = await firebaseService.query('agendamentos', [
+        { field: 'clienteId', operator: '==', value: uid },
+        { field: 'data', operator: '>=', value: hoje },
+        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
+      ]);
+      
+      let pendentes = 0;
+      
+      // Para cada agendamento, verificar se tem formulário associado não respondido
+      for (const agendamento of agendamentos) {
+        // Buscar formulários associados ao serviço
+        const formularios = await firebaseService.query('formularios_anamnese', [
+          { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
+          { field: 'ativo', operator: '==', value: true }
+        ]);
+        
+        if (formularios.length > 0) {
+          // Verificar se já respondeu
+          const respostas = await firebaseService.query('respostas_anamnese', [
+            { field: 'agendamentoId', operator: '==', value: agendamento.id }
+          ]);
+          
+          if (respostas.length === 0) {
+            pendentes++;
+          }
+        }
+      }
+      
+      setFormulariosPendentes(pendentes);
+    } catch (error) {
+      console.error('Erro ao verificar formulários pendentes:', error);
+    }
+  };
 
   const carregarNotificacoes = async () => {
     if (!cliente?.id) return;
@@ -142,6 +197,8 @@ function ClienteLayout() {
       case 'recompensa': return <GiftIcon sx={{ color: '#ff4081' }} />;
       case 'resgate': return <RedeemIcon sx={{ color: '#2196f3' }} />;
       case 'lembrete': return <EventIcon sx={{ color: '#ff9800' }} />;
+      // 🔥 NOVO TIPO PARA FORMULÁRIOS
+      case 'formulario': return <AssignmentIcon sx={{ color: '#9c27b0' }} />;
       default: return <InfoIcon sx={{ color: '#2196f3' }} />;
     }
   };
@@ -238,6 +295,11 @@ function ClienteLayout() {
       <List sx={{ flex: 1, p: 1 }}>
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
+          
+          // 🔥 VERIFICAR SE É O ITEM DE ANAMNESE COM PENDÊNCIAS
+          const isAnamnese = item.text === 'Anamnese';
+          const badgeCount = isAnamnese ? formulariosPendentes : 0;
+          
           return (
             <ListItem
               key={item.text}
@@ -256,8 +318,21 @@ function ClienteLayout() {
                 },
               }}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemIcon>
+                {badgeCount > 0 ? (
+                  <Badge badgeContent={badgeCount} color="secondary">
+                    {item.icon}
+                  </Badge>
+                ) : (
+                  item.icon
+                )}
+              </ListItemIcon>
               <ListItemText primary={item.text} />
+              {badgeCount > 0 && (
+                <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 600 }}>
+                  {badgeCount}
+                </Typography>
+              )}
             </ListItem>
           );
         })}
@@ -312,7 +387,7 @@ function ClienteLayout() {
               BeautyPro
             </Typography>
             
-            {/* 🔥 ÍCONE DE NOTIFICAÇÕES MOBILE */}
+            {/* ÍCONE DE NOTIFICAÇÕES MOBILE */}
             <IconButton color="inherit" onClick={handleNotificacoesClick}>
               <Badge badgeContent={notificacoesNaoLidas} color="secondary">
                 <NotificationsIcon />
@@ -375,9 +450,10 @@ function ClienteLayout() {
           pt: isMobile ? '80px' : 3,
           backgroundColor: '#faf5ff',
           minHeight: '100vh',
+          position: 'relative',
         }}
       >
-        {/* 🔥 ÍCONE DE NOTIFICAÇÕES DESKTOP (fora do drawer) */}
+        {/* ÍCONE DE NOTIFICAÇÕES DESKTOP */}
         {!isMobile && (
           <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
             <IconButton
@@ -395,6 +471,43 @@ function ClienteLayout() {
           </Box>
         )}
 
+        {/* 🔥 BADGE PARA FORMULÁRIOS PENDENTES (visível apenas quando necessário) */}
+        {formulariosPendentes > 0 && (
+          <Box
+            sx={{
+              position: 'fixed',
+              top: isMobile ? 70 : 80,
+              right: 20,
+              zIndex: 999,
+              cursor: 'pointer',
+            }}
+            onClick={() => navigate('/cliente/anamnese')}
+          >
+            <Paper
+              elevation={3}
+              sx={{
+                p: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                bgcolor: '#fff3e0',
+                borderRadius: 2,
+                border: '1px solid #ff9800',
+                '&:hover': {
+                  bgcolor: '#ffe0b2',
+                },
+              }}
+            >
+              <Badge badgeContent={formulariosPendentes} color="warning">
+                <AssignmentIcon sx={{ color: '#ff9800' }} />
+              </Badge>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                Formulário{formulariosPendentes > 1 ? 's' : ''} pendente{formulariosPendentes > 1 ? 's' : ''}
+              </Typography>
+            </Paper>
+          </Box>
+        )}
+
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 20 }}
@@ -405,7 +518,7 @@ function ClienteLayout() {
         </motion.div>
       </Box>
 
-      {/* 🔥 POPOVER DE NOTIFICAÇÕES */}
+      {/* POPOVER DE NOTIFICAÇÕES */}
       <Popover
         open={Boolean(notificacoesAnchor)}
         anchorEl={notificacoesAnchor}
