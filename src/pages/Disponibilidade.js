@@ -86,6 +86,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -152,6 +153,9 @@ function Disponibilidade() {
   const [ausenciaEditando, setAusenciaEditando] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [horarios, setHorarios] = useState([]);
+  
+  // 🔥 Estado para usuário atual
+  const [usuario, setUsuario] = useState(null);
 
   // Estado do formulário de disponibilidade
   const [formData, setFormData] = useState({
@@ -177,6 +181,37 @@ function Disponibilidade() {
     observacoes: '',
   });
 
+  // 🔥 Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuario(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
+
+  // 🔥 Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'disponibilidade',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -184,6 +219,10 @@ function Disponibilidade() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando dados de disponibilidade');
+      
       const [profissionaisData, disponibilidadesData, ausenciasData, agendamentosData] = await Promise.all([
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('disponibilidades').catch(() => []),
@@ -197,8 +236,33 @@ function Disponibilidade() {
       setDisponibilidades(disponibilidadesData || []);
       setAusencias(ausenciasData || []);
       setAgendamentos(agendamentosData || []);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_disponibilidade',
+        'listagem',
+        'Página de disponibilidade carregada',
+        { 
+          totalProfissionais: profissionaisData?.length,
+          totalDisponibilidades: disponibilidadesData?.length,
+          totalAusencias: ausenciasData?.length
+        }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Dados de disponibilidade carregados', {
+        profissionais: profissionaisData?.length,
+        disponibilidades: disponibilidadesData?.length
+      });
+      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar dados de disponibilidade', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
@@ -213,23 +277,29 @@ function Disponibilidade() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleOpenDialog = (profissional = null) => {
-    if (profissional) {
-      setDisponibilidadeEditando(profissional);
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da página de disponibilidade');
+    await carregarDados();
+  };
+
+  const handleOpenDialog = (disponibilidade = null) => {
+    if (disponibilidade) {
+      setDisponibilidadeEditando(disponibilidade);
       setFormData({
-        profissionalId: profissional.id,
-        diaSemana: profissional.diaSemana || 1,
-        horarioInicio: profissional.horarioInicio || '09:00',
-        horarioFim: profissional.horarioFim || '18:00',
-        intervaloInicio: profissional.intervaloInicio || '12:00',
-        intervaloFim: profissional.intervaloFim || '13:00',
-        ativo: profissional.ativo !== false,
-        observacoes: profissional.observacoes || '',
+        profissionalId: disponibilidade.profissionalId,
+        diaSemana: disponibilidade.diaSemana || 1,
+        horarioInicio: disponibilidade.horarioInicio || '09:00',
+        horarioFim: disponibilidade.horarioFim || '18:00',
+        intervaloInicio: disponibilidade.intervaloInicio || '12:00',
+        intervaloFim: disponibilidade.intervaloFim || '13:00',
+        ativo: disponibilidade.ativo !== false,
+        observacoes: disponibilidade.observacoes || '',
       });
     } else {
       setDisponibilidadeEditando(null);
       setFormData({
-        profissionalId: '',
+        profissionalId: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
         diaSemana: 1,
         horarioInicio: '09:00',
         horarioFim: '18:00',
@@ -304,24 +374,54 @@ function Disponibilidade() {
         return;
       }
 
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Salvando configuração de disponibilidade');
+
       const dadosParaSalvar = {
         ...formData,
-        criadoEm: new Date().toISOString(),
+        criadoEm: disponibilidadeEditando ? disponibilidadeEditando.criadoEm : new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
       };
 
       if (disponibilidadeEditando) {
         await firebaseService.update('disponibilidades', disponibilidadeEditando.id, dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'atualizar_disponibilidade',
+          disponibilidadeEditando.id,
+          `Disponibilidade atualizada para ${formData.diaSemana}`,
+          { profissionalId: formData.profissionalId, diaSemana: formData.diaSemana }
+        );
+        
         mostrarSnackbar('Disponibilidade atualizada com sucesso!');
       } else {
-        await firebaseService.add('disponibilidades', dadosParaSalvar);
+        const novaDisponibilidade = await firebaseService.add('disponibilidades', dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'criar_disponibilidade',
+          novaDisponibilidade.id,
+          `Nova disponibilidade criada para dia ${formData.diaSemana}`,
+          { profissionalId: formData.profissionalId, diaSemana: formData.diaSemana }
+        );
+        
         mostrarSnackbar('Disponibilidade cadastrada com sucesso!');
       }
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Disponibilidade salva com sucesso');
 
       handleCloseDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar disponibilidade:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao salvar disponibilidade', {
+        error: error.message
+      });
+      
       mostrarSnackbar(error.message || 'Erro ao salvar disponibilidade', 'error');
     }
   };
@@ -333,32 +433,74 @@ function Disponibilidade() {
         return;
       }
 
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Salvando ausência de profissional');
+
       const dadosParaSalvar = {
         ...ausenciaForm,
-        criadoEm: new Date().toISOString(),
+        criadoEm: ausenciaEditando ? ausenciaEditando.criadoEm : new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
       };
 
       if (ausenciaEditando) {
         await firebaseService.update('ausencias', ausenciaEditando.id, dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'atualizar_ausencia',
+          ausenciaEditando.id,
+          `Ausência atualizada para ${ausenciaForm.tipo}`,
+          { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
+        );
+        
         mostrarSnackbar('Ausência atualizada com sucesso!');
       } else {
-        await firebaseService.add('ausencias', dadosParaSalvar);
+        const novaAusencia = await firebaseService.add('ausencias', dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'criar_ausencia',
+          novaAusencia.id,
+          `Nova ausência criada: ${ausenciaForm.tipo}`,
+          { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
+        );
+        
         mostrarSnackbar('Ausência cadastrada com sucesso!');
       }
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Ausência salva com sucesso');
 
       handleCloseAusenciaDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar ausência:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao salvar ausência', {
+        error: error.message
+      });
+      
       mostrarSnackbar(error.message || 'Erro ao salvar ausência', 'error');
     }
   };
 
-  const handleRemoverAusencia = async (id) => {
+  const handleRemoverAusencia = async (id, ausencia) => {
     if (window.confirm('Deseja realmente remover esta ausência?')) {
       try {
+        // 🔥 LOG TÉCNICO
+        await firebaseService.log('warning', 'Removendo ausência', { ausenciaId: id });
+        
         await firebaseService.delete('ausencias', id);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'remover_ausencia',
+          id,
+          `Ausência removida`,
+          { profissionalId: ausencia.profissionalId, tipo: ausencia.tipo }
+        );
+        
         mostrarSnackbar('Ausência removida com sucesso!');
         carregarDados();
       } catch (error) {
@@ -371,6 +513,9 @@ function Disponibilidade() {
   const handleMudarVisao = (event, novaVisao) => {
     if (novaVisao !== null) {
       setVisao(novaVisao);
+      
+      // 🔥 LOG TÉCNICO (opcional, pode ser removido se gerar muitos logs)
+      firebaseService.log('debug', 'Mudança de visualização', { novaVisao });
     }
   };
 
@@ -439,7 +584,7 @@ function Disponibilidade() {
     const agendamento = agendamentos.find(a =>
       a.profissionalId === profissionalId &&
       a.data === dataStr &&
-      a.horaInicio === hora &&
+      a.horario === hora &&
       a.status !== 'cancelado'
     );
 
@@ -501,7 +646,7 @@ function Disponibilidade() {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box>
         {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
               Disponibilidade de Profissionais
@@ -510,7 +655,14 @@ function Disponibilidade() {
               Gerencie horários, folgas e ausências da equipe
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRefresh}
+            >
+              Atualizar
+            </Button>
             <Button
               variant="outlined"
               startIcon={<EventBusyIcon />}
@@ -842,7 +994,7 @@ function Disponibilidade() {
                             </IconButton>
                             <IconButton
                               size="small"
-                              onClick={() => handleRemoverAusencia(ausencia.id)}
+                              onClick={() => handleRemoverAusencia(ausencia.id, ausencia)}
                               sx={{ color: '#f44336' }}
                             >
                               <DeleteIcon fontSize="small" />
@@ -1040,39 +1192,43 @@ function Disponibilidade() {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="Data Início"
-                  value={ausenciaForm.dataInicio ? new Date(ausenciaForm.dataInicio + 'T12:00:00') : null}
-                  onChange={(newValue) => {
-                    if (newValue) {
-                      setAusenciaForm({ 
-                        ...ausenciaForm, 
-                        dataInicio: newValue.toISOString().split('T')[0] 
-                      });
-                    }
-                  }}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth size="small" />
-                  )}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                  <DatePicker
+                    label="Data Início"
+                    value={ausenciaForm.dataInicio ? new Date(ausenciaForm.dataInicio + 'T12:00:00') : null}
+                    onChange={(newValue) => {
+                      if (newValue) {
+                        setAusenciaForm({ 
+                          ...ausenciaForm, 
+                          dataInicio: format(newValue, 'yyyy-MM-dd') 
+                        });
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} fullWidth size="small" />
+                    )}
+                  />
+                </LocalizationProvider>
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="Data Fim"
-                  value={ausenciaForm.dataFim ? new Date(ausenciaForm.dataFim + 'T12:00:00') : null}
-                  onChange={(newValue) => {
-                    if (newValue) {
-                      setAusenciaForm({ 
-                        ...ausenciaForm, 
-                        dataFim: newValue.toISOString().split('T')[0] 
-                      });
-                    }
-                  }}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth size="small" />
-                  )}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
+                  <DatePicker
+                    label="Data Fim"
+                    value={ausenciaForm.dataFim ? new Date(ausenciaForm.dataFim + 'T12:00:00') : null}
+                    onChange={(newValue) => {
+                      if (newValue) {
+                        setAusenciaForm({ 
+                          ...ausenciaForm, 
+                          dataFim: format(newValue, 'yyyy-MM-dd') 
+                        });
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} fullWidth size="small" />
+                    )}
+                  />
+                </LocalizationProvider>
               </Grid>
 
               <Grid item xs={12} md={6}>
