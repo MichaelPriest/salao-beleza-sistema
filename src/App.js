@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
-import { lightTheme, darkTheme } from './theme'; // Importando os temas
+import { lightTheme, darkTheme } from './theme';
 import { CircularProgress, Box } from '@mui/material';
 
 // Contextos
@@ -14,7 +14,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { AuthClienteProvider } from './contexts/AuthClienteContext';
 
 // Services
-import firebaseService from './services/firebase'; // 🔥 USANDO O firebaseService
+import firebaseService from './services/firebase';
 
 // Components
 import ModernHeader from './components/ModernHeader';
@@ -67,28 +67,38 @@ import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
 
-// Pages de Cupons e Marketing (NOVAS)
+// Pages de Cupons e Marketing
 import GerenciarCupons from './pages/GerenciarCupons';
 import Campanhas from './pages/Campanhas';
 import AnaliseCupons from './pages/AnaliseCupons';
 
-// Pages de Disponibilidade (NOVA)
+// Pages de Disponibilidade
 import Disponibilidade from './pages/Disponibilidade';
 
+// Pages de Indicações
 import Indicacoes from './pages/Indicacoes';
 
-// Pages de Categorias (NOVA)
+// Pages de Categorias
 import CategoriasProdutos from './pages/CategoriasProdutos';
 
-// Pages de Análise de Vendas (NOVA)
+// Pages de Análise de Vendas
 import AnaliseVendas from './pages/AnaliseVendas';
 
-// Pages de Performance (NOVA)
+// Pages de Performance
 import Performance from './pages/Performance';
 
-// Pages de Backup e Logs (NOVAS)
+// Pages de Backup e Logs
 import Backup from './pages/Backup';
 import Logs from './pages/Logs';
+
+// ============================================
+// 🔥 NOVAS PÁGINAS DE ANAMNESE (FORMULÁRIOS)
+// ============================================
+import FormulariosAnamnese from './pages/Anamnese/FormulariosAnamnese';
+import RespostasAnamnese from './pages/Anamnese/RespostasAnamnese';
+import ModelosAnamnese from './pages/Anamnese/ModelosAnamnese';
+import RelatorioAnamnese from './pages/Anamnese/RelatorioAnamnese';
+// ============================================
 
 // Páginas do Cliente
 import ClienteLogin from './pages/ClienteLogin';
@@ -102,10 +112,17 @@ import ClienteHistorico from './pages/ClienteHistorico';
 import ClientePerfil from './pages/ClientePerfil';
 import ClienteNotificacoes from './pages/ClienteNotificacoes';
 
+// ============================================
+// 🔥 NOVAS PÁGINAS DO CLIENTE PARA ANAMNESE
+// ============================================
+import ClienteAnamnese from './pages/ClienteAnamnese';
+import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
+// ============================================
+
 // Página de Teste
 import TesteAPI from './pages/TesteAPI';
 
-// Site Público (AGORA É A PÁGINA PRINCIPAL)
+// Site Público
 import SiteSalao from './pages/SiteSalao';
 
 // Páginas de Erro
@@ -183,7 +200,7 @@ function App() {
     carregarConfiguracoes();
   }, []);
 
-  // Listener para mudanças no modo escuro via localStorage (para sincronizar entre abas)
+  // Listener para mudanças no modo escuro via localStorage
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'modoEscuro') {
@@ -204,7 +221,6 @@ function App() {
       <CssBaseline />
       <FeedbackProvider>
         <DadosProvider>
-          {/* Provider do SISTEMA (funcionários) */}
           <AuthProvider>
             <GlobalLoading />
             <Toaster 
@@ -286,7 +302,22 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  
+                  {/* 🔥 NOVAS ROTAS DE ANAMNESE PARA CLIENTE */}
+                  <Route path="anamnese" element={<ClienteAnamneseLista />} />
+                  <Route path="anamnese/:respostaId" element={<ClienteAnamnese />} />
                 </Route>
+                
+                {/* 🔥 ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO (acesso direto) */}
+                <Route path="/cliente/atendimento/:atendimentoId/anamnese" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteAnamnese />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
                 
                 {/* =========================================== */}
                 {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) */}
@@ -295,7 +326,7 @@ function App() {
                 {/* Login do sistema */}
                 <Route path="/login" element={<ModernLogin />} />
                 
-                {/* DASHBOARD DO SISTEMA (agora em /dashboard) */}
+                {/* DASHBOARD DO SISTEMA */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -570,6 +601,55 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ImportarServicos />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+
+                {/* =========================================== */}
+                {/* 🔥 NOVAS ROTAS - ANAMNESE (FORMULÁRIOS) */}
+                {/* =========================================== */}
+                
+                {/* Gerenciamento de Formulários */}
+                <Route path="/anamnese/formularios" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <FormulariosAnamnese />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* Respostas dos Formulários */}
+                <Route path="/anamnese/respostas" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <RespostasAnamnese />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* Modelos de Formulários */}
+                <Route path="/anamnese/modelos" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ModelosAnamnese />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* Relatórios de Anamnese */}
+                <Route path="/anamnese/relatorios" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <RelatorioAnamnese />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                
+                {/* Detalhe de uma resposta específica */}
+                <Route path="/anamnese/resposta/:id" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <RespostasAnamnese detalheId={true} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
