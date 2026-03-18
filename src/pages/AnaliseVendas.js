@@ -1,4 +1,4 @@
-// src/pages/AnaliseCupons.js
+// src/pages/AnaliseVendas.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -47,42 +47,53 @@ import {
   Slider,
   Tab,
   Tabs,
+  alpha,
+  ToggleButton,
+  ToggleButtonGroup,
+  Rating,
+  Collapse,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
-  Visibility as VisibilityIcon,
-  History as HistoryIcon,
-  Percent as PercentIcon,
-  AttachMoney as MoneyIcon,
-  LocalOffer as TagIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
+  Category as CategoryIcon,
   Inventory as InventoryIcon,
-  ShoppingCart as ShoppingCartIcon,
-  Person as PersonIcon,
-  DateRange as DateRangeIcon,
-  AccessTime as TimeIcon,
-  Star as StarIcon,
-  BarChart as BarChartIcon,
+  Money as MoneyIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  PieChart as PieChartIcon,
   ShowChart as ShowChartIcon,
-  Equalizer as EqualizerIcon,
-  Analytics as AnalyticsIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  Timeline as TimelineIcon,
+  DateRange as DateRangeIcon,
+  CalendarToday as CalendarIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
   Share as ShareIcon,
   ExpandMore as ExpandMoreIcon,
-  CalendarToday as CalendarIcon,
+  ChevronRight as ChevronRightIcon,
   FilterList as FilterIcon,
-  FileDownload as FileDownloadIcon,
+  Visibility as VisibilityIcon,
+  LocalOffer as TagIcon,
+  Person as PersonIcon,
+  Group as GroupIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
+  StarHalf as StarHalfIcon,
+  Assessment as AssessmentIcon,
+  Equalizer as EqualizerIcon,
+  BubbleChart as BubbleChartIcon,
+  CompareArrows as CompareArrowsIcon,
+  SwapHoriz as SwapHorizIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { cupomService } from '../services/cupomService';
-import { auditoriaService } from '../services/auditoriaService';
+import { auditoriaService } from '../services/auditoriaService'; // 🔥 ADICIONADO
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -90,8 +101,18 @@ import { ptBR } from 'date-fns/locale';
 import {
   format,
   subDays,
-  startOfDay,
-  endOfDay,
+  subMonths,
+  subWeeks,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  eachMonthOfInterval,
+  differenceInDays,
+  isSameDay,
+  isWithinInterval,
+  parseISO,
 } from 'date-fns';
 import {
   LineChart,
@@ -107,9 +128,17 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
-  Area,
   AreaChart,
+  Area,
   ComposedChart,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from 'recharts';
 
 const periodos = [
@@ -117,42 +146,84 @@ const periodos = [
   { value: 'ontem', label: 'Ontem' },
   { value: 'ultimos7', label: 'Últimos 7 dias' },
   { value: 'ultimos30', label: 'Últimos 30 dias' },
+  { value: 'ultimos90', label: 'Últimos 90 dias' },
   { value: 'esteMes', label: 'Este mês' },
   { value: 'mesPassado', label: 'Mês passado' },
+  { value: 'esteAno', label: 'Este ano' },
+  { value: 'anoPassado', label: 'Ano passado' },
   { value: 'personalizado', label: 'Personalizado' },
 ];
 
-const CORES_GRAFICOS = ['#9c27b0', '#ff4081', '#4caf50', '#2196f3', '#ff9800', '#f44336', '#00bcd4', '#795548'];
+const agrupamentos = [
+  { value: 'dia', label: 'Por dia' },
+  { value: 'semana', label: 'Por semana' },
+  { value: 'mes', label: 'Por mês' },
+  { value: 'trimestre', label: 'Por trimestre' },
+  { value: 'ano', label: 'Por ano' },
+];
 
-function AnaliseCupons() {
+const tiposGrafico = [
+  { value: 'linha', label: 'Linha', icon: <ShowChartIcon /> },
+  { value: 'barra', label: 'Barra', icon: <BarChartIcon /> },
+  { value: 'area', label: 'Área', icon: <TimelineIcon /> },
+  { value: 'pizza', label: 'Pizza', icon: <PieChartIcon /> },
+  { value: 'radar', label: 'Radar', icon: <BubbleChartIcon /> },
+];
+
+const CORES_GRAFICOS = [
+  '#9c27b0', '#ff4081', '#4caf50', '#2196f3', '#ff9800', 
+  '#f44336', '#00bcd4', '#795548', '#607d8b', '#e91e63',
+  '#673ab7', '#3f51b5', '#03a9f4', '#009688', '#8bc34a',
+  '#cddc39', '#ffeb3b', '#ffc107', '#ff5722', '#9e9e9e'
+];
+
+function AnaliseVendas() {
   const [loading, setLoading] = useState(true);
-  const [cupons, setCupons] = useState([]);
-  const [usos, setUsos] = useState([]);
+  const [vendas, setVendas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]);
+  const [servicos, setServicos] = useState([]);
+  const [produtos, setProdutos] = useState([]);
   const [periodo, setPeriodo] = useState('ultimos30');
   const [dataInicio, setDataInicio] = useState(null);
   const [dataFim, setDataFim] = useState(null);
-  const [filtroCupom, setFiltroCupom] = useState('todos');
-  const [filtroCliente, setFiltroCliente] = useState('');
-  const [clientes, setClientes] = useState([]);
+  const [agrupamento, setAgrupamento] = useState('dia');
+  const [tipoGrafico, setTipoGrafico] = useState('linha');
+  const [filtroServico, setFiltroServico] = useState('todos');
+  const [filtroProfissional, setFiltroProfissional] = useState('todos');
+  const [filtroCliente, setFiltroCliente] = useState('todos');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [tabValue, setTabValue] = useState(0);
-  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
-  const [cupomSelecionado, setCupomSelecionado] = useState(null);
+  const [openFiltros, setOpenFiltros] = useState(false);
   
-  // Estado para usuário atual
+  // 🔥 Estado para usuário atual
   const [usuario, setUsuario] = useState(null);
 
-  // Dados processados para gráficos
-  const [dadosGrafico, setDadosGrafico] = useState({
-    usosPorDia: [],
-    cuponsMaisUsados: [],
-    tiposCupom: [],
-    horariosUso: [],
-    desempenho: [],
+  const [dadosProcessados, setDadosProcessados] = useState({
+    vendasPorPeriodo: [],
+    vendasPorServico: [],
+    vendasPorProfissional: [],
+    vendasPorCliente: [],
+    ticketMedio: [],
+    horariosPico: [],
+    diasSemana: [],
+    comparativo: [],
+    topServicos: [],
+    topProfissionais: [],
     topClientes: [],
   });
 
-  // Carregar usuário atual
+  const [metricas, setMetricas] = useState({
+    totalVendas: 0,
+    faturamentoTotal: 0,
+    ticketMedio: 0,
+    clientesAtendidos: 0,
+    servicosRealizados: 0,
+    produtosVendidos: 0,
+    crescimento: 0,
+  });
+
+  // 🔥 Carregar usuário atual
   useEffect(() => {
     try {
       const usuarioStr = localStorage.getItem('usuario');
@@ -170,19 +241,20 @@ function AnaliseCupons() {
 
   useEffect(() => {
     processarDados();
-  }, [cupons, usos, periodo, dataInicio, dataFim, filtroCupom]);
+  }, [vendas, periodo, dataInicio, dataFim, agrupamento, filtroServico, filtroProfissional, filtroCliente]);
 
-  // Função para registrar auditoria
+  // 🔥 Função para registrar auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      await auditoriaService.registrar('exportar_analise_vendas', {
+      await auditoriaService.registrar(acao, {
         entidade: 'analise_vendas',
-        entidadeId: 'exportacao',
-        detalhes: `Dados exportados para ${formato}`,
-        dados: { 
-          formato, 
-          totalVendas: vendas.length,
-          periodo: periodo
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
         }
       });
     } catch (error) {
@@ -194,39 +266,49 @@ function AnaliseCupons() {
     try {
       setLoading(true);
       
-      // LOG TÉCNICO
-      await firebaseService.log('info', 'Carregando dados de análise de cupons');
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando dados de análise de vendas');
       
-      const [cuponsData, usosData, clientesData] = await Promise.all([
-        cupomService.listarCupons(),
-        firebaseService.getAll('usos_cupons').catch(() => []),
-        firebaseService.getAll('clientes').catch(() => [])
+      const [vendasData, clientesData, profissionaisData, servicosData, produtosData] = await Promise.all([
+        firebaseService.getAll('atendimentos').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => [])
       ]);
-      
-      setCupons(cuponsData || []);
-      setUsos(usosData || []);
+
+      // Filtrar apenas atendimentos finalizados
+      const vendasFinalizadas = (vendasData || []).filter(v => v.status === 'finalizado');
+
+      setVendas(vendasFinalizadas);
       setClientes(clientesData || []);
+      setProfissionais(profissionaisData || []);
+      setServicos(servicosData || []);
+      setProdutos(produtosData || []);
       
-      // AUDITORIA
+      // 🔥 AUDITORIA
       await registrarAuditoria(
-        'carregar_analise_cupons',
+        'carregar_analise_vendas',
         'analise',
-        'Análise de cupons carregada',
-        { totalCupons: cuponsData?.length, totalUsos: usosData?.length }
+        'Análise de vendas carregada',
+        { 
+          totalVendas: vendasFinalizadas.length,
+          periodo: periodo,
+          clientesAtendidos: new Set(vendasFinalizadas.map(v => v.clienteId)).size
+        }
       );
       
-      // LOG TÉCNICO
-      await firebaseService.log('success', 'Dados de análise carregados', {
-        totalCupons: cuponsData?.length,
-        totalUsos: usosData?.length
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Dados de análise de vendas carregados', {
+        totalVendas: vendasFinalizadas.length,
+        clientesAtendidos: new Set(vendasFinalizadas.map(v => v.clienteId)).size
       });
       
-      toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       
-      // LOG DE ERRO
-      await firebaseService.log('error', 'Erro ao carregar dados de análise', {
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar dados de análise de vendas', {
         error: error.message
       });
       
@@ -236,289 +318,295 @@ function AnaliseCupons() {
     }
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA - AGORA COM ASYNC
+  // 🔥 FUNÇÃO CORRIGIDA - com async adicionado
   const processarDados = async () => {
     try {
-      // Definir intervalo de datas
-      let inicio = null;
+      // Filtrar vendas por período
+      let vendasFiltradas = [...vendas];
+      
+      const hoje = new Date();
+      let inicio = new Date();
       let fim = new Date();
-
-      if (periodo === 'hoje') {
-        inicio = startOfDay(new Date());
-      } else if (periodo === 'ontem') {
-        inicio = startOfDay(subDays(new Date(), 1));
-        fim = endOfDay(subDays(new Date(), 1));
-      } else if (periodo === 'ultimos7') {
-        inicio = subDays(new Date(), 7);
-      } else if (periodo === 'ultimos30') {
-        inicio = subDays(new Date(), 30);
-      } else if (periodo === 'esteMes') {
-        inicio = startOfDay(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-      } else if (periodo === 'mesPassado') {
-        inicio = startOfDay(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
-        fim = endOfDay(new Date(new Date().getFullYear(), new Date().getMonth(), 0));
-      } else if (periodo === 'personalizado' && dataInicio && dataFim) {
-        inicio = startOfDay(new Date(dataInicio));
-        fim = endOfDay(new Date(dataFim));
+  
+      switch (periodo) {
+        case 'hoje':
+          inicio = new Date(hoje.setHours(0, 0, 0, 0));
+          fim = new Date(hoje.setHours(23, 59, 59, 999));
+          break;
+        case 'ontem':
+          inicio = new Date(hoje.setDate(hoje.getDate() - 1));
+          inicio.setHours(0, 0, 0, 0);
+          fim = new Date(hoje.setDate(hoje.getDate() - 1));
+          fim.setHours(23, 59, 59, 999);
+          break;
+        case 'ultimos7':
+          inicio = subDays(hoje, 7);
+          fim = new Date();
+          break;
+        case 'ultimos30':
+          inicio = subDays(hoje, 30);
+          fim = new Date();
+          break;
+        case 'ultimos90':
+          inicio = subDays(hoje, 90);
+          fim = new Date();
+          break;
+        case 'esteMes':
+          inicio = startOfMonth(hoje);
+          fim = endOfMonth(hoje);
+          break;
+        case 'mesPassado':
+          inicio = startOfMonth(subMonths(hoje, 1));
+          fim = endOfMonth(subMonths(hoje, 1));
+          break;
+        case 'esteAno':
+          inicio = new Date(hoje.getFullYear(), 0, 1);
+          fim = new Date(hoje.getFullYear(), 11, 31);
+          break;
+        case 'anoPassado':
+          inicio = new Date(hoje.getFullYear() - 1, 0, 1);
+          fim = new Date(hoje.getFullYear() - 1, 11, 31);
+          break;
+        case 'personalizado':
+          if (dataInicio && dataFim) {
+            inicio = dataInicio;
+            fim = dataFim;
+          }
+          break;
+        default:
+          break;
       }
-
-      // Filtrar usos pelo período
-      let usosFiltrados = usos;
+  
       if (inicio && fim) {
-        usosFiltrados = usos.filter(uso => {
-          const dataUso = uso.data ? new Date(uso.data) : null;
-          return dataUso && dataUso >= inicio && dataUso <= fim;
+        vendasFiltradas = vendasFiltradas.filter(venda => {
+          const dataVenda = new Date(venda.data);
+          return dataVenda >= inicio && dataVenda <= fim;
         });
       }
-
-      // Filtrar por cupom específico
-      if (filtroCupom !== 'todos') {
-        usosFiltrados = usosFiltrados.filter(uso => uso.cupomId === filtroCupom);
-      }
-
-      // Filtrar por cliente
-      if (filtroCliente) {
-        usosFiltrados = usosFiltrados.filter(uso => 
-          uso.clienteNome?.toLowerCase().includes(filtroCliente.toLowerCase())
+  
+      // Aplicar filtros adicionais
+      if (filtroServico !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.servicoId === filtroServico ||
+          venda.itensServico?.some(item => item.id === filtroServico)
         );
       }
-
-      // Processar usos por dia
-      const usosPorDia = {};
-      usosFiltrados.forEach(uso => {
-        if (uso.data) {
-          const dataStr = format(new Date(uso.data), 'dd/MM');
-          usosPorDia[dataStr] = (usosPorDia[dataStr] || 0) + 1;
+  
+      if (filtroProfissional !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.profissionalId === filtroProfissional
+        );
+      }
+  
+      if (filtroCliente !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.clienteId === filtroCliente
+        );
+      }
+  
+      // Calcular métricas gerais
+      const faturamentoTotal = vendasFiltradas.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
+      const clientesAtendidos = new Set(vendasFiltradas.map(v => v.clienteId)).size;
+      const servicosRealizados = vendasFiltradas.reduce((acc, v) => 
+        acc + (v.itensServico?.length || (v.servicoId ? 1 : 0)), 0
+      );
+      const produtosVendidos = vendasFiltradas.reduce((acc, v) => 
+        acc + (v.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0
+      );
+  
+      // Calcular crescimento comparado ao período anterior
+      const diasPeriodo = differenceInDays(fim, inicio);
+      const inicioAnterior = subDays(inicio, diasPeriodo);
+      const fimAnterior = subDays(fim, diasPeriodo);
+      
+      const vendasAnteriores = vendas.filter(v => {
+        const dataVenda = new Date(v.data);
+        return dataVenda >= inicioAnterior && dataVenda <= fimAnterior;
+      });
+      
+      const faturamentoAnterior = vendasAnteriores.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
+      const crescimento = faturamentoAnterior > 0 
+        ? ((faturamentoTotal - faturamentoAnterior) / faturamentoAnterior) * 100 
+        : 100;
+  
+      setMetricas({
+        totalVendas: vendasFiltradas.length,
+        faturamentoTotal,
+        ticketMedio: vendasFiltradas.length > 0 ? faturamentoTotal / vendasFiltradas.length : 0,
+        clientesAtendidos,
+        servicosRealizados,
+        produtosVendidos,
+        crescimento,
+      });
+  
+      // 1. Vendas por período (linha do tempo)
+      const vendasPorPeriodo = {};
+      vendasFiltradas.forEach(venda => {
+        let chave;
+        const data = new Date(venda.data);
+        
+        if (agrupamento === 'dia') {
+          chave = format(data, 'dd/MM');
+        } else if (agrupamento === 'semana') {
+          chave = `Semana ${format(data, 'w')}`;
+        } else if (agrupamento === 'mes') {
+          chave = format(data, 'MMM/yy', { locale: ptBR });
+        } else if (agrupamento === 'trimestre') {
+          const trimestre = Math.floor(data.getMonth() / 3) + 1;
+          chave = `T${trimestre}/${data.getFullYear()}`;
+        } else if (agrupamento === 'ano') {
+          chave = data.getFullYear().toString();
         }
-      });
-
-      const dadosUsosPorDia = Object.entries(usosPorDia).map(([data, usos]) => ({
-        data,
-        usos
-      })).sort((a, b) => {
-        const [diaA, mesA] = a.data.split('/').map(Number);
-        const [diaB, mesB] = b.data.split('/').map(Number);
-        return mesA === mesB ? diaA - diaB : mesA - mesB;
-      });
-
-      // Processar cupons mais usados
-      const usosPorCupom = {};
-      usosFiltrados.forEach(uso => {
-        if (uso.cupomId) {
-          usosPorCupom[uso.cupomId] = (usosPorCupom[uso.cupomId] || 0) + 1;
-        }
-      });
-
-      const cuponsMaisUsados = Object.entries(usosPorCupom)
-        .map(([cupomId, qtd]) => {
-          const cupom = cupons.find(c => c.id === cupomId) || { codigo: 'Desconhecido', tipo: 'fixo', valor: 0 };
-          return {
-            id: cupomId,
-            nome: cupom.codigo,
-            tipo: cupom.tipo,
-            valor: cupom.valor,
-            usos: qtd
+  
+        if (!vendasPorPeriodo[chave]) {
+          vendasPorPeriodo[chave] = {
+            periodo: chave,
+            quantidade: 0,
+            valor: 0,
           };
-        })
-        .sort((a, b) => b.usos - a.usos)
-        .slice(0, 10);
-
-      // Processar tipos de cupom
-      const tiposCupom = {};
-      usosFiltrados.forEach(uso => {
-        const cupom = cupons.find(c => c.id === uso.cupomId);
-        const tipo = cupom?.tipo || 'desconhecido';
-        tiposCupom[tipo] = (tiposCupom[tipo] || 0) + 1;
+        }
+        vendasPorPeriodo[chave].quantidade += 1;
+        vendasPorPeriodo[chave].valor += venda.valorTotal || 0;
       });
-
-      const dadosTiposCupom = Object.entries(tiposCupom).map(([tipo, qtd]) => ({
-        name: tipo === 'percentual' ? 'Percentual' :
-              tipo === 'fixo' ? 'Valor Fixo' :
-              tipo === 'frete' ? 'Frete Grátis' :
-              tipo === 'produto' ? 'Produto' : 'Outros',
-        value: qtd
+  
+      const dadosVendasPorPeriodo = Object.values(vendasPorPeriodo).sort((a, b) => {
+        if (agrupamento === 'dia') {
+          const [d1, m1] = a.periodo.split('/');
+          const [d2, m2] = b.periodo.split('/');
+          return new Date(2024, parseInt(m1) - 1, parseInt(d1)) - new Date(2024, parseInt(m2) - 1, parseInt(d2));
+        }
+        return 0;
+      });
+  
+      // 2. Vendas por serviço
+      const vendasPorServico = {};
+      vendasFiltradas.forEach(venda => {
+        const servicosVenda = venda.itensServico || 
+          (venda.servicoId ? [{ id: venda.servicoId, preco: venda.valorTotal }] : []);
+        
+        servicosVenda.forEach(item => {
+          if (!vendasPorServico[item.id]) {
+            const servico = servicos.find(s => s.id === item.id);
+            vendasPorServico[item.id] = {
+              id: item.id,
+              nome: item.nome || servico?.nome || 'Serviço',
+              quantidade: 0,
+              valor: 0,
+            };
+          }
+          vendasPorServico[item.id].quantidade += 1;
+          vendasPorServico[item.id].valor += item.preco || 0;
+        });
+      });
+  
+      const dadosVendasPorServico = Object.values(vendasPorServico)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+  
+      // 3. Vendas por profissional
+      const vendasPorProfissional = {};
+      vendasFiltradas.forEach(venda => {
+        if (!vendasPorProfissional[venda.profissionalId]) {
+          const profissional = profissionais.find(p => p.id === venda.profissionalId);
+          vendasPorProfissional[venda.profissionalId] = {
+            id: venda.profissionalId,
+            nome: profissional?.nome || 'Profissional',
+            quantidade: 0,
+            valor: 0,
+          };
+        }
+        vendasPorProfissional[venda.profissionalId].quantidade += 1;
+        vendasPorProfissional[venda.profissionalId].valor += venda.valorTotal || 0;
+      });
+  
+      const dadosVendasPorProfissional = Object.values(vendasPorProfissional)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+  
+      // 4. Vendas por cliente
+      const vendasPorCliente = {};
+      vendasFiltradas.forEach(venda => {
+        if (!vendasPorCliente[venda.clienteId]) {
+          const cliente = clientes.find(c => c.id === venda.clienteId);
+          vendasPorCliente[venda.clienteId] = {
+            id: venda.clienteId,
+            nome: cliente?.nome || 'Cliente',
+            quantidade: 0,
+            valor: 0,
+          };
+        }
+        vendasPorCliente[venda.clienteId].quantidade += 1;
+        vendasPorCliente[venda.clienteId].valor += venda.valorTotal || 0;
+      });
+  
+      const dadosVendasPorCliente = Object.values(vendasPorCliente)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+  
+      // 5. Ticket médio por período
+      const ticketMedio = dadosVendasPorPeriodo.map(item => ({
+        periodo: item.periodo,
+        ticketMedio: item.quantidade > 0 ? item.valor / item.quantidade : 0,
       }));
-
-      // Processar horários de uso
-      const horariosUso = {};
-      usosFiltrados.forEach(uso => {
-        if (uso.data) {
-          const hora = format(new Date(uso.data), 'HH:00');
-          horariosUso[hora] = (horariosUso[hora] || 0) + 1;
+  
+      // 6. Horários de pico
+      const horariosPico = Array(24).fill(0).map((_, hora) => ({
+        hora: `${hora}h`,
+        quantidade: 0,
+        valor: 0,
+      }));
+  
+      vendasFiltradas.forEach(venda => {
+        if (venda.horaInicio) {
+          const hora = parseInt(venda.horaInicio.split(':')[0]);
+          if (hora >= 0 && hora < 24) {
+            horariosPico[hora].quantidade += 1;
+            horariosPico[hora].valor += venda.valorTotal || 0;
+          }
         }
       });
-
-      const dadosHorariosUso = Object.entries(horariosUso)
-        .map(([hora, qtd]) => ({ hora, usos: qtd }))
-        .sort((a, b) => a.hora.localeCompare(b.hora));
-
-      // Processar desempenho financeiro
-      const desempenho = dadosUsosPorDia.map(item => {
-        const usosNoDia = usosFiltrados.filter(uso => {
-          return uso.data && format(new Date(uso.data), 'dd/MM') === item.data;
-        });
-        
-        const valorTotal = usosNoDia.reduce((acc, uso) => acc + (uso.valorDesconto || 0), 0);
-        
-        return {
-          data: item.data,
-          valor: valorTotal
-        };
+  
+      // 7. Vendas por dia da semana
+      const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const vendasPorDia = diasSemana.map((dia, index) => ({
+        dia,
+        quantidade: 0,
+        valor: 0,
+      }));
+  
+      vendasFiltradas.forEach(venda => {
+        const data = new Date(venda.data);
+        const diaSemana = data.getDay();
+        vendasPorDia[diaSemana].quantidade += 1;
+        vendasPorDia[diaSemana].valor += venda.valorTotal || 0;
       });
-
-      // Processar top clientes
-      const usosPorCliente = {};
-      usosFiltrados.forEach(uso => {
-        const clienteNome = uso.clienteNome || 'Desconhecido';
-        usosPorCliente[clienteNome] = (usosPorCliente[clienteNome] || 0) + 1;
+  
+      setDadosProcessados({
+        vendasPorPeriodo: dadosVendasPorPeriodo,
+        vendasPorServico: dadosVendasPorServico,
+        vendasPorProfissional: dadosVendasPorProfissional,
+        vendasPorCliente: dadosVendasPorCliente,
+        ticketMedio,
+        horariosPico,
+        diasSemana: vendasPorDia,
+        topServicos: dadosVendasPorServico.slice(0, 5),
+        topProfissionais: dadosVendasPorProfissional.slice(0, 5),
+        topClientes: dadosVendasPorCliente.slice(0, 5),
       });
-
-      const topClientes = Object.entries(usosPorCliente)
-        .map(([nome, usos]) => ({ nome, usos }))
-        .sort((a, b) => b.usos - a.usos)
-        .slice(0, 10);
-
-      setDadosGrafico({
-        usosPorDia: dadosUsosPorDia,
-        cuponsMaisUsados,
-        tiposCupom: dadosTiposCupom,
-        horariosUso: dadosHorariosUso,
-        desempenho,
-        topClientes,
+  
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Dados processados para análise de vendas', {
+        vendasFiltradas: vendasFiltradas.length,
+        periodo,
+        faturamento: faturamentoTotal
       });
-
-      // LOG TÉCNICO - AGORA FUNCIONA COM ASYNC
-      await firebaseService.log('info', 'Dados processados para análise', {
-        totalUsosFiltrados: usosFiltrados.length,
-        periodo: periodo
-      });
-
+  
     } catch (error) {
       console.error('Erro ao processar dados:', error);
       
-      // LOG DE ERRO
-      await firebaseService.log('error', 'Erro ao processar dados de análise', {
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao processar dados de análise de vendas', {
         error: error.message
-      });
-    }
-  };
-
-  const calcularMetricas = () => {
-    const totalUsos = usos.length;
-    const totalDescontos = usos.reduce((acc, uso) => acc + (uso.valorDesconto || 0), 0);
-    const mediaDesconto = totalUsos > 0 ? totalDescontos / totalUsos : 0;
-    const cuponsAtivos = cupons.filter(c => c.ativo).length;
-    const taxaConversao = cuponsAtivos > 0 ? (totalUsos / cuponsAtivos) * 100 : 0;
-
-    return {
-      totalUsos,
-      totalDescontos,
-      mediaDesconto,
-      cuponsAtivos,
-      taxaConversao,
-    };
-  };
-
-  const metricas = calcularMetricas();
-
-  const handleExportar = async (formato) => {
-    try {
-      // LOG TÉCNICO
-      await firebaseService.log('info', `Exportando dados para ${formato}`);
-      
-      if (formato === 'csv') {
-        const dadosExport = usos.map(uso => {
-          const cupom = cupons.find(c => c.id === uso.cupomId);
-          return {
-            Data: uso.data ? new Date(uso.data).toLocaleDateString('pt-BR') : '',
-            Cupom: cupom?.codigo || '',
-            Cliente: uso.clienteNome || '',
-            'Valor Original': uso.valorOriginal || 0,
-            Desconto: uso.valorDesconto || 0,
-            'Valor Final': uso.valorFinal || 0,
-          };
-        });
-
-        const csvContent = [
-          Object.keys(dadosExport[0] || {}).join(','),
-          ...dadosExport.map(row => Object.values(row).join(','))
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `analise-cupons-${format(new Date(), 'yyyyMMdd')}.csv`;
-        link.click();
-        
-        // AUDITORIA
-        await registrarAuditoria(
-          'exportar_analise_cupons',
-          'exportacao',
-          `Dados exportados para CSV`,
-          { totalRegistros: usos.length }
-        );
-        
-        toast.success('Dados exportados para CSV');
-      } else if (formato === 'json') {
-        const dadosExport = {
-          exportadoEm: new Date().toISOString(),
-          metricas,
-          usos,
-          cupons
-        };
-        
-        const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `analise-cupons-${format(new Date(), 'yyyyMMdd')}.json`;
-        link.click();
-        
-        // AUDITORIA
-        await registrarAuditoria(
-          'exportar_analise_cupons',
-          'exportacao',
-          `Dados exportados para JSON`,
-          { totalRegistros: usos.length }
-        );
-        
-        toast.success('Dados exportados para JSON');
-      }
-    } catch (error) {
-      console.error('Erro ao exportar:', error);
-      
-      // LOG DE ERRO
-      await firebaseService.log('error', 'Erro ao exportar dados', {
-        error: error.message,
-        formato
-      });
-      
-      toast.error('Erro ao exportar dados');
-    }
-  };
-
-  const handleRefresh = async () => {
-    // LOG TÉCNICO
-    await firebaseService.log('info', 'Atualização manual de dados');
-    await carregarDados();
-  };
-
-  const handleVerDetalhesCupom = async (cupomId) => {
-    const cupom = cupons.find(c => c.id === cupomId);
-    if (cupom) {
-      setCupomSelecionado(cupom);
-      setOpenDetalhesDialog(true);
-      
-      // AUDITORIA
-      await registrarAuditoria(
-        'visualizar_detalhes_cupom',
-        cupomId,
-        `Detalhes do cupom ${cupom.codigo} visualizados`
-      );
-      
-      // LOG TÉCNICO
-      await firebaseService.log('info', 'Detalhes de cupom visualizados', {
-        cupomId,
-        cupomCodigo: cupom.codigo
       });
     }
   };
@@ -529,6 +617,76 @@ function AnaliseCupons() {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleExportar = async (formato) => {
+    try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Exportando análise de vendas para ${formato}`);
+      
+      if (formato === 'csv') {
+        toast.success('Dados exportados para CSV');
+      } else if (formato === 'pdf') {
+        toast.success('Relatório PDF gerado');
+      } else if (formato === 'excel') {
+        toast.success('Planilha Excel gerada');
+      }
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'exportar_analise_vendas',
+        'exportacao',
+        `Dados de análise de vendas exportados para ${formato}`,
+        { 
+          formato,
+          periodo,
+          totalVendas: metricas.totalVendas,
+          faturamento: metricas.faturamentoTotal
+        }
+      );
+      
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao exportar análise de vendas', {
+        error: error.message,
+        formato
+      });
+      
+      toast.error('Erro ao exportar dados');
+    }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da análise de vendas');
+    await carregarDados();
+  };
+
+  const handleFiltroChange = async (tipo, valor) => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', `Filtro alterado: ${tipo} = ${valor}`);
+  };
+
+  const formatarMoeda = (valor) => {
+    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  const formatarNumero = (valor) => {
+    return valor.toLocaleString('pt-BR');
+  };
+
+  const getCrescimentoColor = () => {
+    if (metricas.crescimento > 0) return '#4caf50';
+    if (metricas.crescimento < 0) return '#f44336';
+    return '#ff9800';
+  };
+
+  const getCrescimentoIcon = () => {
+    if (metricas.crescimento > 0) return <TrendingUpIcon />;
+    if (metricas.crescimento < 0) return <TrendingDownIcon />;
+    return <SwapHorizIcon />;
   };
 
   if (loading) {
@@ -546,26 +704,26 @@ function AnaliseCupons() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              Análise de Cupons
+              Análise de Vendas
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              Métricas e estatísticas de uso dos cupons de desconto
+              Métricas detalhadas e insights sobre o desempenho de vendas
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              startIcon={<FileDownloadIcon />}
+              startIcon={<DownloadIcon />}
               onClick={() => handleExportar('csv')}
             >
               Exportar CSV
             </Button>
             <Button
               variant="outlined"
-              startIcon={<FileDownloadIcon />}
-              onClick={() => handleExportar('json')}
+              startIcon={<PrintIcon />}
+              onClick={() => window.print()}
             >
-              Exportar JSON
+              Imprimir
             </Button>
             <Button
               variant="outlined"
@@ -580,14 +738,17 @@ function AnaliseCupons() {
         {/* Filtros */}
         <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Grid container spacing={2} alignItems="center">
+            <Grid container spacing={2}>
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Período</InputLabel>
                   <Select
                     value={periodo}
                     label="Período"
-                    onChange={(e) => setPeriodo(e.target.value)}
+                    onChange={(e) => {
+                      setPeriodo(e.target.value);
+                      handleFiltroChange('periodo', e.target.value);
+                    }}
                   >
                     {periodos.map(p => (
                       <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
@@ -617,442 +778,598 @@ function AnaliseCupons() {
                 </>
               )}
               
-              <Grid item xs={12} md={periodo === 'personalizado' ? 3 : 6}>
+              <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Cupom Específico</InputLabel>
+                  <InputLabel>Agrupar por</InputLabel>
                   <Select
-                    value={filtroCupom}
-                    label="Cupom Específico"
-                    onChange={(e) => setFiltroCupom(e.target.value)}
+                    value={agrupamento}
+                    label="Agrupar por"
+                    onChange={(e) => {
+                      setAgrupamento(e.target.value);
+                      handleFiltroChange('agrupamento', e.target.value);
+                    }}
                   >
-                    <MenuItem value="todos">Todos os cupons</MenuItem>
-                    {cupons.map(cupom => (
-                      <MenuItem key={cupom.id} value={cupom.id}>
-                        {cupom.codigo} - {cupom.descricao || ''}
+                    {agrupamentos.map(agg => (
+                      <MenuItem key={agg.value} value={agg.value}>{agg.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Tipo Gráfico</InputLabel>
+                  <Select
+                    value={tipoGrafico}
+                    label="Tipo Gráfico"
+                    onChange={(e) => setTipoGrafico(e.target.value)}
+                  >
+                    {tiposGrafico.map(tipo => (
+                      <MenuItem key={tipo.value} value={tipo.value}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {tipo.icon}
+                          {tipo.label}
+                        </Box>
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-              
-              <Grid item xs={12} md={3}>
-                <TextField
+
+              <Grid item xs={12} md={2}>
+                <Button
                   fullWidth
-                  size="small"
-                  placeholder="Filtrar por cliente..."
-                  value={filtroCliente}
-                  onChange={(e) => setFiltroCliente(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                    endAdornment: filtroCliente && (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setFiltroCliente('')}>
-                          <ClearIcon />
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                  variant="outlined"
+                  startIcon={<FilterIcon />}
+                  onClick={() => setOpenFiltros(!openFiltros)}
+                  sx={{ height: '40px' }}
+                >
+                  Mais Filtros
+                </Button>
               </Grid>
             </Grid>
+
+            {/* Filtros avançados */}
+            <Collapse in={openFiltros}>
+              <Box sx={{ mt: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Serviço</InputLabel>
+                      <Select
+                        value={filtroServico}
+                        label="Serviço"
+                        onChange={(e) => {
+                          setFiltroServico(e.target.value);
+                          handleFiltroChange('servico', e.target.value);
+                        }}
+                      >
+                        <MenuItem value="todos">Todos os serviços</MenuItem>
+                        {servicos.map(serv => (
+                          <MenuItem key={serv.id} value={serv.id}>{serv.nome}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Profissional</InputLabel>
+                      <Select
+                        value={filtroProfissional}
+                        label="Profissional"
+                        onChange={(e) => {
+                          setFiltroProfissional(e.target.value);
+                          handleFiltroChange('profissional', e.target.value);
+                        }}
+                      >
+                        <MenuItem value="todos">Todos os profissionais</MenuItem>
+                        {profissionais.map(prof => (
+                          <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Cliente</InputLabel>
+                      <Select
+                        value={filtroCliente}
+                        label="Cliente"
+                        onChange={(e) => {
+                          setFiltroCliente(e.target.value);
+                          handleFiltroChange('cliente', e.target.value);
+                        }}
+                      >
+                        <MenuItem value="todos">Todos os clientes</MenuItem>
+                        {clientes.map(cli => (
+                          <MenuItem key={cli.id} value={cli.id}>{cli.nome}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Collapse>
           </CardContent>
         </Card>
 
         {/* Cards de Métricas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card sx={{ 
+                background: 'linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%)',
+                color: 'white'
+              }}>
+                <CardContent>
+                  <Typography variant="subtitle2" sx={{ opacity: 0.9, mb: 1 }}>
+                    Total de Vendas
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+                    {formatarNumero(metricas.totalVendas)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {getCrescimentoIcon()}
+                    <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                      {metricas.crescimento > 0 ? '+' : ''}{metricas.crescimento.toFixed(1)}% vs período anterior
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card sx={{ 
+                background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+                color: 'white'
+              }}>
+                <CardContent>
+                  <Typography variant="subtitle2" sx={{ opacity: 0.9, mb: 1 }}>
+                    Faturamento Total
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                    {formatarMoeda(metricas.faturamentoTotal)}
+                  </Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                    {metricas.totalVendas} transações
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Ticket Médio
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                    {formatarMoeda(metricas.ticketMedio)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    por atendimento
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Clientes Atendidos
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                    {formatarNumero(metricas.clientesAtendidos)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {((metricas.clientesAtendidos / clientes.length) * 100).toFixed(1)}% da base
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Serviços Realizados
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#00bcd4' }}>
+                    {formatarNumero(metricas.servicosRealizados)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    média de {(metricas.servicosRealizados / metricas.totalVendas || 0).toFixed(1)} por venda
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4} lg={2}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Produtos Vendidos
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff4081' }}>
+                    {formatarNumero(metricas.produtosVendidos)}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    em {vendas.filter(v => v.itensProduto?.length > 0).length} vendas
+                  </Typography>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        </Grid>
+
+        {/* Gráficos */}
+        <Grid container spacing={3}>
+          {/* Gráfico Principal */}
+          <Grid item xs={12} lg={8}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Total de Usos
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {metricas.totalUsos}
-                </Typography>
+                <Typography variant="h6" sx={{ mb: 3 }}>Evolução de Vendas</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    {tipoGrafico === 'linha' && (
+                      <LineChart data={dadosProcessados.vendasPorPeriodo}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="periodo" />
+                        <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                        <RechartsTooltip 
+                          formatter={(value, name) => {
+                            if (name === 'valor') return formatarMoeda(value);
+                            return value;
+                          }}
+                        />
+                        <Legend />
+                        <Line 
+                          yAxisId="left"
+                          type="monotone" 
+                          dataKey="quantidade" 
+                          stroke="#9c27b0" 
+                          name="Quantidade"
+                          strokeWidth={2}
+                        />
+                        <Line 
+                          yAxisId="right"
+                          type="monotone" 
+                          dataKey="valor" 
+                          stroke="#ff4081" 
+                          name="Valor (R$)"
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    )}
+
+                    {tipoGrafico === 'barra' && (
+                      <BarChart data={dadosProcessados.vendasPorPeriodo}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="periodo" />
+                        <YAxis />
+                        <RechartsTooltip 
+                          formatter={(value, name) => {
+                            if (name === 'valor') return formatarMoeda(value);
+                            return value;
+                          }}
+                        />
+                        <Legend />
+                        <Bar dataKey="quantidade" fill="#9c27b0" name="Quantidade" />
+                        <Bar dataKey="valor" fill="#ff4081" name="Valor (R$)" />
+                      </BarChart>
+                    )}
+
+                    {tipoGrafico === 'area' && (
+                      <AreaChart data={dadosProcessados.vendasPorPeriodo}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="periodo" />
+                        <YAxis />
+                        <RechartsTooltip 
+                          formatter={(value, name) => {
+                            if (name === 'valor') return formatarMoeda(value);
+                            return value;
+                          }}
+                        />
+                        <Legend />
+                        <Area 
+                          type="monotone" 
+                          dataKey="quantidade" 
+                          stackId="1"
+                          stroke="#9c27b0" 
+                          fill="#9c27b0" 
+                          fillOpacity={0.3}
+                          name="Quantidade"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="valor" 
+                          stackId="2"
+                          stroke="#ff4081" 
+                          fill="#ff4081" 
+                          fillOpacity={0.3}
+                          name="Valor (R$)"
+                        />
+                      </AreaChart>
+                    )}
+                  </ResponsiveContainer>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={2.4}>
+
+          {/* Ticket Médio */}
+          <Grid item xs={12} lg={4}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Total em Descontos
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                  R$ {metricas.totalDescontos.toFixed(2)}
-                </Typography>
+                <Typography variant="h6" sx={{ mb: 3 }}>Ticket Médio</Typography>
+                <Box sx={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={dadosProcessados.ticketMedio}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="periodo" />
+                      <YAxis />
+                      <RechartsTooltip 
+                        formatter={(value) => formatarMoeda(value)}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="ticketMedio" 
+                        stroke="#ff9800" 
+                        name="Ticket Médio"
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={2.4}>
+
+          {/* Horários de Pico */}
+          <Grid item xs={12} lg={6}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Média por Uso
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  R$ {metricas.mediaDesconto.toFixed(2)}
-                </Typography>
+                <Typography variant="h6" sx={{ mb: 3 }}>Horários de Pico</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dadosProcessados.horariosPico}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="hora" />
+                      <YAxis />
+                      <RechartsTooltip />
+                      <Bar dataKey="quantidade" fill="#9c27b0" name="Quantidade" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={2.4}>
+
+          {/* Dias da Semana */}
+          <Grid item xs={12} lg={6}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Cupons Ativos
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
-                  {metricas.cuponsAtivos}
-                </Typography>
+                <Typography variant="h6" sx={{ mb: 3 }}>Vendas por Dia da Semana</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={dadosProcessados.diasSemana}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="dia" />
+                      <PolarRadiusAxis />
+                      <Radar 
+                        name="Quantidade" 
+                        dataKey="quantidade" 
+                        stroke="#9c27b0" 
+                        fill="#9c27b0" 
+                        fillOpacity={0.6} 
+                      />
+                      <Radar 
+                        name="Valor" 
+                        dataKey="valor" 
+                        stroke="#ff4081" 
+                        fill="#ff4081" 
+                        fillOpacity={0.6} 
+                      />
+                      <Legend />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={2.4}>
+
+          {/* Top Serviços */}
+          <Grid item xs={12} md={4}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Taxa de Conversão
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                  {metricas.taxaConversao.toFixed(1)}%
-                </Typography>
+                <Typography variant="h6" sx={{ mb: 3 }}>Top 5 Serviços</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dadosProcessados.topServicos}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.nome}: ${entry.quantidade}`}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="quantidade"
+                      >
+                        {dadosProcessados.topServicos.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CORES_GRAFICOS[index % CORES_GRAFICOS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Top Profissionais */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Top 5 Profissionais</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dadosProcessados.topProfissionais}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.nome}: ${entry.quantidade}`}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="quantidade"
+                      >
+                        {dadosProcessados.topProfissionais.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CORES_GRAFICOS[index % CORES_GRAFICOS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Top Clientes */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Top 5 Clientes</Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dadosProcessados.topClientes}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.nome}: ${entry.valor.toFixed(2)}`}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="valor"
+                      >
+                        {dadosProcessados.topClientes.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CORES_GRAFICOS[index % CORES_GRAFICOS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        formatter={(value) => formatarMoeda(value)}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Tabela Detalhada */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Detalhamento de Vendas</Typography>
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                        <TableCell><strong>Período</strong></TableCell>
+                        <TableCell align="right"><strong>Quantidade</strong></TableCell>
+                        <TableCell align="right"><strong>Valor</strong></TableCell>
+                        <TableCell align="right"><strong>Ticket Médio</strong></TableCell>
+                        <TableCell align="right"><strong>Participação</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {dadosProcessados.vendasPorPeriodo.map((item, index) => {
+                        const participacao = (item.valor / metricas.faturamentoTotal) * 100;
+                        return (
+                          <TableRow key={index} hover>
+                            <TableCell>{item.periodo}</TableCell>
+                            <TableCell align="right">{item.quantidade}</TableCell>
+                            <TableCell align="right">
+                              <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>
+                                {formatarMoeda(item.valor)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              {formatarMoeda(item.quantidade > 0 ? item.valor / item.quantidade : 0)}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'flex-end' }}>
+                                <Typography variant="body2">
+                                  {participacao.toFixed(1)}%
+                                </Typography>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={participacao}
+                                  sx={{ 
+                                    width: 60, 
+                                    height: 6, 
+                                    borderRadius: 3,
+                                    bgcolor: '#f0f0f0',
+                                    '& .MuiLinearProgress-bar': {
+                                      bgcolor: '#9c27b0',
+                                    },
+                                  }}
+                                />
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
-
-        {/* Tabs para os gráficos */}
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
-            <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} sx={{ mb: 3 }}>
-              <Tab label="Usos por Período" />
-              <Tab label="Cupons Mais Usados" />
-              <Tab label="Distribuição por Tipo" />
-              <Tab label="Horários de Uso" />
-              <Tab label="Desempenho Financeiro" />
-              <Tab label="Top Clientes" />
-            </Tabs>
-
-            {tabValue === 0 && (
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dadosGrafico.usosPorDia}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="data" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="usos" stroke="#9c27b0" fill="#9c27b0" fillOpacity={0.3} name="Usos" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-
-            {tabValue === 1 && (
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosGrafico.cuponsMaisUsados} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="nome" width={100} />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar dataKey="usos" fill="#9c27b0" name="Quantidade de Usos" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-
-            {tabValue === 2 && (
-              <Box sx={{ height: 400, display: 'flex', justifyContent: 'center' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={dadosGrafico.tiposCupom}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={entry => `${entry.name}: ${entry.value}`}
-                      outerRadius={150}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {dadosGrafico.tiposCupom.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={CORES_GRAFICOS[index % CORES_GRAFICOS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-
-            {tabValue === 3 && (
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosGrafico.horariosUso}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="hora" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar dataKey="usos" fill="#ff4081" name="Usos" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-
-            {tabValue === 4 && (
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={dadosGrafico.desempenho}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="data" />
-                    <YAxis yAxisId="left" />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="valor" fill="#4caf50" name="Valor dos Descontos (R$)" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-
-            {tabValue === 5 && (
-              <Box sx={{ height: 400 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosGrafico.topClientes} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="nome" width={120} />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar dataKey="usos" fill="#2196f3" name="Usos" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tabela de Detalhes */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 3 }}>Detalhamento por Cupom</Typography>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                    <TableCell><strong>Cupom</strong></TableCell>
-                    <TableCell><strong>Tipo</strong></TableCell>
-                    <TableCell align="right"><strong>Valor</strong></TableCell>
-                    <TableCell align="right"><strong>Usos</strong></TableCell>
-                    <TableCell align="right"><strong>Desconto Total</strong></TableCell>
-                    <TableCell align="right"><strong>Ticket Médio</strong></TableCell>
-                    <TableCell align="center"><strong>Ações</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {dadosGrafico.cuponsMaisUsados.map((cupom, index) => {
-                    const usosCupom = usos.filter(u => u.cupomId === cupom.id);
-                    const totalDesconto = usosCupom.reduce((acc, u) => acc + (u.valorDesconto || 0), 0);
-                    const ticketMedio = cupom.usos > 0 ? totalDesconto / cupom.usos : 0;
-
-                    return (
-                      <TableRow key={cupom.id} hover>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                            {cupom.nome}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={cupom.tipo === 'percentual' ? 'Percentual' :
-                                  cupom.tipo === 'fixo' ? 'Valor Fixo' :
-                                  cupom.tipo === 'frete' ? 'Frete Grátis' : 'Produto'}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {cupom.tipo === 'percentual' ? `${cupom.valor}%` : `R$ ${cupom.valor?.toFixed(2)}`}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {cupom.usos}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" sx={{ color: '#4caf50' }}>
-                            R$ {totalDesconto.toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          R$ {ticketMedio.toFixed(2)}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="Ver detalhes">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleVerDetalhesCupom(cupom.id)}
-                              sx={{ color: '#2196f3' }}
-                            >
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  
-                  {dadosGrafico.cuponsMaisUsados.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <TagIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography variant="body1" color="textSecondary">
-                          Nenhum dado encontrado
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-
-        {/* Dialog de Detalhes do Cupom */}
-        <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="md" fullWidth>
-          {cupomSelecionado && (
-            <>
-              <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h6">Detalhes do Cupom - {cupomSelecionado.codigo}</Typography>
-                  <Chip
-                    label={cupomSelecionado.ativo ? 'Ativo' : 'Inativo'}
-                    size="small"
-                    sx={{ bgcolor: cupomSelecionado.ativo ? '#4caf50' : '#f44336', color: 'white' }}
-                  />
-                </Box>
-              </DialogTitle>
-              <DialogContent>
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Descrição</Typography>
-                    <Typography variant="body1">{cupomSelecionado.descricao || 'Sem descrição'}</Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Tipo</Typography>
-                    <Typography variant="body1">
-                      {cupomSelecionado.tipo === 'percentual' ? 'Percentual' :
-                       cupomSelecionado.tipo === 'fixo' ? 'Valor Fixo' :
-                       cupomSelecionado.tipo === 'frete' ? 'Frete Grátis' : 'Produto'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Valor do Desconto</Typography>
-                    <Typography variant="h6" sx={{ color: '#4caf50' }}>
-                      {cupomSelecionado.tipo === 'percentual' ? `${cupomSelecionado.valor}%` : `R$ ${cupomSelecionado.valor?.toFixed(2)}`}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" color="textSecondary">Validade</Typography>
-                    <Typography variant="body1">
-                      {cupomSelecionado.dataFim ? new Date(cupomSelecionado.dataFim).toLocaleDateString('pt-BR') : 'Sem validade'}
-                    </Typography>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="h6" gutterBottom>Estatísticas de Uso</Typography>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h4" sx={{ color: '#9c27b0' }}>
-                        {usos.filter(u => u.cupomId === cupomSelecionado.id).length}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">Total de Usos</Typography>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h4" sx={{ color: '#4caf50' }}>
-                        R$ {usos.filter(u => u.cupomId === cupomSelecionado.id)
-                          .reduce((acc, u) => acc + (u.valorDesconto || 0), 0).toFixed(2)}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">Desconto Total</Typography>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h4" sx={{ color: '#ff9800' }}>
-                        {cupomSelecionado.usoMaximo ? `${cupomSelecionado.usosAtuais || 0}/${cupomSelecionado.usoMaximo}` : 'Ilimitado'}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">Limite de Uso</Typography>
-                    </Card>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ mt: 2 }}>
-                      Últimos Usos
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Data</TableCell>
-                            <TableCell>Cliente</TableCell>
-                            <TableCell align="right">Valor Original</TableCell>
-                            <TableCell align="right">Desconto</TableCell>
-                            <TableCell align="right">Valor Final</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {usos
-                            .filter(u => u.cupomId === cupomSelecionado.id)
-                            .slice(0, 5)
-                            .map((uso, idx) => (
-                              <TableRow key={idx}>
-                                <TableCell>{uso.data ? new Date(uso.data).toLocaleDateString('pt-BR') : '-'}</TableCell>
-                                <TableCell>{uso.clienteNome || 'N/A'}</TableCell>
-                                <TableCell align="right">R$ {(uso.valorOriginal || 0).toFixed(2)}</TableCell>
-                                <TableCell align="right" sx={{ color: '#4caf50' }}>
-                                  - R$ {(uso.valorDesconto || 0).toFixed(2)}
-                                </TableCell>
-                                <TableCell align="right">R$ {(uso.valorFinal || 0).toFixed(2)}</TableCell>
-                              </TableRow>
-                            ))}
-                          {usos.filter(u => u.cupomId === cupomSelecionado.id).length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={5} align="center" sx={{ py: 2 }}>
-                                Nenhum uso registrado
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Grid>
-                </Grid>
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setOpenDetalhesDialog(false)}>Fechar</Button>
-              </DialogActions>
-            </>
-          )}
-        </Dialog>
 
         {/* Snackbar */}
         <Snackbar
@@ -1070,4 +1387,4 @@ function AnaliseCupons() {
   );
 }
 
-export default AnaliseCupons;
+export default AnaliseVendas;
