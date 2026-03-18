@@ -34,6 +34,7 @@ import {
   Avatar,
   Switch,
   FormControlLabel,
+  Checkbox, // 🔥 ADICIONADO AQUI
   Badge,
   Radio,
   RadioGroup,
