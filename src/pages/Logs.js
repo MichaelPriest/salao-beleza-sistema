@@ -35,104 +35,29 @@ import {
   Avatar,
   Switch,
   FormControlLabel,
-  Autocomplete,
   Badge,
-  Checkbox,
-  ListItemText,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Radio,
-  RadioGroup,
-  Slider,
-  Tab,
-  Tabs,
-  alpha,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  StepButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText as MuiListItemText,
   Collapse,
-  Breadcrumbs,
-  Link,
-  CardActions,
-  CardHeader,
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
-  Fab,
-  Zoom,
-  Fade,
-  Grow,
-  Slide,
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
-  TimelineOppositeContent,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Add as AddIcon,
   History as HistoryIcon,
-  Timeline as TimelineIcon,
-  Event as EventIcon,
-  Person as PersonIcon,
-  Computer as ComputerIcon,
-  Security as SecurityIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
   Info as InfoIcon,
   CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
   FilterList as FilterIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
-  Share as ShareIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  ChevronRight as ChevronRightIcon,
-  DragHandle as DragHandleIcon,
-  Sort as SortIcon,
   Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  Save as SaveIcon,
-  Settings as SettingsIcon,
-  Tune as TuneIcon,
   BugReport as BugIcon,
-  Code as CodeIcon,
-  Terminal as TerminalIcon,
   Storage as StorageIcon,
-  Database as DatabaseIcon,
-  CloudQueue as CloudQueueIcon,
-  CloudDone as CloudDoneIcon,
-  CloudOff as CloudOffIcon,
-  CloudSync as CloudSyncIcon,
-  Lock as LockIcon,
-  LockOpen as LockOpenIcon,
-  LockOutline as LockOutlineIcon,
-  VerifiedUser as VerifiedUserIcon,
-  AdminPanelSettings as AdminIcon,
-  SupervisedUserCircle as UserIcon,
-  Group as GroupIcon,
-  Assignment as AssignmentIcon,
-  AssignmentTurnedIn as AssignmentTurnedInIcon,
-  AssignmentLate as AssignmentLateIcon,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -140,20 +65,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   format,
   subDays,
-  subMonths,
-  subWeeks,
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  eachMonthOfInterval,
-  differenceInDays,
   isSameDay,
-  isWithinInterval,
-  parseISO,
-  differenceInHours,
-  differenceInMinutes,
 } from 'date-fns';
 
 const niveisLog = [
@@ -175,6 +87,7 @@ const categoriasLog = [
   { value: 'seguranca', label: 'Segurança' },
   { value: 'backup', label: 'Backup' },
   { value: 'api', label: 'API' },
+  { value: 'logs', label: 'Logs' }, // 🔥 ADICIONADO
 ];
 
 function Logs() {
@@ -192,6 +105,10 @@ function Logs() {
   const [logSelecionado, setLogSelecionado] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [autoRefresh, setAutoRefresh] = useState(false);
+  
+  // 🔥 Estado para usuário atual
+  const [usuarioAtual, setUsuarioAtual] = useState(null);
+  
   const [estatisticas, setEstatisticas] = useState({
     total: 0,
     info: 0,
@@ -202,6 +119,18 @@ function Logs() {
     ultimaHora: 0,
     ultimas24h: 0,
   });
+
+  // 🔥 Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuarioAtual(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
 
   useEffect(() => {
     carregarLogs();
@@ -218,9 +147,34 @@ function Logs() {
     carregarLogs();
   }, [nivel, categoria, usuario, dataInicio, dataFim]);
 
+  // 🔥 Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'logs',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuarioAtual?.id,
+          usuarioNome: usuarioAtual?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarLogs = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando logs do sistema', {
+        filtros: { nivel, categoria, usuario },
+        periodo: { inicio: dataInicio, fim: dataFim }
+      });
       
       let logsData = await firebaseService.getAll('logs').catch(() => []);
       
@@ -268,8 +222,33 @@ function Logs() {
         ultimas24h: logsData.filter(l => new Date(l.timestamp) >= umDiaAtras).length,
       });
 
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_logs',
+        'listagem',
+        'Listagem de logs carregada',
+        { 
+          totalLogs: logsData.length,
+          filtros: { nivel, categoria, usuario },
+          periodo: { inicio: dataInicio, fim: dataFim }
+        }
+      );
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Logs carregados com sucesso', {
+        total: logsData.length,
+        info: logsData.filter(l => l.nivel === 'info').length,
+        error: logsData.filter(l => l.nivel === 'error').length
+      });
+
     } catch (error) {
       console.error('Erro ao carregar logs:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar logs', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar logs');
     } finally {
       setLoading(false);
@@ -284,13 +263,24 @@ function Logs() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleVerDetalhes = (log) => {
+  const handleVerDetalhes = async (log) => {
     setLogSelecionado(log);
     setOpenDetalhesDialog(true);
+    
+    // 🔥 AUDITORIA
+    await registrarAuditoria(
+      'visualizar_log',
+      log.id,
+      `Visualização de log ${log.id}`,
+      { nivel: log.nivel, categoria: log.categoria }
+    );
   };
 
-  const handleExportarLogs = () => {
+  const handleExportarLogs = async () => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Exportando logs', { total: logs.length });
+      
       const dadosExportacao = logs.map(log => ({
         data: format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss'),
         nivel: log.nivel,
@@ -313,6 +303,15 @@ function Logs() {
       a.click();
       
       URL.revokeObjectURL(url);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'exportar_logs',
+        'exportacao',
+        `Logs exportados (${logs.length} registros)`,
+        { totalLogs: logs.length, formato: 'json' }
+      );
+      
       mostrarSnackbar('Logs exportados com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar logs:', error);
@@ -323,6 +322,17 @@ function Logs() {
   const handleLimparLogs = async () => {
     if (window.confirm('Deseja realmente limpar todos os logs? Esta ação não pode ser desfeita.')) {
       try {
+        // 🔥 LOG TÉCNICO
+        await firebaseService.log('warning', 'Iniciando limpeza de logs', { total: logs.length });
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'limpar_logs',
+          'limpeza',
+          `Limpeza de logs iniciada (${logs.length} registros)`,
+          { totalLogs: logs.length }
+        );
+        
         toast.success('Logs limpos com sucesso!');
         carregarLogs();
       } catch (error) {
@@ -330,6 +340,17 @@ function Logs() {
         toast.error('Erro ao limpar logs');
       }
     }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual de logs');
+    await carregarLogs();
+  };
+
+  const handleFiltroChange = async (tipo, valor) => {
+    // 🔥 LOG TÉCNICO (opcional - pode ser removido se gerar muitos logs)
+    // await firebaseService.log('debug', 'Filtro alterado', { tipo, valor });
   };
 
   const getNivelInfo = (nivelValue) => {
@@ -396,7 +417,7 @@ function Logs() {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={carregarLogs}
+              onClick={handleRefresh}
             >
               Atualizar
             </Button>
@@ -516,7 +537,10 @@ function Logs() {
                   size="small"
                   placeholder="Buscar em logs..."
                   value={filtro}
-                  onChange={(e) => setFiltro(e.target.value)}
+                  onChange={(e) => {
+                    setFiltro(e.target.value);
+                    handleFiltroChange('texto', e.target.value);
+                  }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -540,7 +564,10 @@ function Logs() {
                   <Select
                     value={nivel}
                     label="Nível"
-                    onChange={(e) => setNivel(e.target.value)}
+                    onChange={(e) => {
+                      setNivel(e.target.value);
+                      handleFiltroChange('nivel', e.target.value);
+                    }}
                   >
                     <MenuItem value="todos">Todos os níveis</MenuItem>
                     {niveisLog.map(n => (
@@ -561,7 +588,10 @@ function Logs() {
                   <Select
                     value={categoria}
                     label="Categoria"
-                    onChange={(e) => setCategoria(e.target.value)}
+                    onChange={(e) => {
+                      setCategoria(e.target.value);
+                      handleFiltroChange('categoria', e.target.value);
+                    }}
                   >
                     <MenuItem value="todos">Todas</MenuItem>
                     {categoriasLog.map(c => (
