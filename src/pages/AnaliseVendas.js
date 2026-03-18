@@ -175,15 +175,14 @@ function AnaliseCupons() {
   // Função para registrar auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      await auditoriaService.registrar(acao, {
-        entidade: 'analise_cupons',
-        entidadeId,
-        detalhes,
-        dados: {
-          ...dados,
-          usuarioId: usuario?.id,
-          usuarioNome: usuario?.nome,
-          timestamp: new Date().toISOString()
+      await auditoriaService.registrar('exportar_analise_vendas', {
+        entidade: 'analise_vendas',
+        entidadeId: 'exportacao',
+        detalhes: `Dados exportados para ${formato}`,
+        dados: { 
+          formato, 
+          totalVendas: vendas.length,
+          periodo: periodo
         }
       });
     } catch (error) {
