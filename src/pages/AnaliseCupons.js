@@ -239,13 +239,13 @@ function AnaliseCupons() {
     }
   };
 
-  // Função para processar dados
-  const processarDados = () => {
+  // 🔥 FUNÇÃO CORRIGIDA - com async adicionado
+  const processarDados = async () => {
     try {
       // Definir intervalo de datas
       let inicio = null;
       let fim = new Date();
-
+  
       if (periodo === 'hoje') {
         inicio = startOfDay(new Date());
       } else if (periodo === 'ontem') {
@@ -264,7 +264,7 @@ function AnaliseCupons() {
         inicio = startOfDay(new Date(dataInicio));
         fim = endOfDay(new Date(dataFim));
       }
-
+  
       // Filtrar usos pelo período
       let usosFiltrados = usos;
       if (inicio && fim) {
@@ -273,19 +273,19 @@ function AnaliseCupons() {
           return dataUso && dataUso >= inicio && dataUso <= fim;
         });
       }
-
+  
       // Filtrar por cupom específico
       if (filtroCupom !== 'todos') {
         usosFiltrados = usosFiltrados.filter(uso => uso.cupomId === filtroCupom);
       }
-
+  
       // Filtrar por cliente
       if (filtroCliente) {
         usosFiltrados = usosFiltrados.filter(uso => 
           uso.clienteNome?.toLowerCase().includes(filtroCliente.toLowerCase())
         );
       }
-
+  
       // Processar usos por dia
       const usosPorDia = {};
       usosFiltrados.forEach(uso => {
@@ -294,7 +294,7 @@ function AnaliseCupons() {
           usosPorDia[dataStr] = (usosPorDia[dataStr] || 0) + 1;
         }
       });
-
+  
       const dadosUsosPorDia = Object.entries(usosPorDia).map(([data, usos]) => ({
         data,
         usos
@@ -303,7 +303,7 @@ function AnaliseCupons() {
         const [diaB, mesB] = b.data.split('/').map(Number);
         return mesA === mesB ? diaA - diaB : mesA - mesB;
       });
-
+  
       // Processar cupons mais usados
       const usosPorCupom = {};
       usosFiltrados.forEach(uso => {
@@ -311,7 +311,7 @@ function AnaliseCupons() {
           usosPorCupom[uso.cupomId] = (usosPorCupom[uso.cupomId] || 0) + 1;
         }
       });
-
+  
       const cuponsMaisUsados = Object.entries(usosPorCupom)
         .map(([cupomId, qtd]) => {
           const cupom = cupons.find(c => c.id === cupomId) || { codigo: 'Desconhecido', tipo: 'fixo', valor: 0 };
@@ -325,7 +325,7 @@ function AnaliseCupons() {
         })
         .sort((a, b) => b.usos - a.usos)
         .slice(0, 10);
-
+  
       // Processar tipos de cupom
       const tiposCupom = {};
       usosFiltrados.forEach(uso => {
@@ -333,7 +333,7 @@ function AnaliseCupons() {
         const tipo = cupom?.tipo || 'desconhecido';
         tiposCupom[tipo] = (tiposCupom[tipo] || 0) + 1;
       });
-
+  
       const dadosTiposCupom = Object.entries(tiposCupom).map(([tipo, qtd]) => ({
         name: tipo === 'percentual' ? 'Percentual' :
               tipo === 'fixo' ? 'Valor Fixo' :
@@ -341,7 +341,7 @@ function AnaliseCupons() {
               tipo === 'produto' ? 'Produto' : 'Outros',
         value: qtd
       }));
-
+  
       // Processar horários de uso
       const horariosUso = {};
       usosFiltrados.forEach(uso => {
@@ -350,11 +350,11 @@ function AnaliseCupons() {
           horariosUso[hora] = (horariosUso[hora] || 0) + 1;
         }
       });
-
+  
       const dadosHorariosUso = Object.entries(horariosUso)
         .map(([hora, qtd]) => ({ hora, usos: qtd }))
         .sort((a, b) => a.hora.localeCompare(b.hora));
-
+  
       // Processar desempenho financeiro
       const desempenho = dadosUsosPorDia.map(item => {
         const usosNoDia = usosFiltrados.filter(uso => {
@@ -368,19 +368,19 @@ function AnaliseCupons() {
           valor: valorTotal
         };
       });
-
+  
       // Processar top clientes
       const usosPorCliente = {};
       usosFiltrados.forEach(uso => {
         const clienteNome = uso.clienteNome || 'Desconhecido';
         usosPorCliente[clienteNome] = (usosPorCliente[clienteNome] || 0) + 1;
       });
-
+  
       const topClientes = Object.entries(usosPorCliente)
         .map(([nome, usos]) => ({ nome, usos }))
         .sort((a, b) => b.usos - a.usos)
         .slice(0, 10);
-
+  
       setDadosGrafico({
         usosPorDia: dadosUsosPorDia,
         cuponsMaisUsados,
@@ -389,18 +389,18 @@ function AnaliseCupons() {
         desempenho,
         topClientes,
       });
-
-      // 🔥 LOG TÉCNICO
+  
+      // 🔥 LOG TÉCNICO - agora funciona com await
       await firebaseService.log('info', 'Dados processados para análise', {
         totalUsosFiltrados: usosFiltrados.length,
         periodo: periodo
       });
-
+  
     } catch (error) {
       console.error('Erro ao processar dados:', error);
       
       // 🔥 LOG DE ERRO
-      firebaseService.log('error', 'Erro ao processar dados de análise', {
+      await firebaseService.log('error', 'Erro ao processar dados de análise', {
         error: error.message
       });
     }
