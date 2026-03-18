@@ -84,6 +84,8 @@ import {
   LockOpen as LockOpenIcon,
   EventBusy as EventBusyIcon,
   EventAvailable as EventAvailableIcon,
+  // 🔥 ÍCONES PARA ANAMNESE
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -373,12 +375,16 @@ function ModernAgendamentos() {
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   
-  // 🔥 Estados para disponibilidade
+  // Estados para disponibilidade
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [ausencias, setAusencias] = useState([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   
-  // 🔥 Trigger para forçar atualização
+  // 🔥 ESTADOS PARA ANAMNESE
+  const [formulariosPendentes, setFormulariosPendentes] = useState({});
+  const [verificandoFormularios, setVerificandoFormularios] = useState(false);
+  
+  // Trigger para forçar atualização
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
   // Estados para impressão/exportação
@@ -586,21 +592,21 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // 🔥 FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
+  // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
   // ============================================
 
   const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return false;
 
     const dataObj = new Date(data + 'T12:00:00');
-    const diaSemana = dataObj.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+    const diaSemana = dataObj.getDay();
 
     // Verificar disponibilidade do profissional para este dia da semana
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
     );
 
-    if (!disponibilidade) return false; // Profissional não trabalha neste dia
+    if (!disponibilidade) return false;
 
     // Verificar se horário está dentro do expediente
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
@@ -624,14 +630,14 @@ function ModernAgendamentos() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
     }
 
-    // Verificar ausências (folgas, férias, etc.)
+    // Verificar ausências
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
       data >= a.dataInicio &&
       data <= a.dataFim &&
       (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') || // Dia inteiro
-        (horario >= a.horarioInicio && horario < a.horarioFim) // Horário específico
+        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
+        (horario >= a.horarioInicio && horario < a.horarioFim)
       )
     );
 
@@ -730,6 +736,55 @@ function ModernAgendamentos() {
       formData.data,
       horario
     );
+  };
+
+  // ============================================
+  // 🔥 FUNÇÕES PARA ANAMNESE
+  // ============================================
+
+  const verificarFormulariosPendentes = async (agendamento) => {
+    if (!agendamento || !agendamento.servicoId) return false;
+    
+    try {
+      // Buscar formulários ativos associados ao serviço
+      const formularios = await firebaseService.query('formularios_anamnese', [
+        { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
+        { field: 'ativo', operator: '==', value: true }
+      ]);
+
+      if (formularios.length === 0) return false;
+
+      // Verificar se já existe resposta para este agendamento
+      const respostas = await firebaseService.query('respostas_anamnese', [
+        { field: 'agendamentoId', operator: '==', value: agendamento.id }
+      ]);
+
+      return respostas.length === 0;
+    } catch (error) {
+      console.error('Erro ao verificar formulários:', error);
+      return false;
+    }
+  };
+
+  const verificarTodosFormularios = async () => {
+    if (!agendamentos || agendamentos.length === 0) return;
+    
+    setVerificandoFormularios(true);
+    const pendentesMap = {};
+    
+    try {
+      for (const agendamento of agendamentos) {
+        const temPendente = await verificarFormulariosPendentes(agendamento);
+        if (temPendente) {
+          pendentesMap[agendamento.id] = true;
+        }
+      }
+      setFormulariosPendentes(pendentesMap);
+    } catch (error) {
+      console.error('Erro ao verificar formulários:', error);
+    } finally {
+      setVerificandoFormularios(false);
+    }
   };
 
   // ============================================
@@ -1804,6 +1859,13 @@ function ModernAgendamentos() {
     carregarDisponibilidade();
   }, [updateTrigger]);
 
+  // 🔥 Verificar formulários pendentes quando agendamentos mudar
+  useEffect(() => {
+    if (agendamentos && agendamentos.length > 0) {
+      verificarTodosFormularios();
+    }
+  }, [agendamentos, updateTrigger]);
+
   useEffect(() => {
     if (formData.profissionalId && servicos) {
       const profissional = profissionais?.find(p => p.id === formData.profissionalId);
@@ -2213,6 +2275,9 @@ function ModernAgendamentos() {
                                 const cliente = getClienteData(event.clienteId);
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
+                                
+                                // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
+                                const temFormularioPendente = formulariosPendentes[event.id];
 
                                 if (!cliente) return null;
 
@@ -2225,6 +2290,7 @@ function ModernAgendamentos() {
                                     >
                                       <Card variant="outlined" sx={{ 
                                         p: 2,
+                                        position: 'relative', // Para o badge
                                         borderLeft: '4px solid',
                                         borderLeftColor: 
                                           event.tipo === 'atendimento' ? '#ff9800' :
@@ -2232,6 +2298,28 @@ function ModernAgendamentos() {
                                           event.status === 'pendente' ? '#ff9800' :
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
+                                        {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
+                                        {temFormularioPendente && (
+                                          <Tooltip title="Formulário de anamnese pendente">
+                                            <Badge
+                                              badgeContent="!"
+                                              color="warning"
+                                              sx={{
+                                                position: 'absolute',
+                                                top: 10,
+                                                right: 10,
+                                                '& .MuiBadge-badge': {
+                                                  fontSize: '0.8rem',
+                                                  height: 20,
+                                                  minWidth: 20,
+                                                }
+                                              }}
+                                            >
+                                              <AssignmentIcon sx={{ color: '#ff9800', opacity: 0.7 }} />
+                                            </Badge>
+                                          </Tooltip>
+                                        )}
+
                                         <Grid container spacing={2} alignItems="center">
                                           <Grid item xs={12} sm={6} md={3}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -2293,6 +2381,19 @@ function ModernAgendamentos() {
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                              {/* 🔥 BOTÃO PARA FORMULÁRIO */}
+                                              {temFormularioPendente && (
+                                                <Tooltip title="Preencher formulário">
+                                                  <IconButton
+                                                    size="small"
+                                                    onClick={() => navigate(`/cliente/atendimento/${event.id}/anamnese`)}
+                                                    sx={{ color: '#ff9800' }}
+                                                  >
+                                                    <AssignmentIcon fontSize="small" />
+                                                  </IconButton>
+                                                </Tooltip>
+                                              )}
+
                                               {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
                                                 <Button
                                                   size="small"
@@ -2439,19 +2540,38 @@ function ModernAgendamentos() {
                           {day.events.slice(0, 3).map(event => {
                             const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
+                            // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
+                            const temFormularioPendente = formulariosPendentes[event.id];
+                            
                             return (
-                              <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                <Badge
-                                  color={getStatusColor(event.status)}
-                                  variant="dot"
-                                >
-                                  {event.tipo === 'atendimento' ? (
-                                    <TimerIcon fontSize="inherit" sx={{ color: '#ff9800' }} />
+                              <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
+                                {temFormularioPendente && (
+                                  <Badge
+                                    badgeContent="!"
+                                    color="warning"
+                                    sx={{
+                                      '& .MuiBadge-badge': {
+                                        fontSize: '0.6rem',
+                                        height: 16,
+                                        minWidth: 16,
+                                      }
+                                    }}
+                                  >
+                                    {event.tipo === 'atendimento' ? (
+                                      <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
+                                    ) : (
+                                      <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
+                                    )}
+                                  </Badge>
+                                )}
+                                {!temFormularioPendente && (
+                                  event.tipo === 'atendimento' ? (
+                                    <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
                                   ) : (
-                                    <ScheduleIcon fontSize="inherit" sx={{ color: '#9c27b0' }} />
-                                  )}
-                                </Badge>
-                                <Typography variant="caption">
+                                    <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
+                                  )
+                                )}
+                                <Typography variant="caption" noWrap>
                                   {event.horario} - {cliente?.nome?.split(' ')[0]} ({servicosLista.length})
                                 </Typography>
                               </Box>
@@ -2509,7 +2629,8 @@ function ModernAgendamentos() {
                           bgcolor: day.date === selectedDate ? '#f3e5f5' : 'white',
                           borderLeft: day.count > 0 ? '3px solid' : 'none',
                           borderLeftColor: '#9c27b0',
-                          '&:hover': { boxShadow: 3, bgcolor: '#faf5ff' }
+                          '&:hover': { boxShadow: 3, bgcolor: '#faf5ff' },
+                          position: 'relative',
                         }}
                         onClick={() => day.count > 0 ? handleDayDetails(day.date, day.events) : handleDayClick(day.date)}
                       >
@@ -2552,6 +2673,9 @@ function ModernAgendamentos() {
                             {day.events.slice(0, 2).map(event => {
                               const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
+                              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
+                              const temFormularioPendente = formulariosPendentes[event.id];
+                              
                               return (
                                 <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                                   <Box
@@ -2559,11 +2683,12 @@ function ModernAgendamentos() {
                                       width: 8,
                                       height: 8,
                                       borderRadius: '50%',
-                                      bgcolor: 
+                                      bgcolor: temFormularioPendente ? '#ff9800' : (
                                         event.tipo === 'atendimento' ? '#ff9800' :
                                         event.status === 'confirmado' ? '#4caf50' :
                                         event.status === 'pendente' ? '#ff9800' :
-                                        event.status === 'cancelado' ? '#f44336' : '#9c27b0',
+                                        event.status === 'cancelado' ? '#f44336' : '#9c27b0'
+                                      ),
                                     }}
                                   />
                                   <Typography variant="caption" noWrap sx={{ fontSize: '0.65rem' }}>
@@ -2610,11 +2735,35 @@ function ModernAgendamentos() {
               const cliente = getClienteData(event.clienteId);
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
+              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
+              const temFormularioPendente = formulariosPendentes[event.id];
 
               if (!cliente) return null;
 
               return (
-                <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
+                  {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
+                  {temFormularioPendente && (
+                    <Tooltip title="Formulário de anamnese pendente">
+                      <Badge
+                        badgeContent="!"
+                        color="warning"
+                        sx={{
+                          position: 'absolute',
+                          top: 10,
+                          right: 10,
+                          '& .MuiBadge-badge': {
+                            fontSize: '0.8rem',
+                            height: 20,
+                            minWidth: 20,
+                          }
+                        }}
+                      >
+                        <AssignmentIcon sx={{ color: '#ff9800', opacity: 0.7 }} />
+                      </Badge>
+                    </Tooltip>
+                  )}
+
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
@@ -2680,6 +2829,23 @@ function ModernAgendamentos() {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                    {/* 🔥 BOTÃO PARA FORMULÁRIO */}
+                    {temFormularioPendente && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        startIcon={<AssignmentIcon />}
+                        onClick={() => {
+                          setOpenDayDialog(false);
+                          navigate(`/cliente/atendimento/${event.id}/anamnese`);
+                        }}
+                        sx={{ mr: 1 }}
+                      >
+                        Formulário
+                      </Button>
+                    )}
+
                     {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
                       <Button
                         size="small"
