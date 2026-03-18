@@ -93,6 +93,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService'; // 🔥 ADICIONADO
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -193,6 +194,11 @@ function AnaliseVendas() {
   const [filtroCliente, setFiltroCliente] = useState('todos');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [tabValue, setTabValue] = useState(0);
+  const [openFiltros, setOpenFiltros] = useState(false);
+  
+  // 🔥 Estado para usuário atual
+  const [usuario, setUsuario] = useState(null);
+
   const [dadosProcessados, setDadosProcessados] = useState({
     vendasPorPeriodo: [],
     vendasPorServico: [],
@@ -206,6 +212,7 @@ function AnaliseVendas() {
     topProfissionais: [],
     topClientes: [],
   });
+
   const [metricas, setMetricas] = useState({
     totalVendas: 0,
     faturamentoTotal: 0,
@@ -216,8 +223,17 @@ function AnaliseVendas() {
     crescimento: 0,
   });
 
-  // ✅ CORREÇÃO: Mover o estado para DENTRO do componente
-  const [openFiltros, setOpenFiltros] = useState(false);
+  // 🔥 Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuario(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
 
   useEffect(() => {
     carregarDados();
@@ -227,9 +243,32 @@ function AnaliseVendas() {
     processarDados();
   }, [vendas, periodo, dataInicio, dataFim, agrupamento, filtroServico, filtroProfissional, filtroCliente]);
 
+  // 🔥 Função para registrar auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'analise_vendas',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando dados de análise de vendas');
+      
       const [vendasData, clientesData, profissionaisData, servicosData, produtosData] = await Promise.all([
         firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
@@ -246,8 +285,33 @@ function AnaliseVendas() {
       setProfissionais(profissionaisData || []);
       setServicos(servicosData || []);
       setProdutos(produtosData || []);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_analise_vendas',
+        'analise',
+        'Análise de vendas carregada',
+        { 
+          totalVendas: vendasFinalizadas.length,
+          periodo: periodo,
+          clientesAtendidos: new Set(vendasFinalizadas.map(v => v.clienteId)).size
+        }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Dados de análise de vendas carregados', {
+        totalVendas: vendasFinalizadas.length,
+        clientesAtendidos: new Set(vendasFinalizadas.map(v => v.clienteId)).size
+      });
+      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar dados de análise de vendas', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
@@ -255,278 +319,295 @@ function AnaliseVendas() {
   };
 
   const processarDados = () => {
-    // Filtrar vendas por período
-    let vendasFiltradas = [...vendas];
-    
-    const hoje = new Date();
-    let inicio = new Date();
-    let fim = new Date();
+    try {
+      // Filtrar vendas por período
+      let vendasFiltradas = [...vendas];
+      
+      const hoje = new Date();
+      let inicio = new Date();
+      let fim = new Date();
 
-    switch (periodo) {
-      case 'hoje':
-        inicio = new Date(hoje.setHours(0, 0, 0, 0));
-        fim = new Date(hoje.setHours(23, 59, 59, 999));
-        break;
-      case 'ontem':
-        inicio = new Date(hoje.setDate(hoje.getDate() - 1));
-        inicio.setHours(0, 0, 0, 0);
-        fim = new Date(hoje.setDate(hoje.getDate() - 1));
-        fim.setHours(23, 59, 59, 999);
-        break;
-      case 'ultimos7':
-        inicio = subDays(hoje, 7);
-        fim = new Date();
-        break;
-      case 'ultimos30':
-        inicio = subDays(hoje, 30);
-        fim = new Date();
-        break;
-      case 'ultimos90':
-        inicio = subDays(hoje, 90);
-        fim = new Date();
-        break;
-      case 'esteMes':
-        inicio = startOfMonth(hoje);
-        fim = endOfMonth(hoje);
-        break;
-      case 'mesPassado':
-        inicio = startOfMonth(subMonths(hoje, 1));
-        fim = endOfMonth(subMonths(hoje, 1));
-        break;
-      case 'esteAno':
-        inicio = new Date(hoje.getFullYear(), 0, 1);
-        fim = new Date(hoje.getFullYear(), 11, 31);
-        break;
-      case 'anoPassado':
-        inicio = new Date(hoje.getFullYear() - 1, 0, 1);
-        fim = new Date(hoje.getFullYear() - 1, 11, 31);
-        break;
-      case 'personalizado':
-        if (dataInicio && dataFim) {
-          inicio = dataInicio;
-          fim = dataFim;
-        }
-        break;
-      default:
-        break;
-    }
+      switch (periodo) {
+        case 'hoje':
+          inicio = new Date(hoje.setHours(0, 0, 0, 0));
+          fim = new Date(hoje.setHours(23, 59, 59, 999));
+          break;
+        case 'ontem':
+          inicio = new Date(hoje.setDate(hoje.getDate() - 1));
+          inicio.setHours(0, 0, 0, 0);
+          fim = new Date(hoje.setDate(hoje.getDate() - 1));
+          fim.setHours(23, 59, 59, 999);
+          break;
+        case 'ultimos7':
+          inicio = subDays(hoje, 7);
+          fim = new Date();
+          break;
+        case 'ultimos30':
+          inicio = subDays(hoje, 30);
+          fim = new Date();
+          break;
+        case 'ultimos90':
+          inicio = subDays(hoje, 90);
+          fim = new Date();
+          break;
+        case 'esteMes':
+          inicio = startOfMonth(hoje);
+          fim = endOfMonth(hoje);
+          break;
+        case 'mesPassado':
+          inicio = startOfMonth(subMonths(hoje, 1));
+          fim = endOfMonth(subMonths(hoje, 1));
+          break;
+        case 'esteAno':
+          inicio = new Date(hoje.getFullYear(), 0, 1);
+          fim = new Date(hoje.getFullYear(), 11, 31);
+          break;
+        case 'anoPassado':
+          inicio = new Date(hoje.getFullYear() - 1, 0, 1);
+          fim = new Date(hoje.getFullYear() - 1, 11, 31);
+          break;
+        case 'personalizado':
+          if (dataInicio && dataFim) {
+            inicio = dataInicio;
+            fim = dataFim;
+          }
+          break;
+        default:
+          break;
+      }
 
-    if (inicio && fim) {
-      vendasFiltradas = vendasFiltradas.filter(venda => {
-        const dataVenda = new Date(venda.data);
-        return dataVenda >= inicio && dataVenda <= fim;
+      if (inicio && fim) {
+        vendasFiltradas = vendasFiltradas.filter(venda => {
+          const dataVenda = new Date(venda.data);
+          return dataVenda >= inicio && dataVenda <= fim;
+        });
+      }
+
+      // Aplicar filtros adicionais
+      if (filtroServico !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.servicoId === filtroServico ||
+          venda.itensServico?.some(item => item.id === filtroServico)
+        );
+      }
+
+      if (filtroProfissional !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.profissionalId === filtroProfissional
+        );
+      }
+
+      if (filtroCliente !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => 
+          venda.clienteId === filtroCliente
+        );
+      }
+
+      // Calcular métricas gerais
+      const faturamentoTotal = vendasFiltradas.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
+      const clientesAtendidos = new Set(vendasFiltradas.map(v => v.clienteId)).size;
+      const servicosRealizados = vendasFiltradas.reduce((acc, v) => 
+        acc + (v.itensServico?.length || (v.servicoId ? 1 : 0)), 0
+      );
+      const produtosVendidos = vendasFiltradas.reduce((acc, v) => 
+        acc + (v.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0
+      );
+
+      // Calcular crescimento comparado ao período anterior
+      const diasPeriodo = differenceInDays(fim, inicio);
+      const inicioAnterior = subDays(inicio, diasPeriodo);
+      const fimAnterior = subDays(fim, diasPeriodo);
+      
+      const vendasAnteriores = vendas.filter(v => {
+        const dataVenda = new Date(v.data);
+        return dataVenda >= inicioAnterior && dataVenda <= fimAnterior;
       });
-    }
-
-    // Aplicar filtros adicionais
-    if (filtroServico !== 'todos') {
-      vendasFiltradas = vendasFiltradas.filter(venda => 
-        venda.servicoId === filtroServico ||
-        venda.itensServico?.some(item => item.id === filtroServico)
-      );
-    }
-
-    if (filtroProfissional !== 'todos') {
-      vendasFiltradas = vendasFiltradas.filter(venda => 
-        venda.profissionalId === filtroProfissional
-      );
-    }
-
-    if (filtroCliente !== 'todos') {
-      vendasFiltradas = vendasFiltradas.filter(venda => 
-        venda.clienteId === filtroCliente
-      );
-    }
-
-    // Calcular métricas gerais
-    const faturamentoTotal = vendasFiltradas.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
-    const clientesAtendidos = new Set(vendasFiltradas.map(v => v.clienteId)).size;
-    const servicosRealizados = vendasFiltradas.reduce((acc, v) => 
-      acc + (v.itensServico?.length || (v.servicoId ? 1 : 0)), 0
-    );
-    const produtosVendidos = vendasFiltradas.reduce((acc, v) => 
-      acc + (v.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0
-    );
-
-    // Calcular crescimento comparado ao período anterior
-    const diasPeriodo = differenceInDays(fim, inicio);
-    const inicioAnterior = subDays(inicio, diasPeriodo);
-    const fimAnterior = subDays(fim, diasPeriodo);
-    
-    const vendasAnteriores = vendas.filter(v => {
-      const dataVenda = new Date(v.data);
-      return dataVenda >= inicioAnterior && dataVenda <= fimAnterior;
-    });
-    
-    const faturamentoAnterior = vendasAnteriores.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
-    const crescimento = faturamentoAnterior > 0 
-      ? ((faturamentoTotal - faturamentoAnterior) / faturamentoAnterior) * 100 
-      : 100;
-
-    setMetricas({
-      totalVendas: vendasFiltradas.length,
-      faturamentoTotal,
-      ticketMedio: vendasFiltradas.length > 0 ? faturamentoTotal / vendasFiltradas.length : 0,
-      clientesAtendidos,
-      servicosRealizados,
-      produtosVendidos,
-      crescimento,
-    });
-
-    // 1. Vendas por período (linha do tempo)
-    const vendasPorPeriodo = {};
-    vendasFiltradas.forEach(venda => {
-      let chave;
-      const data = new Date(venda.data);
       
-      if (agrupamento === 'dia') {
-        chave = format(data, 'dd/MM');
-      } else if (agrupamento === 'semana') {
-        chave = `Semana ${format(data, 'w')}`;
-      } else if (agrupamento === 'mes') {
-        chave = format(data, 'MMM/yy', { locale: ptBR });
-      } else if (agrupamento === 'trimestre') {
-        const trimestre = Math.floor(data.getMonth() / 3) + 1;
-        chave = `T${trimestre}/${data.getFullYear()}`;
-      } else if (agrupamento === 'ano') {
-        chave = data.getFullYear().toString();
-      }
+      const faturamentoAnterior = vendasAnteriores.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
+      const crescimento = faturamentoAnterior > 0 
+        ? ((faturamentoTotal - faturamentoAnterior) / faturamentoAnterior) * 100 
+        : 100;
 
-      if (!vendasPorPeriodo[chave]) {
-        vendasPorPeriodo[chave] = {
-          periodo: chave,
-          quantidade: 0,
-          valor: 0,
-        };
-      }
-      vendasPorPeriodo[chave].quantidade += 1;
-      vendasPorPeriodo[chave].valor += venda.valorTotal || 0;
-    });
+      setMetricas({
+        totalVendas: vendasFiltradas.length,
+        faturamentoTotal,
+        ticketMedio: vendasFiltradas.length > 0 ? faturamentoTotal / vendasFiltradas.length : 0,
+        clientesAtendidos,
+        servicosRealizados,
+        produtosVendidos,
+        crescimento,
+      });
 
-    const dadosVendasPorPeriodo = Object.values(vendasPorPeriodo).sort((a, b) => {
-      if (agrupamento === 'dia') {
-        const [d1, m1] = a.periodo.split('/');
-        const [d2, m2] = b.periodo.split('/');
-        return new Date(2024, parseInt(m1) - 1, parseInt(d1)) - new Date(2024, parseInt(m2) - 1, parseInt(d2));
-      }
-      return 0;
-    });
+      // 1. Vendas por período (linha do tempo)
+      const vendasPorPeriodo = {};
+      vendasFiltradas.forEach(venda => {
+        let chave;
+        const data = new Date(venda.data);
+        
+        if (agrupamento === 'dia') {
+          chave = format(data, 'dd/MM');
+        } else if (agrupamento === 'semana') {
+          chave = `Semana ${format(data, 'w')}`;
+        } else if (agrupamento === 'mes') {
+          chave = format(data, 'MMM/yy', { locale: ptBR });
+        } else if (agrupamento === 'trimestre') {
+          const trimestre = Math.floor(data.getMonth() / 3) + 1;
+          chave = `T${trimestre}/${data.getFullYear()}`;
+        } else if (agrupamento === 'ano') {
+          chave = data.getFullYear().toString();
+        }
 
-    // 2. Vendas por serviço
-    const vendasPorServico = {};
-    vendasFiltradas.forEach(venda => {
-      const servicosVenda = venda.itensServico || 
-        (venda.servicoId ? [{ id: venda.servicoId, preco: venda.valorTotal }] : []);
-      
-      servicosVenda.forEach(item => {
-        if (!vendasPorServico[item.id]) {
-          const servico = servicos.find(s => s.id === item.id);
-          vendasPorServico[item.id] = {
-            id: item.id,
-            nome: item.nome || servico?.nome || 'Serviço',
+        if (!vendasPorPeriodo[chave]) {
+          vendasPorPeriodo[chave] = {
+            periodo: chave,
             quantidade: 0,
             valor: 0,
           };
         }
-        vendasPorServico[item.id].quantidade += 1;
-        vendasPorServico[item.id].valor += item.preco || 0;
+        vendasPorPeriodo[chave].quantidade += 1;
+        vendasPorPeriodo[chave].valor += venda.valorTotal || 0;
       });
-    });
 
-    const dadosVendasPorServico = Object.values(vendasPorServico)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-
-    // 3. Vendas por profissional
-    const vendasPorProfissional = {};
-    vendasFiltradas.forEach(venda => {
-      if (!vendasPorProfissional[venda.profissionalId]) {
-        const profissional = profissionais.find(p => p.id === venda.profissionalId);
-        vendasPorProfissional[venda.profissionalId] = {
-          id: venda.profissionalId,
-          nome: profissional?.nome || 'Profissional',
-          quantidade: 0,
-          valor: 0,
-        };
-      }
-      vendasPorProfissional[venda.profissionalId].quantidade += 1;
-      vendasPorProfissional[venda.profissionalId].valor += venda.valorTotal || 0;
-    });
-
-    const dadosVendasPorProfissional = Object.values(vendasPorProfissional)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-
-    // 4. Vendas por cliente
-    const vendasPorCliente = {};
-    vendasFiltradas.forEach(venda => {
-      if (!vendasPorCliente[venda.clienteId]) {
-        const cliente = clientes.find(c => c.id === venda.clienteId);
-        vendasPorCliente[venda.clienteId] = {
-          id: venda.clienteId,
-          nome: cliente?.nome || 'Cliente',
-          quantidade: 0,
-          valor: 0,
-        };
-      }
-      vendasPorCliente[venda.clienteId].quantidade += 1;
-      vendasPorCliente[venda.clienteId].valor += venda.valorTotal || 0;
-    });
-
-    const dadosVendasPorCliente = Object.values(vendasPorCliente)
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-
-    // 5. Ticket médio por período
-    const ticketMedio = dadosVendasPorPeriodo.map(item => ({
-      periodo: item.periodo,
-      ticketMedio: item.quantidade > 0 ? item.valor / item.quantidade : 0,
-    }));
-
-    // 6. Horários de pico
-    const horariosPico = Array(24).fill(0).map((_, hora) => ({
-      hora: `${hora}h`,
-      quantidade: 0,
-      valor: 0,
-    }));
-
-    vendasFiltradas.forEach(venda => {
-      if (venda.horaInicio) {
-        const hora = parseInt(venda.horaInicio.split(':')[0]);
-        if (hora >= 0 && hora < 24) {
-          horariosPico[hora].quantidade += 1;
-          horariosPico[hora].valor += venda.valorTotal || 0;
+      const dadosVendasPorPeriodo = Object.values(vendasPorPeriodo).sort((a, b) => {
+        if (agrupamento === 'dia') {
+          const [d1, m1] = a.periodo.split('/');
+          const [d2, m2] = b.periodo.split('/');
+          return new Date(2024, parseInt(m1) - 1, parseInt(d1)) - new Date(2024, parseInt(m2) - 1, parseInt(d2));
         }
-      }
-    });
+        return 0;
+      });
 
-    // 7. Vendas por dia da semana
-    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const vendasPorDia = diasSemana.map((dia, index) => ({
-      dia,
-      quantidade: 0,
-      valor: 0,
-    }));
+      // 2. Vendas por serviço
+      const vendasPorServico = {};
+      vendasFiltradas.forEach(venda => {
+        const servicosVenda = venda.itensServico || 
+          (venda.servicoId ? [{ id: venda.servicoId, preco: venda.valorTotal }] : []);
+        
+        servicosVenda.forEach(item => {
+          if (!vendasPorServico[item.id]) {
+            const servico = servicos.find(s => s.id === item.id);
+            vendasPorServico[item.id] = {
+              id: item.id,
+              nome: item.nome || servico?.nome || 'Serviço',
+              quantidade: 0,
+              valor: 0,
+            };
+          }
+          vendasPorServico[item.id].quantidade += 1;
+          vendasPorServico[item.id].valor += item.preco || 0;
+        });
+      });
 
-    vendasFiltradas.forEach(venda => {
-      const data = new Date(venda.data);
-      const diaSemana = data.getDay();
-      vendasPorDia[diaSemana].quantidade += 1;
-      vendasPorDia[diaSemana].valor += venda.valorTotal || 0;
-    });
+      const dadosVendasPorServico = Object.values(vendasPorServico)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
 
-    setDadosProcessados({
-      vendasPorPeriodo: dadosVendasPorPeriodo,
-      vendasPorServico: dadosVendasPorServico,
-      vendasPorProfissional: dadosVendasPorProfissional,
-      vendasPorCliente: dadosVendasPorCliente,
-      ticketMedio,
-      horariosPico,
-      diasSemana: vendasPorDia,
-      topServicos: dadosVendasPorServico.slice(0, 5),
-      topProfissionais: dadosVendasPorProfissional.slice(0, 5),
-      topClientes: dadosVendasPorCliente.slice(0, 5),
-    });
+      // 3. Vendas por profissional
+      const vendasPorProfissional = {};
+      vendasFiltradas.forEach(venda => {
+        if (!vendasPorProfissional[venda.profissionalId]) {
+          const profissional = profissionais.find(p => p.id === venda.profissionalId);
+          vendasPorProfissional[venda.profissionalId] = {
+            id: venda.profissionalId,
+            nome: profissional?.nome || 'Profissional',
+            quantidade: 0,
+            valor: 0,
+          };
+        }
+        vendasPorProfissional[venda.profissionalId].quantidade += 1;
+        vendasPorProfissional[venda.profissionalId].valor += venda.valorTotal || 0;
+      });
+
+      const dadosVendasPorProfissional = Object.values(vendasPorProfissional)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+
+      // 4. Vendas por cliente
+      const vendasPorCliente = {};
+      vendasFiltradas.forEach(venda => {
+        if (!vendasPorCliente[venda.clienteId]) {
+          const cliente = clientes.find(c => c.id === venda.clienteId);
+          vendasPorCliente[venda.clienteId] = {
+            id: venda.clienteId,
+            nome: cliente?.nome || 'Cliente',
+            quantidade: 0,
+            valor: 0,
+          };
+        }
+        vendasPorCliente[venda.clienteId].quantidade += 1;
+        vendasPorCliente[venda.clienteId].valor += venda.valorTotal || 0;
+      });
+
+      const dadosVendasPorCliente = Object.values(vendasPorCliente)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+
+      // 5. Ticket médio por período
+      const ticketMedio = dadosVendasPorPeriodo.map(item => ({
+        periodo: item.periodo,
+        ticketMedio: item.quantidade > 0 ? item.valor / item.quantidade : 0,
+      }));
+
+      // 6. Horários de pico
+      const horariosPico = Array(24).fill(0).map((_, hora) => ({
+        hora: `${hora}h`,
+        quantidade: 0,
+        valor: 0,
+      }));
+
+      vendasFiltradas.forEach(venda => {
+        if (venda.horaInicio) {
+          const hora = parseInt(venda.horaInicio.split(':')[0]);
+          if (hora >= 0 && hora < 24) {
+            horariosPico[hora].quantidade += 1;
+            horariosPico[hora].valor += venda.valorTotal || 0;
+          }
+        }
+      });
+
+      // 7. Vendas por dia da semana
+      const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const vendasPorDia = diasSemana.map((dia, index) => ({
+        dia,
+        quantidade: 0,
+        valor: 0,
+      }));
+
+      vendasFiltradas.forEach(venda => {
+        const data = new Date(venda.data);
+        const diaSemana = data.getDay();
+        vendasPorDia[diaSemana].quantidade += 1;
+        vendasPorDia[diaSemana].valor += venda.valorTotal || 0;
+      });
+
+      setDadosProcessados({
+        vendasPorPeriodo: dadosVendasPorPeriodo,
+        vendasPorServico: dadosVendasPorServico,
+        vendasPorProfissional: dadosVendasPorProfissional,
+        vendasPorCliente: dadosVendasPorCliente,
+        ticketMedio,
+        horariosPico,
+        diasSemana: vendasPorDia,
+        topServicos: dadosVendasPorServico.slice(0, 5),
+        topProfissionais: dadosVendasPorProfissional.slice(0, 5),
+        topClientes: dadosVendasPorCliente.slice(0, 5),
+      });
+
+      // 🔥 LOG TÉCNICO
+      firebaseService.log('info', 'Dados processados para análise de vendas', {
+        vendasFiltradas: vendasFiltradas.length,
+        periodo,
+        faturamento: faturamentoTotal
+      });
+
+    } catch (error) {
+      console.error('Erro ao processar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      firebaseService.log('error', 'Erro ao processar dados de análise de vendas', {
+        error: error.message
+      });
+    }
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -537,14 +618,54 @@ function AnaliseVendas() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleExportar = (formato) => {
-    if (formato === 'csv') {
-      toast.success('Dados exportados para CSV');
-    } else if (formato === 'pdf') {
-      toast.success('Relatório PDF gerado');
-    } else if (formato === 'excel') {
-      toast.success('Planilha Excel gerada');
+  const handleExportar = async (formato) => {
+    try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Exportando análise de vendas para ${formato}`);
+      
+      if (formato === 'csv') {
+        toast.success('Dados exportados para CSV');
+      } else if (formato === 'pdf') {
+        toast.success('Relatório PDF gerado');
+      } else if (formato === 'excel') {
+        toast.success('Planilha Excel gerada');
+      }
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'exportar_analise_vendas',
+        'exportacao',
+        `Dados de análise de vendas exportados para ${formato}`,
+        { 
+          formato,
+          periodo,
+          totalVendas: metricas.totalVendas,
+          faturamento: metricas.faturamentoTotal
+        }
+      );
+      
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao exportar análise de vendas', {
+        error: error.message,
+        formato
+      });
+      
+      toast.error('Erro ao exportar dados');
     }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da análise de vendas');
+    await carregarDados();
+  };
+
+  const handleFiltroChange = async (tipo, valor) => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', `Filtro alterado: ${tipo} = ${valor}`);
   };
 
   const formatarMoeda = (valor) => {
@@ -606,7 +727,7 @@ function AnaliseVendas() {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={carregarDados}
+              onClick={handleRefresh}
             >
               Atualizar
             </Button>
@@ -623,7 +744,10 @@ function AnaliseVendas() {
                   <Select
                     value={periodo}
                     label="Período"
-                    onChange={(e) => setPeriodo(e.target.value)}
+                    onChange={(e) => {
+                      setPeriodo(e.target.value);
+                      handleFiltroChange('periodo', e.target.value);
+                    }}
                   >
                     {periodos.map(p => (
                       <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
@@ -659,7 +783,10 @@ function AnaliseVendas() {
                   <Select
                     value={agrupamento}
                     label="Agrupar por"
-                    onChange={(e) => setAgrupamento(e.target.value)}
+                    onChange={(e) => {
+                      setAgrupamento(e.target.value);
+                      handleFiltroChange('agrupamento', e.target.value);
+                    }}
                   >
                     {agrupamentos.map(agg => (
                       <MenuItem key={agg.value} value={agg.value}>{agg.label}</MenuItem>
@@ -701,7 +828,7 @@ function AnaliseVendas() {
               </Grid>
             </Grid>
 
-            {/* Filtros avançados (podem ser expandidos) */}
+            {/* Filtros avançados */}
             <Collapse in={openFiltros}>
               <Box sx={{ mt: 2 }}>
                 <Grid container spacing={2}>
@@ -711,7 +838,10 @@ function AnaliseVendas() {
                       <Select
                         value={filtroServico}
                         label="Serviço"
-                        onChange={(e) => setFiltroServico(e.target.value)}
+                        onChange={(e) => {
+                          setFiltroServico(e.target.value);
+                          handleFiltroChange('servico', e.target.value);
+                        }}
                       >
                         <MenuItem value="todos">Todos os serviços</MenuItem>
                         {servicos.map(serv => (
@@ -727,7 +857,10 @@ function AnaliseVendas() {
                       <Select
                         value={filtroProfissional}
                         label="Profissional"
-                        onChange={(e) => setFiltroProfissional(e.target.value)}
+                        onChange={(e) => {
+                          setFiltroProfissional(e.target.value);
+                          handleFiltroChange('profissional', e.target.value);
+                        }}
                       >
                         <MenuItem value="todos">Todos os profissionais</MenuItem>
                         {profissionais.map(prof => (
@@ -743,7 +876,10 @@ function AnaliseVendas() {
                       <Select
                         value={filtroCliente}
                         label="Cliente"
-                        onChange={(e) => setFiltroCliente(e.target.value)}
+                        onChange={(e) => {
+                          setFiltroCliente(e.target.value);
+                          handleFiltroChange('cliente', e.target.value);
+                        }}
                       >
                         <MenuItem value="todos">Todos os clientes</MenuItem>
                         {clientes.map(cli => (
