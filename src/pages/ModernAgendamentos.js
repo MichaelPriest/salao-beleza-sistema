@@ -82,6 +82,8 @@ import {
   History as HistoryIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
+  EventBusy as EventBusyIcon,
+  EventAvailable as EventAvailableIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -151,7 +153,7 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Componente para impressão da agenda - VERSÃO MELHORADA
+// Componente para impressão da agenda
 const RelatorioAgenda = React.forwardRef(({ 
   eventos, 
   profissional, 
@@ -212,7 +214,7 @@ const RelatorioAgenda = React.forwardRef(({
         </Typography>
       </Box>
 
-      {/* Estatísticas - VERSÃO COMPACTA */}
+      {/* Estatísticas */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Resumo do Período
@@ -253,7 +255,7 @@ const RelatorioAgenda = React.forwardRef(({
         </Box>
       </Box>
 
-      {/* Eventos por Dia - VERSÃO COMPACTA */}
+      {/* Eventos por Dia */}
       <Box>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Agenda Detalhada
@@ -355,6 +357,11 @@ function ModernAgendamentos() {
   const [openDayDialog, setOpenDayDialog] = useState(false);
   const [showAtendimentos, setShowAtendimentos] = useState(true);
   
+  // 🔥 Estados para disponibilidade
+  const [disponibilidades, setDisponibilidades] = useState([]);
+  const [ausencias, setAusencias] = useState([]);
+  const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
+  
   // 🔥 Trigger para forçar atualização
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
@@ -383,7 +390,6 @@ function ModernAgendamentos() {
   const [servicosSelecionados, setServicosSelecionados] = useState([]);
   const [servicoAtual, setServicoAtual] = useState('');
   const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
-  const [profissionaisDisponiveis, setProfissionaisDisponiveis] = useState([]);
   const [profissionalSelecionado, setProfissionalSelecionado] = useState('');
 
   // Estados para pesquisa de profissionais e serviços nos selects
@@ -397,6 +403,19 @@ function ModernAgendamentos() {
   const { data: profissionais, loading: loadingProfissionais } = useFirebase('profissionais');
   const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
   const { data: usuarios, loading: loadingUsuarios } = useFirebase('usuarios');
+
+  // 🔥 Carregar disponibilidades e ausências
+  useEffect(() => {
+    const carregarDisponibilidade = async () => {
+      const [dispData, ausData] = await Promise.all([
+        firebaseService.getAll('disponibilidades').catch(() => []),
+        firebaseService.getAll('ausencias').catch(() => [])
+      ]);
+      setDisponibilidades(dispData || []);
+      setAusencias(ausData || []);
+    };
+    carregarDisponibilidade();
+  }, [updateTrigger]);
 
   // Carregar configurações
   useEffect(() => {
@@ -435,17 +454,166 @@ function ModernAgendamentos() {
     }
   }, []);
 
+  // 🔥 Efeito para atualizar horários disponíveis quando profissional ou data mudar
+  useEffect(() => {
+    if (formData.profissionalId && formData.data) {
+      const horarios = timeSlots.filter(time => 
+        verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
+      );
+      setHorariosDisponiveis(horarios);
+    } else {
+      setHorariosDisponiveis([]);
+    }
+  }, [formData.profissionalId, formData.data, disponibilidades, ausencias, agendamentos, selectedAppointment]);
+
   const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos || loadingUsuarios;
 
   // ============================================
-  // 🔥 FUNÇÕES CORRIGIDAS PARA ACESSAR DADOS DO CLIENTE
+  // 🔥 FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
   // ============================================
 
-  // Função para obter dados do cliente de forma segura
+  // Verificar disponibilidade do profissional
+  const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
+    if (!profissionalId || !data || !horario) return false;
+
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+
+    // 🔍 Verificar disponibilidade do profissional para este dia da semana
+    const disponibilidade = disponibilidades.find(
+      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
+    );
+
+    if (!disponibilidade) return false; // Profissional não trabalha neste dia
+
+    // ⏰ Verificar se horário está dentro do expediente
+    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
+    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
+    const [horaAtual, minAtual] = horario.split(':').map(Number);
+    
+    const minutosInicio = horaInicio * 60 + minInicio;
+    const minutosFim = horaFim * 60 + minFim;
+    const minutosAtual = horaAtual * 60 + minAtual;
+
+    if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
+
+    // 🍽️ Verificar intervalo de almoço
+    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
+      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
+      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
+      
+      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
+      const minutosIntFim = horaIntFim * 60 + minIntFim;
+
+      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
+    }
+
+    // 🚫 Verificar ausências (folgas, férias, etc.)
+    const ausencia = ausencias.find(a => 
+      a.profissionalId === profissionalId &&
+      data >= a.dataInicio &&
+      data <= a.dataFim &&
+      (
+        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') || // Dia inteiro
+        (horario >= a.horarioInicio && horario < a.horarioFim) // Horário específico
+      )
+    );
+
+    if (ausencia) return false;
+
+    // 📅 Verificar se já existe agendamento neste horário
+    const agendamentoExistente = (agendamentos || []).some(apt => 
+      apt.profissionalId === profissionalId &&
+      apt.data === data &&
+      apt.horario === horario &&
+      apt.id !== selectedAppointment?.id &&
+      apt.status !== 'cancelado'
+    );
+
+    return !agendamentoExistente;
+  };
+
+  // Obter motivo de indisponibilidade
+  const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
+    if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
+
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
+
+    const disponibilidade = disponibilidades.find(
+      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
+    );
+
+    if (!disponibilidade) return 'Profissional não trabalha neste dia da semana';
+
+    const [horaAtual, minAtual] = horario.split(':').map(Number);
+    const minutosAtual = horaAtual * 60 + minAtual;
+
+    // Verificar horário de expediente
+    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
+    const minutosInicio = horaInicio * 60 + minInicio;
+    
+    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
+    const minutosFim = horaFim * 60 + minFim;
+
+    if (minutosAtual < minutosInicio) return 'Antes do horário de início';
+    if (minutosAtual >= minutosFim) return 'Após o horário de término';
+
+    // Verificar intervalo
+    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
+      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
+      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
+      
+      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
+      const minutosIntFim = horaIntFim * 60 + minIntFim;
+
+      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
+    }
+
+    // Verificar ausência
+    const ausencia = ausencias.find(a => 
+      a.profissionalId === profissionalId &&
+      data >= a.dataInicio &&
+      data <= a.dataFim &&
+      (
+        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
+        (horario >= a.horarioInicio && horario < a.horarioFim)
+      )
+    );
+
+    if (ausencia) {
+      const tipos = {
+        folga: 'Profissional está de folga',
+        ferias: 'Profissional está de férias',
+        licenca: 'Profissional está de licença',
+        falta: 'Profissional ausente',
+        treinamento: 'Profissional em treinamento',
+        evento: 'Profissional em evento'
+      };
+      return tipos[ausencia.tipo] || 'Profissional ausente';
+    }
+
+    // Verificar agendamento existente
+    const agendamentoExistente = (agendamentos || []).some(apt => 
+      apt.profissionalId === profissionalId &&
+      apt.data === data &&
+      apt.horario === horario &&
+      apt.id !== selectedAppointment?.id &&
+      apt.status !== 'cancelado'
+    );
+
+    if (agendamentoExistente) return 'Horário já ocupado';
+
+    return null;
+  };
+
+  // ============================================
+  // FUNÇÕES PARA ACESSAR DADOS DO CLIENTE
+  // ============================================
+
   const getClienteData = (clienteId) => {
     if (!clienteId || !clientes) return null;
     
-    // Buscar cliente pelo ID (pode ser o uid do Firebase Auth ou o id do documento)
     const cliente = clientes.find(c => 
       c.id === clienteId || 
       c.uid === clienteId || 
@@ -454,7 +622,6 @@ function ModernAgendamentos() {
     
     if (!cliente) return null;
     
-    // Retornar objeto padronizado com todos os campos necessários
     return {
       id: cliente.id || cliente.uid || cliente.googleUid,
       nome: cliente.nome || cliente.displayName || 'Cliente',
@@ -475,7 +642,6 @@ function ModernAgendamentos() {
     };
   };
 
-  // Função para obter dados do profissional
   const getProfissionalData = (profissionalId) => {
     if (!profissionalId || !profissionais) return null;
     
@@ -494,7 +660,6 @@ function ModernAgendamentos() {
     };
   };
 
-  // Função para obter dados do usuário do sistema
   const getUsuarioSistemaData = (usuarioId) => {
     if (!usuarioId || !usuarios) return null;
     
@@ -506,11 +671,9 @@ function ModernAgendamentos() {
     return usuario || null;
   };
 
-  // Função para formatar telefone
   const formatarTelefone = (telefone) => {
     if (!telefone || telefone === 'Não informado') return telefone;
     
-    // Remove tudo que não é número
     const numeros = telefone.replace(/\D/g, '');
     
     if (numeros.length === 11) {
@@ -522,19 +685,16 @@ function ModernAgendamentos() {
     return telefone;
   };
 
-  // Função para formatar CPF
   const formatarCPF = (cpf) => {
     if (!cpf) return '';
     const numeros = cpf.replace(/\D/g, '');
     return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
-  // Função para remover máscara do CPF
   const removerMascaraCPF = (cpf) => {
     return cpf ? cpf.replace(/\D/g, '') : '';
   };
 
-  // Função para formatar data no formato brasileiro
   const formatarDataBrasil = (data) => {
     if (!data) return '';
     const d = new Date(data);
@@ -545,17 +705,14 @@ function ModernAgendamentos() {
   const filtrarEventosPorUsuario = (eventos) => {
     if (!usuario) return eventos;
 
-    // Cliente: ver apenas seus próprios eventos
     if (cargo === 'cliente' && usuario.clienteId) {
       return eventos.filter(e => e.clienteId === usuario.clienteId);
     }
 
-    // Profissional: ver apenas seus eventos
     if (cargo === 'profissional' && usuario.profissionalId) {
       return eventos.filter(e => e.profissionalId === usuario.profissionalId);
     }
 
-    // Admin, Gerente, Atendente: ver todos
     return eventos;
   };
 
@@ -595,20 +752,16 @@ function ModernAgendamentos() {
   // FUNÇÕES PARA FILTRAR SERVIÇOS POR PROFISSIONAL
   // ============================================
 
-  // Atualizar serviços disponíveis quando profissional é selecionado
   useEffect(() => {
     if (formData.profissionalId && servicos) {
-      // Buscar o profissional selecionado
       const profissional = profissionais?.find(p => p.id === formData.profissionalId);
       
       if (profissional && profissional.servicosIds) {
-        // Filtrar serviços pelos IDs associados ao profissional
         const servicosDoProfissional = servicos.filter(s => 
           profissional.servicosIds.includes(s.id) && s.ativo !== false
         );
         setServicosDisponiveis(servicosDoProfissional);
       } else {
-        // Se profissional não tem serviços específicos, mostrar todos ativos
         setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
       }
     } else {
@@ -616,12 +769,10 @@ function ModernAgendamentos() {
     }
   }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
 
-  // Filtrar serviços pela busca
   const servicosFiltrados = servicosDisponiveis.filter(servico => 
     servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
   );
 
-  // Filtrar profissionais pela busca
   const profissionaisFiltrados = (profissionais || []).filter(prof => 
     prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
   );
@@ -630,7 +781,6 @@ function ModernAgendamentos() {
   // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
   // ============================================
 
-  // Adicionar serviço à lista
   const adicionarServico = () => {
     if (!servicoAtual) {
       toast.error('Selecione um serviço');
@@ -640,7 +790,6 @@ function ModernAgendamentos() {
     const servico = servicos?.find(s => s.id === servicoAtual);
     if (!servico) return;
 
-    // Verificar se serviço já foi adicionado
     if (servicosSelecionados.some(s => s.id === servico.id)) {
       toast.error('Este serviço já foi adicionado');
       return;
@@ -652,29 +801,25 @@ function ModernAgendamentos() {
       preco: servico.preco || 0,
       duracao: servico.duracao || 60,
       comissao: servico.comissaoProfissional || 50,
-      profissionalId: profissionalSelecionado || formData.profissionalId
+      profissionalId: formData.profissionalId
     };
 
     setServicosSelecionados([...servicosSelecionados, novoServico]);
     setServicoAtual('');
     setBuscaServico('');
     
-    // Calcular novo valor total
     const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
     setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
   };
 
-  // Remover serviço da lista
   const removerServico = (id) => {
     const novosServicos = servicosSelecionados.filter(s => s.id !== id);
     setServicosSelecionados(novosServicos);
     
-    // Calcular novo valor total
     const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
     setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
   };
 
-  // Limpar lista de serviços
   const limparServicos = () => {
     setServicosSelecionados([]);
     setFormData({ ...formData, valorTotal: 0, servicos: [] });
@@ -710,7 +855,6 @@ function ModernAgendamentos() {
         });
         setServicosSelecionados([]);
         setServicoAtual('');
-        setProfissionalSelecionado('');
         setBuscaProfissional('');
         setBuscaServico('');
       }
@@ -799,17 +943,14 @@ function ModernAgendamentos() {
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
     
-    // Se for profissional, só vê eventos do seu profissionalId (já filtrado no filtrarEventosPorUsuario)
     if (cargo === 'profissional') {
       return statusMatch && tipoMatch;
     }
     
-    // Se for cliente, só vê seus eventos (já filtrado no filtrarEventosPorUsuario)
     if (cargo === 'cliente') {
       return statusMatch && tipoMatch;
     }
     
-    // Admin, Gerente, Atendente: todos com filtros
     return professionalMatch && statusMatch && tipoMatch;
   });
 
@@ -902,14 +1043,12 @@ function ModernAgendamentos() {
   };
 
   const handleAdd = () => {
-    // Profissionais e clientes não podem criar agendamentos
     if (cargo === 'profissional') {
       toast.error('Profissionais não podem criar agendamentos');
       return;
     }
     
     if (cargo === 'cliente') {
-      // Cliente pode criar? Se sim, redirecionar para página específica
       toast.info('Para agendar, entre em contato com a recepção');
       return;
     }
@@ -919,7 +1058,6 @@ function ModernAgendamentos() {
   };
 
   const handleEdit = (event) => {
-    // Profissionais e clientes não podem editar
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para editar agendamentos');
       return;
@@ -934,7 +1072,6 @@ function ModernAgendamentos() {
   };
 
   const handleDelete = (id, tipo) => {
-    // Profissionais e clientes não podem excluir
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para cancelar agendamentos');
       return;
@@ -954,7 +1091,6 @@ function ModernAgendamentos() {
       
       await excluir(appointmentToDelete);
       
-      // Registrar na auditoria
       await auditoriaService.registrar('cancelar_agendamento', {
         entidade: 'agendamentos',
         entidadeId: appointmentToDelete,
@@ -983,9 +1119,7 @@ function ModernAgendamentos() {
     setAppointmentToDelete(null);
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA: Atualizar status com trigger
   const handleStatusChange = async (id, newStatus) => {
-    // Profissionais e clientes não podem alterar status
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para alterar status');
       return;
@@ -998,7 +1132,6 @@ function ModernAgendamentos() {
       
       await atualizar(id, { status: newStatus });
       
-      // Registrar na auditoria
       await auditoriaService.registrar('alterar_status_agendamento', {
         entidade: 'agendamentos',
         entidadeId: id,
@@ -1042,29 +1175,37 @@ function ModernAgendamentos() {
         return;
       }
 
+      if (!formData.profissionalId) {
+        toast.error('Selecione um profissional');
+        return;
+      }
+
       if (!formData.horario) {
         toast.error('Selecione um horário');
         return;
       }
 
-      // Verificar horário ocupado
-      const horarioOcupado = (agendamentos || []).some(apt => 
-        apt.data === formData.data && 
-        apt.horario === formData.horario && 
-        apt.profissionalId === formData.profissionalId &&
-        apt.id !== selectedAppointment?.id &&
-        apt.status !== 'cancelado'
+      // 🔥 Validar disponibilidade do profissional
+      const disponivel = verificarDisponibilidadeProfissional(
+        formData.profissionalId, 
+        formData.data, 
+        formData.horario
       );
 
-      if (horarioOcupado) {
-        toast.error('Este horário já está ocupado para este profissional');
+      if (!disponivel) {
+        const motivo = getMotivoIndisponibilidade(
+          formData.profissionalId, 
+          formData.data, 
+          formData.horario
+        );
+        toast.error(`Horário indisponível: ${motivo || 'Profissional não disponível'}`);
         return;
       }
 
       const dadosParaSalvar = {
         clienteId: formData.clienteId,
         profissionalId: formData.profissionalId,
-        servicoId: servicosSelecionados[0]?.id, // Primeiro serviço para compatibilidade
+        servicoId: servicosSelecionados[0]?.id,
         servicos: servicosSelecionados,
         data: formData.data,
         horario: formData.horario,
@@ -1084,7 +1225,6 @@ function ModernAgendamentos() {
         
         await atualizar(selectedAppointment.id, dadosParaSalvar);
         
-        // Registrar na auditoria
         await auditoriaService.registrarAtualizacao(
           'agendamentos',
           selectedAppointment.id,
@@ -1098,7 +1238,6 @@ function ModernAgendamentos() {
       } else {
         agendamentoCriado = await adicionar(dadosParaSalvar);
         
-        // Registrar na auditoria
         await auditoriaService.registrarCriacao(
           'agendamentos',
           agendamentoCriado.id,
@@ -1138,7 +1277,6 @@ function ModernAgendamentos() {
   };
 
   const iniciarAtendimento = async (agendamento) => {
-    // Profissionais e clientes não podem iniciar atendimentos
     if (cargo === 'cliente') {
       toast.error('Apenas funcionários podem iniciar atendimentos');
       return;
@@ -1196,7 +1334,6 @@ function ModernAgendamentos() {
         updatedAt: Timestamp.now()
       });
 
-      // Registrar na auditoria
       await auditoriaService.registrar('iniciar_atendimento', {
         entidade: 'atendimentos',
         entidadeId: atendimentoCriado.id,
@@ -1228,7 +1365,6 @@ function ModernAgendamentos() {
   };
 
   const continuarAtendimento = (atendimento) => {
-    // Profissionais e atendentes podem continuar, clientes não
     if (cargo === 'cliente') {
       toast.error('Você não tem acesso a esta funcionalidade');
       return;
@@ -1287,15 +1423,14 @@ function ModernAgendamentos() {
     return tipo === 'agendamento' ? 'Agendamento' : 'Atendimento';
   };
 
+  // 🔥 Função atualizada para verificar disponibilidade de horário
   const isHorarioDisponivel = (horario) => {
     if (!formData.profissionalId || !formData.data) return true;
     
-    return !(agendamentos || []).some(apt => 
-      apt.data === formData.data && 
-      apt.horario === horario && 
-      apt.profissionalId === formData.profissionalId &&
-      apt.id !== selectedAppointment?.id &&
-      apt.status !== 'cancelado'
+    return verificarDisponibilidadeProfissional(
+      formData.profissionalId,
+      formData.data,
+      horario
     );
   };
 
@@ -1317,7 +1452,7 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES DE EXPORTAÇÃO E IMPRESSÃO MELHORADAS
+  // FUNÇÕES DE EXPORTAÇÃO E IMPRESSÃO
   // ============================================
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -1329,7 +1464,6 @@ function ModernAgendamentos() {
   };
 
   const handleOpenRelatorio = () => {
-    // Apenas admin, gerente e atendente podem gerar relatórios
     if (cargo === 'profissional' || cargo === 'cliente') {
       toast.error('Você não tem permissão para gerar relatórios');
       return;
@@ -1341,7 +1475,6 @@ function ModernAgendamentos() {
     setOpenRelatorioDialog(false);
   };
 
-  // Função para imprimir a agenda - VERSÃO MELHORADA
   const handlePrint = () => {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
@@ -1443,12 +1576,10 @@ function ModernAgendamentos() {
       printWindow.document.write(printHTML);
       printWindow.document.close();
       
-      // Aguardar carregamento e imprimir
       setTimeout(() => {
         printWindow.print();
         mostrarSnackbar('Impressão concluída!', 'success');
         
-        // Registrar na auditoria
         auditoriaService.registrar('imprimir_relatorio_agenda', {
           entidade: 'agendamentos',
           detalhes: 'Impressão de relatório de agenda',
@@ -1469,7 +1600,6 @@ function ModernAgendamentos() {
     }
   };
 
-  // Função para exportar PDF - VERSÃO MELHORADA
   const handleExportPDF = async () => {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
@@ -1477,7 +1607,6 @@ function ModernAgendamentos() {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       
-      // Filtrar eventos pelo período
       let eventosFiltrados = filteredEvents;
       if (periodoRelatorio.tipo === 'dia') {
         eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
@@ -1487,7 +1616,6 @@ function ModernAgendamentos() {
         );
       }
 
-      // Ordenar por data e horário
       eventosFiltrados.sort((a, b) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
@@ -1551,7 +1679,6 @@ function ModernAgendamentos() {
       doc.text('Agenda Detalhada', 14, yPos);
       yPos += 6;
 
-      // Agrupar por data
       const eventosPorData = {};
       eventosFiltrados.forEach(evento => {
         if (!eventosPorData[evento.data]) {
@@ -1561,7 +1688,6 @@ function ModernAgendamentos() {
       });
 
       Object.keys(eventosPorData).sort().forEach(data => {
-        // Verificar espaço na página
         if (yPos > doc.internal.pageSize.getHeight() - 40) {
           doc.addPage();
           yPos = 20;
@@ -1610,11 +1736,9 @@ function ModernAgendamentos() {
         yPos = doc.lastAutoTable.finalY + 6;
       });
 
-      // Salvar PDF
       const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
       doc.save(fileName);
       
-      // Registrar na auditoria
       await auditoriaService.registrar('exportar_pdf_agenda', {
         entidade: 'agendamentos',
         detalhes: 'Exportação de relatório de agenda em PDF',
@@ -1637,12 +1761,10 @@ function ModernAgendamentos() {
     }
   };
 
-  // Função para exportar Excel - VERSÃO MELHORADA
   const handleExportExcel = async () => {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
       
-      // Filtrar eventos pelo período
       let eventosFiltrados = filteredEvents;
       if (periodoRelatorio.tipo === 'dia') {
         eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
@@ -1652,13 +1774,11 @@ function ModernAgendamentos() {
         );
       }
 
-      // Ordenar por data e horário
       eventosFiltrados.sort((a, b) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
 
-      // Criar workbook
       const wb = XLSX.utils.book_new();
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
@@ -1667,7 +1787,6 @@ function ModernAgendamentos() {
       const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
         new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
 
-      // Aba de Informações
       const infoData = [
         ['RELATÓRIO DE AGENDA'],
         [''],
@@ -1681,7 +1800,6 @@ function ModernAgendamentos() {
       const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
       XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
 
-      // Aba de Resumo por Status
       const statsPorStatus = {
         'Agendamentos': eventosFiltrados.filter(e => e.tipo === 'agendamento').length,
         'Atendimentos': eventosFiltrados.filter(e => e.tipo === 'atendimento').length,
@@ -1700,7 +1818,6 @@ function ModernAgendamentos() {
       const wsStats = XLSX.utils.aoa_to_sheet(statsData);
       XLSX.utils.book_append_sheet(wb, wsStats, 'Resumo');
 
-      // Aba de Agenda Detalhada
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
         ...eventosFiltrados.map(evento => {
@@ -1727,11 +1844,9 @@ function ModernAgendamentos() {
       const wsAgenda = XLSX.utils.aoa_to_sheet(agendaData);
       XLSX.utils.book_append_sheet(wb, wsAgenda, 'Agenda Detalhada');
 
-      // Salvar arquivo
       const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.xlsx`;
       XLSX.writeFile(wb, fileName);
       
-      // Registrar na auditoria
       await auditoriaService.registrar('exportar_excel_agenda', {
         entidade: 'agendamentos',
         detalhes: 'Exportação de relatório de agenda em Excel',
@@ -1854,7 +1969,7 @@ function ModernAgendamentos() {
         </Box>
       </Box>
 
-      {/* Atendimentos em Andamento - Apenas para admin/gerente/atendente/profissional */}
+      {/* Atendimentos em Andamento */}
       {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
           <CardContent>
@@ -1959,7 +2074,7 @@ function ModernAgendamentos() {
               </Box>
             </Grid>
             
-            {/* Filtro de Profissional - Visível para admin/gerente/atendente */}
+            {/* Filtro de Profissional */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -1978,7 +2093,7 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Status - Visível para todos exceto cliente */}
+            {/* Filtro de Status */}
             {cargo !== 'cliente' && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -1999,7 +2114,7 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Mostrar - Visível para admin/gerente/atendente */}
+            {/* Filtro de Mostrar */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -2620,7 +2735,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Agendamento - Apenas para admin/gerente/atendente */}
+      {/* Dialog de Agendamento */}
       {openDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
@@ -3012,19 +3127,38 @@ function ModernAgendamentos() {
                       onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
                     >
                       <MenuItem value="">Selecione um horário</MenuItem>
-                      {timeSlots.map(time => (
-                        <MenuItem 
-                          key={time} 
-                          value={time}
-                          disabled={!isHorarioDisponivel(time)}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TimeIcon fontSize="small" />
-                            {time}
-                            {!isHorarioDisponivel(time) && ' (Ocupado)'}
-                          </Box>
-                        </MenuItem>
-                      ))}
+                      {timeSlots.map(time => {
+                        const disponivel = isHorarioDisponivel(time);
+                        const motivo = getMotivoIndisponibilidade(
+                          formData.profissionalId, 
+                          formData.data, 
+                          time
+                        );
+                        
+                        return (
+                          <MenuItem 
+                            key={time} 
+                            value={time}
+                            disabled={!disponivel}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {disponivel ? (
+                                <EventAvailableIcon fontSize="small" sx={{ color: '#4caf50' }} />
+                              ) : (
+                                <EventBusyIcon fontSize="small" sx={{ color: '#f44336' }} />
+                              )}
+                              <Box>
+                                <Typography variant="body2">{time}</Typography>
+                                {!disponivel && motivo && (
+                                  <Typography variant="caption" color="error" sx={{ fontSize: '0.6rem' }}>
+                                    {motivo}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                          </MenuItem>
+                        );
+                      })}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -3098,7 +3232,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Relatórios - Apenas para admin/gerente/atendente */}
+      {/* Dialog de Relatórios */}
       {openRelatorioDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
         <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
