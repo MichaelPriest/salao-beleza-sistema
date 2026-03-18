@@ -309,11 +309,14 @@ function ModelosAnamnese() {
 
   const handleSalvarComoNovo = async (modelo) => {
     try {
+      // 🔥 Remover o campo id que causa erro
+      const { id, ...modeloParaSalvar } = modelo;
+      
       const novoModelo = {
-        ...modelo,
-        id: undefined,
+        ...modeloParaSalvar,
         usos: 0,
-        criadoEm: new Date().toISOString()
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString()
       };
       
       await firebaseService.add('modelos_anamnese', novoModelo);
