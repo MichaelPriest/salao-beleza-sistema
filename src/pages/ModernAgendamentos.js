@@ -104,6 +104,18 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
+// ============================================
+// CONSTANTES E FUNÇÕES AUXILIARES
+// ============================================
+
+const timeSlots = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
+];
+
+const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
 // Funções auxiliares de data
 const getDaysInMonth = (date) => {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -145,15 +157,10 @@ const getWeekDays = (date) => {
   return days;
 };
 
-const timeSlots = [
-  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
-];
+// ============================================
+// COMPONENTE RELATORIO AGENDA
+// ============================================
 
-const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-
-// Componente para impressão da agenda
 const RelatorioAgenda = React.forwardRef(({ 
   eventos, 
   profissional, 
@@ -339,16 +346,25 @@ const RelatorioAgenda = React.forwardRef(({
   );
 });
 
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
+
 function ModernAgendamentos() {
   const navigate = useNavigate();
+  
+  // Estados de usuário e permissões
   const [usuario, setUsuario] = useState(null);
   const [cargo, setCargo] = useState('');
   
+  // Estados de visualização
   const [viewMode, setViewMode] = useState('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [selectedProfessional, setSelectedProfessional] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  
+  // Estados de diálogos
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
@@ -404,211 +420,21 @@ function ModernAgendamentos() {
   const { data: servicos, loading: loadingServicos } = useFirebase('servicos');
   const { data: usuarios, loading: loadingUsuarios } = useFirebase('usuarios');
 
-  // 🔥 Carregar disponibilidades e ausências
-  useEffect(() => {
-    const carregarDisponibilidade = async () => {
-      const [dispData, ausData] = await Promise.all([
-        firebaseService.getAll('disponibilidades').catch(() => []),
-        firebaseService.getAll('ausencias').catch(() => [])
-      ]);
-      setDisponibilidades(dispData || []);
-      setAusencias(ausData || []);
-    };
-    carregarDisponibilidade();
-  }, [updateTrigger]);
-
-  // Carregar configurações
-  useEffect(() => {
-    const carregarConfiguracoes = async () => {
-      const configData = await firebaseService.getAll('configuracoes');
-      if (configData && configData.length > 0) {
-        setConfiguracoes(configData[0]);
-      }
-    };
-    carregarConfiguracoes();
-  }, []);
-
-  useEffect(() => {
-    const user = usuariosService.getUsuarioAtual();
-    setUsuario(user);
-    setCargo(user?.cargo || '');
-
-    // Registrar acesso na auditoria
-    auditoriaService.registrar('acesso_agenda', {
-      entidade: 'agendamentos',
-      detalhes: `Acesso à página de agenda`,
-      dados: {
-        usuarioId: user?.id,
-        cargo: user?.cargo
-      }
-    });
-
-    // Se for profissional, filtrar automaticamente pelo profissional
-    if (user?.cargo === 'profissional' && user?.profissionalId) {
-      setSelectedProfessional(user.profissionalId);
-    }
-
-    // Se for cliente, mostrar apenas seus agendamentos
-    if (user?.cargo === 'cliente' && user?.clienteId) {
-      setSelectedProfessional('all');
-    }
-  }, []);
-
-  // 🔥 Efeito para atualizar horários disponíveis quando profissional ou data mudar
-  useEffect(() => {
-    if (formData.profissionalId && formData.data) {
-      const horarios = timeSlots.filter(time => 
-        verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
-      );
-      setHorariosDisponiveis(horarios);
-    } else {
-      setHorariosDisponiveis([]);
-    }
-  }, [formData.profissionalId, formData.data, disponibilidades, ausencias, agendamentos, selectedAppointment]);
-
-  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos || loadingUsuarios;
+  // Estado do formulário
+  const [formData, setFormData] = useState({
+    clienteId: '',
+    profissionalId: '',
+    servicoId: '',
+    data: selectedDate,
+    horario: '',
+    observacoes: '',
+    status: 'pendente',
+    servicos: [],
+    valorTotal: 0
+  });
 
   // ============================================
-  // 🔥 FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
-  // ============================================
-
-  // Verificar disponibilidade do profissional
-  const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
-    if (!profissionalId || !data || !horario) return false;
-
-    const dataObj = new Date(data + 'T12:00:00');
-    const diaSemana = dataObj.getDay(); // 0 = Domingo, 1 = Segunda, etc.
-
-    // 🔍 Verificar disponibilidade do profissional para este dia da semana
-    const disponibilidade = disponibilidades.find(
-      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
-    );
-
-    if (!disponibilidade) return false; // Profissional não trabalha neste dia
-
-    // ⏰ Verificar se horário está dentro do expediente
-    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
-    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
-    const [horaAtual, minAtual] = horario.split(':').map(Number);
-    
-    const minutosInicio = horaInicio * 60 + minInicio;
-    const minutosFim = horaFim * 60 + minFim;
-    const minutosAtual = horaAtual * 60 + minAtual;
-
-    if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
-
-    // 🍽️ Verificar intervalo de almoço
-    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
-      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
-      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
-      
-      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
-      const minutosIntFim = horaIntFim * 60 + minIntFim;
-
-      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
-    }
-
-    // 🚫 Verificar ausências (folgas, férias, etc.)
-    const ausencia = ausencias.find(a => 
-      a.profissionalId === profissionalId &&
-      data >= a.dataInicio &&
-      data <= a.dataFim &&
-      (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') || // Dia inteiro
-        (horario >= a.horarioInicio && horario < a.horarioFim) // Horário específico
-      )
-    );
-
-    if (ausencia) return false;
-
-    // 📅 Verificar se já existe agendamento neste horário
-    const agendamentoExistente = (agendamentos || []).some(apt => 
-      apt.profissionalId === profissionalId &&
-      apt.data === data &&
-      apt.horario === horario &&
-      apt.id !== selectedAppointment?.id &&
-      apt.status !== 'cancelado'
-    );
-
-    return !agendamentoExistente;
-  };
-
-  // Obter motivo de indisponibilidade
-  const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
-    if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
-
-    const dataObj = new Date(data + 'T12:00:00');
-    const diaSemana = dataObj.getDay();
-
-    const disponibilidade = disponibilidades.find(
-      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
-    );
-
-    if (!disponibilidade) return 'Profissional não trabalha neste dia da semana';
-
-    const [horaAtual, minAtual] = horario.split(':').map(Number);
-    const minutosAtual = horaAtual * 60 + minAtual;
-
-    // Verificar horário de expediente
-    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
-    const minutosInicio = horaInicio * 60 + minInicio;
-    
-    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
-    const minutosFim = horaFim * 60 + minFim;
-
-    if (minutosAtual < minutosInicio) return 'Antes do horário de início';
-    if (minutosAtual >= minutosFim) return 'Após o horário de término';
-
-    // Verificar intervalo
-    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
-      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
-      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
-      
-      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
-      const minutosIntFim = horaIntFim * 60 + minIntFim;
-
-      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
-    }
-
-    // Verificar ausência
-    const ausencia = ausencias.find(a => 
-      a.profissionalId === profissionalId &&
-      data >= a.dataInicio &&
-      data <= a.dataFim &&
-      (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
-        (horario >= a.horarioInicio && horario < a.horarioFim)
-      )
-    );
-
-    if (ausencia) {
-      const tipos = {
-        folga: 'Profissional está de folga',
-        ferias: 'Profissional está de férias',
-        licenca: 'Profissional está de licença',
-        falta: 'Profissional ausente',
-        treinamento: 'Profissional em treinamento',
-        evento: 'Profissional em evento'
-      };
-      return tipos[ausencia.tipo] || 'Profissional ausente';
-    }
-
-    // Verificar agendamento existente
-    const agendamentoExistente = (agendamentos || []).some(apt => 
-      apt.profissionalId === profissionalId &&
-      apt.data === data &&
-      apt.horario === horario &&
-      apt.id !== selectedAppointment?.id &&
-      apt.status !== 'cancelado'
-    );
-
-    if (agendamentoExistente) return 'Horário já ocupado';
-
-    return null;
-  };
-
-  // ============================================
-  // FUNÇÕES PARA ACESSAR DADOS DO CLIENTE
+  // FUNÇÕES DE UTILIDADE
   // ============================================
 
   const getClienteData = (clienteId) => {
@@ -701,165 +527,210 @@ function ModernAgendamentos() {
     return d.toLocaleDateString('pt-BR');
   };
 
-  // Filtrar eventos baseado no cargo do usuário
-  const filtrarEventosPorUsuario = (eventos) => {
-    if (!usuario) return eventos;
-
-    if (cargo === 'cliente' && usuario.clienteId) {
-      return eventos.filter(e => e.clienteId === usuario.clienteId);
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'confirmado': return 'success';
+      case 'pendente': return 'warning';
+      case 'cancelado': return 'error';
+      case 'finalizado': return 'info';
+      case 'em_andamento': return 'secondary';
+      default: return 'default';
     }
-
-    if (cargo === 'profissional' && usuario.profissionalId) {
-      return eventos.filter(e => e.profissionalId === usuario.profissionalId);
-    }
-
-    return eventos;
   };
 
-  // Combinar agendamentos e atendimentos
-  const todosEventos = filtrarEventosPorUsuario([
-    ...(agendamentos || []).map(apt => ({
-      ...apt,
-      tipo: 'agendamento',
-      icone: <ScheduleIcon />,
-      dataObj: apt.data,
-      horarioObj: apt.horario
-    })),
-    ...(atendimentos || []).map(att => ({
-      ...att,
-      tipo: 'atendimento',
-      icone: <TimerIcon />,
-      status: att.status || 'em_andamento',
-      dataObj: att.data,
-      horarioObj: att.horaInicio
-    }))
-  ]);
+  const getStatusIcon = (status) => {
+    switch(status) {
+      case 'confirmado': return <CheckIcon />;
+      case 'pendente': return <ScheduleIcon />;
+      case 'cancelado': return <CancelIcon />;
+      case 'finalizado': return <CheckIcon />;
+      case 'em_andamento': return <TimerIcon />;
+      default: return null;
+    }
+  };
 
-  // Estado do formulário
-  const [formData, setFormData] = useState({
-    clienteId: '',
-    profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
-    servicoId: '',
-    data: selectedDate,
-    horario: '',
-    observacoes: '',
-    status: 'pendente',
-    servicos: [],
-    valorTotal: 0
-  });
+  const getStatusLabel = (status) => {
+    switch(status) {
+      case 'confirmado': return 'Confirmado';
+      case 'pendente': return 'Pendente';
+      case 'cancelado': return 'Cancelado';
+      case 'finalizado': return 'Finalizado';
+      case 'em_andamento': return 'Em Andamento';
+      default: return status;
+    }
+  };
 
-  // ============================================
-  // FUNÇÕES PARA FILTRAR SERVIÇOS POR PROFISSIONAL
-  // ============================================
+  const getTipoIcon = (tipo) => {
+    return tipo === 'agendamento' ? <ScheduleIcon fontSize="small" /> : <TimerIcon fontSize="small" />;
+  };
 
-  useEffect(() => {
-    if (formData.profissionalId && servicos) {
-      const profissional = profissionais?.find(p => p.id === formData.profissionalId);
-      
-      if (profissional && profissional.servicosIds) {
-        const servicosDoProfissional = servicos.filter(s => 
-          profissional.servicosIds.includes(s.id) && s.ativo !== false
-        );
-        setServicosDisponiveis(servicosDoProfissional);
-      } else {
-        setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
-      }
+  const getTipoLabel = (tipo) => {
+    return tipo === 'agendamento' ? 'Agendamento' : 'Atendimento';
+  };
+
+  const getHeaderText = () => {
+    if (viewMode === 'day') {
+      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } else if (viewMode === 'week') {
+      const start = getWeekDays(currentDate)[0];
+      const end = getWeekDays(currentDate)[6];
+      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
     } else {
-      setServicosDisponiveis([]);
+      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
-  }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
-
-  const servicosFiltrados = servicosDisponiveis.filter(servico => 
-    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
-  );
-
-  const profissionaisFiltrados = (profissionais || []).filter(prof => 
-    prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
-  );
+  };
 
   // ============================================
-  // FUNÇÕES PARA GERENCIAR MÚLTIPLOS SERVIÇOS
+  // 🔥 FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
   // ============================================
 
-  const adicionarServico = () => {
-    if (!servicoAtual) {
-      toast.error('Selecione um serviço');
-      return;
-    }
+  const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
+    if (!profissionalId || !data || !horario) return false;
 
-    const servico = servicos?.find(s => s.id === servicoAtual);
-    if (!servico) return;
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay(); // 0 = Domingo, 1 = Segunda, etc.
 
-    if (servicosSelecionados.some(s => s.id === servico.id)) {
-      toast.error('Este serviço já foi adicionado');
-      return;
-    }
+    // Verificar disponibilidade do profissional para este dia da semana
+    const disponibilidade = disponibilidades.find(
+      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
+    );
 
-    const novoServico = {
-      id: servico.id,
-      nome: servico.nome,
-      preco: servico.preco || 0,
-      duracao: servico.duracao || 60,
-      comissao: servico.comissaoProfissional || 50,
-      profissionalId: formData.profissionalId
-    };
+    if (!disponibilidade) return false; // Profissional não trabalha neste dia
 
-    setServicosSelecionados([...servicosSelecionados, novoServico]);
-    setServicoAtual('');
-    setBuscaServico('');
+    // Verificar se horário está dentro do expediente
+    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
+    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
+    const [horaAtual, minAtual] = horario.split(':').map(Number);
     
-    const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
-    setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
-  };
+    const minutosInicio = horaInicio * 60 + minInicio;
+    const minutosFim = horaFim * 60 + minFim;
+    const minutosAtual = horaAtual * 60 + minAtual;
 
-  const removerServico = (id) => {
-    const novosServicos = servicosSelecionados.filter(s => s.id !== id);
-    setServicosSelecionados(novosServicos);
-    
-    const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
-    setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
-  };
+    if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
 
-  const limparServicos = () => {
-    setServicosSelecionados([]);
-    setFormData({ ...formData, valorTotal: 0, servicos: [] });
-  };
+    // Verificar intervalo de almoço
+    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
+      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
+      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
+      
+      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
+      const minutosIntFim = horaIntFim * 60 + minIntFim;
 
-  // Reset quando abrir modal
-  useEffect(() => {
-    if (openDialog) {
-      if (selectedAppointment) {
-        setFormData({
-          clienteId: selectedAppointment.clienteId || '',
-          profissionalId: selectedAppointment.profissionalId || (cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : ''),
-          servicoId: selectedAppointment.servicoId || '',
-          data: selectedAppointment.data || selectedDate,
-          horario: selectedAppointment.horario || '',
-          observacoes: selectedAppointment.observacoes || '',
-          status: selectedAppointment.status || 'pendente',
-          servicos: selectedAppointment.servicos || [],
-          valorTotal: selectedAppointment.valorTotal || 0
-        });
-        setServicosSelecionados(selectedAppointment.servicos || []);
-      } else {
-        setFormData({
-          clienteId: '',
-          profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
-          servicoId: '',
-          data: selectedDate,
-          horario: '',
-          observacoes: '',
-          status: 'pendente',
-          servicos: [],
-          valorTotal: 0
-        });
-        setServicosSelecionados([]);
-        setServicoAtual('');
-        setBuscaProfissional('');
-        setBuscaServico('');
-      }
+      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
     }
-  }, [openDialog, selectedAppointment, selectedDate, usuario, cargo, updateTrigger]);
+
+    // Verificar ausências (folgas, férias, etc.)
+    const ausencia = ausencias.find(a => 
+      a.profissionalId === profissionalId &&
+      data >= a.dataInicio &&
+      data <= a.dataFim &&
+      (
+        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') || // Dia inteiro
+        (horario >= a.horarioInicio && horario < a.horarioFim) // Horário específico
+      )
+    );
+
+    if (ausencia) return false;
+
+    // Verificar se já existe agendamento neste horário
+    const agendamentoExistente = (agendamentos || []).some(apt => 
+      apt.profissionalId === profissionalId &&
+      apt.data === data &&
+      apt.horario === horario &&
+      apt.id !== selectedAppointment?.id &&
+      apt.status !== 'cancelado'
+    );
+
+    return !agendamentoExistente;
+  };
+
+  const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
+    if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
+
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
+
+    const disponibilidade = disponibilidades.find(
+      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
+    );
+
+    if (!disponibilidade) return 'Profissional não trabalha neste dia da semana';
+
+    const [horaAtual, minAtual] = horario.split(':').map(Number);
+    const minutosAtual = horaAtual * 60 + minAtual;
+
+    // Verificar horário de expediente
+    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
+    const minutosInicio = horaInicio * 60 + minInicio;
+    
+    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
+    const minutosFim = horaFim * 60 + minFim;
+
+    if (minutosAtual < minutosInicio) return 'Antes do horário de início';
+    if (minutosAtual >= minutosFim) return 'Após o horário de término';
+
+    // Verificar intervalo
+    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
+      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
+      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
+      
+      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
+      const minutosIntFim = horaIntFim * 60 + minIntFim;
+
+      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
+    }
+
+    // Verificar ausência
+    const ausencia = ausencias.find(a => 
+      a.profissionalId === profissionalId &&
+      data >= a.dataInicio &&
+      data <= a.dataFim &&
+      (
+        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
+        (horario >= a.horarioInicio && horario < a.horarioFim)
+      )
+    );
+
+    if (ausencia) {
+      const tipos = {
+        folga: 'Profissional está de folga',
+        ferias: 'Profissional está de férias',
+        licenca: 'Profissional está de licença',
+        falta: 'Profissional ausente',
+        treinamento: 'Profissional em treinamento',
+        evento: 'Profissional em evento'
+      };
+      return tipos[ausencia.tipo] || 'Profissional ausente';
+    }
+
+    // Verificar agendamento existente
+    const agendamentoExistente = (agendamentos || []).some(apt => 
+      apt.profissionalId === profissionalId &&
+      apt.data === data &&
+      apt.horario === horario &&
+      apt.id !== selectedAppointment?.id &&
+      apt.status !== 'cancelado'
+    );
+
+    if (agendamentoExistente) return 'Horário já ocupado';
+
+    return null;
+  };
+
+  const isHorarioDisponivel = (horario) => {
+    if (!formData.profissionalId || !formData.data) return true;
+    
+    return verificarDisponibilidadeProfissional(
+      formData.profissionalId,
+      formData.data,
+      horario
+    );
+  };
 
   // ============================================
   // FUNÇÕES DE PESQUISA DE CLIENTES
@@ -904,40 +775,43 @@ function ModernAgendamentos() {
     return resultados.slice(0, 10);
   };
 
-  useEffect(() => {
-    if (showClientSearch) {
-      const resultados = buscarClientes();
-      setSearchClientResults(resultados);
+  // ============================================
+  // FUNÇÕES DE FILTRAGEM DE EVENTOS
+  // ============================================
+
+  const filtrarEventosPorUsuario = (eventos) => {
+    if (!usuario) return eventos;
+
+    if (cargo === 'cliente' && usuario.clienteId) {
+      return eventos.filter(e => e.clienteId === usuario.clienteId);
     }
-  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
 
-  const handleOpenClientSearch = () => {
-    setShowClientSearch(true);
-    setSearchClientTerm('');
-    setCpfInput('');
-    setDataNascimentoInput(null);
-    setSearchClientType('nome');
+    if (cargo === 'profissional' && usuario.profissionalId) {
+      return eventos.filter(e => e.profissionalId === usuario.profissionalId);
+    }
+
+    return eventos;
   };
 
-  const handleCloseClientSearch = () => {
-    setShowClientSearch(false);
-  };
+  // Combinar agendamentos e atendimentos
+  const todosEventos = filtrarEventosPorUsuario([
+    ...(agendamentos || []).map(apt => ({
+      ...apt,
+      tipo: 'agendamento',
+      icone: <ScheduleIcon />,
+      dataObj: apt.data,
+      horarioObj: apt.horario
+    })),
+    ...(atendimentos || []).map(att => ({
+      ...att,
+      tipo: 'atendimento',
+      icone: <TimerIcon />,
+      status: att.status || 'em_andamento',
+      dataObj: att.data,
+      horarioObj: att.horaInicio
+    }))
+  ]);
 
-  const handleSelectClient = (cliente) => {
-    setFormData({ ...formData, clienteId: cliente.id });
-    setShowClientSearch(false);
-    toast.success(`Cliente ${cliente.nome} selecionado`);
-  };
-
-  const handleClearClient = () => {
-    setFormData({ ...formData, clienteId: '' });
-  };
-
-  const getSelectedClientData = () => {
-    return getClienteData(formData.clienteId);
-  };
-
-  // Filtrar eventos
   const filteredEvents = todosEventos.filter(event => {
     const professionalMatch = selectedProfessional === 'all' || event.profissionalId === selectedProfessional;
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
@@ -1006,6 +880,70 @@ function ModernAgendamentos() {
     finalizados: dayEvents.filter(e => e.status === 'finalizado').length,
   };
 
+  // ============================================
+  // FUNÇÕES DE SERVIÇOS
+  // ============================================
+
+  const servicosFiltrados = servicosDisponiveis.filter(servico => 
+    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
+  );
+
+  const profissionaisFiltrados = (profissionais || []).filter(prof => 
+    prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
+  );
+
+  const adicionarServico = () => {
+    if (!servicoAtual) {
+      toast.error('Selecione um serviço');
+      return;
+    }
+
+    const servico = servicos?.find(s => s.id === servicoAtual);
+    if (!servico) return;
+
+    if (servicosSelecionados.some(s => s.id === servico.id)) {
+      toast.error('Este serviço já foi adicionado');
+      return;
+    }
+
+    const novoServico = {
+      id: servico.id,
+      nome: servico.nome,
+      preco: servico.preco || 0,
+      duracao: servico.duracao || 60,
+      comissao: servico.comissaoProfissional || 50,
+      profissionalId: formData.profissionalId
+    };
+
+    setServicosSelecionados([...servicosSelecionados, novoServico]);
+    setServicoAtual('');
+    setBuscaServico('');
+    
+    const novoTotal = [...servicosSelecionados, novoServico].reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: [...servicosSelecionados, novoServico] });
+  };
+
+  const removerServico = (id) => {
+    const novosServicos = servicosSelecionados.filter(s => s.id !== id);
+    setServicosSelecionados(novosServicos);
+    
+    const novoTotal = novosServicos.reduce((acc, s) => acc + (s.preco || 0), 0);
+    setFormData({ ...formData, valorTotal: novoTotal, servicos: novosServicos });
+  };
+
+  const limparServicos = () => {
+    setServicosSelecionados([]);
+    setFormData({ ...formData, valorTotal: 0, servicos: [] });
+  };
+
+  const getSelectedClientData = () => {
+    return getClienteData(formData.clienteId);
+  };
+
+  // ============================================
+  // FUNÇÕES DE NAVEGAÇÃO
+  // ============================================
+
   const handlePrevious = () => {
     if (viewMode === 'day') {
       const newDate = addDays(new Date(selectedDate), -1);
@@ -1041,6 +979,20 @@ function ModernAgendamentos() {
     setCurrentDate(today);
     setSelectedDate(formatDate(today));
   };
+
+  const handleDayClick = (date) => {
+    setSelectedDate(date);
+    setViewMode('day');
+  };
+
+  const handleDayDetails = (date, events) => {
+    setSelectedDayDetails({ date, events });
+    setOpenDayDialog(true);
+  };
+
+  // ============================================
+  // FUNÇÕES DE AÇÕES (CRUD)
+  // ============================================
 
   const handleAdd = () => {
     if (cargo === 'profissional') {
@@ -1161,121 +1113,6 @@ function ModernAgendamentos() {
     }
   };
 
-  const handleSave = async (event) => {
-    event.preventDefault();
-    
-    try {
-      if (!formData.clienteId) {
-        toast.error('Selecione um cliente');
-        return;
-      }
-
-      if (servicosSelecionados.length === 0) {
-        toast.error('Adicione pelo menos um serviço');
-        return;
-      }
-
-      if (!formData.profissionalId) {
-        toast.error('Selecione um profissional');
-        return;
-      }
-
-      if (!formData.horario) {
-        toast.error('Selecione um horário');
-        return;
-      }
-
-      // 🔥 Validar disponibilidade do profissional
-      const disponivel = verificarDisponibilidadeProfissional(
-        formData.profissionalId, 
-        formData.data, 
-        formData.horario
-      );
-
-      if (!disponivel) {
-        const motivo = getMotivoIndisponibilidade(
-          formData.profissionalId, 
-          formData.data, 
-          formData.horario
-        );
-        toast.error(`Horário indisponível: ${motivo || 'Profissional não disponível'}`);
-        return;
-      }
-
-      const dadosParaSalvar = {
-        clienteId: formData.clienteId,
-        profissionalId: formData.profissionalId,
-        servicoId: servicosSelecionados[0]?.id,
-        servicos: servicosSelecionados,
-        data: formData.data,
-        horario: formData.horario,
-        observacoes: formData.observacoes || '',
-        status: formData.status || 'pendente',
-        valorTotal: formData.valorTotal,
-        origem: 'sistema',
-        createdBy: usuario?.id || usuario?.uid || 'sistema',
-        createdByName: usuario?.nome || 'Sistema',
-        createdByCargo: usuario?.cargo || 'sistema'
-      };
-
-      let agendamentoCriado;
-
-      if (selectedAppointment) {
-        const agendamentoAntigo = { ...selectedAppointment };
-        
-        await atualizar(selectedAppointment.id, dadosParaSalvar);
-        
-        await auditoriaService.registrarAtualizacao(
-          'agendamentos',
-          selectedAppointment.id,
-          agendamentoAntigo,
-          dadosParaSalvar,
-          `Agendamento atualizado`
-        );
-
-        agendamentoCriado = { ...dadosParaSalvar, id: selectedAppointment.id };
-        toast.success('Agendamento atualizado!');
-      } else {
-        agendamentoCriado = await adicionar(dadosParaSalvar);
-        
-        await auditoriaService.registrarCriacao(
-          'agendamentos',
-          agendamentoCriado.id,
-          dadosParaSalvar,
-          `Novo agendamento criado`
-        );
-
-        toast.success('Agendamento criado!');
-      }
-
-      setUpdateTrigger(prev => prev + 1);
-
-      // Notificar profissional
-      if (usuario && formData.profissionalId) {
-        try {
-          const usuarios = await firebaseService.getAll('usuarios');
-          const profissionalUser = usuarios.find(u => u.profissionalId === formData.profissionalId);
-          
-          if (profissionalUser) {
-            await notificacoesService.notificarAgendamento(agendamentoCriado, profissionalUser.id);
-          }
-        } catch (notifError) {
-          console.error('Erro ao enviar notificação:', notifError);
-        }
-      }
-      
-      setOpenDialog(false);
-    } catch (error) {
-      console.error('Erro ao salvar agendamento:', error);
-      toast.error('Erro ao salvar agendamento');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: selectedAppointment ? 'atualizar_agendamento' : 'criar_agendamento',
-        dados: formData
-      });
-    }
-  };
-
   const iniciarAtendimento = async (agendamento) => {
     if (cargo === 'cliente') {
       toast.error('Apenas funcionários podem iniciar atendimentos');
@@ -1372,82 +1209,140 @@ function ModernAgendamentos() {
     navigate(`/atendimento/${atendimento.id}`);
   };
 
-  const handleDayClick = (date) => {
-    setSelectedDate(date);
-    setViewMode('day');
+  const handleOpenClientSearch = () => {
+    setShowClientSearch(true);
+    setSearchClientTerm('');
+    setCpfInput('');
+    setDataNascimentoInput(null);
+    setSearchClientType('nome');
   };
 
-  const handleDayDetails = (date, events) => {
-    setSelectedDayDetails({ date, events });
-    setOpenDayDialog(true);
+  const handleCloseClientSearch = () => {
+    setShowClientSearch(false);
   };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'confirmado': return 'success';
-      case 'pendente': return 'warning';
-      case 'cancelado': return 'error';
-      case 'finalizado': return 'info';
-      case 'em_andamento': return 'secondary';
-      default: return 'default';
-    }
+  const handleSelectClient = (cliente) => {
+    setFormData({ ...formData, clienteId: cliente.id });
+    setShowClientSearch(false);
+    toast.success(`Cliente ${cliente.nome} selecionado`);
   };
 
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'confirmado': return <CheckIcon />;
-      case 'pendente': return <ScheduleIcon />;
-      case 'cancelado': return <CancelIcon />;
-      case 'finalizado': return <CheckIcon />;
-      case 'em_andamento': return <TimerIcon />;
-      default: return null;
-    }
+  const handleClearClient = () => {
+    setFormData({ ...formData, clienteId: '' });
   };
 
-  const getStatusLabel = (status) => {
-    switch(status) {
-      case 'confirmado': return 'Confirmado';
-      case 'pendente': return 'Pendente';
-      case 'cancelado': return 'Cancelado';
-      case 'finalizado': return 'Finalizado';
-      case 'em_andamento': return 'Em Andamento';
-      default: return status;
-    }
-  };
-
-  const getTipoIcon = (tipo) => {
-    return tipo === 'agendamento' ? <ScheduleIcon fontSize="small" /> : <TimerIcon fontSize="small" />;
-  };
-
-  const getTipoLabel = (tipo) => {
-    return tipo === 'agendamento' ? 'Agendamento' : 'Atendimento';
-  };
-
-  // 🔥 Função atualizada para verificar disponibilidade de horário
-  const isHorarioDisponivel = (horario) => {
-    if (!formData.profissionalId || !formData.data) return true;
+  const handleSave = async (event) => {
+    event.preventDefault();
     
-    return verificarDisponibilidadeProfissional(
-      formData.profissionalId,
-      formData.data,
-      horario
-    );
-  };
+    try {
+      if (!formData.clienteId) {
+        toast.error('Selecione um cliente');
+        return;
+      }
 
-  const getHeaderText = () => {
-    if (viewMode === 'day') {
-      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      if (servicosSelecionados.length === 0) {
+        toast.error('Adicione pelo menos um serviço');
+        return;
+      }
+
+      if (!formData.profissionalId) {
+        toast.error('Selecione um profissional');
+        return;
+      }
+
+      if (!formData.horario) {
+        toast.error('Selecione um horário');
+        return;
+      }
+
+      // Validar disponibilidade do profissional
+      const disponivel = verificarDisponibilidadeProfissional(
+        formData.profissionalId, 
+        formData.data, 
+        formData.horario
+      );
+
+      if (!disponivel) {
+        const motivo = getMotivoIndisponibilidade(
+          formData.profissionalId, 
+          formData.data, 
+          formData.horario
+        );
+        toast.error(`Horário indisponível: ${motivo || 'Profissional não disponível'}`);
+        return;
+      }
+
+      const dadosParaSalvar = {
+        clienteId: formData.clienteId,
+        profissionalId: formData.profissionalId,
+        servicoId: servicosSelecionados[0]?.id,
+        servicos: servicosSelecionados,
+        data: formData.data,
+        horario: formData.horario,
+        observacoes: formData.observacoes || '',
+        status: formData.status || 'pendente',
+        valorTotal: formData.valorTotal,
+        origem: 'sistema',
+        createdBy: usuario?.id || usuario?.uid || 'sistema',
+        createdByName: usuario?.nome || 'Sistema',
+        createdByCargo: usuario?.cargo || 'sistema'
+      };
+
+      let agendamentoCriado;
+
+      if (selectedAppointment) {
+        const agendamentoAntigo = { ...selectedAppointment };
+        
+        await atualizar(selectedAppointment.id, dadosParaSalvar);
+        
+        await auditoriaService.registrarAtualizacao(
+          'agendamentos',
+          selectedAppointment.id,
+          agendamentoAntigo,
+          dadosParaSalvar,
+          `Agendamento atualizado`
+        );
+
+        agendamentoCriado = { ...dadosParaSalvar, id: selectedAppointment.id };
+        toast.success('Agendamento atualizado!');
+      } else {
+        agendamentoCriado = await adicionar(dadosParaSalvar);
+        
+        await auditoriaService.registrarCriacao(
+          'agendamentos',
+          agendamentoCriado.id,
+          dadosParaSalvar,
+          `Novo agendamento criado`
+        );
+
+        toast.success('Agendamento criado!');
+      }
+
+      setUpdateTrigger(prev => prev + 1);
+
+      // Notificar profissional
+      if (usuario && formData.profissionalId) {
+        try {
+          const usuarios = await firebaseService.getAll('usuarios');
+          const profissionalUser = usuarios.find(u => u.profissionalId === formData.profissionalId);
+          
+          if (profissionalUser) {
+            await notificacoesService.notificarAgendamento(agendamentoCriado, profissionalUser.id);
+          }
+        } catch (notifError) {
+          console.error('Erro ao enviar notificação:', notifError);
+        }
+      }
+      
+      setOpenDialog(false);
+    } catch (error) {
+      console.error('Erro ao salvar agendamento:', error);
+      toast.error('Erro ao salvar agendamento');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: selectedAppointment ? 'atualizar_agendamento' : 'criar_agendamento',
+        dados: formData
       });
-    } else if (viewMode === 'week') {
-      const start = weekDays_list[0];
-      const end = weekDays_list[6];
-      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
-    } else {
-      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
 
@@ -1869,6 +1764,122 @@ function ModernAgendamentos() {
     }
   };
 
+  // ============================================
+  // EFEITOS (useEffect)
+  // ============================================
+
+  useEffect(() => {
+    const user = usuariosService.getUsuarioAtual();
+    setUsuario(user);
+    setCargo(user?.cargo || '');
+
+    if (user?.cargo === 'profissional' && user?.profissionalId) {
+      setSelectedProfessional(user.profissionalId);
+    }
+
+    if (user?.cargo === 'cliente' && user?.clienteId) {
+      setSelectedProfessional('all');
+    }
+  }, []);
+
+  useEffect(() => {
+    const carregarConfiguracoes = async () => {
+      const configData = await firebaseService.getAll('configuracoes');
+      if (configData && configData.length > 0) {
+        setConfiguracoes(configData[0]);
+      }
+    };
+    carregarConfiguracoes();
+  }, []);
+
+  useEffect(() => {
+    const carregarDisponibilidade = async () => {
+      const [dispData, ausData] = await Promise.all([
+        firebaseService.getAll('disponibilidades').catch(() => []),
+        firebaseService.getAll('ausencias').catch(() => [])
+      ]);
+      setDisponibilidades(dispData || []);
+      setAusencias(ausData || []);
+    };
+    carregarDisponibilidade();
+  }, [updateTrigger]);
+
+  useEffect(() => {
+    if (formData.profissionalId && servicos) {
+      const profissional = profissionais?.find(p => p.id === formData.profissionalId);
+      
+      if (profissional && profissional.servicosIds) {
+        const servicosDoProfissional = servicos.filter(s => 
+          profissional.servicosIds.includes(s.id) && s.ativo !== false
+        );
+        setServicosDisponiveis(servicosDoProfissional);
+      } else {
+        setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
+      }
+    } else {
+      setServicosDisponiveis([]);
+    }
+  }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
+
+  useEffect(() => {
+    if (formData.profissionalId && formData.data) {
+      const horarios = timeSlots.filter(time => 
+        verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
+      );
+      setHorariosDisponiveis(horarios);
+    } else {
+      setHorariosDisponiveis([]);
+    }
+  }, [formData.profissionalId, formData.data, disponibilidades, ausencias, agendamentos, selectedAppointment]);
+
+  useEffect(() => {
+    if (openDialog) {
+      if (selectedAppointment) {
+        setFormData({
+          clienteId: selectedAppointment.clienteId || '',
+          profissionalId: selectedAppointment.profissionalId || (cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : ''),
+          servicoId: selectedAppointment.servicoId || '',
+          data: selectedAppointment.data || selectedDate,
+          horario: selectedAppointment.horario || '',
+          observacoes: selectedAppointment.observacoes || '',
+          status: selectedAppointment.status || 'pendente',
+          servicos: selectedAppointment.servicos || [],
+          valorTotal: selectedAppointment.valorTotal || 0
+        });
+        setServicosSelecionados(selectedAppointment.servicos || []);
+      } else {
+        setFormData({
+          clienteId: '',
+          profissionalId: cargo === 'profissional' && usuario?.profissionalId ? usuario.profissionalId : '',
+          servicoId: '',
+          data: selectedDate,
+          horario: '',
+          observacoes: '',
+          status: 'pendente',
+          servicos: [],
+          valorTotal: 0
+        });
+        setServicosSelecionados([]);
+        setServicoAtual('');
+        setBuscaProfissional('');
+        setBuscaServico('');
+      }
+    }
+  }, [openDialog, selectedAppointment, selectedDate, usuario, cargo, updateTrigger]);
+
+  useEffect(() => {
+    if (showClientSearch) {
+      const resultados = buscarClientes();
+      setSearchClientResults(resultados);
+    }
+  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos || loadingUsuarios;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -2074,7 +2085,6 @@ function ModernAgendamentos() {
               </Box>
             </Grid>
             
-            {/* Filtro de Profissional */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -2093,7 +2103,6 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Status */}
             {cargo !== 'cliente' && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
@@ -2114,7 +2123,6 @@ function ModernAgendamentos() {
               </Grid>
             )}
 
-            {/* Filtro de Mostrar */}
             {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
