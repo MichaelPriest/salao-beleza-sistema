@@ -64,6 +64,7 @@ import {
   ListItemIcon,
   ListItemText,
   Link,
+  CircularProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -125,15 +126,13 @@ import {
   AttachMoney as MoneyIcon,
   Inventory as InventoryIcon,
   SettingsApplications as SettingsApplicationsIcon,
-  Google as GoogleIcon,
   Cloud as CloudIcon,
-  Dropbox as DropboxIcon,
-  Microsoft as MicrosoftIcon,
   Book as BookIcon,
   Help as HelpIcon,
   Link as LinkIcon,
   Key as KeyIcon,
   VpnKey as VpnKeyIcon,
+  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -268,6 +267,15 @@ function Backup() {
   const [showPassword, setShowPassword] = useState({});
   const [testandoConexao, setTestandoConexao] = useState(false);
   const [conexaoStatus, setConexaoStatus] = useState({});
+  const [estatisticas, setEstatisticas] = useState({
+    totalBackups: 0,
+    tamanhoTotal: 0,
+    ultimoBackup: null,
+    backupsHoje: 0,
+    backupsSemana: 0,
+    espacoUsado: 0,
+    espacoDisponivel: 0,
+  });
 
   // 🔥 Estado para usuário atual
   const [usuarioAtual, setUsuarioAtual] = useState(null);
@@ -301,6 +309,7 @@ function Backup() {
     { value: 'mensal', label: 'Mensal' },
   ];
 
+  // 🔥 CORRIGIDO: Substituídos ícones que não existem por CloudIcon
   const cloudServices = [
     { 
       value: 'dropbox', 
@@ -312,14 +321,14 @@ function Backup() {
     { 
       value: 'googleDrive', 
       label: 'Google Drive', 
-      icon: <GoogleIcon />,
+      icon: <CloudIcon />,
       color: '#4285F4',
       docs: 'https://developers.google.com/drive'
     },
     { 
       value: 'oneDrive', 
       label: 'OneDrive', 
-      icon: <MicrosoftIcon />,
+      icon: <CloudIcon />,
       color: '#0078D4',
       docs: 'https://docs.microsoft.com/en-us/onedrive/developer/'
     },
@@ -484,13 +493,10 @@ function Backup() {
     setConexaoStatus({ ...conexaoStatus, [cloudService]: 'testando' });
 
     try {
-      // Simular teste de conexão (substituir por chamada real à API)
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Aqui você implementaria a validação real com cada serviço
       const config = cloudConfig[cloudService];
       
-      // Validação básica dos campos obrigatórios
       let valido = false;
       let mensagem = '';
 
@@ -548,16 +554,6 @@ function Backup() {
       }
     }));
   };
-
-  const [estatisticas, setEstatisticas] = useState({
-    totalBackups: 0,
-    tamanhoTotal: 0,
-    ultimoBackup: null,
-    backupsHoje: 0,
-    backupsSemana: 0,
-    espacoUsado: 0,
-    espacoDisponivel: 0,
-  });
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -985,24 +981,249 @@ function Backup() {
           </Box>
         </Box>
 
-        {/* Cards de Estatísticas (manter o mesmo código) */}
+        {/* Cards de Estatísticas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* ... (mesmo código anterior) ... */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
+                    <BackupIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                      {estatisticas.totalBackups}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Total de Backups
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#4caf50', width: 48, height: 48 }}>
+                    <StorageIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                      {formatarTamanho(estatisticas.tamanhoTotal)}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Espaço Utilizado
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
+                    <ScheduleIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      {formatarTempo(estatisticas.ultimoBackup?.dataCriacao)}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Último Backup
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#2196f3', width: 48, height: 48 }}>
+                    <CloudQueueIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                      {estatisticas.backupsHoje}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Backups Hoje
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
 
-        {/* Espaço em Disco (manter o mesmo código) */}
+        {/* Espaço em Disco */}
         <Card sx={{ mb: 4 }}>
-          {/* ... (mesmo código anterior) ... */}
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2 }}>Espaço em Disco</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <Box sx={{ flex: 1 }}>
+                <LinearProgress
+                  variant="determinate"
+                  value={(estatisticas.espacoUsado / estatisticas.espacoDisponivel) * 100}
+                  sx={{
+                    height: 10,
+                    borderRadius: 5,
+                    bgcolor: '#f0f0f0',
+                    '& .MuiLinearProgress-bar': {
+                      bgcolor: '#9c27b0',
+                    },
+                  }}
+                />
+              </Box>
+              <Typography variant="body2" sx={{ minWidth: 100 }}>
+                {((estatisticas.espacoUsado / estatisticas.espacoDisponivel) * 100).toFixed(1)}%
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="caption" color="textSecondary">
+                Usado: {formatarTamanho(estatisticas.espacoUsado)}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                Disponível: {formatarTamanho(estatisticas.espacoDisponivel)}
+              </Typography>
+            </Box>
+          </CardContent>
         </Card>
 
-        {/* Lista de Backups (manter o mesmo código) */}
+        {/* Lista de Backups */}
         <Card>
-          {/* ... (mesmo código anterior) ... */}
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 3 }}>Histórico de Backups</Typography>
+            
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableCell><strong>Nome</strong></TableCell>
+                    <TableCell><strong>Tipo</strong></TableCell>
+                    <TableCell><strong>Data</strong></TableCell>
+                    <TableCell><strong>Tamanho</strong></TableCell>
+                    <TableCell><strong>Registros</strong></TableCell>
+                    <TableCell><strong>Status</strong></TableCell>
+                    <TableCell align="center"><strong>Ações</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {backups.map((backup, index) => {
+                    const statusInfo = statusBackup.find(s => s.value === backup.status) || statusBackup[0];
+                    
+                    return (
+                      <TableRow key={backup.id || index} hover>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {backup.nome}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {backup.criadoPor}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={tiposBackup.find(t => t.value === backup.tipo)?.label || backup.tipo}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {safeFormat(backup.dataCriacao, 'dd/MM/yyyy')}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {safeFormat(backup.dataCriacao, 'HH:mm')}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {formatarTamanho(backup.tamanho || 0)}
+                        </TableCell>
+                        <TableCell>
+                          {backup.registros || 0}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={statusInfo.icon}
+                            label={statusInfo.label}
+                            size="small"
+                            sx={{ bgcolor: statusInfo.color, color: 'white' }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Tooltip title="Download">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDownloadBackup(backup)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <DownloadIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="Restaurar">
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  setBackupSelecionado(backup);
+                                  setOpenRestoreDialog(true);
+                                }}
+                                sx={{ color: '#4caf50' }}
+                              >
+                                <RestoreIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="Excluir">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteBackup(backup)}
+                                sx={{ color: '#f44336' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  
+                  {backups.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                        <BackupIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
+                        <Typography variant="body1" color="textSecondary">
+                          Nenhum backup encontrado
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          startIcon={<BackupIcon />}
+                          onClick={() => setOpenDialog(true)}
+                          sx={{ mt: 2 }}
+                        >
+                          Criar primeiro backup
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
         </Card>
 
-        {/* =========================================== */}
         {/* DIALOG DE CONFIGURAÇÃO CLOUD */}
-        {/* =========================================== */}
         <Dialog 
           open={openCloudConfigDialog} 
           onClose={() => setOpenCloudConfigDialog(false)} 
@@ -1384,9 +1605,7 @@ function Backup() {
           </DialogActions>
         </Dialog>
 
-        {/* =========================================== */}
         {/* DIALOG DE MANUAL DE CONFIGURAÇÃO */}
-        {/* =========================================== */}
         <Dialog 
           open={openManualDialog} 
           onClose={() => setOpenManualDialog(false)} 
@@ -1411,7 +1630,7 @@ function Backup() {
               {/* Dropbox */}
               <Box sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ color: '#0061FF' }}>
-                  <DropboxIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  <CloudIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
                   Configuração do Dropbox
                 </Typography>
                 
@@ -1512,21 +1731,6 @@ function Backup() {
                   </pre>
                 </Alert>
               </Box>
-
-              {/* Google Drive (similar ao Dropbox) */}
-              <Box sx={{ p: 2, display: 'none' }}>
-                {/* ... conteúdo do Google Drive ... */}
-              </Box>
-
-              {/* OneDrive (similar) */}
-              <Box sx={{ p: 2, display: 'none' }}>
-                {/* ... conteúdo do OneDrive ... */}
-              </Box>
-
-              {/* Cloud Storage (similar) */}
-              <Box sx={{ p: 2, display: 'none' }}>
-                {/* ... conteúdo do Cloud Storage ... */}
-              </Box>
             </Box>
           </DialogContent>
           <DialogActions>
@@ -1534,21 +1738,391 @@ function Backup() {
           </DialogActions>
         </Dialog>
 
-        {/* =========================================== */}
-        {/* DIALOG DE NOVO BACKUP (manter o mesmo) */}
-        {/* =========================================== */}
+        {/* DIALOG DE NOVO BACKUP */}
         <Dialog open={openDialog} onClose={() => !backupEmAndamento && setOpenDialog(false)} maxWidth="md" fullWidth>
-          {/* ... (mesmo código anterior) ... */}
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BackupIcon />
+              <Typography variant="h6">Novo Backup</Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ mt: 2 }}>
+            {backupEmAndamento ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <CloudSyncIcon sx={{ fontSize: 64, color: '#9c27b0', animation: 'spin 2s linear infinite', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Criando backup...
+                </Typography>
+                <Box sx={{ width: '100%', mt: 3 }}>
+                  <LinearProgress variant="determinate" value={progresso} />
+                  <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                    {progresso}% concluído
+                  </Typography>
+                </Box>
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Tipo de Backup</InputLabel>
+                    <Select
+                      value={tipoBackup}
+                      label="Tipo de Backup"
+                      onChange={(e) => setTipoBackup(e.target.value)}
+                    >
+                      {tiposBackup.map(tipo => (
+                        <MenuItem key={tipo.value} value={tipo.value}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {tipo.icon}
+                            <Box>
+                              <Typography variant="body2">{tipo.label}</Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {tipo.descricao}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Destino</InputLabel>
+                    <Select
+                      value={destino}
+                      label="Destino"
+                      onChange={(e) => setDestino(e.target.value)}
+                    >
+                      <MenuItem value="local">Local (Download)</MenuItem>
+                      <MenuItem value="cloud">Cloud Storage</MenuItem>
+                      <MenuItem value="google">Google Drive</MenuItem>
+                      <MenuItem value="dropbox">Dropbox</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Frequência</InputLabel>
+                    <Select
+                      value={frequencia}
+                      label="Frequência"
+                      onChange={(e) => setFrequencia(e.target.value)}
+                    >
+                      {frequencias.map(freq => (
+                        <MenuItem key={freq.value} value={freq.value}>{freq.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                {frequencia !== 'manual' && (
+                  <>
+                    <Grid item xs={12} md={6}>
+                      <DatePicker
+                        label="Data do Agendamento"
+                        value={dataAgendamento}
+                        onChange={setDataAgendamento}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            size: 'small',
+                          }
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Horário"
+                        type="time"
+                        value={horaAgendamento}
+                        onChange={(e) => setHoraAgendamento(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        size="small"
+                      />
+                    </Grid>
+                  </>
+                )}
+
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" sx={{ color: '#9c27b0', mb: 2 }}>
+                    Opções Avançadas
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={incluirArquivos}
+                        onChange={(e) => setIncluirArquivos(e.target.checked)}
+                      />
+                    }
+                    label="Incluir arquivos"
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={compactar}
+                        onChange={(e) => setCompactar(e.target.checked)}
+                      />
+                    }
+                    label="Compactar (ZIP)"
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={protegerSenha}
+                        onChange={(e) => setProtegerSenha(e.target.checked)}
+                      />
+                    }
+                    label="Proteger com senha"
+                  />
+                </Grid>
+
+                {protegerSenha && (
+                  <>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Senha"
+                        type="password"
+                        value={senhaBackup}
+                        onChange={(e) => setSenhaBackup(e.target.value)}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Confirmar Senha"
+                        type="password"
+                        value={confirmarSenha}
+                        onChange={(e) => setConfirmarSenha(e.target.value)}
+                        error={senhaBackup !== confirmarSenha}
+                        helperText={senhaBackup !== confirmarSenha ? 'Senhas não conferem' : ''}
+                        size="small"
+                      />
+                    </Grid>
+                  </>
+                )}
+
+                <Grid item xs={12}>
+                  <Alert severity="info">
+                    <strong>Informação:</strong> O backup pode levar alguns minutos dependendo da quantidade de dados.
+                    Recomenda-se não fechar a janela durante o processo.
+                  </Alert>
+                </Grid>
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenDialog(false)} disabled={backupEmAndamento}>
+              Cancelar
+            </Button>
+            {!backupEmAndamento && (
+              <Button
+                onClick={handleCriarBackup}
+                variant="contained"
+                startIcon={<BackupIcon />}
+                sx={{ bgcolor: '#9c27b0' }}
+              >
+                Iniciar Backup
+              </Button>
+            )}
+          </DialogActions>
         </Dialog>
 
-        {/* DIALOG DE RESTAURAÇÃO (manter o mesmo) */}
+        {/* DIALOG DE RESTAURAÇÃO */}
         <Dialog open={openRestoreDialog} onClose={() => !backupEmAndamento && setOpenRestoreDialog(false)} maxWidth="sm" fullWidth>
-          {/* ... (mesmo código anterior) ... */}
+          <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <RestoreIcon />
+              <Typography variant="h6">Restaurar Backup</Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <strong>Atenção!</strong> Restaurar um backup substituirá todos os dados atuais.
+                Esta ação não pode ser desfeita.
+              </Alert>
+
+              <Typography variant="body1" gutterBottom>
+                Você está prestes a restaurar o backup:
+              </Typography>
+              
+              <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+                <Typography variant="subtitle2">
+                  {backupSelecionado?.nome}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                  Criado em: {safeFormatDateTime(backupSelecionado?.dataCriacao)}
+                </Typography>
+                <Typography variant="caption" color="textSecondary" display="block">
+                  Tipo: {tiposBackup.find(t => t.value === backupSelecionado?.tipo)?.label}
+                </Typography>
+                <Typography variant="caption" color="textSecondary" display="block">
+                  Tamanho: {formatarTamanho(backupSelecionado?.tamanho || 0)}
+                </Typography>
+              </Paper>
+
+              <FormControlLabel
+                control={<Checkbox />}
+                label="Confirmo que entendi os riscos e desejo prosseguir"
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenRestoreDialog(false)}>Cancelar</Button>
+            <Button
+              onClick={() => handleRestaurarBackup(backupSelecionado)}
+              variant="contained"
+              color="warning"
+              startIcon={<RestoreIcon />}
+            >
+              Restaurar Backup
+            </Button>
+          </DialogActions>
         </Dialog>
 
-        {/* DIALOG DE CONFIGURAÇÕES GERAIS (manter o mesmo) */}
+        {/* DIALOG DE CONFIGURAÇÕES GERAIS */}
         <Dialog open={openConfigDialog} onClose={() => setOpenConfigDialog(false)} maxWidth="sm" fullWidth>
-          {/* ... (mesmo código anterior) ... */}
+          <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SettingsIcon />
+              <Typography variant="h6">Configurações de Backup</Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Frequência de Backup</InputLabel>
+                  <Select
+                    value={frequencia}
+                    label="Frequência de Backup"
+                    onChange={(e) => setFrequencia(e.target.value)}
+                  >
+                    {frequencias.map(freq => (
+                      <MenuItem key={freq.value} value={freq.value}>{freq.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {frequencia !== 'manual' && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <DatePicker
+                      label="Data Início"
+                      value={dataAgendamento}
+                      onChange={setDataAgendamento}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          size: 'small',
+                        }
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Horário"
+                      type="time"
+                      value={horaAgendamento}
+                      onChange={(e) => setHoraAgendamento(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Tipo Padrão</InputLabel>
+                  <Select
+                    value={tipoBackup}
+                    label="Tipo Padrão"
+                    onChange={(e) => setTipoBackup(e.target.value)}
+                  >
+                    {tiposBackup.map(tipo => (
+                      <MenuItem key={tipo.value} value={tipo.value}>{tipo.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Destino Padrão</InputLabel>
+                  <Select
+                    value={destino}
+                    label="Destino Padrão"
+                    onChange={(e) => setDestino(e.target.value)}
+                  >
+                    <MenuItem value="local">Local (Download)</MenuItem>
+                    <MenuItem value="cloud">Cloud Storage</MenuItem>
+                    <MenuItem value="google">Google Drive</MenuItem>
+                    <MenuItem value="dropbox">Dropbox</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" gutterBottom>
+                  Opções Padrão
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={incluirArquivos}
+                      onChange={(e) => setIncluirArquivos(e.target.checked)}
+                    />
+                  }
+                  label="Incluir arquivos por padrão"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={compactar}
+                      onChange={(e) => setCompactar(e.target.checked)}
+                    />
+                  }
+                  label="Compactar backups por padrão"
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenConfigDialog(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSalvarConfiguracoes}
+              variant="contained"
+              sx={{ bgcolor: '#2196f3' }}
+            >
+              Salvar Configurações
+            </Button>
+          </DialogActions>
         </Dialog>
 
         {/* Snackbar */}
