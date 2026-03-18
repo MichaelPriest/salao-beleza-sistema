@@ -41,8 +41,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../../services/firebase';
-import { useAuthCliente } from '../../contexts/AuthClienteContext';
+import { firebaseService } from '../services/firebase';
+import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
