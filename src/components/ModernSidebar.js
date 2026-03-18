@@ -38,7 +38,7 @@ import {
   EventAvailable as EventAvailableIcon,
   EventBusy as EventBusyIcon,
   DateRange as DateRangeIcon,
-  Schedule as ScheduleIcon, // <-- ADICIONADO
+  Schedule as ScheduleIcon,
   
   // Atendimentos
   Receipt as ReceiptIcon,
@@ -144,7 +144,7 @@ import {
   Stars as StarsIcon,
   Redeem as RedeemIcon,
   
-  // 🔥 ÍCONES PARA CUPONS
+  // Ícones para cupons
   LocalOffer as TagIcon,
   Sell as SellIcon,
   
@@ -153,17 +153,25 @@ import {
   Equalizer as EqualizerIcon,
   Analytics as AnalyticsIcon,
   
-  // 🔥 ÍCONES PARA CAMPANHAS
+  // Ícones para campanhas
   Campaign as CampaignIcon,
   
-  // 🔥 ÍCONES PARA CATEGORIAS
+  // Ícones para categorias
   Category as CategoryIcon,
+  
+  // 🔥 NOVOS ÍCONES PARA ANAMNESE
+  Assignment as AssignmentIcon,
+  Quiz as QuizIcon,
+  QuestionAnswer as QuestionAnswerIcon,
+  Checklist as ChecklistIcon,
+  FormatListBulleted as ListBulletedIcon,
+  Ballot as BallotIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 
-// Estrutura do menu com ícones e permissões por cargo - REORGANIZADA
+// Estrutura do menu com ícones e permissões por cargo - ATUALIZADA
 const menuGroups = [
   {
     title: 'INÍCIO',
@@ -174,14 +182,14 @@ const menuGroups = [
         icon: <DashboardIcon />, 
         path: '/dashboard', 
         permission: 'visualizar_dashboard',
-        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos podem ver
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
       { 
         text: 'Notificações', 
         icon: <NotificationsActiveIcon />, 
         path: '/notificacoes', 
         permission: 'visualizar_notificacoes',
-        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'], // Todos podem ver
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'],
         badge: 'unread' 
       },
     ],
@@ -195,21 +203,21 @@ const menuGroups = [
         icon: <DateRangeIcon />, 
         path: '/agendamentos', 
         permission: 'gerenciar_agendamentos',
-        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos veem mas com visões diferentes
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
       { 
         text: 'Atendimentos', 
         icon: <AssignmentTurnedInIcon />, 
         path: '/atendimentos', 
         permission: 'gerenciar_atendimentos',
-        cargos: ['admin', 'gerente', 'atendente', 'profissional'] // Cliente não vê
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
       { 
         text: 'Histórico de Atendimentos', 
         icon: <HistoryIcon />, 
         path: '/historico', 
         permission: 'visualizar_relatorios',
-        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'] // Todos podem ver histórico
+        cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
     ],
   },
@@ -222,7 +230,7 @@ const menuGroups = [
         icon: <GroupIcon />, 
         path: '/clientes', 
         permission: 'gerenciar_clientes',
-        cargos: ['admin', 'gerente', 'atendente'] // Profissional e cliente não veem
+        cargos: ['admin', 'gerente', 'atendente']
       },
       { 
         text: 'Fidelidade', 
@@ -390,6 +398,43 @@ const menuGroups = [
       },
     ],
   },
+  // ============================================
+  // 🔥 NOVO GRUPO: ANAMNESE (FORMULÁRIOS)
+  // ============================================
+  {
+    title: 'ANAMNESE E FORMULÁRIOS',
+    icon: <ChecklistIcon />,
+    items: [
+      { 
+        text: 'Formulários', 
+        icon: <AssignmentIcon />, 
+        path: '/anamnese/formularios', 
+        permission: 'gerenciar_anamnese',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Respostas', 
+        icon: <QuestionAnswerIcon />, 
+        path: '/anamnese/respostas', 
+        permission: 'visualizar_anamnese',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
+      },
+      { 
+        text: 'Modelos', 
+        icon: <BallotIcon />, 
+        path: '/anamnese/modelos', 
+        permission: 'gerenciar_anamnese',
+        cargos: ['admin', 'gerente']
+      },
+      { 
+        text: 'Relatórios', 
+        icon: <ListBulletedIcon />, 
+        path: '/anamnese/relatorios', 
+        permission: 'visualizar_relatorios',
+        cargos: ['admin', 'gerente']
+      },
+    ],
+  },
   {
     title: 'RELATÓRIOS E ANÁLISES',
     icon: <AssessmentIcon />,
@@ -488,10 +533,17 @@ export const extraIcons = {
   equalizer: <EqualizerIcon />,
   campaign: <CampaignIcon />,
   category: <CategoryIcon />,
-  schedule: <ScheduleIcon />, // <-- ADICIONADO
+  schedule: <ScheduleIcon />,
+  // 🔥 NOVOS ÍCONES
+  assignment: <AssignmentIcon />,
+  quiz: <QuizIcon />,
+  questionAnswer: <QuestionAnswerIcon />,
+  checklist: <ChecklistIcon />,
+  listBulleted: <ListBulletedIcon />,
+  ballot: <BallotIcon />,
 };
 
-// Componente Mobile Sidebar Otimizado
+// Componente Mobile Sidebar (mantido igual)
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
   
@@ -748,7 +800,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
   );
 };
 
-// Componente Desktop Sidebar Otimizado
+// Componente Desktop Sidebar (mantido igual)
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -1138,7 +1190,7 @@ function ModernSidebar() {
     }
   };
 
-  // NOVA FUNÇÃO: Verificar permissão baseada no cargo
+  // Função para verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
     
