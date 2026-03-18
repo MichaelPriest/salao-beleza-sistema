@@ -55,6 +55,13 @@ import {
   Collapse,
   Breadcrumbs,
   Link,
+  Menu,
+  ListItemAvatar,
+  Step,
+  StepLabel,
+  Stepper,
+  StepContent,
+  CircularProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -95,15 +102,20 @@ import {
   ContentCut as ContentCutIcon,
   WaterDrop as WaterDropIcon,
   Air as AirIcon,
-  // Ícones personalizados (podem ser criados ou substituídos)
+  CloudUpload as CloudUploadIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  Help as HelpIcon,
 } from '@mui/icons-material';
 
-// Para ícones que não existem no Material-UI, podemos usar alternativas ou criar SVGs
+// Para ícones que não existem no Material-UI
 const CreamIcon = () => <span>🧴</span>;
 const PerfumeIcon = () => <span>🌸</span>;
+
 import { motion, Reorder, useDragControls } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 // Cores para categorias
@@ -163,6 +175,16 @@ function CategoriasProdutos() {
   const [modoExibicao, setModoExibicao] = useState('arvore'); // 'arvore' ou 'lista'
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [usuario, setUsuario] = useState(null);
+  
+  // Estados para importação em massa
+  const [openImportDialog, setOpenImportDialog] = useState(false);
+  const [importStep, setImportStep] = useState(0);
+  const [importData, setImportData] = useState('');
+  const [importPreview, setImportPreview] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResults, setImportResults] = useState(null);
+  const [importErrors, setImportErrors] = useState([]);
+  const [importStrategy, setImportStrategy] = useState('merge'); // 'merge', 'replace', 'skip'
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -195,9 +217,32 @@ function CategoriasProdutos() {
     }
   };
 
+  // 🔥 Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'categorias_produtos',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando categorias de produtos');
+      
       const [categoriasData, produtosData] = await Promise.all([
         firebaseService.getAll('categorias_produtos').catch(() => []),
         firebaseService.getAll('produtos').catch(() => [])
@@ -210,8 +255,28 @@ function CategoriasProdutos() {
 
       setCategorias(categoriasOrdenadas);
       setProdutos(produtosData || []);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_categorias',
+        'listagem',
+        'Página de categorias carregada',
+        { totalCategorias: categoriasOrdenadas.length, totalProdutos: produtosData?.length }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Categorias carregadas', {
+        totalCategorias: categoriasOrdenadas.length
+      });
+      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar categorias', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar categorias');
     } finally {
       setLoading(false);
@@ -288,6 +353,9 @@ function CategoriasProdutos() {
         return;
       }
 
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Salvando categoria: ${formData.nome}`);
+
       const dadosParaSalvar = {
         ...formData,
         palavrasChave: formData.palavrasChave || [],
@@ -299,16 +367,46 @@ function CategoriasProdutos() {
 
       if (categoriaEditando) {
         await firebaseService.update('categorias_produtos', categoriaEditando.id, dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'atualizar_categoria',
+          categoriaEditando.id,
+          `Categoria ${formData.nome} atualizada`,
+          { dadosAntigos: categoriaEditando, dadosNovos: formData }
+        );
+        
         mostrarSnackbar('Categoria atualizada com sucesso!');
       } else {
-        await firebaseService.add('categorias_produtos', dadosParaSalvar);
+        const novaCategoria = await firebaseService.add('categorias_produtos', dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'criar_categoria',
+          novaCategoria.id,
+          `Nova categoria criada: ${formData.nome}`,
+          { dados: formData }
+        );
+        
         mostrarSnackbar('Categoria criada com sucesso!');
       }
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Categoria salva com sucesso', {
+        nome: formData.nome
+      });
 
       handleCloseDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar categoria:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao salvar categoria', {
+        error: error.message,
+        nome: formData.nome
+      });
+      
       mostrarSnackbar(error.message || 'Erro ao salvar categoria', 'error');
     }
   };
@@ -340,7 +438,19 @@ function CategoriasProdutos() {
 
   const handleConfirmDelete = async () => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('warning', `Excluindo categoria: ${categoriaParaDeletar.nome}`);
+      
       await firebaseService.delete('categorias_produtos', categoriaParaDeletar.id);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'excluir_categoria',
+        categoriaParaDeletar.id,
+        `Categoria ${categoriaParaDeletar.nome} excluída`,
+        { categoria: categoriaParaDeletar }
+      );
+      
       mostrarSnackbar('Categoria excluída com sucesso!');
       setOpenDeleteDialog(false);
       setCategoriaParaDeletar(null);
@@ -349,6 +459,12 @@ function CategoriasProdutos() {
       console.error('Erro ao excluir categoria:', error);
       mostrarSnackbar('Erro ao excluir categoria', 'error');
     }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da página de categorias');
+    await carregarDados();
   };
 
   const handleToggleExpand = (categoriaId) => {
@@ -374,10 +490,209 @@ function CategoriasProdutos() {
         firebaseService.update('categorias_produtos', item.id, { ordem: index })
       );
       await Promise.all(updates);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'reordenar_categorias',
+        'reordenacao',
+        'Ordem das categorias reordenada',
+        { novaOrdem: items.map(i => ({ id: i.id, nome: i.nome })) }
+      );
+      
     } catch (error) {
       console.error('Erro ao salvar nova ordem:', error);
       mostrarSnackbar('Erro ao salvar ordem das categorias', 'error');
     }
+  };
+
+  // ============================================
+  // FUNÇÕES DE IMPORTAÇÃO EM MASSA
+  // ============================================
+
+  const handleOpenImportDialog = () => {
+    setImportStep(0);
+    setImportData('');
+    setImportPreview([]);
+    setImportResults(null);
+    setImportErrors([]);
+    setImportStrategy('merge');
+    setOpenImportDialog(true);
+  };
+
+  const handleCloseImportDialog = () => {
+    setOpenImportDialog(false);
+  };
+
+  const handleImportDataChange = (e) => {
+    setImportData(e.target.value);
+    
+    // Tentar fazer preview automático
+    try {
+      const linhas = e.target.value.split('\n').filter(l => l.trim());
+      if (linhas.length > 0) {
+        // Assumir formato CSV simples: nome,descrição,cor,icone,categoriaPai,ativo,destaque
+        const preview = linhas.slice(0, 5).map(linha => {
+          const cols = linha.split(',').map(c => c.trim());
+          return {
+            nome: cols[0] || '',
+            descricao: cols[1] || '',
+            cor: cols[2] || '#9c27b0',
+            icone: cols[3] || 'category',
+            categoriaPai: cols[4] || '',
+            ativo: cols[5] !== 'false',
+            destaque: cols[6] === 'true',
+          };
+        });
+        setImportPreview(preview);
+      }
+    } catch (error) {
+      console.warn('Erro ao gerar preview:', error);
+    }
+  };
+
+  const handleProcessImport = async () => {
+    try {
+      setImportLoading(true);
+      setImportErrors([]);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Iniciando importação em massa de categorias');
+      
+      const linhas = importData.split('\n').filter(l => l.trim());
+      const resultados = [];
+      const erros = [];
+
+      for (let i = 0; i < linhas.length; i++) {
+        try {
+          const linha = linhas[i];
+          const cols = linha.split(',').map(c => c.trim());
+          
+          if (cols.length < 1) {
+            erros.push({ linha: i + 1, erro: 'Formato inválido' });
+            continue;
+          }
+
+          const nome = cols[0];
+          if (!nome) {
+            erros.push({ linha: i + 1, erro: 'Nome é obrigatório' });
+            continue;
+          }
+
+          // Verificar se categoria já existe
+          const categoriaExistente = categorias.find(c => 
+            c.nome.toLowerCase() === nome.toLowerCase()
+          );
+
+          const categoriaData = {
+            nome,
+            descricao: cols[1] || '',
+            cor: cols[2] || '#9c27b0',
+            icone: cols[3] || 'category',
+            categoriaPai: cols[4] || '',
+            ativo: cols[5] !== 'false',
+            destaque: cols[6] === 'true',
+            palavrasChave: [],
+            criadoPor: usuario?.id,
+            criadoPorNome: usuario?.nome,
+            criadoEm: new Date().toISOString(),
+            atualizadoEm: new Date().toISOString(),
+          };
+
+          if (categoriaExistente) {
+            if (importStrategy === 'skip') {
+              resultados.push({ linha: i + 1, nome, status: 'ignorado', motivo: 'Já existe' });
+              continue;
+            } else if (importStrategy === 'replace') {
+              await firebaseService.update('categorias_produtos', categoriaExistente.id, categoriaData);
+              resultados.push({ linha: i + 1, nome, status: 'substituído' });
+            } else { // merge
+              const dadosMesclados = { ...categoriaExistente, ...categoriaData };
+              await firebaseService.update('categorias_produtos', categoriaExistente.id, dadosMesclados);
+              resultados.push({ linha: i + 1, nome, status: 'mesclado' });
+            }
+          } else {
+            await firebaseService.add('categorias_produtos', categoriaData);
+            resultados.push({ linha: i + 1, nome, status: 'criado' });
+          }
+
+        } catch (error) {
+          erros.push({ linha: i + 1, erro: error.message });
+        }
+      }
+
+      const total = resultados.length;
+      const criados = resultados.filter(r => r.status === 'criado').length;
+      const atualizados = resultados.filter(r => r.status === 'substituído' || r.status === 'mesclado').length;
+      const ignorados = resultados.filter(r => r.status === 'ignorado').length;
+
+      setImportResults({
+        total,
+        criados,
+        atualizados,
+        ignorados,
+        erros: erros.length
+      });
+      
+      setImportErrors(erros);
+      setImportStep(1);
+
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'importar_categorias',
+        'importacao',
+        `Importação em massa de categorias`,
+        { 
+          total, 
+          criados, 
+          atualizados, 
+          ignorados,
+          erros: erros.length,
+          estrategia: importStrategy 
+        }
+      );
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Importação concluída', {
+        total,
+        criados,
+        atualizados,
+        erros: erros.length
+      });
+
+      // Recarregar dados
+      carregarDados();
+
+    } catch (error) {
+      console.error('Erro na importação:', error);
+      setImportErrors([...importErrors, { linha: 'geral', erro: error.message }]);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro na importação de categorias', {
+        error: error.message
+      });
+      
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const template = `nome,descrição,cor,icone,categoriaPai,ativo,destaque
+"Cabelos","Produtos para cabelo","#9c27b0","spa","",true,true
+"Maquiagem","Produtos de maquiagem","#e91e63","brush","",true,false
+"Bases","Bases para maquiagem","#ff9800","brush","Maquiagem",true,false
+"Perfumaria","Perfumes e fragrâncias","#00bcd4","perfume","",true,true
+"Infantil","Produtos infantis","#4caf50","favorite","",true,false`;
+
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'modelo_categorias.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast.success('Modelo baixado com sucesso!');
   };
 
   const getIcone = (iconeNome) => {
@@ -555,7 +870,7 @@ function CategoriasProdutos() {
   return (
     <Box>
       {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
             Categorias de Produtos
@@ -564,13 +879,34 @@ function CategoriasProdutos() {
             Organize seus produtos em categorias e subcategorias
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleOpenImportDialog}
+          >
+            Importar CSV
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownloadTemplate}
+          >
+            Modelo CSV
+          </Button>
           <Button
             variant="outlined"
             startIcon={modoExibicao === 'arvore' ? <SortIcon /> : <FolderIcon />}
             onClick={() => setModoExibicao(modoExibicao === 'arvore' ? 'lista' : 'arvore')}
           >
             {modoExibicao === 'arvore' ? 'Visualizar Lista' : 'Visualizar Árvore'}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={handleRefresh}
+          >
+            Atualizar
           </Button>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
@@ -589,7 +925,7 @@ function CategoriasProdutos() {
 
       {/* Cards de Resumo */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -609,7 +945,7 @@ function CategoriasProdutos() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -629,11 +965,31 @@ function CategoriasProdutos() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
+                  <FolderOpenIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                    {categorias.filter(c => c.categoriaPai).length}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Subcategorias
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: '#2196f3', width: 48, height: 48 }}>
                   <InventoryIcon />
                 </Avatar>
                 <Box>
@@ -654,7 +1010,7 @@ function CategoriasProdutos() {
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
                 size="small"
@@ -677,9 +1033,14 @@ function CategoriasProdutos() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />} sx={{ justifyContent: 'flex-end' }}>
-                <Link color="inherit" href="#" onClick={() => setCategoriaSelecionada(null)}>
+                <Link 
+                  component="button" 
+                  variant="body2" 
+                  onClick={() => setCategoriaSelecionada(null)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   Todas as categorias
                 </Link>
                 {categoriaSelecionada && (
@@ -1031,6 +1392,188 @@ function CategoriasProdutos() {
           >
             {categoriaEditando ? 'Atualizar' : 'Criar Categoria'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Importação em Massa */}
+      <Dialog open={openImportDialog} onClose={handleCloseImportDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CloudUploadIcon />
+            <Typography variant="h6">Importar Categorias em Massa</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Stepper activeStep={importStep} sx={{ mb: 4 }}>
+            <Step>
+              <StepLabel>Importar dados</StepLabel>
+            </Step>
+            <Step>
+              <StepLabel>Resultado</StepLabel>
+            </Step>
+          </Stepper>
+
+          {importStep === 0 && (
+            <Box>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <strong>Formato CSV esperado:</strong> nome,descrição,cor,icone,categoriaPai,ativo,destaque
+                <br />
+                <Button size="small" onClick={handleDownloadTemplate} sx={{ mt: 1 }}>
+                  Baixar modelo
+                </Button>
+              </Alert>
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Estratégia para categorias existentes</InputLabel>
+                    <Select
+                      value={importStrategy}
+                      label="Estratégia para categorias existentes"
+                      onChange={(e) => setImportStrategy(e.target.value)}
+                    >
+                      <MenuItem value="merge">Mesclar (manter dados antigos + novos)</MenuItem>
+                      <MenuItem value="replace">Substituir (sobrescrever completamente)</MenuItem>
+                      <MenuItem value="skip">Ignorar (não modificar existentes)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+
+              <TextField
+                fullWidth
+                multiline
+                rows={10}
+                label="Cole os dados CSV aqui"
+                value={importData}
+                onChange={handleImportDataChange}
+                placeholder="nome,descrição,cor,icone,categoriaPai,ativo,destaque"
+                size="small"
+              />
+
+              {importPreview.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Preview (primeiras 5 linhas):
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Nome</TableCell>
+                          <TableCell>Descrição</TableCell>
+                          <TableCell>Cor</TableCell>
+                          <TableCell>Ícone</TableCell>
+                          <TableCell>Categoria Pai</TableCell>
+                          <TableCell>Status</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {importPreview.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{item.nome}</TableCell>
+                            <TableCell>{item.descricao}</TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ width: 16, height: 16, bgcolor: item.cor, borderRadius: 1 }} />
+                                {item.cor}
+                              </Box>
+                            </TableCell>
+                            <TableCell>{item.icone}</TableCell>
+                            <TableCell>{item.categoriaPai || '-'}</TableCell>
+                            <TableCell>
+                              {item.ativo ? 'Ativo' : 'Inativo'}
+                              {item.destaque && ' / Destaque'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {importStep === 1 && importResults && (
+            <Box>
+              <Alert severity="success" sx={{ mb: 3 }}>
+                Importação concluída!
+              </Alert>
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="#2196f3">{importResults.total}</Typography>
+                    <Typography variant="caption">Total processado</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="#4caf50">{importResults.criados}</Typography>
+                    <Typography variant="caption">Criados</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="#ff9800">{importResults.atualizados}</Typography>
+                    <Typography variant="caption">Atualizados</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="#9e9e9e">{importResults.ignorados}</Typography>
+                    <Typography variant="caption">Ignorados</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {importErrors.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Alert severity="error">
+                    <Typography variant="subtitle2">Erros encontrados:</Typography>
+                    <List dense>
+                      {importErrors.map((erro, idx) => (
+                        <ListItem key={idx}>
+                          <ListItemText 
+                            primary={`Linha ${erro.linha}: ${erro.erro}`}
+                            primaryTypographyProps={{ variant: 'caption' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Alert>
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {importLoading && (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CircularProgress />
+              <Typography sx={{ mt: 2 }}>Processando importação...</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {importStep === 0 && (
+            <>
+              <Button onClick={handleCloseImportDialog}>Cancelar</Button>
+              <Button
+                onClick={handleProcessImport}
+                variant="contained"
+                disabled={!importData.trim() || importLoading}
+                sx={{ bgcolor: '#2196f3' }}
+              >
+                Importar
+              </Button>
+            </>
+          )}
+          {importStep === 1 && (
+            <Button onClick={handleCloseImportDialog} variant="contained">
+              Fechar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
