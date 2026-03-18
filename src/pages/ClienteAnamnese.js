@@ -56,8 +56,8 @@ import {
   KeyboardArrowRight,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { firebaseService } from '../../services/firebase';
-import { useAuthCliente } from '../../contexts/AuthClienteContext';
+import { firebaseService } from '../services/firebase';
+import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { Timestamp } from 'firebase/firestore';
 
 function ClienteAnamnese() {
