@@ -246,14 +246,18 @@ function AnaliseVendas() {
   // 🔥 Função para registrar auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
+      // Garantir que usuario existe
+      const usuarioId = usuario?.id || 'sistema';
+      const usuarioNome = usuario?.nome || 'Sistema';
+      
       await auditoriaService.registrar(acao, {
         entidade: 'analise_vendas',
         entidadeId,
         detalhes,
         dados: {
           ...dados,
-          usuarioId: usuario?.id,
-          usuarioNome: usuario?.nome,
+          usuarioId, // 👈 USANDO VARIÁVEL SEGURA
+          usuarioNome, // 👈 USANDO VARIÁVEL SEGURA
           timestamp: new Date().toISOString()
         }
       });
@@ -625,21 +629,43 @@ function AnaliseVendas() {
       await firebaseService.log('info', `Exportando análise de vendas para ${formato}`);
       
       if (formato === 'csv') {
+        // Criar dados para CSV
+        const dadosExport = vendas.map(venda => ({
+          Data: venda.data || '',
+          Cliente: venda.clienteNome || '',
+          Profissional: venda.profissionalNome || '',
+          Serviços: venda.itensServico?.map(s => s.nome).join(', ') || venda.servicoNome || '',
+          Valor: venda.valorTotal || 0,
+          'Forma Pagamento': venda.pagamentos?.map(p => p.formaPagamento).join(', ') || ''
+        }));
+  
+        // Gerar CSV
+        const csvContent = [
+          Object.keys(dadosExport[0] || {}).join(','),
+          ...dadosExport.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+        ].join('\n');
+  
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `analise-vendas-${format(new Date(), 'yyyyMMdd')}.csv`;
+        link.click();
+        
         toast.success('Dados exportados para CSV');
       } else if (formato === 'pdf') {
-        toast.success('Relatório PDF gerado');
+        toast.success('Relatório PDF gerado (simulação)');
       } else if (formato === 'excel') {
-        toast.success('Planilha Excel gerada');
+        toast.success('Planilha Excel gerada (simulação)');
       }
       
-      // 🔥 AUDITORIA
+      // 🔥 AUDITORIA - CORRIGIDO
       await registrarAuditoria(
         'exportar_analise_vendas',
         'exportacao',
         `Dados de análise de vendas exportados para ${formato}`,
         { 
-          formato,
-          periodo,
+          formato: formato, // 👈 AGORA ESTÁ EXPLÍCITO
+          periodo: periodo,
           totalVendas: metricas.totalVendas,
           faturamento: metricas.faturamentoTotal
         }
@@ -648,10 +674,10 @@ function AnaliseVendas() {
     } catch (error) {
       console.error('Erro ao exportar:', error);
       
-      // 🔥 LOG DE ERRO
+      // 🔥 LOG DE ERRO - CORRIGIDO
       await firebaseService.log('error', 'Erro ao exportar análise de vendas', {
         error: error.message,
-        formato
+        formato: formato // 👈 AGORA ESTÁ EXPLÍCITO
       });
       
       toast.error('Erro ao exportar dados');
