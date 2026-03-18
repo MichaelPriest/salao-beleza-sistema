@@ -318,7 +318,8 @@ function AnaliseVendas() {
     }
   };
 
-  const processarDados = () => {
+  // 🔥 FUNÇÃO CORRIGIDA - com async adicionado
+  const processarDados = async () => {
     try {
       // Filtrar vendas por período
       let vendasFiltradas = [...vendas];
@@ -326,7 +327,7 @@ function AnaliseVendas() {
       const hoje = new Date();
       let inicio = new Date();
       let fim = new Date();
-
+  
       switch (periodo) {
         case 'hoje':
           inicio = new Date(hoje.setHours(0, 0, 0, 0));
@@ -375,14 +376,14 @@ function AnaliseVendas() {
         default:
           break;
       }
-
+  
       if (inicio && fim) {
         vendasFiltradas = vendasFiltradas.filter(venda => {
           const dataVenda = new Date(venda.data);
           return dataVenda >= inicio && dataVenda <= fim;
         });
       }
-
+  
       // Aplicar filtros adicionais
       if (filtroServico !== 'todos') {
         vendasFiltradas = vendasFiltradas.filter(venda => 
@@ -390,19 +391,19 @@ function AnaliseVendas() {
           venda.itensServico?.some(item => item.id === filtroServico)
         );
       }
-
+  
       if (filtroProfissional !== 'todos') {
         vendasFiltradas = vendasFiltradas.filter(venda => 
           venda.profissionalId === filtroProfissional
         );
       }
-
+  
       if (filtroCliente !== 'todos') {
         vendasFiltradas = vendasFiltradas.filter(venda => 
           venda.clienteId === filtroCliente
         );
       }
-
+  
       // Calcular métricas gerais
       const faturamentoTotal = vendasFiltradas.reduce((acc, v) => acc + (v.valorTotal || 0), 0);
       const clientesAtendidos = new Set(vendasFiltradas.map(v => v.clienteId)).size;
@@ -412,7 +413,7 @@ function AnaliseVendas() {
       const produtosVendidos = vendasFiltradas.reduce((acc, v) => 
         acc + (v.itensProduto?.reduce((sum, p) => sum + (p.quantidade || 1), 0) || 0), 0
       );
-
+  
       // Calcular crescimento comparado ao período anterior
       const diasPeriodo = differenceInDays(fim, inicio);
       const inicioAnterior = subDays(inicio, diasPeriodo);
@@ -427,7 +428,7 @@ function AnaliseVendas() {
       const crescimento = faturamentoAnterior > 0 
         ? ((faturamentoTotal - faturamentoAnterior) / faturamentoAnterior) * 100 
         : 100;
-
+  
       setMetricas({
         totalVendas: vendasFiltradas.length,
         faturamentoTotal,
@@ -437,7 +438,7 @@ function AnaliseVendas() {
         produtosVendidos,
         crescimento,
       });
-
+  
       // 1. Vendas por período (linha do tempo)
       const vendasPorPeriodo = {};
       vendasFiltradas.forEach(venda => {
@@ -456,7 +457,7 @@ function AnaliseVendas() {
         } else if (agrupamento === 'ano') {
           chave = data.getFullYear().toString();
         }
-
+  
         if (!vendasPorPeriodo[chave]) {
           vendasPorPeriodo[chave] = {
             periodo: chave,
@@ -467,7 +468,7 @@ function AnaliseVendas() {
         vendasPorPeriodo[chave].quantidade += 1;
         vendasPorPeriodo[chave].valor += venda.valorTotal || 0;
       });
-
+  
       const dadosVendasPorPeriodo = Object.values(vendasPorPeriodo).sort((a, b) => {
         if (agrupamento === 'dia') {
           const [d1, m1] = a.periodo.split('/');
@@ -476,7 +477,7 @@ function AnaliseVendas() {
         }
         return 0;
       });
-
+  
       // 2. Vendas por serviço
       const vendasPorServico = {};
       vendasFiltradas.forEach(venda => {
@@ -497,11 +498,11 @@ function AnaliseVendas() {
           vendasPorServico[item.id].valor += item.preco || 0;
         });
       });
-
+  
       const dadosVendasPorServico = Object.values(vendasPorServico)
         .sort((a, b) => b.valor - a.valor)
         .slice(0, 10);
-
+  
       // 3. Vendas por profissional
       const vendasPorProfissional = {};
       vendasFiltradas.forEach(venda => {
@@ -517,11 +518,11 @@ function AnaliseVendas() {
         vendasPorProfissional[venda.profissionalId].quantidade += 1;
         vendasPorProfissional[venda.profissionalId].valor += venda.valorTotal || 0;
       });
-
+  
       const dadosVendasPorProfissional = Object.values(vendasPorProfissional)
         .sort((a, b) => b.valor - a.valor)
         .slice(0, 10);
-
+  
       // 4. Vendas por cliente
       const vendasPorCliente = {};
       vendasFiltradas.forEach(venda => {
@@ -537,24 +538,24 @@ function AnaliseVendas() {
         vendasPorCliente[venda.clienteId].quantidade += 1;
         vendasPorCliente[venda.clienteId].valor += venda.valorTotal || 0;
       });
-
+  
       const dadosVendasPorCliente = Object.values(vendasPorCliente)
         .sort((a, b) => b.valor - a.valor)
         .slice(0, 10);
-
+  
       // 5. Ticket médio por período
       const ticketMedio = dadosVendasPorPeriodo.map(item => ({
         periodo: item.periodo,
         ticketMedio: item.quantidade > 0 ? item.valor / item.quantidade : 0,
       }));
-
+  
       // 6. Horários de pico
       const horariosPico = Array(24).fill(0).map((_, hora) => ({
         hora: `${hora}h`,
         quantidade: 0,
         valor: 0,
       }));
-
+  
       vendasFiltradas.forEach(venda => {
         if (venda.horaInicio) {
           const hora = parseInt(venda.horaInicio.split(':')[0]);
@@ -564,7 +565,7 @@ function AnaliseVendas() {
           }
         }
       });
-
+  
       // 7. Vendas por dia da semana
       const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
       const vendasPorDia = diasSemana.map((dia, index) => ({
@@ -572,14 +573,14 @@ function AnaliseVendas() {
         quantidade: 0,
         valor: 0,
       }));
-
+  
       vendasFiltradas.forEach(venda => {
         const data = new Date(venda.data);
         const diaSemana = data.getDay();
         vendasPorDia[diaSemana].quantidade += 1;
         vendasPorDia[diaSemana].valor += venda.valorTotal || 0;
       });
-
+  
       setDadosProcessados({
         vendasPorPeriodo: dadosVendasPorPeriodo,
         vendasPorServico: dadosVendasPorServico,
@@ -592,19 +593,19 @@ function AnaliseVendas() {
         topProfissionais: dadosVendasPorProfissional.slice(0, 5),
         topClientes: dadosVendasPorCliente.slice(0, 5),
       });
-
+  
       // 🔥 LOG TÉCNICO
-      firebaseService.log('info', 'Dados processados para análise de vendas', {
+      await firebaseService.log('info', 'Dados processados para análise de vendas', {
         vendasFiltradas: vendasFiltradas.length,
         periodo,
         faturamento: faturamentoTotal
       });
-
+  
     } catch (error) {
       console.error('Erro ao processar dados:', error);
       
       // 🔥 LOG DE ERRO
-      firebaseService.log('error', 'Erro ao processar dados de análise de vendas', {
+      await firebaseService.log('error', 'Erro ao processar dados de análise de vendas', {
         error: error.message
       });
     }
