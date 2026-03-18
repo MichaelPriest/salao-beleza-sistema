@@ -76,6 +76,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -146,6 +147,7 @@ function Campanhas() {
     },
   });
 
+  // 🔥 Carregar usuário atual
   useEffect(() => {
     carregarUsuario();
     carregarDados();
@@ -162,19 +164,63 @@ function Campanhas() {
     }
   };
 
+  // 🔥 Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'campanhas',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando campanhas');
+      
       const [campanhasData, cuponsData, clientesData] = await Promise.all([
         firebaseService.getAll('campanhas').catch(() => []),
         firebaseService.getAll('cupons').catch(() => []),
         firebaseService.getAll('clientes').catch(() => [])
       ]);
+      
       setCampanhas(campanhasData || []);
       setCupons(cuponsData || []);
       setClientes(clientesData || []);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_campanhas',
+        'listagem',
+        'Página de campanhas carregada',
+        { totalCampanhas: campanhasData?.length }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Campanhas carregadas', {
+        total: campanhasData?.length
+      });
+      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar campanhas', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar campanhas');
     } finally {
       setLoading(false);
@@ -263,9 +309,17 @@ function Campanhas() {
     setCampanhaEditando(null);
   };
 
-  const handleVerDetalhes = (campanha) => {
+  const handleVerDetalhes = async (campanha) => {
     setCampanhaSelecionada(campanha);
     setOpenDetalhesDialog(true);
+    
+    // 🔥 AUDITORIA
+    await registrarAuditoria(
+      'visualizar_campanha',
+      campanha.id,
+      `Visualização da campanha ${campanha.nome}`,
+      { tipo: campanha.tipo, status: campanha.status }
+    );
   };
 
   const handleInputChange = (e) => {
@@ -297,7 +351,7 @@ function Campanhas() {
     }));
   };
 
-  // FUNÇÃO handleConfigChange ADICIONADA para resolver o erro
+  // FUNÇÃO handleConfigChange ADICIONADA
   const handleConfigChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -313,6 +367,9 @@ function Campanhas() {
         return;
       }
 
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Salvando campanha: ${formData.nome}`);
+
       const dadosParaSalvar = {
         ...formData,
         orcamento: formData.orcamento ? parseFloat(formData.orcamento) : 0,
@@ -320,32 +377,75 @@ function Campanhas() {
         metaClientes: formData.metaClientes ? parseInt(formData.metaClientes) : 0,
         criadoPor: usuario?.id,
         criadoPorNome: usuario?.nome,
-        criadoEm: new Date().toISOString(),
+        criadoEm: campanhaEditando ? campanhaEditando.criadoEm : new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
       };
 
       if (campanhaEditando) {
         await firebaseService.update('campanhas', campanhaEditando.id, dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'atualizar_campanha',
+          campanhaEditando.id,
+          `Campanha ${formData.nome} atualizada`,
+          { tipo: formData.tipo, status: formData.status }
+        );
+        
         mostrarSnackbar('Campanha atualizada com sucesso!');
       } else {
-        await firebaseService.add('campanhas', dadosParaSalvar);
+        const novaCampanha = await firebaseService.add('campanhas', dadosParaSalvar);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'criar_campanha',
+          novaCampanha.id,
+          `Nova campanha criada: ${formData.nome}`,
+          { tipo: formData.tipo, status: formData.status }
+        );
+        
         mostrarSnackbar('Campanha criada com sucesso!');
       }
+
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Campanha salva com sucesso', {
+        nome: formData.nome,
+        tipo: formData.tipo
+      });
 
       handleCloseDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar campanha:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao salvar campanha', {
+        error: error.message,
+        nome: formData.nome
+      });
+      
       mostrarSnackbar(error.message || 'Erro ao salvar campanha', 'error');
     }
   };
 
   const handleMudarStatus = async (campanha, novoStatus) => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Alterando status da campanha ${campanha.nome} para ${novoStatus}`);
+      
       await firebaseService.update('campanhas', campanha.id, {
         status: novoStatus,
         atualizadoEm: new Date().toISOString()
       });
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'alterar_status_campanha',
+        campanha.id,
+        `Status alterado de ${campanha.status} para ${novoStatus}`,
+        { statusAntigo: campanha.status, statusNovo: novoStatus }
+      );
+      
       mostrarSnackbar(`Status alterado com sucesso!`);
       carregarDados();
     } catch (error) {
@@ -356,6 +456,9 @@ function Campanhas() {
 
   const handleDuplicar = async (campanha) => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', `Duplicando campanha: ${campanha.nome}`);
+      
       const novaCampanha = {
         ...campanha,
         nome: `${campanha.nome} (cópia)`,
@@ -365,13 +468,53 @@ function Campanhas() {
       };
       delete novaCampanha.id;
       
-      await firebaseService.add('campanhas', novaCampanha);
+      const resultado = await firebaseService.add('campanhas', novaCampanha);
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'duplicar_campanha',
+        resultado.id,
+        `Campanha duplicada a partir de ${campanha.nome}`,
+        { campanhaOriginal: campanha.id, nomeOriginal: campanha.nome }
+      );
+      
       mostrarSnackbar('Campanha duplicada com sucesso!');
       carregarDados();
     } catch (error) {
       console.error('Erro ao duplicar campanha:', error);
       mostrarSnackbar('Erro ao duplicar campanha', 'error');
     }
+  };
+
+  const handleDelete = async (campanha) => {
+    if (window.confirm(`Deseja realmente excluir a campanha "${campanha.nome}"?`)) {
+      try {
+        // 🔥 LOG TÉCNICO
+        await firebaseService.log('warning', `Excluindo campanha: ${campanha.nome}`);
+        
+        await firebaseService.delete('campanhas', campanha.id);
+        
+        // 🔥 AUDITORIA
+        await registrarAuditoria(
+          'excluir_campanha',
+          campanha.id,
+          `Campanha ${campanha.nome} excluída`,
+          { tipo: campanha.tipo, status: campanha.status }
+        );
+        
+        mostrarSnackbar('Campanha excluída com sucesso!');
+        carregarDados();
+      } catch (error) {
+        console.error('Erro ao excluir campanha:', error);
+        mostrarSnackbar('Erro ao excluir campanha', 'error');
+      }
+    }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da página de campanhas');
+    await carregarDados();
   };
 
   const getAlcanceEstimado = (campanha) => {
@@ -446,18 +589,29 @@ function Campanhas() {
               Gerencie campanhas promocionais e ações de marketing
             </Typography>
           </Box>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              }}
-            >
-              Nova Campanha
-            </Button>
-          </motion.div>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={handleRefresh}
+              >
+                Atualizar
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+                sx={{
+                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                }}
+              >
+                Nova Campanha
+              </Button>
+            </motion.div>
+          </Box>
         </Box>
 
         {/* Cards de Resumo */}
@@ -599,147 +753,161 @@ function Campanhas() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paginatedCampanhas.map((campanha, index) => (
-                  <motion.tr
-                    key={campanha.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {campanha.nome}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {campanha.descricao?.substring(0, 50)}
-                        {campanha.descricao?.length > 50 ? '...' : ''}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={tiposCampanha.find(t => t.value === campanha.tipo)?.label || campanha.tipo}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2">
-                          {new Date(campanha.dataInicio).toLocaleDateString('pt-BR')}
+                {paginatedCampanhas.map((campanha, index) => {
+                  const alcance = getAlcanceEstimado(campanha);
+                  const progresso = calcularProgresso(campanha);
+                  
+                  return (
+                    <motion.tr
+                      key={campanha.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {campanha.nome}
                         </Typography>
-                        {campanha.dataFim && (
-                          <Typography variant="caption" color="textSecondary">
-                            até {new Date(campanha.dataFim).toLocaleDateString('pt-BR')}
+                        <Typography variant="caption" color="textSecondary">
+                          {campanha.descricao?.substring(0, 50)}
+                          {campanha.descricao?.length > 50 ? '...' : ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={tiposCampanha.find(t => t.value === campanha.tipo)?.label || campanha.tipo}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2">
+                            {new Date(campanha.dataInicio).toLocaleDateString('pt-BR')}
                           </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(campanha.status)}
-                        size="small"
-                        sx={{
-                          bgcolor: getStatusColor(campanha.status),
-                          color: 'white',
-                          fontWeight: 600
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {getAlcanceEstimado(campanha)} clientes
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {campanha.cuponsAssociados?.length || 0} cupom(ns)
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ flex: 1 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={calcularProgresso(campanha)}
-                            sx={{
-                              height: 8,
-                              borderRadius: 4,
-                              bgcolor: '#f0f0f0',
-                              '& .MuiLinearProgress-bar': {
-                                bgcolor: '#4caf50',
-                              },
-                            }}
-                          />
+                          {campanha.dataFim && (
+                            <Typography variant="caption" color="textSecondary">
+                              até {new Date(campanha.dataFim).toLocaleDateString('pt-BR')}
+                            </Typography>
+                          )}
                         </Box>
-                        <Typography variant="body2" sx={{ minWidth: 45 }}>
-                          {calcularProgresso(campanha).toFixed(0)}%
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={getStatusLabel(campanha.status)}
+                          size="small"
+                          sx={{
+                            bgcolor: getStatusColor(campanha.status),
+                            color: 'white',
+                            fontWeight: 600
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {alcance} clientes
                         </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        <Tooltip title="Ver detalhes">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleVerDetalhes(campanha)}
-                            sx={{ color: '#2196f3' }}
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Duplicar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDuplicar(campanha)}
-                            sx={{ color: '#4caf50' }}
-                          >
-                            <CopyIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Editar">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(campanha)}
-                            sx={{ color: '#ff4081' }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {campanha.status === 'rascunho' && (
-                          <Tooltip title="Ativar">
+                        <Typography variant="caption" color="textSecondary">
+                          {campanha.cuponsAssociados?.length || 0} cupom(ns)
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={progresso}
+                              sx={{
+                                height: 8,
+                                borderRadius: 4,
+                                bgcolor: '#f0f0f0',
+                                '& .MuiLinearProgress-bar': {
+                                  bgcolor: '#4caf50',
+                                },
+                              }}
+                            />
+                          </Box>
+                          <Typography variant="body2" sx={{ minWidth: 45 }}>
+                            {progresso.toFixed(0)}%
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                          <Tooltip title="Ver detalhes">
                             <IconButton
                               size="small"
-                              onClick={() => handleMudarStatus(campanha, 'agendada')}
+                              onClick={() => handleVerDetalhes(campanha)}
+                              sx={{ color: '#2196f3' }}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Duplicar">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDuplicar(campanha)}
                               sx={{ color: '#4caf50' }}
                             >
-                              <CheckIcon fontSize="small" />
+                              <CopyIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        )}
-                        {campanha.status === 'ativa' && (
-                          <Tooltip title="Pausar">
+                          <Tooltip title="Editar">
                             <IconButton
                               size="small"
-                              onClick={() => handleMudarStatus(campanha, 'pausada')}
-                              sx={{ color: '#ff9800' }}
+                              onClick={() => handleOpenDialog(campanha)}
+                              sx={{ color: '#ff4081' }}
                             >
-                              <CancelIcon fontSize="small" />
+                              <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        )}
-                        {campanha.status === 'pausada' && (
-                          <Tooltip title="Retomar">
+                          <Tooltip title="Excluir">
                             <IconButton
                               size="small"
-                              onClick={() => handleMudarStatus(campanha, 'ativa')}
-                              sx={{ color: '#4caf50' }}
+                              onClick={() => handleDelete(campanha)}
+                              sx={{ color: '#f44336' }}
                             >
-                              <PlayArrowIcon fontSize="small" />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </motion.tr>
-                ))}
+                          {campanha.status === 'rascunho' && (
+                            <Tooltip title="Ativar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleMudarStatus(campanha, 'agendada')}
+                                sx={{ color: '#4caf50' }}
+                              >
+                                <CheckIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {campanha.status === 'ativa' && (
+                            <Tooltip title="Pausar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleMudarStatus(campanha, 'pausada')}
+                                sx={{ color: '#ff9800' }}
+                              >
+                                <CancelIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {campanha.status === 'pausada' && (
+                            <Tooltip title="Retomar">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleMudarStatus(campanha, 'ativa')}
+                                sx={{ color: '#4caf50' }}
+                              >
+                                <PlayArrowIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </motion.tr>
+                  );
+                })}
                 {paginatedCampanhas.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
@@ -1225,7 +1393,7 @@ function Campanhas() {
 
                   <Grid item xs={12} md={4}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <Money sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
+                      <MoneyIcon sx={{ fontSize: 40, color: '#4caf50', mb: 1 }} />
                       <Typography variant="h4" sx={{ fontWeight: 700 }}>
                         R$ {(campanhaSelecionada.faturamentoReal || 0).toFixed(2)}
                       </Typography>
