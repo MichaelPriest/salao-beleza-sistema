@@ -109,6 +109,8 @@ import {
   Send as SendIcon,
   Assignment as AssignmentIcon,
   AssignmentTurnedIn as TurnedInIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import { motion, Reorder, useDragControls } from 'framer-motion';
 import { toast } from 'react-hot-toast';
