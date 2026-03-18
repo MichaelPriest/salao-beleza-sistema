@@ -648,6 +648,20 @@ function ModernDashboard() {
       .filter(c => c.status === 'pago')
       .reduce((acc, c) => acc + (c.valor || 0), 0);
 
+    // 🔥 POPULAR APPOINTMENTS PARA O CARD DA AGENDA
+    const agendamentosHojeLista = (agendamentos || []).filter(a => a.data === hojeStr);
+    
+    const clientesHoje = agendamentosHojeLista
+      .filter(a => a.status !== 'cancelado')
+      .map(a => {
+        const cliente = clientes?.find(c => c.id === a.clienteId);
+        const servico = servicos?.find(s => s.id === a.servicoId);
+        return { ...a, cliente, servico };
+      })
+      .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
+
+    setAppointments(clientesHoje);
+
     setStats({
       faturamentoMensal: faturamento,
       faturamentoHoje,
