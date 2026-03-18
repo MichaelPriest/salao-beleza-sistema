@@ -160,7 +160,6 @@ import {
   Category as CategoryIcon,
   
   // 🔥 NOVOS ÍCONES PARA ANAMNESE
-  Assignment as AssignmentIcon,
   Quiz as QuizIcon,
   QuestionAnswer as QuestionAnswerIcon,
   Checklist as ChecklistIcon,
