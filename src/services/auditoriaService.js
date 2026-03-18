@@ -16,37 +16,53 @@ class AuditoriaService {
     }
   }
 
-  // 🔥 FUNÇÃO AUXILIAR PARA OBTER USUÁRIO
-  obterUsuario() { // 🔥 CORRIGIDO: obterUsuario (não o brerUsuario)
+  // 🔥 FUNÇÃO AUXILIAR PARA OBTER USUÁRIO - CORRIGIDA
+  obterUsuario() {
     try {
       const usuarioStr = localStorage.getItem('usuario');
       if (usuarioStr) {
-        return JSON.parse(usuarioStr);
+        const usuario = JSON.parse(usuarioStr);
+        return {
+          ...usuario,
+          id: usuario.id || usuario.uid || 'sistema',
+          nome: usuario.nome || 'Usuário'
+        };
       }
     } catch (error) {
       console.error('Erro ao obter usuário:', error);
     }
-    return null;
+    return { id: 'sistema', nome: 'Sistema' }; // 🔥 FALLBACK
   }
 
-  // 🔥 REGISTRAR AÇÃO NO LOG
+  // 🔥 REGISTRAR AÇÃO NO LOG - CORRIGIDO
   async registrar(acao, dados = {}) {
     try {
       const ip = await this.obterIp();
-      const usuario = this.obterUsuario(); // 🔥 CORRIGIDO
+      const usuario = this.obterUsuario();
       
       const agora = new Date().toISOString();
 
+      // 🔥 GARANTIR QUE USUARIOID NUNCA É UNDEFINED
+      const usuarioId = usuario.id || usuario.uid || 'sistema';
+      const usuarioNome = usuario.nome || 'Sistema';
+
       const log = {
         acao,
-        usuario: usuario?.nome || 'Sistema',
-        usuarioId: usuario?.id || usuario?.uid || 'sistema',
+        usuario: usuarioNome,
+        usuarioId: usuarioId, // 🔥 AGORA SEMPRE TEM VALOR
         ip,
         data: agora,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         ...dados
       };
+
+      // 🔥 REMOVER QUALQUER CAMPO UNDEFINED
+      Object.keys(log).forEach(key => {
+        if (log[key] === undefined) {
+          delete log[key];
+        }
+      });
 
       console.log('📝 Registrando auditoria:', log);
 
@@ -64,11 +80,11 @@ class AuditoriaService {
   async registrarLogin(usuario) {
     return this.registrar('login', {
       entidade: 'usuarios',
-      entidadeId: usuario.id || usuario.uid,
-      detalhes: `Login realizado por ${usuario.nome || usuario.email}`,
+      entidadeId: usuario?.id || usuario?.uid || 'sistema',
+      detalhes: `Login realizado por ${usuario?.nome || usuario?.email || 'Sistema'}`,
       dados: {
-        email: usuario.email,
-        cargo: usuario.cargo
+        email: usuario?.email,
+        cargo: usuario?.cargo
       }
     });
   }
@@ -77,7 +93,7 @@ class AuditoriaService {
   async registrarLogout(usuario) {
     return this.registrar('logout', {
       entidade: 'usuarios',
-      entidadeId: usuario?.id || usuario?.uid || 'desconhecido',
+      entidadeId: usuario?.id || usuario?.uid || 'sistema',
       detalhes: `Logout realizado`
     });
   }
@@ -86,25 +102,25 @@ class AuditoriaService {
   async registrarCriacao(entidade, entidadeId, dados, detalhes = '') {
     return this.registrar('criar', {
       entidade,
-      entidadeId,
-      detalhes: detalhes || `Criação de ${entidade}: ${dados.nome || dados.descricao || entidadeId}`,
-      dados
+      entidadeId: entidadeId || 'sem_id',
+      detalhes: detalhes || `Criação de ${entidade}: ${dados?.nome || dados?.descricao || entidadeId}`,
+      dados: dados || {}
     });
   }
 
   // 🔥 ATUALIZAÇÃO DE REGISTRO
   async registrarAtualizacao(entidade, entidadeId, dadosAntigos, dadosNovos, detalhes = '') {
-    const camposAlterados = Object.keys(dadosNovos).filter(
-      key => JSON.stringify(dadosAntigos[key]) !== JSON.stringify(dadosNovos[key])
+    const camposAlterados = Object.keys(dadosNovos || {}).filter(
+      key => JSON.stringify(dadosAntigos?.[key]) !== JSON.stringify(dadosNovos?.[key])
     );
 
     return this.registrar('atualizar', {
       entidade,
-      entidadeId,
+      entidadeId: entidadeId || 'sem_id',
       detalhes: detalhes || `Atualização de ${entidade}: ${camposAlterados.length} campo(s) alterado(s)`,
       dados: {
-        antes: dadosAntigos,
-        depois: dadosNovos,
+        antes: dadosAntigos || {},
+        depois: dadosNovos || {},
         camposAlterados
       }
     });
@@ -114,9 +130,9 @@ class AuditoriaService {
   async registrarExclusao(entidade, entidadeId, dados, detalhes = '') {
     return this.registrar('excluir', {
       entidade,
-      entidadeId,
-      detalhes: detalhes || `Exclusão de ${entidade}: ${dados.nome || dados.descricao || entidadeId}`,
-      dados
+      entidadeId: entidadeId || 'sem_id',
+      detalhes: detalhes || `Exclusão de ${entidade}: ${dados?.nome || dados?.descricao || entidadeId}`,
+      dados: dados || {}
     });
   }
 
@@ -124,7 +140,7 @@ class AuditoriaService {
   async registrarVisualizacao(entidade, entidadeId, detalhes = '') {
     return this.registrar('visualizar', {
       entidade,
-      entidadeId,
+      entidadeId: entidadeId || 'sem_id',
       detalhes: detalhes || `Visualização de ${entidade}`
     });
   }
@@ -132,9 +148,9 @@ class AuditoriaService {
   // 🔥 ERRO
   async registrarErro(erro, contexto = {}) {
     return this.registrar('erro', {
-      detalhes: erro.message || 'Erro desconhecido',
+      detalhes: erro?.message || 'Erro desconhecido',
       dados: {
-        stack: erro.stack,
+        stack: erro?.stack,
         ...contexto
       }
     });
