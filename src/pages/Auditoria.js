@@ -306,6 +306,9 @@ function Auditoria() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const printRef = useRef();
   
+  // 🔥 Estado para usuário atual
+  const [usuarioAtual, setUsuarioAtual] = useState(null);
+  
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -333,6 +336,18 @@ function Auditoria() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [bottomNavValue, setBottomNavValue] = useState(0);
 
+  // 🔥 Carregar usuário atual
+  useEffect(() => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        setUsuarioAtual(JSON.parse(usuarioStr));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  }, []);
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -341,9 +356,31 @@ function Auditoria() {
     calcularEstatisticas();
   }, [logs]);
 
+  // 🔥 Função para registrar na auditoria
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'auditoria',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuarioAtual?.id,
+          usuarioNome: usuarioAtual?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Carregando dados de auditoria');
       
       const [logsData, usuariosData, configData] = await Promise.all([
         firebaseService.getAll('auditoria').catch(() => []),
@@ -355,9 +392,28 @@ function Auditoria() {
       setUsuarios(usuariosData || []);
       setConfig(configData?.[0] || null);
       
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'carregar_auditoria',
+        'listagem',
+        'Página de auditoria carregada',
+        { totalRegistros: logsData?.length }
+      );
+      
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('success', 'Dados de auditoria carregados', {
+        totalLogs: logsData?.length
+      });
+      
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      
+      // 🔥 LOG DE ERRO
+      await firebaseService.log('error', 'Erro ao carregar dados de auditoria', {
+        error: error.message
+      });
+      
       toast.error('Erro ao carregar dados');
       await auditoriaService.registrarErro(error, { 
         acao: 'carregar_auditoria',
@@ -397,8 +453,16 @@ function Auditoria() {
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `auditoria_${getDataString(new Date())}`,
-    onBeforeGetContent: () => {
+    onBeforeGetContent: async () => {
       toast.loading('Preparando impressão...', { id: 'print' });
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'imprimir_relatorio',
+        'impressao',
+        'Relatório de auditoria impresso',
+        { totalRegistros: logsOrdenados.length }
+      );
     },
     onAfterPrint: () => {
       toast.success('Impressão enviada!', { id: 'print' });
@@ -409,8 +473,13 @@ function Auditoria() {
     }
   });
 
-  const handleExportJSON = () => {
+  const handleExportJSON = async () => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Exportando auditoria para JSON', {
+        totalRegistros: logsFiltrados.length
+      });
+      
       const dadosExport = {
         geradoEm: new Date().toISOString(),
         empresa: config?.salao?.nome || 'Sistema',
@@ -431,6 +500,15 @@ function Auditoria() {
       link.href = URL.createObjectURL(blob);
       link.download = `auditoria_${getDataString(new Date())}.json`;
       link.click();
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'exportar_json',
+        'exportacao',
+        `Dados exportados para JSON (${logsFiltrados.length} registros)`,
+        { formato: 'json', totalRegistros: logsFiltrados.length }
+      );
+      
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar:', error);
@@ -438,8 +516,13 @@ function Auditoria() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Exportando auditoria para CSV', {
+        totalRegistros: logsFiltrados.length
+      });
+      
       const headers = ['Data/Hora', 'Usuário', 'Ação', 'Entidade', 'ID', 'IP', 'Detalhes'];
       const data = logsFiltrados.map(log => [
         log.data ? new Date(log.data).toLocaleString('pt-BR') : '',
@@ -460,6 +543,15 @@ function Auditoria() {
       link.href = URL.createObjectURL(blob);
       link.download = `auditoria_${getDataString(new Date())}.csv`;
       link.click();
+      
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'exportar_csv',
+        'exportacao',
+        `Dados exportados para CSV (${logsFiltrados.length} registros)`,
+        { formato: 'csv', totalRegistros: logsFiltrados.length }
+      );
+      
       mostrarSnackbar('Relatório exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar:', error);
@@ -471,6 +563,9 @@ function Auditoria() {
     if (!window.confirm('Tem certeza que deseja limpar logs com mais de 90 dias?')) return;
 
     try {
+      // 🔥 LOG TÉCNICO
+      await firebaseService.log('warning', 'Iniciando limpeza de logs antigos');
+      
       const noventaDiasAtras = subDays(new Date(), 90).toISOString();
       const logsAntigos = logs.filter(log => dataMaiorOuIgual(noventaDiasAtras, log.data) === false);
       
@@ -480,12 +575,31 @@ function Auditoria() {
         }
       }
       
+      // 🔥 AUDITORIA
+      await registrarAuditoria(
+        'limpar_logs_antigos',
+        'limpeza',
+        `Limpeza de logs antigos (${logsAntigos.length} registros)`,
+        { totalRemovidos: logsAntigos.length, dias: 90 }
+      );
+      
       toast.success(`${logsAntigos.length} logs antigos removidos!`);
       carregarDados();
     } catch (error) {
       console.error('Erro ao limpar logs:', error);
       toast.error('Erro ao limpar logs');
     }
+  };
+
+  const handleRefresh = async () => {
+    // 🔥 LOG TÉCNICO
+    await firebaseService.log('info', 'Atualização manual da auditoria');
+    await carregarDados();
+  };
+
+  const handleFiltroChange = async (tipo, valor) => {
+    // 🔥 LOG TÉCNICO (opcional - pode ser removido se gerar muitos logs)
+    // await firebaseService.log('debug', 'Filtro alterado', { tipo, valor });
   };
 
   // ✅ FILTRO CORRIGIDO - sem usar .split diretamente
@@ -562,9 +676,17 @@ function Auditoria() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleOpenDetalhes = (log) => {
+  const handleOpenDetalhes = async (log) => {
     setLogSelecionado(log);
     setOpenDetalhesDialog(true);
+    
+    // 🔥 AUDITORIA
+    await registrarAuditoria(
+      'visualizar_log',
+      log.id,
+      `Visualização de log de auditoria`,
+      { acao: log.acao, usuario: log.usuario }
+    );
   };
 
   const handleCloseDetalhes = () => {
@@ -679,7 +801,10 @@ function Auditoria() {
               size="small"
               placeholder="Buscar..."
               value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
+              onChange={(e) => {
+                setFiltro(e.target.value);
+                handleFiltroChange('texto', e.target.value);
+              }}
             />
           </Grid>
 
@@ -688,7 +813,10 @@ function Auditoria() {
               <InputLabel>Ação</InputLabel>
               <Select
                 value={filtroAcao}
-                onChange={(e) => setFiltroAcao(e.target.value)}
+                onChange={(e) => {
+                  setFiltroAcao(e.target.value);
+                  handleFiltroChange('acao', e.target.value);
+                }}
                 label="Ação"
               >
                 <MenuItem value="todos">Todas</MenuItem>
@@ -706,7 +834,10 @@ function Auditoria() {
               <InputLabel>Usuário</InputLabel>
               <Select
                 value={filtroUsuario}
-                onChange={(e) => setFiltroUsuario(e.target.value)}
+                onChange={(e) => {
+                  setFiltroUsuario(e.target.value);
+                  handleFiltroChange('usuario', e.target.value);
+                }}
                 label="Usuário"
               >
                 <MenuItem value="todos">Todos</MenuItem>
@@ -723,7 +854,10 @@ function Auditoria() {
               <InputLabel>Período</InputLabel>
               <Select
                 value={filtroPeriodo}
-                onChange={(e) => setFiltroPeriodo(e.target.value)}
+                onChange={(e) => {
+                  setFiltroPeriodo(e.target.value);
+                  handleFiltroChange('periodo', e.target.value);
+                }}
                 label="Período"
               >
                 <MenuItem value="todos">Todos</MenuItem>
@@ -744,7 +878,10 @@ function Auditoria() {
                   type="date"
                   label="Início"
                   value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
+                  onChange={(e) => {
+                    setDataInicio(e.target.value);
+                    handleFiltroChange('dataInicio', e.target.value);
+                  }}
                   InputLabelProps={{ shrink: true }}
                   size="small"
                 />
@@ -755,7 +892,10 @@ function Auditoria() {
                   type="date"
                   label="Fim"
                   value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
+                  onChange={(e) => {
+                    setDataFim(e.target.value);
+                    handleFiltroChange('dataFim', e.target.value);
+                  }}
                   InputLabelProps={{ shrink: true }}
                   size="small"
                 />
@@ -832,7 +972,7 @@ function Auditoria() {
                 <FilterIcon />
               </Badge>
             </IconButton>
-            <IconButton onClick={carregarDados}>
+            <IconButton onClick={handleRefresh}>
               <RefreshIcon />
             </IconButton>
           </Box>
@@ -880,7 +1020,7 @@ function Auditoria() {
             <Button
               variant="contained"
               startIcon={<RefreshIcon />}
-              onClick={carregarDados}
+              onClick={handleRefresh}
               sx={{ bgcolor: '#9c27b0' }}
             >
               Atualizar
@@ -946,7 +1086,10 @@ function Auditoria() {
                   size="small"
                   placeholder="Buscar..."
                   value={filtro}
-                  onChange={(e) => setFiltro(e.target.value)}
+                  onChange={(e) => {
+                    setFiltro(e.target.value);
+                    handleFiltroChange('texto', e.target.value);
+                  }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -969,7 +1112,10 @@ function Auditoria() {
                   <InputLabel>Ação</InputLabel>
                   <Select
                     value={filtroAcao}
-                    onChange={(e) => setFiltroAcao(e.target.value)}
+                    onChange={(e) => {
+                      setFiltroAcao(e.target.value);
+                      handleFiltroChange('acao', e.target.value);
+                    }}
                     label="Ação"
                   >
                     <MenuItem value="todos">Todas</MenuItem>
@@ -987,7 +1133,10 @@ function Auditoria() {
                   <InputLabel>Usuário</InputLabel>
                   <Select
                     value={filtroUsuario}
-                    onChange={(e) => setFiltroUsuario(e.target.value)}
+                    onChange={(e) => {
+                      setFiltroUsuario(e.target.value);
+                      handleFiltroChange('usuario', e.target.value);
+                    }}
                     label="Usuário"
                   >
                     <MenuItem value="todos">Todos</MenuItem>
@@ -1004,7 +1153,10 @@ function Auditoria() {
                   <InputLabel>Período</InputLabel>
                   <Select
                     value={filtroPeriodo}
-                    onChange={(e) => setFiltroPeriodo(e.target.value)}
+                    onChange={(e) => {
+                      setFiltroPeriodo(e.target.value);
+                      handleFiltroChange('periodo', e.target.value);
+                    }}
                     label="Período"
                   >
                     <MenuItem value="todos">Todos</MenuItem>
@@ -1025,7 +1177,10 @@ function Auditoria() {
                       type="date"
                       label="Início"
                       value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
+                      onChange={(e) => {
+                        setDataInicio(e.target.value);
+                        handleFiltroChange('dataInicio', e.target.value);
+                      }}
                       InputLabelProps={{ shrink: true }}
                       size="small"
                     />
@@ -1036,7 +1191,10 @@ function Auditoria() {
                       type="date"
                       label="Fim"
                       value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
+                      onChange={(e) => {
+                        setDataFim(e.target.value);
+                        handleFiltroChange('dataFim', e.target.value);
+                      }}
                       InputLabelProps={{ shrink: true }}
                       size="small"
                     />
