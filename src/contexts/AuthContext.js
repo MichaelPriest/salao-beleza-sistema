@@ -21,8 +21,25 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 🔥 CORREÇÃO CRÍTICA: Verificar se está na área do cliente
+    const path = window.location.pathname;
+    if (path.startsWith('/cliente')) {
+      console.log('🚫 AuthContext ignorado na área do cliente');
+      setLoading(false);
+      return;
+    }
+
+    console.log('✅ AuthContext ativo na área administrativa');
+    
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // 🔥 CORREÇÃO: Se estiver na área do cliente, não fazer nada
+      if (window.location.pathname.startsWith('/cliente')) {
+        console.log('🚫 onAuthStateChanged ignorado na área do cliente');
+        setLoading(false);
+        return;
+      }
+
       if (firebaseUser) {
         try {
           console.log('🔍 AuthContext - Usuário Firebase:', firebaseUser.uid, firebaseUser.email);
@@ -35,11 +52,10 @@ export const AuthProvider = ({ children }) => {
             const userData = userSnap.data();
             console.log('✅ AuthContext - Usuário encontrado:', userData);
             
-            // IMPORTANTE: Não verificar cliente aqui!
             const usuarioCompleto = { 
               id: firebaseUser.uid, 
               ...userData,
-              isCliente: false // Marcar explicitamente que não é cliente
+              isCliente: false
             };
             
             setUser(usuarioCompleto);
@@ -51,7 +67,10 @@ export const AuthProvider = ({ children }) => {
             // Tentar buscar por email como fallback
             const usuarios = await firebaseService.query('usuarios', [
               { field: 'email', operator: '==', value: firebaseUser.email }
-            ]);
+            ]).catch(err => {
+              console.log('Erro na query de usuarios:', err);
+              return [];
+            });
             
             if (usuarios && usuarios.length > 0) {
               const usuarioData = usuarios[0];
@@ -75,15 +94,17 @@ export const AuthProvider = ({ children }) => {
               localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
             } else {
               console.log('❌ AuthContext - Usuário não encontrado no sistema');
+              // 🔥 IMPORTANTE: Não setar usuário, apenas logar
               toast.error('Usuário não encontrado no sistema');
             }
           }
         } catch (error) {
           console.error('❌ AuthContext - Erro ao buscar usuário:', error);
+          // 🔥 IMPORTANTE: Não propagar erro, apenas logar
           await auditoriaService.registrarErro(error, { 
             contexto: 'onAuthStateChanged',
             usuarioId: firebaseUser?.uid 
-          });
+          }).catch(() => {});
         }
       } else {
         console.log('👋 AuthContext - Usuário deslogado');
