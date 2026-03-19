@@ -226,7 +226,7 @@ import { auditoriaService } from '../../services/auditoriaService';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { v4 as uuidv4 } from 'uuid';
 import SignatureCanvas from 'react-signature-canvas';
-import NumberFormat from 'react-number-format';
+import { NumericFormat } from 'react-number-format'; // 🔥 CORRIGIDO: importação correta
 import InputMask from 'react-input-mask';
 
 // ============================================
@@ -270,10 +270,11 @@ const tiposQuestao = [
 // COMPONENTES DE MÁSCARA
 // ============================================
 
-const NumberFormatCustom = React.forwardRef(function NumberFormatCustom(props, ref) {
+// 🔥 COMPONENTE CORRIGIDO PARA USAR NumericFormat
+const NumericFormatCustom = React.forwardRef(function NumericFormatCustom(props, ref) {
   const { onChange, ...other } = props;
   return (
-    <NumberFormat
+    <NumericFormat
       {...other}
       getInputRef={ref}
       onValueChange={(values) => {
@@ -883,7 +884,7 @@ function FormulariosAnamnese() {
             label={pergunta}
             required={obrigatoria}
             InputProps={{
-              inputComponent: NumberFormatCustom,
+              inputComponent: NumericFormatCustom,
             }}
             disabled
           />
