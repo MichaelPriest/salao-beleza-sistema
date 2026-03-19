@@ -25,7 +25,7 @@ import {
   InputAdornment,
   Divider,
   LinearProgress,
-  CircularProgress, // ✅ ADICIONADO
+  CircularProgress,
   Avatar,
   Radio,
   RadioGroup,
@@ -65,9 +65,15 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 function ClienteAnamnese() {
+  console.log('🔥 ClienteAnamnese MONTADO - INÍCIO');
+  
   const navigate = useNavigate();
-  const { atendimentoId, agendamentoId } = useParams(); // 🔥 Aceita ambos
+  const { atendimentoId, agendamentoId } = useParams();
   const { cliente, firebaseUser } = useAuthCliente();
+
+  console.log('📌 Params recebidos:', { atendimentoId, agendamentoId });
+  console.log('📌 Cliente do contexto:', cliente);
+  console.log('📌 FirebaseUser:', firebaseUser);
   
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -83,41 +89,58 @@ function ClienteAnamnese() {
   const entityType = atendimentoId ? 'atendimento' : 'agendamento';
 
   useEffect(() => {
+    console.log('📌 useEffect executado - entityId:', entityId);
     if (entityId) {
       carregarDados();
+    } else {
+      console.error('❌ entityId não definido');
+      toast.error('ID não encontrado');
+      setLoading(false);
     }
   }, [entityId]);
 
   const carregarDados = async () => {
+    console.log('📥 INÍCIO carregarDados para entityId:', entityId);
+    console.log('🔍 entityType:', entityType);
+    
     try {
       setLoading(true);
+      console.log('⏳ Loading set to true');
       
       let atendimentoData;
       
       if (entityType === 'atendimento') {
-        // Buscar diretamente pelo atendimento
+        console.log('🔍 Buscando atendimento com ID:', entityId);
         atendimentoData = await firebaseService.getById('atendimentos', entityId);
+        console.log('✅ Atendimento encontrado:', atendimentoData);
       } else {
-        // Buscar o agendamento
+        console.log('🔍 Buscando agendamento com ID:', entityId);
         const agendamento = await firebaseService.getById('agendamentos', entityId);
+        console.log('✅ Agendamento encontrado:', agendamento);
         
         if (!agendamento) {
+          console.error('❌ Agendamento não encontrado');
           toast.error('Agendamento não encontrado');
+          setLoading(false);
           return;
         }
         
-        // Verificar se já existe atendimento para este agendamento
+        console.log('🔍 Verificando atendimentos existentes para este agendamento...');
         const atendimentosExistentes = await firebaseService.query('atendimentos', [
           { field: 'agendamentoId', operator: '==', value: entityId }
         ]);
+        console.log('✅ Atendimentos existentes:', atendimentosExistentes);
         
         if (atendimentosExistentes.length > 0) {
-          // Se já existe atendimento, redirecionar para ele
+          console.log('🔄 Redirecionando para atendimento:', atendimentosExistentes[0].id);
           navigate(`/cliente/atendimento/${atendimentosExistentes[0].id}/anamnese`, { replace: true });
           return;
         }
         
-        // Se não existe, usar dados do agendamento
+        console.log('🔍 Buscando nome do serviço...');
+        const servicoNome = agendamento.servicoNome || (await buscarServicoNome(agendamento.servicoId));
+        console.log('✅ Nome do serviço:', servicoNome);
+        
         atendimentoData = {
           id: agendamento.id,
           agendamentoId: agendamento.id,
@@ -125,20 +148,24 @@ function ClienteAnamnese() {
           profissionalId: agendamento.profissionalId,
           profissionalNome: agendamento.profissionalNome,
           servicoId: agendamento.servicoId,
-          servicoNome: agendamento.servicoNome || (await buscarServicoNome(agendamento.servicoId)),
+          servicoNome: servicoNome,
           data: agendamento.data,
           horaInicio: agendamento.horario,
         };
       }
 
       setAtendimento(atendimentoData);
+      console.log('✅ atendimentoData setado:', atendimentoData);
 
       if (!atendimentoData) {
+        console.error('❌ atendimentoData é null');
         toast.error('Atendimento não encontrado');
+        setLoading(false);
         return;
       }
 
-      // Verificar se já existe resposta para este atendimento/agendamento
+      // Verificar se já existe resposta
+      console.log('🔍 Verificando respostas existentes...');
       let respostasExistentes;
       if (atendimentoData.agendamentoId) {
         respostasExistentes = await firebaseService.query('respostas_anamnese', [
@@ -149,36 +176,47 @@ function ClienteAnamnese() {
           { field: 'atendimentoId', operator: '==', value: atendimentoData.id }
         ]);
       }
+      console.log('✅ Respostas existentes:', respostasExistentes);
 
       if (respostasExistentes.length > 0) {
-        // Se já respondeu, redirecionar para visualização
+        console.log('🔄 Redirecionando para visualização da resposta:', respostasExistentes[0].id);
         navigate(`/cliente/anamnese/${respostasExistentes[0].id}`);
         return;
       }
 
       // Buscar formulários associados ao serviço
+      console.log('🔍 Buscando formulários para serviço:', atendimentoData.servicoId);
       const formularios = await firebaseService.query('formularios_anamnese', [
         { field: 'servicoIds', operator: 'array-contains', value: atendimentoData.servicoId },
         { field: 'ativo', operator: '==', value: true }
       ]);
+      console.log('✅ Formulários encontrados:', formularios);
 
       if (formularios.length > 0) {
+        console.log('📋 Formulário selecionado:', formularios[0]);
         setFormulario(formularios[0]);
+      } else {
+        console.log('⚠️ Nenhum formulário encontrado para este serviço');
       }
 
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar formulário');
+      console.error('❌ ERRO em carregarDados:', error);
+      console.error('Stack trace:', error.stack);
+      toast.error('Erro ao carregar formulário: ' + error.message);
     } finally {
+      console.log('⏳ Finalizando carregamento - setLoading(false)');
       setLoading(false);
     }
   };
 
   const buscarServicoNome = async (servicoId) => {
     try {
+      console.log('🔍 Buscando nome do serviço para ID:', servicoId);
       const servico = await firebaseService.getById('servicos', servicoId);
+      console.log('✅ Serviço encontrado:', servico);
       return servico?.nome || 'Serviço';
-    } catch {
+    } catch (error) {
+      console.error('❌ Erro ao buscar nome do serviço:', error);
       return 'Serviço';
     }
   };
@@ -194,30 +232,32 @@ function ClienteAnamnese() {
     }));
 
     // Validar campo obrigatório
-    const questao = formulario?.questoes.find(q => q.id === perguntaId);
+    const questao = formulario?.questoes?.find(q => q.id === perguntaId);
     if (questao?.obrigatoria) {
       setValidacao(prev => ({
         ...prev,
-        [perguntaId]: !!value
+        [perguntaId]: !!value && (Array.isArray(value) ? value.length > 0 : true)
       }));
     }
   };
 
   const handleFileUpload = async (perguntaId, file) => {
-    // Implementar upload de arquivo
     console.log('Upload de arquivo:', file);
+    // Implementar upload de arquivo
   };
 
   const validarFormulario = () => {
     if (!formulario) return false;
     
     const novosErros = {};
+    let valido = true;
     
-    formulario.questoes.forEach(questao => {
+    formulario.questoes?.forEach(questao => {
       if (questao.obrigatoria) {
         const resposta = respostas[questao.id]?.valor;
         if (!resposta || (Array.isArray(resposta) && resposta.length === 0)) {
           novosErros[questao.id] = false;
+          valido = false;
         } else {
           novosErros[questao.id] = true;
         }
@@ -225,7 +265,7 @@ function ClienteAnamnese() {
     });
 
     setValidacao(novosErros);
-    return Object.values(novosErros).every(v => v !== false);
+    return valido;
   };
 
   const handleProximo = () => {
@@ -255,10 +295,10 @@ function ClienteAnamnese() {
 
       // Montar respostas
       const respostasFormatadas = Object.entries(respostas).map(([perguntaId, data]) => {
-        const questao = formulario.questoes.find(q => q.id === perguntaId);
+        const questao = formulario.questoes?.find(q => q.id === perguntaId);
         return {
           perguntaId,
-          pergunta: questao.pergunta,
+          pergunta: questao?.pergunta || '',
           resposta: data.valor,
           tipo: data.tipo
         };
@@ -269,10 +309,11 @@ function ClienteAnamnese() {
         formularioId: formulario.id,
         formularioTitulo: formulario.titulo,
         clienteId: uid,
-        clienteNome: cliente.nome,
-        profissionalId: atendimento.profissionalId,
-        servicoId: atendimento.servicoId,
-        servicoNome: atendimento.servicoNome,
+        clienteNome: cliente?.nome || 'Cliente',
+        profissionalId: atendimento?.profissionalId,
+        profissionalNome: atendimento?.profissionalNome,
+        servicoId: atendimento?.servicoId,
+        servicoNome: atendimento?.servicoNome,
         status: 'respondido',
         respostas: respostasFormatadas,
         respondidoEm: new Date().toISOString(),
@@ -281,20 +322,36 @@ function ClienteAnamnese() {
       };
 
       // Adicionar IDs apropriados
-      if (atendimento.agendamentoId) {
+      if (atendimento?.agendamentoId) {
         dadosResposta.agendamentoId = atendimento.agendamentoId;
       } else {
-        dadosResposta.atendimentoId = atendimento.id;
+        dadosResposta.atendimentoId = atendimento?.id;
       }
 
+      console.log('📤 Enviando dados:', dadosResposta);
+      
       // Salvar no Firebase
       await firebaseService.add('respostas_anamnese', dadosResposta);
 
+      setSnackbar({
+        open: true,
+        message: 'Formulário enviado com sucesso!',
+        severity: 'success'
+      });
+      
       toast.success('Formulário enviado com sucesso!');
-      navigate('/cliente/anamnese');
+      
+      setTimeout(() => {
+        navigate('/cliente/anamnese');
+      }, 2000);
       
     } catch (error) {
-      console.error('Erro ao enviar formulário:', error);
+      console.error('❌ Erro ao enviar formulário:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao enviar formulário',
+        severity: 'error'
+      });
       toast.error('Erro ao enviar formulário');
     } finally {
       setEnviando(false);
@@ -310,35 +367,46 @@ function ClienteAnamnese() {
     }
   };
 
+  const mostrarSnackbar = (message, severity) => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   if (loading) {
+    console.log('⏳ Renderizando loading...');
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
+        <CircularProgress size={60} thickness={4} sx={{ color: '#9c27b0' }} />
       </Box>
     );
   }
 
   if (!formulario) {
+    console.log('⚠️ Renderizando sem formulário');
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="info">
+      <Box sx={{ p: 3, maxWidth: 600, mx: 'auto', mt: 4 }}>
+        <Alert 
+          severity="info"
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/cliente/anamnese')}>
+              Voltar
+            </Button>
+          }
+        >
           Não há formulário para preencher neste atendimento.
         </Alert>
-        <Button
-          variant="contained"
-          onClick={() => navigate('/cliente/anamnese')}
-          sx={{ mt: 2 }}
-        >
-          Voltar para lista
-        </Button>
       </Box>
     );
   }
 
-  const questaoAtual = formulario.questoes[activeStep];
+  console.log('✅ Renderizando formulário completo');
+  const questaoAtual = formulario.questoes?.[activeStep];
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, mb: 8, px: 2 }}>
       {/* Cabeçalho */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
         <IconButton onClick={() => navigate('/cliente/anamnese')} sx={{ mr: 2 }}>
@@ -349,7 +417,7 @@ function ClienteAnamnese() {
             {formulario.titulo}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Atendimento: {atendimento?.servicoNome} • {formatarData(atendimento?.data)}
+            {atendimento?.servicoNome} • {formatarData(atendimento?.data)} às {atendimento?.horaInicio}
           </Typography>
         </Box>
       </Box>
@@ -403,7 +471,7 @@ function ClienteAnamnese() {
         <CardContent>
           <MobileStepper
             variant="progress"
-            steps={formulario.questoes.length}
+            steps={formulario.questoes?.length || 0}
             position="static"
             activeStep={activeStep}
             sx={{ maxWidth: '100%', flexGrow: 1, mb: 3 }}
@@ -411,10 +479,10 @@ function ClienteAnamnese() {
               <Button
                 size="small"
                 onClick={handleProximo}
-                disabled={activeStep === formulario.questoes.length - 1 && enviando}
+                disabled={activeStep === (formulario.questoes?.length || 0) - 1 && enviando}
               >
-                {activeStep === formulario.questoes.length - 1 ? 'Enviar' : 'Próxima'}
-                {activeStep < formulario.questoes.length - 1 && <KeyboardArrowRight />}
+                {activeStep === (formulario.questoes?.length || 0) - 1 ? 'Enviar' : 'Próxima'}
+                {activeStep < (formulario.questoes?.length || 0) - 1 && <KeyboardArrowRight />}
               </Button>
             }
             backButton={
@@ -431,18 +499,18 @@ function ClienteAnamnese() {
 
           <Paper variant="outlined" sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              {activeStep + 1}. {questaoAtual.pergunta}
-              {questaoAtual.obrigatoria && <span style={{ color: '#f44336' }}> *</span>}
+              {activeStep + 1}. {questaoAtual?.pergunta}
+              {questaoAtual?.obrigatoria && <span style={{ color: '#f44336' }}> *</span>}
             </Typography>
 
-            {questaoAtual.descricao && (
+            {questaoAtual?.descricao && (
               <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
                 {questaoAtual.descricao}
               </Typography>
             )}
 
             {/* Renderizar campo baseado no tipo */}
-            {questaoAtual.tipo === 'texto' && (
+            {questaoAtual?.tipo === 'texto' && (
               <TextField
                 fullWidth
                 size="small"
@@ -454,7 +522,7 @@ function ClienteAnamnese() {
               />
             )}
 
-            {questaoAtual.tipo === 'textarea' && (
+            {questaoAtual?.tipo === 'textarea' && (
               <TextField
                 fullWidth
                 multiline
@@ -467,7 +535,7 @@ function ClienteAnamnese() {
               />
             )}
 
-            {questaoAtual.tipo === 'select' && (
+            {questaoAtual?.tipo === 'select' && (
               <FormControl fullWidth size="small" error={validacao[questaoAtual.id] === false}>
                 <InputLabel>Selecione uma opção</InputLabel>
                 <Select
@@ -485,7 +553,7 @@ function ClienteAnamnese() {
               </FormControl>
             )}
 
-            {questaoAtual.tipo === 'radio' && (
+            {questaoAtual?.tipo === 'radio' && (
               <RadioGroup
                 value={respostas[questaoAtual.id]?.valor || ''}
                 onChange={(e) => handleRespostaChange(questaoAtual.id, e.target.value, questaoAtual.tipo)}
@@ -496,7 +564,7 @@ function ClienteAnamnese() {
               </RadioGroup>
             )}
 
-            {questaoAtual.tipo === 'checkbox' && (
+            {questaoAtual?.tipo === 'checkbox' && (
               <FormGroup>
                 {questaoAtual.opcoes?.map((op, i) => {
                   const valores = respostas[questaoAtual.id]?.valor || [];
@@ -521,7 +589,7 @@ function ClienteAnamnese() {
               </FormGroup>
             )}
 
-            {questaoAtual.tipo === 'data' && (
+            {questaoAtual?.tipo === 'data' && (
               <TextField
                 type="date"
                 fullWidth
@@ -534,7 +602,7 @@ function ClienteAnamnese() {
               />
             )}
 
-            {questaoAtual.tipo === 'hora' && (
+            {questaoAtual?.tipo === 'hora' && (
               <TextField
                 type="time"
                 fullWidth
@@ -547,7 +615,7 @@ function ClienteAnamnese() {
               />
             )}
 
-            {questaoAtual.tipo === 'arquivo' && (
+            {questaoAtual?.tipo === 'arquivo' && (
               <Box>
                 <input
                   accept="image/*,.pdf"
@@ -584,7 +652,7 @@ function ClienteAnamnese() {
               Anterior
             </Button>
             
-            {activeStep === formulario.questoes.length - 1 ? (
+            {activeStep === (formulario.questoes?.length || 0) - 1 ? (
               <Button
                 variant="contained"
                 color="success"
@@ -614,7 +682,7 @@ function ClienteAnamnese() {
           {/* Progresso */}
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
             <Typography variant="caption" color="textSecondary">
-              Questão {activeStep + 1} de {formulario.questoes.length}
+              Questão {activeStep + 1} de {formulario.questoes?.length || 0}
             </Typography>
           </Box>
         </CardContent>
@@ -624,10 +692,10 @@ function ClienteAnamnese() {
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
       </Snackbar>
