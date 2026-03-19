@@ -1,4 +1,4 @@
-// src/pages/Cliente/ClienteAnamnese.js
+// src/pages/ClienteAnamnese.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -25,6 +25,7 @@ import {
   InputAdornment,
   Divider,
   LinearProgress,
+  CircularProgress, // ✅ ADICIONADO
   Avatar,
   Radio,
   RadioGroup,
