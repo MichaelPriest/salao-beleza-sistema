@@ -1,4 +1,4 @@
-// src/pages/ModernDashboard.js
+// src/pages/ModernDashboard.js - VERSÃO ATUALIZADA COM ANAMNESE
 import React, { useState, useEffect } from 'react';
 import {
   Grid,
@@ -68,6 +68,8 @@ import {
   Spa as SpaIcon,
   Notifications as NotificationsIcon,
   ArrowForward as ArrowIcon,
+  Assignment as AssignmentIcon, // 🔥 NOVO ÍCONE PARA ANAMNESE
+  Quiz as QuizIcon, // 🔥 NOVO ÍCONE PARA FORMULÁRIO
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -96,6 +98,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { usuariosService } from '../services/usuariosService';
+import { anamneseService } from '../services/anamneseService'; // 🔥 IMPORTAR SERVIÇO DE ANAMNESE
 
 // ✅ Funções seguras para manipulação de datas
 const safeDate = (dateValue) => {
@@ -245,7 +248,7 @@ const StatCard = ({ icon, title, value, trend, trendValue, color, loading, subti
 );
 
 // Card de agendamento para profissionais e atendentes
-const AppointmentCard = ({ appointment, client, service }) => {
+const AppointmentCard = ({ appointment, client, service, hasAnamnese }) => {
   const statusInfo = statusColors[appointment.status] || { color: '#9e9e9e', label: appointment.status, icon: <Warning /> };
   
   return (
@@ -278,6 +281,19 @@ const AppointmentCard = ({ appointment, client, service }) => {
                   variant="outlined"
                   sx={{ fontSize: '0.7rem' }}
                 />
+                {/* 🔥 INDICADOR DE ANAMNESE PENDENTE */}
+                {hasAnamnese && (
+                  <Chip
+                    icon={<AssignmentIcon />}
+                    label="Anamnese pendente"
+                    size="small"
+                    sx={{ 
+                      bgcolor: '#2196f3',
+                      color: 'white',
+                      fontSize: '0.7rem'
+                    }}
+                  />
+                )}
               </Box>
             </Box>
             <Chip
@@ -456,6 +472,74 @@ const ComissoesCard = ({ comissoes, totalPendente, totalPago }) => {
   );
 };
 
+// 🔥 NOVO CARD DE ANAMNESE PENDENTE
+const AnamneseCard = ({ pendentes, onVerTodos }) => {
+  return (
+    <Card sx={{ bgcolor: '#e3f2fd', border: '2px solid #2196f3' }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Avatar sx={{ bgcolor: '#2196f3', width: 56, height: 56 }}>
+            <AssignmentIcon sx={{ fontSize: 30 }} />
+          </Avatar>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
+              {pendentes.length}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Formulário(s) de Anamnese Pendente(s)
+            </Typography>
+          </Box>
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        {pendentes.length > 0 ? (
+          <>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Próximos agendamentos:
+            </Typography>
+            <List dense>
+              {pendentes.slice(0, 3).map((item, index) => (
+                <ListItem key={index} sx={{ px: 0 }}>
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#2196f3', width: 24, height: 24 }}>
+                      <Person />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={item.clienteNome}
+                    secondary={`${item.servicoNome} - ${safeFormat(item.data, 'dd/MM')} às ${item.horaInicio}`}
+                    primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                    secondaryTypographyProps={{ variant: 'caption' }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </>
+        ) : (
+          <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 2 }}>
+            Nenhum formulário pendente
+          </Typography>
+        )}
+
+        <Button
+          fullWidth
+          variant="contained"
+          startIcon={<QuizIcon />}
+          onClick={onVerTodos}
+          sx={{ 
+            mt: 2, 
+            bgcolor: '#2196f3',
+            '&:hover': { bgcolor: '#1976d2' }
+          }}
+        >
+          Ver Todos os Pendentes
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
 function ModernDashboard() {
   const [usuario, setUsuario] = useState(null);
   const [cargo, setCargo] = useState('');
@@ -475,6 +559,10 @@ function ModernDashboard() {
   });
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedMetric, setSelectedMetric] = useState('revenue');
+
+  // 🔥 NOVOS ESTADOS PARA ANAMNESE
+  const [anamnesePendentes, setAnamnesePendentes] = useState([]);
+  const [loadingAnamnese, setLoadingAnamnese] = useState(false);
 
   // Dados específicos por cargo
   const [fidelidadeData, setFidelidadeData] = useState({
@@ -502,6 +590,8 @@ function ModernDashboard() {
   const { data: produtos, loading: loadingProdutos } = useFirebase('produtos');
   const { data: pontuacoes, loading: loadingPontuacoes } = useFirebase('pontuacao');
   const { data: recompensas, loading: loadingRecompensas } = useFirebase('recompensas');
+  const { data: formularios, loading: loadingFormularios } = useFirebase('formularios_anamnese'); // 🔥 NOVO
+  const { data: respostasAnamnese, loading: loadingRespostas } = useFirebase('respostas_anamnese'); // 🔥 NOVO
 
   useEffect(() => {
     carregarUsuario();
@@ -513,21 +603,78 @@ function ModernDashboard() {
     setCargo(user?.cargo || '');
   };
 
+  // 🔥 CARREGAR ANAMNESES PENDENTES
+  const carregarAnamnesesPendentes = useCallback(async () => {
+    try {
+      setLoadingAnamnese(true);
+      
+      const hoje = new Date().toISOString().split('T')[0];
+      
+      // Buscar agendamentos de hoje em diante
+      const agendamentosFuturos = (agendamentos || []).filter(a => 
+        a.data >= hoje && 
+        a.status !== 'cancelado' && 
+        a.status !== 'finalizado'
+      );
+      
+      const pendentes = [];
+      
+      for (const agendamento of agendamentosFuturos) {
+        // Verificar se o serviço requer anamnese
+        const formulariosRequeridos = (formularios || []).filter(f => 
+          f.ativo && 
+          f.servicoIds?.includes(agendamento.servicoId)
+        );
+        
+        if (formulariosRequeridos.length === 0) continue;
+        
+        // Verificar se já foi respondido
+        const respostaExistente = (respostasAnamnese || []).find(r => 
+          r.agendamentoId === agendamento.id
+        );
+        
+        if (!respostaExistente) {
+          pendentes.push({
+            agendamentoId: agendamento.id,
+            clienteId: agendamento.clienteId,
+            clienteNome: agendamento.clienteNome || 'Cliente',
+            profissionalId: agendamento.profissionalId,
+            profissionalNome: agendamento.profissionalNome || 'Profissional',
+            servicoId: agendamento.servicoId,
+            servicoNome: agendamento.servicoNome || 'Serviço',
+            data: agendamento.data,
+            horaInicio: agendamento.horario || agendamento.horaInicio,
+            formularios: formulariosRequeridos.map(f => f.titulo).join(', ')
+          });
+        }
+      }
+      
+      setAnamnesePendentes(pendentes);
+      
+    } catch (error) {
+      console.error('Erro ao carregar anamneses pendentes:', error);
+    } finally {
+      setLoadingAnamnese(false);
+    }
+  }, [agendamentos, formularios, respostasAnamnese]);
+
   useEffect(() => {
     if (!usuario) return;
 
     const allLoaded = !loadingAgendamentos && !loadingAtendimentos && !loadingClientes && 
                       !loadingProfissionais && !loadingServicos && !loadingPagamentos && 
                       !loadingComissoes && !loadingProdutos && !loadingPontuacoes && 
-                      !loadingRecompensas;
+                      !loadingRecompensas && !loadingFormularios && !loadingRespostas;
 
     if (allLoaded) {
       calcularDadosPorCargo();
+      carregarAnamnesesPendentes();
       setLoading(false);
     }
   }, [usuario, loadingAgendamentos, loadingAtendimentos, loadingClientes, 
       loadingProfissionais, loadingServicos, loadingPagamentos, loadingComissoes, 
-      loadingProdutos, loadingPontuacoes, loadingRecompensas, period, customDateRange]);
+      loadingProdutos, loadingPontuacoes, loadingRecompensas, loadingFormularios,
+      loadingRespostas, period, customDateRange]);
 
   const getDateRange = () => {
     const hoje = new Date();
@@ -656,7 +803,16 @@ function ModernDashboard() {
       .map(a => {
         const cliente = clientes?.find(c => c.id === a.clienteId);
         const servico = servicos?.find(s => s.id === a.servicoId);
-        return { ...a, cliente, servico };
+        
+        // 🔥 VERIFICAR SE TEM ANAMNESE PENDENTE
+        const hasAnamnese = anamnesePendentes.some(p => p.agendamentoId === a.id);
+        
+        return { 
+          ...a, 
+          cliente, 
+          servico,
+          hasAnamnese
+        };
       })
       .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
 
@@ -700,7 +856,16 @@ function ModernDashboard() {
       .map(a => {
         const cliente = clientes?.find(c => c.id === a.clienteId);
         const servico = servicos?.find(s => s.id === a.servicoId);
-        return { ...a, cliente, servico };
+        
+        // 🔥 VERIFICAR SE TEM ANAMNESE PENDENTE
+        const hasAnamnese = anamnesePendentes.some(p => p.agendamentoId === a.id);
+        
+        return { 
+          ...a, 
+          cliente, 
+          servico,
+          hasAnamnese
+        };
       })
       .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
 
@@ -736,7 +901,16 @@ function ModernDashboard() {
       .map(a => {
         const cliente = clientes?.find(c => c.id === a.clienteId);
         const servico = servicos?.find(s => s.id === a.servicoId);
-        return { ...a, cliente, servico };
+        
+        // 🔥 VERIFICAR SE TEM ANAMNESE PENDENTE
+        const hasAnamnese = anamnesePendentes.some(p => p.agendamentoId === a.id);
+        
+        return { 
+          ...a, 
+          cliente, 
+          servico,
+          hasAnamnese
+        };
       })
       .sort((a, b) => (a.horario || '').localeCompare(b.horario || ''));
 
@@ -966,8 +1140,13 @@ function ModernDashboard() {
     setLoading(true);
     setTimeout(() => {
       calcularDadosPorCargo();
+      carregarAnamnesesPendentes();
       setLoading(false);
     }, 500);
+  };
+
+  const handleVerAnamnesesPendentes = () => {
+    window.location.href = '/notificacoes?filter=anamnese';
   };
 
   const formatarMoeda = (valor) => {
@@ -1058,6 +1237,28 @@ function ModernDashboard() {
             </Tooltip>
           </Box>
         </Box>
+
+        {/* 🔥 ALERTA DE ANAMNESE PENDENTE */}
+        {anamnesePendentes.length > 0 && (
+          <Alert 
+            severity="info" 
+            icon={<AssignmentIcon />}
+            sx={{ mb: 3 }}
+            action={
+              <Button 
+                color="inherit" 
+                size="small"
+                onClick={handleVerAnamnesesPendentes}
+              >
+                Ver todos ({anamnesePendentes.length})
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>{anamnesePendentes.length} formulário(s) de anamnese</strong> pendente(s) para preenchimento antes dos atendimentos.
+            </Typography>
+          </Alert>
+        )}
 
         {/* Cards de Estatísticas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -1311,6 +1512,7 @@ function ModernDashboard() {
                           appointment={apt}
                           client={cliente}
                           service={servico}
+                          hasAnamnese={apt.hasAnamnese} // 🔥 PASSAR INDICADOR DE ANAMNESE
                         />
                       );
                     })
@@ -1340,6 +1542,16 @@ function ModernDashboard() {
             Gerencie os atendimentos do dia
           </Typography>
         </Box>
+
+        {/* 🔥 CARD DE ANAMNESE PENDENTE PARA ATENDENTE */}
+        {anamnesePendentes.length > 0 && (
+          <Grid item xs={12} sx={{ mb: 3 }}>
+            <AnamneseCard 
+              pendentes={anamnesePendentes} 
+              onVerTodos={handleVerAnamnesesPendentes}
+            />
+          </Grid>
+        )}
 
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
@@ -1400,6 +1612,20 @@ function ModernDashboard() {
                           <Typography variant="body2" color="textSecondary">
                             {apt.servico?.nome} • {apt.horario}
                           </Typography>
+                          {/* 🔥 INDICADOR DE ANAMNESE PENDENTE */}
+                          {apt.hasAnamnese && (
+                            <Chip
+                              icon={<AssignmentIcon />}
+                              label="Anamnese pendente"
+                              size="small"
+                              sx={{ 
+                                mt: 0.5,
+                                bgcolor: '#2196f3',
+                                color: 'white',
+                                fontSize: '0.7rem'
+                              }}
+                            />
+                          )}
                         </Box>
                         <Chip
                           label={apt.status}
@@ -1482,6 +1708,28 @@ function ModernDashboard() {
           </Typography>
         </Box>
 
+        {/* 🔥 ALERTA DE ANAMNESE PENDENTE PARA PROFISSIONAL */}
+        {anamnesePendentes.length > 0 && (
+          <Alert 
+            severity="info" 
+            icon={<AssignmentIcon />}
+            sx={{ mb: 3 }}
+            action={
+              <Button 
+                color="inherit" 
+                size="small"
+                onClick={handleVerAnamnesesPendentes}
+              >
+                Ver pendentes ({anamnesePendentes.length})
+              </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>{anamnesePendentes.length} cliente(s)</strong> precisam preencher anamnese antes do atendimento.
+            </Typography>
+          </Alert>
+        )}
+
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
             <Card>
@@ -1496,6 +1744,7 @@ function ModernDashboard() {
                       appointment={apt}
                       client={apt.cliente}
                       service={apt.servico}
+                      hasAnamnese={apt.hasAnamnese} // 🔥 PASSAR INDICADOR DE ANAMNESE
                     />
                   ))
                 ) : (
