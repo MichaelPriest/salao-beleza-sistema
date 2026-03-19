@@ -1,5 +1,5 @@
 // src/components/ImprimirRespostaAnamnese.js
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -7,6 +7,7 @@ import {
   Divider,
   Chip,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -14,9 +15,92 @@ import {
   CalendarToday as CalendarIcon,
   Schedule as ScheduleIcon,
   Badge as BadgeIcon,
+  Work as WorkIcon,
 } from '@mui/icons-material';
+import { firebaseService } from '../services/firebase';
 
 const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, profissional }, ref) => {
+  const [dadosCompletos, setDadosCompletos] = useState({
+    resposta: resposta,
+    formulario: formulario,
+    cliente: cliente,
+    profissional: profissional,
+    atendimento: null,
+    agendamento: null,
+    servico: null,
+    loading: true
+  });
+
+  useEffect(() => {
+    carregarDadosCompletos();
+  }, [resposta]);
+
+  const carregarDadosCompletos = async () => {
+    try {
+      console.log('🔍 Carregando dados completos para impressão...');
+      
+      let atendimentoData = null;
+      let agendamentoData = null;
+      let servicoData = null;
+      let profissionalData = profissional;
+      
+      // 1. Buscar atendimento se tiver ID
+      if (resposta?.atendimentoId) {
+        try {
+          atendimentoData = await firebaseService.getById('atendimentos', resposta.atendimentoId);
+          console.log('✅ Atendimento carregado:', atendimentoData);
+        } catch (error) {
+          console.error('Erro ao buscar atendimento:', error);
+        }
+      }
+      
+      // 2. Buscar agendamento se tiver ID
+      if (resposta?.agendamentoId) {
+        try {
+          agendamentoData = await firebaseService.getById('agendamentos', resposta.agendamentoId);
+          console.log('✅ Agendamento carregado:', agendamentoData);
+        } catch (error) {
+          console.error('Erro ao buscar agendamento:', error);
+        }
+      }
+      
+      // 3. Buscar serviço
+      if (resposta?.servicoId) {
+        try {
+          servicoData = await firebaseService.getById('servicos', resposta.servicoId);
+          console.log('✅ Serviço carregado:', servicoData);
+        } catch (error) {
+          console.error('Erro ao buscar serviço:', error);
+        }
+      }
+      
+      // 4. Buscar profissional se não veio
+      if (!profissionalData && resposta?.profissionalId) {
+        try {
+          profissionalData = await firebaseService.getById('profissionais', resposta.profissionalId);
+          console.log('✅ Profissional carregado:', profissionalData);
+        } catch (error) {
+          console.error('Erro ao buscar profissional:', error);
+        }
+      }
+      
+      setDadosCompletos({
+        resposta,
+        formulario,
+        cliente,
+        profissional: profissionalData,
+        atendimento: atendimentoData,
+        agendamento: agendamentoData,
+        servico: servicoData,
+        loading: false
+      });
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados completos:', error);
+      setDadosCompletos(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   const formatarData = (data) => {
     if (!data) return '-';
     try {
@@ -41,6 +125,45 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
     }
   };
 
+  const getServicoNome = () => {
+    if (dadosCompletos.servico?.nome) return dadosCompletos.servico.nome;
+    if (dadosCompletos.resposta?.servicoNome) return dadosCompletos.resposta.servicoNome;
+    if (dadosCompletos.atendimento?.servicoNome) return dadosCompletos.atendimento.servicoNome;
+    if (dadosCompletos.agendamento?.servicoNome) return dadosCompletos.agendamento.servicoNome;
+    return 'Serviço não informado';
+  };
+
+  const getProfissionalNome = () => {
+    if (dadosCompletos.profissional?.nome) return dadosCompletos.profissional.nome;
+    if (dadosCompletos.resposta?.profissionalNome) return dadosCompletos.resposta.profissionalNome;
+    if (dadosCompletos.atendimento?.profissionalNome) return dadosCompletos.atendimento.profissionalNome;
+    if (dadosCompletos.agendamento?.profissionalNome) return dadosCompletos.agendamento.profissionalNome;
+    return 'Profissional não informado';
+  };
+
+  const getDataAtendimento = () => {
+    if (dadosCompletos.atendimento?.data) return formatarDataSimples(dadosCompletos.atendimento.data);
+    if (dadosCompletos.agendamento?.data) return formatarDataSimples(dadosCompletos.agendamento.data);
+    if (dadosCompletos.resposta?.dataAgendamento) return formatarDataSimples(dadosCompletos.resposta.dataAgendamento);
+    return 'Data não informada';
+  };
+
+  const getHorarioAtendimento = () => {
+    if (dadosCompletos.atendimento?.horaInicio) return dadosCompletos.atendimento.horaInicio;
+    if (dadosCompletos.agendamento?.horario) return dadosCompletos.agendamento.horario;
+    if (dadosCompletos.resposta?.horaAgendamento) return dadosCompletos.resposta.horaAgendamento;
+    return 'Horário não informado';
+  };
+
+  if (dadosCompletos.loading) {
+    return (
+      <Box ref={ref} sx={{ p: 4, textAlign: 'center' }}>
+        <CircularProgress />
+        <Typography sx={{ mt: 2 }}>Carregando dados para impressão...</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '800px', margin: '0 auto' }}>
       {/* Cabeçalho com logo e título */}
@@ -49,7 +172,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
           Ficha de Anamnese
         </Typography>
         <Typography variant="h6" sx={{ fontWeight: 500, color: '#555', fontSize: '1.2rem' }}>
-          {formulario?.titulo || 'Formulário de Anamnese'}
+          {dadosCompletos.formulario?.titulo || dadosCompletos.resposta?.formularioTitulo || 'Formulário de Anamnese'}
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1, fontSize: '0.8rem' }}>
           Emitido em: {new Date().toLocaleString('pt-BR')}
@@ -71,7 +194,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Nome do Cliente
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '1rem' }}>
-              {resposta?.clienteNome || cliente?.nome || 'Não informado'}
+              {dadosCompletos.cliente?.nome || dadosCompletos.resposta?.clienteNome || 'Não informado'}
             </Typography>
           </Grid>
 
@@ -80,28 +203,28 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               CPF
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {cliente?.cpf || 'Não informado'}
+              {dadosCompletos.cliente?.cpf || 'Não informado'}
             </Typography>
           </Grid>
 
-          {cliente?.dataNascimento && (
+          {dadosCompletos.cliente?.dataNascimento && (
             <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="textSecondary" display="block">
                 Data de Nascimento
               </Typography>
               <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-                {formatarDataSimples(cliente.dataNascimento)}
+                {formatarDataSimples(dadosCompletos.cliente.dataNascimento)}
               </Typography>
             </Grid>
           )}
 
-          {cliente?.telefone && (
+          {dadosCompletos.cliente?.telefone && (
             <Grid item xs={12} sm={6}>
               <Typography variant="caption" color="textSecondary" display="block">
                 Telefone
               </Typography>
               <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-                {cliente.telefone}
+                {dadosCompletos.cliente.telefone}
               </Typography>
             </Grid>
           )}
@@ -112,7 +235,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#9c27b0', mb: 2, borderBottom: '1px solid #9c27b0', pb: 1 }}>
-              <BadgeIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 20 }} />
+              <WorkIcon sx={{ mr: 1, verticalAlign: 'middle', fontSize: 20 }} />
               Dados do Atendimento
             </Typography>
           </Grid>
@@ -122,7 +245,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Serviço
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1rem' }}>
-              {resposta?.servicoNome || 'Não informado'}
+              {getServicoNome()}
             </Typography>
           </Grid>
 
@@ -131,7 +254,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Profissional
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {resposta?.profissionalNome || profissional?.nome || 'Não informado'}
+              {getProfissionalNome()}
             </Typography>
           </Grid>
 
@@ -141,7 +264,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Data do Atendimento
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {resposta?.dataAgendamento ? formatarDataSimples(resposta.dataAgendamento) : 'Não informado'}
+              {getDataAtendimento()}
             </Typography>
           </Grid>
 
@@ -151,7 +274,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Horário
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {resposta?.horaAgendamento || 'Não informado'}
+              {getHorarioAtendimento()}
             </Typography>
           </Grid>
 
@@ -160,7 +283,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Respondido em
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {resposta?.respondidoEm ? formatarData(resposta.respondidoEm) : 'Não informado'}
+              {dadosCompletos.resposta?.respondidoEm ? formatarData(dadosCompletos.resposta.respondidoEm) : 'Não informado'}
             </Typography>
           </Grid>
 
@@ -169,9 +292,9 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               Status
             </Typography>
             <Typography variant="body1" sx={{ fontSize: '1rem' }}>
-              {resposta?.status === 'respondido' ? 'Respondido' : 
-               resposta?.status === 'visto' ? 'Visualizado' : 
-               resposta?.status || 'Não informado'}
+              {dadosCompletos.resposta?.status === 'respondido' ? 'Respondido' : 
+               dadosCompletos.resposta?.status === 'visto' ? 'Visualizado' : 
+               dadosCompletos.resposta?.status || 'Não informado'}
             </Typography>
           </Grid>
         </Grid>
@@ -184,7 +307,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
           Respostas do Formulário
         </Typography>
 
-        {resposta?.respostas?.map((item, index) => (
+        {dadosCompletos.resposta?.respostas?.map((item, index) => (
           <Box key={index} sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#333', mb: 1 }}>
               {index + 1}. {item.pergunta}
@@ -228,7 +351,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
           </Box>
         ))}
 
-        {(!resposta?.respostas || resposta.respostas.length === 0) && (
+        {(!dadosCompletos.resposta?.respostas || dadosCompletos.resposta.respostas.length === 0) && (
           <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
             Nenhuma resposta encontrada
           </Typography>
@@ -236,13 +359,13 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
       </Paper>
 
       {/* Observações do profissional */}
-      {resposta?.observacoesProfissional && (
+      {dadosCompletos.resposta?.observacoesProfissional && (
         <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#9c27b0', mb: 2 }}>
             Observações do Profissional
           </Typography>
           <Typography variant="body1" sx={{ lineHeight: 1.6, bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-            {resposta.observacoesProfissional}
+            {dadosCompletos.resposta.observacoesProfissional}
           </Typography>
         </Paper>
       )}
