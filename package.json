@@ -40,16 +40,16 @@
     "react-hot-toast": "^2.4.0",
     "react-icons": "^5.6.0",
     "react-input-mask": "^2.0.4",
-    "react-number-format": "^5.3.1",          // 🔥 ADICIONAR
+    "react-number-format": "^5.3.1",
     "react-phone-number-input": "^3.4.16",
     "react-router-dom": "^6.14.0",
     "react-scripts": "5.0.1",
     "react-select": "^5.10.2",
-    "react-signature-canvas": "^1.0.3",        // 🔥 ADICIONAR
+    "react-signature-canvas": "^1.0.3",
     "react-social-media-embed": "^2.5.2",
     "react-to-print": "^3.3.0",
     "recharts": "^2.8.0",
-    "uuid": "^9.0.1",                          // 🔥 ADICIONAR
+    "uuid": "^9.0.1",
     "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"
   },
