@@ -308,8 +308,19 @@ function App() {
                   <Route path="anamnese/:respostaId" element={<ClienteAnamnese />} />
                 </Route>
                 
-                {/* 🔥 ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO (acesso direto) */}
+                {/* 🔥 ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO DE ATENDIMENTO */}
                 <Route path="/cliente/atendimento/:atendimentoId/anamnese" element={
+                  <AuthClienteProvider>
+                    <ClientePrivateRoute>
+                      <ClienteLayout>
+                        <ClienteAnamnese />
+                      </ClienteLayout>
+                    </ClientePrivateRoute>
+                  </AuthClienteProvider>
+                } />
+                
+                {/* 🔥 NOVA ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO DE AGENDAMENTO */}
+                <Route path="/cliente/agendamento/:agendamentoId/anamnese" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
                       <ClienteLayout>
