@@ -1,5 +1,5 @@
 // src/pages/Anamnese/RespostasAnamnese.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -97,12 +97,14 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useReactToPrint } from 'react-to-print';
 import { firebaseService } from '../../services/firebase';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays } from 'date-fns';
+import ImprimirRespostaAnamnese from '../../components/ImprimirRespostaAnamnese';
 
 function RespostasAnamnese() {
   const [loading, setLoading] = useState(true);
@@ -119,6 +121,16 @@ function RespostasAnamnese() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [respostaSelecionada, setRespostaSelecionada] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // 🔥 ESTADOS PARA IMPRESSÃO
+  const [isPrinting, setIsPrinting] = useState(false);
+  const printRef = useRef(null);
+  const [dadosImpressao, setDadosImpressao] = useState({
+    resposta: null,
+    formulario: null,
+    cliente: null,
+    profissional: null
+  });
 
   useEffect(() => {
     carregarDados();
@@ -142,6 +154,49 @@ function RespostasAnamnese() {
       setLoading(false);
     }
   };
+
+  // 🔥 FUNÇÃO PARA IMPRIMIR RESPOSTA SELECIONADA
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: respostaSelecionada 
+      ? `anamnese_${respostaSelecionada.clienteNome}_${new Date().toISOString().split('T')[0]}`
+      : `anamnese_${new Date().toISOString().split('T')[0]}`,
+    onBeforeGetContent: async () => {
+      setIsPrinting(true);
+      toast.loading('Preparando impressão...', { id: 'print-anamnese' });
+      
+      // 🔥 CARREGAR DADOS COMPLETOS PARA IMPRESSÃO
+      if (respostaSelecionada) {
+        const formulario = formularios.find(f => f.id === respostaSelecionada.formularioId);
+        const cliente = clientes.find(c => c.id === respostaSelecionada.clienteId);
+        
+        let profissional = null;
+        if (respostaSelecionada.profissionalId) {
+          try {
+            profissional = await firebaseService.getById('profissionais', respostaSelecionada.profissionalId);
+          } catch (error) {
+            console.error('Erro ao carregar profissional:', error);
+          }
+        }
+        
+        setDadosImpressao({
+          resposta: respostaSelecionada,
+          formulario,
+          cliente,
+          profissional
+        });
+      }
+    },
+    onAfterPrint: () => {
+      setIsPrinting(false);
+      toast.success('Impressão concluída!', { id: 'print-anamnese' });
+    },
+    onPrintError: (error) => {
+      setIsPrinting(false);
+      console.error('Erro na impressão:', error);
+      toast.error('Erro ao imprimir. Tente novamente.', { id: 'print-anamnese' });
+    }
+  });
 
   const handleMarcarComoVisto = async (resposta) => {
     try {
@@ -520,7 +575,10 @@ function RespostasAnamnese() {
                             <Tooltip title="Imprimir">
                               <IconButton
                                 size="small"
-                                onClick={() => window.print()}
+                                onClick={() => {
+                                  setRespostaSelecionada(res);
+                                  setTimeout(() => handlePrint(), 100);
+                                }}
                                 sx={{ color: '#9c27b0' }}
                               >
                                 <PrintIcon fontSize="small" />
@@ -629,7 +687,7 @@ function RespostasAnamnese() {
                           </Box>
                         ) : (
                           <Typography variant="body1">
-                            {resposta.resposta}
+                            {resposta.resposta || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>}
                           </Typography>
                         )}
                       </AccordionDetails>
@@ -653,10 +711,14 @@ function RespostasAnamnese() {
                 <Button
                   variant="contained"
                   onClick={() => {
-                    window.print();
+                    setOpenDetalhesDialog(false);
+                    setTimeout(() => handlePrint(), 100);
                   }}
+                  startIcon={<PrintIcon />}
+                  disabled={isPrinting}
+                  sx={{ bgcolor: '#9c27b0' }}
                 >
-                  Imprimir
+                  {isPrinting ? 'Imprimindo...' : 'Imprimir'}
                 </Button>
               </DialogActions>
             </>
@@ -674,6 +736,17 @@ function RespostasAnamnese() {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Componente oculto para impressão personalizada */}
+        <Box sx={{ display: 'none' }}>
+          <ImprimirRespostaAnamnese
+            ref={printRef}
+            resposta={dadosImpressao.resposta}
+            formulario={dadosImpressao.formulario}
+            cliente={dadosImpressao.cliente}
+            profissional={dadosImpressao.profissional}
+          />
+        </Box>
       </Box>
     </LocalizationProvider>
   );
