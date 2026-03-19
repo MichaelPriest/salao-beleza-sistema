@@ -70,6 +70,7 @@ import {
   StepLabel,
   StepContent,
   StepButton,
+  CircularProgress, // 🔥 ADICIONADO
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -111,6 +112,7 @@ function RespostasAnamnese() {
   const [respostas, setRespostas] = useState([]);
   const [formularios, setFormularios] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [profissionais, setProfissionais] = useState([]); // 🔥 ADICIONADO
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroFormulario, setFiltroFormulario] = useState('todos');
@@ -139,14 +141,16 @@ function RespostasAnamnese() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [respostasData, formulariosData, clientesData] = await Promise.all([
+      const [respostasData, formulariosData, clientesData, profissionaisData] = await Promise.all([
         firebaseService.getAll('respostas_anamnese'),
         firebaseService.getAll('formularios_anamnese'),
-        firebaseService.getAll('clientes')
+        firebaseService.getAll('clientes'),
+        firebaseService.getAll('profissionais') // 🔥 ADICIONADO
       ]);
       setRespostas(respostasData || []);
       setFormularios(formulariosData || []);
       setClientes(clientesData || []);
+      setProfissionais(profissionaisData || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar respostas');
@@ -155,38 +159,89 @@ function RespostasAnamnese() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA IMPRIMIR RESPOSTA SELECIONADA
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: respostaSelecionada 
-      ? `anamnese_${respostaSelecionada.clienteNome}_${new Date().toISOString().split('T')[0]}`
-      : `anamnese_${new Date().toISOString().split('T')[0]}`,
-    onBeforeGetContent: async () => {
+  // 🔥 FUNÇÃO CORRIGIDA PARA IMPRIMIR - CARREGA DADOS ANTES DE IMPRIMIR
+  const handlePrintResposta = async (resposta) => {
+    try {
       setIsPrinting(true);
-      toast.loading('Preparando impressão...', { id: 'print-anamnese' });
+      toast.loading('Carregando dados para impressão...', { id: 'print-anamnese' });
       
-      // 🔥 CARREGAR DADOS COMPLETOS PARA IMPRESSÃO
-      if (respostaSelecionada) {
-        const formulario = formularios.find(f => f.id === respostaSelecionada.formularioId);
-        const cliente = clientes.find(c => c.id === respostaSelecionada.clienteId);
-        
-        let profissional = null;
-        if (respostaSelecionada.profissionalId) {
+      console.log('🔍 Iniciando carregamento para impressão:', resposta.id);
+      
+      // 🔥 CARREGAR DADOS COMPLETOS ANTES DE IMPRIMIR
+      const formulario = formularios.find(f => f.id === resposta.formularioId);
+      const cliente = clientes.find(c => c.id === resposta.clienteId);
+      
+      let profissional = null;
+      if (resposta.profissionalId) {
+        profissional = profissionais.find(p => p.id === resposta.profissionalId);
+        if (!profissional) {
           try {
-            profissional = await firebaseService.getById('profissionais', respostaSelecionada.profissionalId);
+            profissional = await firebaseService.getById('profissionais', resposta.profissionalId);
           } catch (error) {
             console.error('Erro ao carregar profissional:', error);
           }
         }
-        
-        setDadosImpressao({
-          resposta: respostaSelecionada,
-          formulario,
-          cliente,
-          profissional
-        });
       }
-    },
+      
+      // Buscar dados adicionais se necessário
+      let dadosCompletos = {
+        resposta: resposta,
+        formulario,
+        cliente,
+        profissional
+      };
+      
+      // Se não encontrou o formulário na lista, buscar diretamente
+      if (!dadosCompletos.formulario && resposta.formularioId) {
+        try {
+          console.log('🔍 Buscando formulário diretamente:', resposta.formularioId);
+          const formData = await firebaseService.getById('formularios_anamnese', resposta.formularioId);
+          dadosCompletos.formulario = formData;
+          console.log('✅ Formulário carregado:', formData);
+        } catch (error) {
+          console.error('Erro ao buscar formulário:', error);
+        }
+      }
+      
+      // Se não encontrou o cliente na lista, buscar diretamente
+      if (!dadosCompletos.cliente && resposta.clienteId) {
+        try {
+          console.log('🔍 Buscando cliente diretamente:', resposta.clienteId);
+          const clienteData = await firebaseService.getById('clientes', resposta.clienteId);
+          dadosCompletos.cliente = clienteData;
+          console.log('✅ Cliente carregado:', clienteData);
+        } catch (error) {
+          console.error('Erro ao buscar cliente:', error);
+        }
+      }
+      
+      console.log('📦 Dados carregados para impressão:', dadosCompletos);
+      
+      // 🔥 ATUALIZAR ESTADO
+      setDadosImpressao(dadosCompletos);
+      
+      // Pequeno delay para garantir que o estado foi atualizado
+      setTimeout(() => {
+        toast.dismiss('print-anamnese');
+        // 🔥 CHAMAR A IMPRESSÃO
+        setTimeout(() => {
+          handlePrint();
+        }, 100);
+      }, 500);
+      
+    } catch (error) {
+      console.error('❌ Erro ao preparar impressão:', error);
+      toast.error('Erro ao preparar impressão', { id: 'print-anamnese' });
+      setIsPrinting(false);
+    }
+  };
+
+  // 🔥 FUNÇÃO DE IMPRESSÃO
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: dadosImpressao.resposta 
+      ? `anamnese_${dadosImpressao.resposta.clienteNome}_${new Date().toISOString().split('T')[0]}`
+      : `anamnese_${new Date().toISOString().split('T')[0]}`,
     onAfterPrint: () => {
       setIsPrinting(false);
       toast.success('Impressão concluída!', { id: 'print-anamnese' });
@@ -575,13 +630,11 @@ function RespostasAnamnese() {
                             <Tooltip title="Imprimir">
                               <IconButton
                                 size="small"
-                                onClick={() => {
-                                  setRespostaSelecionada(res);
-                                  setTimeout(() => handlePrint(), 100);
-                                }}
+                                onClick={() => handlePrintResposta(res)}
+                                disabled={isPrinting}
                                 sx={{ color: '#9c27b0' }}
                               >
-                                <PrintIcon fontSize="small" />
+                                {isPrinting ? <CircularProgress size={18} /> : <PrintIcon fontSize="small" />}
                               </IconButton>
                             </Tooltip>
                           </Box>
@@ -712,13 +765,13 @@ function RespostasAnamnese() {
                   variant="contained"
                   onClick={() => {
                     setOpenDetalhesDialog(false);
-                    setTimeout(() => handlePrint(), 100);
+                    handlePrintResposta(respostaSelecionada);
                   }}
-                  startIcon={<PrintIcon />}
+                  startIcon={isPrinting ? <CircularProgress size={20} color="inherit" /> : <PrintIcon />}
                   disabled={isPrinting}
                   sx={{ bgcolor: '#9c27b0' }}
                 >
-                  {isPrinting ? 'Imprimindo...' : 'Imprimir'}
+                  {isPrinting ? 'Preparando...' : 'Imprimir'}
                 </Button>
               </DialogActions>
             </>
