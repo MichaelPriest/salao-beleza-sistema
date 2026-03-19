@@ -85,7 +85,6 @@ import {
   Search as SearchIcon,
   Lock as LockIcon,
   ReceiptLong as ReceiptLongIcon,
-  // 🔥 ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
   Quiz as QuizIcon,
 } from '@mui/icons-material';
@@ -1441,7 +1440,7 @@ function ModernAtendimento() {
   };
 
   // ============================================
-  // FUNÇÕES DE FIDELIDADE
+  // FUNÇÕES DE FIDELIDADE - CORRIGIDAS
   // ============================================
 
   const registrarUsoCupom = async (cupom) => {
@@ -1467,16 +1466,40 @@ function ModernAtendimento() {
     }
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA PARA ADICIONAR PONTOS DE FIDELIDADE
   const adicionarPontosFidelidade = async () => {
-    if (!fidelidadeConfig?.ativo || pontosGanhos <= 0) return;
+    if (!fidelidadeConfig?.ativo) {
+      console.log('ℹ️ Fidelidade não está ativa');
+      return;
+    }
+
+    if (pontosGanhos <= 0) {
+      console.log('ℹ️ Nenhum ponto a ser adicionado');
+      return;
+    }
+
+    if (!cliente?.id) {
+      console.log('ℹ️ Cliente não identificado');
+      return;
+    }
 
     try {
       const pontosKey = `${id}_${cliente.id}`;
+      
+      // Verificar se já processou estes pontos
       if (pontosProcessadosRef.current.has(pontosKey)) {
         console.log('🔄 Pontos já foram processados para este atendimento');
         return;
       }
 
+      console.log('🎯 Adicionando pontos de fidelidade:', {
+        clienteId: cliente.id,
+        clienteNome: cliente.nome,
+        pontos: pontosGanhos,
+        nivel: nivelCliente
+      });
+
+      // Registrar pontuação no Firebase
       const pontuacaoData = {
         clienteId: cliente.id,
         clienteNome: cliente.nome,
@@ -1492,20 +1515,41 @@ function ModernAtendimento() {
       };
 
       await firebaseService.add('pontuacao', pontuacaoData);
-      pontosProcessadosRef.current.add(pontosKey);
-      console.log('✅ Pontos de fidelidade adicionados:', pontosGanhos);
       
-      setPontosCliente(prev => prev + pontosGanhos);
+      // Marcar como processado
+      pontosProcessadosRef.current.add(pontosKey);
+      
+      // Atualizar estado local
+      setPontosCliente(prev => {
+        const novoSaldo = prev + pontosGanhos;
+        console.log(`✅ Saldo de pontos atualizado: ${prev} -> ${novoSaldo}`);
+        return novoSaldo;
+      });
 
+      // Registrar na auditoria
       await registrarAuditoria(
         'adicionar_pontos_fidelidade',
         cliente.id,
         `${pontosGanhos} pontos adicionados por atendimento`,
-        { atendimentoId: id, pontos: pontosGanhos, nivel: nivelCliente }
+        { 
+          atendimentoId: id, 
+          pontos: pontosGanhos, 
+          nivel: nivelCliente,
+          bonus: bonusAplicados
+        }
       );
+
+      // Mostrar toast de sucesso
+      toast.success(`🏆 +${pontosGanhos} pontos de fidelidade!`, {
+        icon: '⭐',
+        duration: 4000
+      });
+
+      console.log('✅ Pontos de fidelidade adicionados com sucesso:', pontosGanhos);
       
     } catch (error) {
       console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
+      toast.error('Erro ao adicionar pontos de fidelidade');
     }
   };
 
@@ -1596,7 +1640,7 @@ function ModernAtendimento() {
   };
 
   // ============================================
-  // FUNÇÃO PRINCIPAL: FINALIZAR ATENDIMENTO
+  // FUNÇÃO PRINCIPAL: FINALIZAR ATENDIMENTO - CORRIGIDA
   // ============================================
 
   const handleFinalizarAtendimento = async () => {
@@ -1630,6 +1674,15 @@ function ModernAtendimento() {
       }
   
       console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
+      console.log('📊 Dados do atendimento:', {
+        valorTotal,
+        totalPago,
+        pontosGanhos,
+        fidelidadeAtiva: fidelidadeConfig?.ativo,
+        itensServico: itensServico.length,
+        itensProduto: itensProduto.length,
+        cupons: cuponsAplicados.length
+      });
   
       // 1. Buscar o agendamento associado
       let agendamentoId = null;
@@ -1731,12 +1784,22 @@ function ModernAtendimento() {
   
       await firebaseService.add('comissoes', comissaoData);
   
-      // 6. Adicionar pontos de fidelidade
+      // 🔥 6. ADICIONAR PONTOS DE FIDELIDADE (AGORA ANTES DE PROCESSAR INDICAÇÃO)
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
+        console.log('🎯 Chamando adicionarPontosFidelidade com:', {
+          pontosGanhos,
+          fidelidadeAtiva: fidelidadeConfig.ativo
+        });
         await adicionarPontosFidelidade();
+      } else {
+        console.log('ℹ️ Pontos NÃO adicionados - verifique:', {
+          fidelidadeAtiva: fidelidadeConfig?.ativo,
+          pontosGanhos,
+          existeConfig: !!fidelidadeConfig
+        });
       }
   
-      // 7. Processar indicação
+      // 7. Processar indicação (após pontos)
       await processarIndicacao();
   
       // 8. Atualizar cliente
@@ -1746,7 +1809,7 @@ function ModernAtendimento() {
         updatedAt: Timestamp.now()
       });
 
-      // 9. Registrar na auditoria (🔥 chamada corrigida)
+      // 9. Registrar na auditoria
       await registrarAuditoria(
         'finalizar_atendimento',
         id,
@@ -1928,12 +1991,16 @@ function ModernAtendimento() {
     });
     texto += `${linha}`;
     
-    // Fidelidade
+    // 🔥 FIDELIDADE - AGORA MOSTRANDO OS PONTOS GANHOS
     if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
       texto += `${negritoInicio}FIDELIDADE:${negritoFim}${quebraLinha}`;
-      texto += `Pontos ganhos: +${pontosGanhos}${quebraLinha}`;
-      texto += `Saldo atual: ${pontosCliente + pontosGanhos} pontos${quebraLinha}`;
-      texto += `Nível: ${nivelCliente.toUpperCase()}${quebraLinha}`;
+      texto += `Pontos ganhos neste atendimento: +${pontosGanhos}${quebraLinha}`;
+      texto += `Saldo anterior: ${pontosCliente} pontos${quebraLinha}`;
+      texto += `Novo saldo: ${pontosCliente + pontosGanhos} pontos${quebraLinha}`;
+      texto += `Nível atual: ${nivelCliente.toUpperCase()}${quebraLinha}`;
+      if (bonusAplicados.length > 0) {
+        texto += `Bônus aplicados: ${bonusAplicados.join(', ')}${quebraLinha}`;
+      }
       texto += `${linha}`;
     }
     
@@ -2312,7 +2379,7 @@ function ModernAtendimento() {
 
               <Divider sx={{ my: 2 }} />
 
-              {/* Card de Fidelidade */}
+              {/* 🔥 Card de Fidelidade - AGORA MOSTRANDO PONTOS GANHOS */}
               {fidelidadeConfig?.ativo && (
                 <Box sx={{ mb: 3, p: 2, bgcolor: '#faf5ff', borderRadius: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -2346,12 +2413,41 @@ function ModernAtendimento() {
                     </Typography>
                   </Box>
 
-                  {pontosGanhos > 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="textSecondary">
-                        Pontos a ganhar:
+                  {/* 🔥 MOSTRAR PONTOS A GANHAR COM DESTAQUE */}
+                  {pontosGanhos > 0 && atendimento.status !== 'finalizado' && (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#e8f5e8',
+                      borderRadius: 1,
+                      border: '1px solid #4caf50',
+                      mb: 1
+                    }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        ⭐ Pontos a ganhar:
                       </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                        +{pontosGanhos}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* 🔥 MOSTRAR PONTOS GANHOS SE JÁ FINALIZADO */}
+                  {pontosGanhos > 0 && atendimento.status === 'finalizado' && (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: '#e8f5e8',
+                      borderRadius: 1,
+                      border: '1px solid #4caf50',
+                      mb: 1
+                    }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        ⭐ Pontos ganhos:
+                      </Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
                         +{pontosGanhos}
                       </Typography>
                     </Box>
@@ -3043,10 +3139,27 @@ function ModernAtendimento() {
                           <strong>{cuponsAplicados.length} cupom(ns)</strong> aplicados com sucesso!
                         </Box>
                       )}
+                      {/* 🔥 MOSTRAR PONTOS GANHOS NO ALERTA DE SUCESSO */}
                       {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
-                        <Box sx={{ mt: 1 }}>
-                          <StarIcon sx={{ verticalAlign: 'middle', mr: 0.5, color: '#ff9800' }} />
-                          <strong>{pontosGanhos} pontos</strong> adicionados à fidelidade do cliente!
+                        <Box sx={{ 
+                          mt: 2, 
+                          p: 1.5, 
+                          bgcolor: '#fff3cd', 
+                          border: '1px solid #ffeeba', 
+                          borderRadius: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1
+                        }}>
+                          <StarIcon sx={{ color: '#ff9800', fontSize: 28 }} />
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#856404' }}>
+                              🎉 {pontosGanhos} PONTOS DE FIDELIDADE GANHOS!
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#856404' }}>
+                              Cliente agora tem {pontosCliente + pontosGanhos} pontos no total
+                            </Typography>
+                          </Box>
                         </Box>
                       )}
                     </Alert>
@@ -3193,24 +3306,48 @@ function ModernAtendimento() {
                           ))}
                         </Grid>
 
-                        {/* Informações de fidelidade no comprovante */}
+                        {/* 🔥 Informações de fidelidade no comprovante - AGORA MOSTRANDO CORRETAMENTE */}
                         {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
                           <Grid item xs={12}>
                             <Divider sx={{ my: 1 }} />
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ 
+                              p: 2, 
+                              bgcolor: '#faf5ff', 
+                              borderRadius: 1,
+                              border: '1px solid #9c27b0'
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                 <StarIcon sx={{ color: '#ff9800' }} />
-                                <Typography variant="body2">Pontos ganhos:</Typography>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                  FIDELIDADE
+                                </Typography>
                               </Box>
-                              <Typography variant="body1" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                                +{pontosGanhos}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">Saldo atual:</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {pontosCliente + pontosGanhos} pontos
-                              </Typography>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">Pontos ganhos neste atendimento:</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                                  +{pontosGanhos}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">Saldo anterior:</Typography>
+                                <Typography variant="body2">{pontosCliente} pontos</Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>Novo saldo:</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                                  {pontosCliente + pontosGanhos} pontos
+                                </Typography>
+                              </Box>
+                              <Box sx={{ mt: 1 }}>
+                                <Chip
+                                  label={`Nível: ${nivelCliente.toUpperCase()}`}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: fidelidadeConfig.niveis?.[nivelCliente]?.cor || '#9c27b0',
+                                    color: nivelCliente === 'ouro' ? '#000' : '#fff',
+                                  }}
+                                />
+                              </Box>
                             </Box>
                           </Grid>
                         )}
