@@ -1,4 +1,4 @@
-// src/pages/ModernNotificacoes.js - CORREÇÃO COMPLETA
+// src/pages/ModernNotificacoes.js - VERSÃO ATUALIZADA COM ANAMNESE
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
@@ -22,6 +22,8 @@ import {
   DialogActions,
   Avatar,
   Paper,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -38,11 +40,15 @@ import {
   Inventory as InventoryIcon,
   Payment as PaymentIcon,
   Visibility as VisibilityIcon,
+  Assignment as AssignmentIcon, // 🔥 Ícone para anamnese
+  Quiz as QuizIcon, // 🔥 Ícone para formulário
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { notificacoesService } from '../services/notificacoesService';
+import { anamneseService } from '../services/anamneseService'; // 🔥 Importar serviço de anamnese
+import { firebaseService } from '../services/firebase';
 
 function ModernNotificacoes() {
   const navigate = useNavigate();
@@ -58,6 +64,12 @@ function ModernNotificacoes() {
   const [usuario, setUsuario] = useState(null);
   const [error, setError] = useState(null);
   const [carregado, setCarregado] = useState(false);
+  
+  // 🔥 ESTADOS PARA ANAMNESE
+  const [anamnesePendentes, setAnamnesePendentes] = useState([]);
+  const [loadingAnamnese, setLoadingAnamnese] = useState(false);
+  const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
+  const [selectedAnamnese, setSelectedAnamnese] = useState(null);
 
   // Carregar usuário do localStorage apenas uma vez
   useEffect(() => {
@@ -90,12 +102,122 @@ function ModernNotificacoes() {
     }
   }, []);
 
+  // 🔥 CARREGAR ANAMNESES PENDENTES
+  const carregarAnamnesesPendentes = useCallback(async () => {
+    try {
+      setLoadingAnamnese(true);
+      console.log('📋 Carregando anamneses pendentes...');
+      
+      // Buscar todos os agendamentos de hoje em diante
+      const agendamentos = await firebaseService.getAll('agendamentos');
+      const hoje = new Date().toISOString().split('T')[0];
+      
+      const agendamentosFuturos = agendamentos.filter(a => 
+        a.data >= hoje && 
+        a.status !== 'cancelado' && 
+        a.status !== 'finalizado'
+      );
+      
+      console.log(`📅 Encontrados ${agendamentosFuturos.length} agendamentos futuros`);
+      
+      // Verificar quais têm formulário pendente
+      const pendentes = [];
+      
+      for (const agendamento of agendamentosFuturos) {
+        const temFormulario = await anamneseService.verificarFormularioPendente(agendamento.id);
+        
+        if (temFormulario) {
+          const formulario = await anamneseService.obterFormularioParaAgendamento(agendamento.id);
+          
+          pendentes.push({
+            id: agendamento.id,
+            agendamentoId: agendamento.id,
+            clienteId: agendamento.clienteId,
+            clienteNome: agendamento.clienteNome || 'Cliente',
+            profissionalId: agendamento.profissionalId,
+            profissionalNome: agendamento.profissionalNome || 'Profissional',
+            servicoId: agendamento.servicoId,
+            servicoNome: agendamento.servicoNome || 'Serviço',
+            data: agendamento.data,
+            horaInicio: agendamento.horaInicio,
+            formularioTitulo: formulario?.titulo || 'Formulário de Anamnese',
+            formularioId: formulario?.id,
+            status: 'pendente'
+          });
+        }
+      }
+      
+      console.log(`📋 ${pendentes.length} anamneses pendentes encontradas`);
+      setAnamnesePendentes(pendentes);
+      
+      // 🔥 Criar notificações para anamneses pendentes
+      await criarNotificacoesAnamnese(pendentes);
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar anamneses pendentes:', error);
+    } finally {
+      setLoadingAnamnese(false);
+    }
+  }, []);
+
+  // 🔥 CRIAR NOTIFICAÇÕES PARA ANAMNESE
+  const criarNotificacoesAnamnese = async (pendentes) => {
+    const userId = usuario?.uid || usuario?.id;
+    if (!userId) return;
+
+    try {
+      for (const item of pendentes) {
+        // Verificar se já existe notificação para este agendamento
+        const notificacoesExistentes = await notificacoesService.listar(userId);
+        const existeNotificacao = notificacoesExistentes.some(n => 
+          n.tipo === 'anamnese' && 
+          n.detalhes?.agendamentoId === item.agendamentoId &&
+          !n.lida
+        );
+
+        if (!existeNotificacao) {
+          const notificacao = {
+            usuarioId: userId,
+            tipo: 'anamnese',
+            titulo: '📋 Formulário de Anamnese Pendente',
+            mensagem: `${item.clienteNome} precisa preencher o formulário antes do atendimento de ${item.servicoNome}`,
+            data: new Date().toISOString(),
+            lida: false,
+            prioridade: 'alta',
+            acao: {
+              texto: 'Preencher formulário',
+              link: `/anamnese/${item.agendamentoId}`
+            },
+            detalhes: {
+              agendamentoId: item.agendamentoId,
+              clienteId: item.clienteId,
+              clienteNome: item.clienteNome,
+              servicoId: item.servicoId,
+              servicoNome: item.servicoNome,
+              profissionalId: item.profissionalId,
+              profissionalNome: item.profissionalNome,
+              data: item.data,
+              horaInicio: item.horaInicio,
+              dataFormatada: new Date(item.data).toLocaleDateString('pt-BR'),
+              horario: item.horaInicio,
+              formularioTitulo: item.formularioTitulo
+            }
+          };
+
+          await notificacoesService.criar(notificacao);
+          console.log('✅ Notificação de anamnese criada para:', item.clienteNome);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao criar notificações de anamnese:', error);
+    }
+  };
+
   // Carregar notificações quando o usuário estiver disponível
   useEffect(() => {
     let mounted = true;
 
     const loadNotifications = async () => {
-      // 🔥 CORREÇÃO: Usar uid ou id do usuário
       const userId = usuario?.uid || usuario?.id;
       
       if (!userId) {
@@ -121,6 +243,9 @@ function ModernNotificacoes() {
           console.log('✅ Notificações carregadas com sucesso:', data?.length || 0);
           setNotifications(data || []);
           setCarregado(true);
+          
+          // 🔥 Carregar anamneses pendentes
+          await carregarAnamnesesPendentes();
         }
       } catch (error) {
         if (mounted) {
@@ -140,7 +265,7 @@ function ModernNotificacoes() {
     return () => {
       mounted = false;
     };
-  }, [usuario]); // Depende do objeto usuario completo, não apenas uid
+  }, [usuario, carregarAnamnesesPendentes]);
 
   // Log para debug
   useEffect(() => {
@@ -150,12 +275,13 @@ function ModernNotificacoes() {
       carregado,
       error,
       notificationsCount: notifications.length,
+      anamnesePendentesCount: anamnesePendentes.length,
       userId,
       usuario: usuario ? 'presente' : 'ausente'
     });
-  }, [loading, carregado, error, notifications.length, usuario]);
+  }, [loading, carregado, error, notifications.length, anamnesePendentes.length, usuario]);
 
-  // 🔥 FILTRAGEM MEMOIZADA
+  // 🔥 FILTRAGEM MEMOIZADA (incluindo tipo 'anamnese')
   const filteredNotifications = useMemo(() => {
     console.log('🔍 Filtrando notificações...');
     let filtered = [...notifications];
@@ -188,6 +314,20 @@ function ModernNotificacoes() {
     return notifications.filter(n => !n.lida).length;
   }, [notifications]);
 
+  // 🔥 CONTAGEM POR TIPO
+  const countsByType = useMemo(() => {
+    const counts = {
+      todos: notifications.length,
+      agendamento: notifications.filter(n => n.tipo === 'agendamento').length,
+      cliente: notifications.filter(n => n.tipo === 'cliente').length,
+      estoque: notifications.filter(n => n.tipo === 'estoque').length,
+      pagamento: notifications.filter(n => n.tipo === 'pagamento').length,
+      lembrete: notifications.filter(n => n.tipo === 'lembrete').length,
+      anamnese: notifications.filter(n => n.tipo === 'anamnese').length, // 🔥 NOVO
+    };
+    return counts;
+  }, [notifications]);
+
   // 🔥 FUNÇÕES CORRIGIDAS PARA USAR uid OU id
   const carregarNotificacoes = useCallback(async () => {
     const userId = usuario?.uid || usuario?.id;
@@ -197,9 +337,15 @@ function ModernNotificacoes() {
       setLoading(true);
       setError(null);
       console.log('📥 Recarregando notificações manualmente para userId:', userId);
+      
+      // Recarregar notificações
       const data = await notificacoesService.listar(userId);
       console.log('📊 Notificações recarregadas:', data.length);
       setNotifications(data);
+      
+      // Recarregar anamneses pendentes
+      await carregarAnamnesesPendentes();
+      
     } catch (error) {
       console.error('❌ Erro ao recarregar notificações:', error);
       setError(error.message);
@@ -207,7 +353,7 @@ function ModernNotificacoes() {
     } finally {
       setLoading(false);
     }
-  }, [usuario]);
+  }, [usuario, carregarAnamnesesPendentes]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -286,6 +432,18 @@ function ModernNotificacoes() {
     setOpenDetailsDialog(true);
   };
 
+  // 🔥 FUNÇÃO PARA VER DETALHES DA ANAMNESE
+  const handleViewAnamneseDetails = (item) => {
+    setSelectedAnamnese(item);
+    setOpenAnamneseDialog(true);
+  };
+
+  // 🔥 FUNÇÃO PARA IR PARA O FORMULÁRIO DE ANAMNESE
+  const handleIrParaAnamnese = (agendamentoId) => {
+    setOpenAnamneseDialog(false);
+    navigate(`/anamnese/${agendamentoId}`);
+  };
+
   const handleNavigate = (tipo, detalhes) => {
     setOpenDetailsDialog(false);
     
@@ -310,6 +468,13 @@ function ModernNotificacoes() {
           navigate(`/atendimento/${detalhes.id}`);
         }
         break;
+      case 'anamnese': // 🔥 NOVO CASO
+        if (detalhes?.agendamentoId) {
+          navigate(`/anamnese/${detalhes.agendamentoId}`);
+        } else {
+          navigate('/anamnese');
+        }
+        break;
       default:
         if (detalhes?.link) {
           navigate(detalhes.link);
@@ -317,35 +482,41 @@ function ModernNotificacoes() {
     }
   };
 
+  // 🔥 FUNÇÃO PARA OBTER ÍCONE (ATUALIZADA)
   const getNotificationIcon = (tipo) => {
     switch (tipo) {
       case 'agendamento': return <EventIcon sx={{ color: '#9c27b0', fontSize: 40 }} />;
       case 'cliente': return <PersonIcon sx={{ color: '#ff4081', fontSize: 40 }} />;
       case 'estoque': return <InventoryIcon sx={{ color: '#f44336', fontSize: 40 }} />;
       case 'pagamento': return <PaymentIcon sx={{ color: '#4caf50', fontSize: 40 }} />;
-      case 'lembrete': return <AccessTimeIcon sx={{ color: '#ff9800', fontSize: 40 }} />;
+      case 'lembrete': return <TimeIcon sx={{ color: '#ff9800', fontSize: 40 }} />;
+      case 'anamnese': return <AssignmentIcon sx={{ color: '#2196f3', fontSize: 40 }} />; // 🔥 NOVO
       default: return <InfoIcon sx={{ color: '#2196f3', fontSize: 40 }} />;
     }
   };
 
+  // 🔥 FUNÇÃO PARA OBTER LABEL DO TIPO (ATUALIZADA)
   const getNotificationTypeLabel = (tipo) => {
     const labels = {
       agendamento: 'Agendamento',
       cliente: 'Cliente',
       estoque: 'Estoque',
       pagamento: 'Pagamento',
-      lembrete: 'Lembrete'
+      lembrete: 'Lembrete',
+      anamnese: 'Anamnese' // 🔥 NOVO
     };
     return labels[tipo] || 'Sistema';
   };
 
+  // 🔥 FUNÇÃO PARA OBTER COR DO TIPO (ATUALIZADA)
   const getNotificationTypeColor = (tipo) => {
     const colors = {
       agendamento: '#9c27b0',
       cliente: '#ff4081',
       estoque: '#f44336',
       pagamento: '#4caf50',
-      lembrete: '#ff9800'
+      lembrete: '#ff9800',
+      anamnese: '#2196f3' // 🔥 NOVO
     };
     return colors[tipo] || '#2196f3';
   };
@@ -354,6 +525,15 @@ function ModernNotificacoes() {
     if (!date) return '';
     try {
       return new Date(date).toLocaleString('pt-BR');
+    } catch {
+      return '';
+    }
+  };
+
+  const formatDateShort = (date) => {
+    if (!date) return '';
+    try {
+      return new Date(date).toLocaleDateString('pt-BR');
     } catch {
       return '';
     }
@@ -402,9 +582,9 @@ function ModernNotificacoes() {
           <Button
             variant="outlined"
             onClick={carregarNotificacoes}
-            disabled={loading}
+            disabled={loading || loadingAnamnese}
           >
-            Recarregar
+            {loadingAnamnese ? 'Carregando...' : 'Recarregar'}
           </Button>
           <Button
             variant="outlined"
@@ -431,9 +611,32 @@ function ModernNotificacoes() {
         <Typography variant="caption" component="div">
           <strong>Debug:</strong> ID: {usuario?.uid || usuario?.id || 'N/A'} | 
           Notificações: {notifications.length} | 
+          Anamnese Pendentes: {anamnesePendentes.length} |
           Carregado: {carregado ? 'Sim' : 'Não'}
         </Typography>
       </Paper>
+
+      {/* 🔥 AVISO DE ANAMNESE PENDENTE */}
+      {anamnesePendentes.length > 0 && (
+        <Alert 
+          severity="info" 
+          icon={<AssignmentIcon />}
+          sx={{ mb: 3 }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => setFilterType('anamnese')}
+            >
+              Ver todos ({anamnesePendentes.length})
+            </Button>
+          }
+        >
+          <Typography variant="body2">
+            <strong>{anamnesePendentes.length} formulário(s) de anamnese</strong> pendente(s) para preenchimento antes dos atendimentos.
+          </Typography>
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Cards de Estatísticas */}
@@ -443,7 +646,7 @@ function ModernNotificacoes() {
               <CardContent>
                 <Typography variant="subtitle2" color="textSecondary" gutterBottom>Total</Typography>
                 <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {notifications.length}
+                  {countsByType.todos}
                 </Typography>
               </CardContent>
             </Card>
@@ -469,7 +672,7 @@ function ModernNotificacoes() {
               <CardContent>
                 <Typography variant="subtitle2" color="textSecondary" gutterBottom>Agendamentos</Typography>
                 <Typography variant="h3" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {notifications.filter(n => n.tipo === 'agendamento').length}
+                  {countsByType.agendamento}
                 </Typography>
               </CardContent>
             </Card>
@@ -478,11 +681,11 @@ function ModernNotificacoes() {
 
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Card sx={{ bgcolor: '#ffebee' }}>
+            <Card sx={{ bgcolor: '#e3f2fd' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Alertas</Typography>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#f44336' }}>
-                  {notifications.filter(n => n.tipo === 'estoque').length}
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Anamnese</Typography>
+                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3' }}>
+                  {countsByType.anamnese}
                 </Typography>
               </CardContent>
             </Card>
@@ -496,9 +699,9 @@ function ModernNotificacoes() {
               {/* Tabs */}
               <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
                 <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
-                  <Tab label={`Todas (${notifications.length})`} />
+                  <Tab label={`Todas (${countsByType.todos})`} />
                   <Tab label={`Não lidas (${unreadCount})`} />
-                  <Tab label={`Lidas (${notifications.length - unreadCount})`} />
+                  <Tab label={`Lidas (${countsByType.todos - unreadCount})`} />
                 </Tabs>
               </Box>
 
@@ -506,20 +709,27 @@ function ModernNotificacoes() {
               <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
                 <FilterIcon color="action" />
                 <Typography variant="body2">Filtrar:</Typography>
-                {['todos', 'agendamento', 'cliente', 'estoque', 'pagamento', 'lembrete'].map(tipo => (
-                  <Chip
+                {['todos', 'agendamento', 'cliente', 'estoque', 'pagamento', 'lembrete', 'anamnese'].map(tipo => (
+                  <Badge
                     key={tipo}
-                    label={tipo === 'todos' ? 'Todos' : getNotificationTypeLabel(tipo)}
-                    onClick={() => setFilterType(tipo)}
-                    variant={filterType === tipo ? 'filled' : 'outlined'}
-                    sx={filterType === tipo ? {
-                      bgcolor: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo),
-                      color: 'white'
-                    } : {
-                      color: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo),
-                      borderColor: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo)
-                    }}
-                  />
+                    badgeContent={tipo !== 'todos' ? countsByType[tipo] : 0}
+                    color="primary"
+                    invisible={tipo === 'todos' || countsByType[tipo] === 0}
+                  >
+                    <Chip
+                      label={tipo === 'todos' ? 'Todos' : getNotificationTypeLabel(tipo)}
+                      onClick={() => setFilterType(tipo)}
+                      variant={filterType === tipo ? 'filled' : 'outlined'}
+                      icon={tipo === 'anamnese' ? <AssignmentIcon /> : undefined}
+                      sx={filterType === tipo ? {
+                        bgcolor: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo),
+                        color: 'white'
+                      } : {
+                        color: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo),
+                        borderColor: tipo === 'todos' ? 'primary.main' : getNotificationTypeColor(tipo)
+                      }}
+                    />
+                  </Badge>
                 ))}
               </Box>
 
@@ -556,8 +766,8 @@ function ModernNotificacoes() {
                         variant="outlined"
                         sx={{
                           mb: 2,
-                          bgcolor: notification.lida ? 'transparent' : '#f3e5f5',
-                          borderLeft: !notification.lida ? '4px solid #9c27b0' : 'none',
+                          bgcolor: notification.lida ? 'transparent' : `${getNotificationTypeColor(notification.tipo)}10`,
+                          borderLeft: !notification.lida ? `4px solid ${getNotificationTypeColor(notification.tipo)}` : 'none',
                           '&:hover': { boxShadow: 3 }
                         }}
                       >
@@ -580,6 +790,14 @@ function ModernNotificacoes() {
                                     fontWeight: 600,
                                   }}
                                 />
+                                {notification.prioridade === 'alta' && (
+                                  <Chip 
+                                    icon={<WarningIcon />} 
+                                    label="Prioridade Alta" 
+                                    size="small" 
+                                    color="error" 
+                                  />
+                                )}
                                 {!notification.lida && (
                                   <Chip icon={<TimeIcon />} label="Nova" size="small" color="secondary" />
                                 )}
@@ -596,34 +814,53 @@ function ModernNotificacoes() {
                               <Typography variant="caption" color="textSecondary">
                                 {formatDate(notification.data)}
                               </Typography>
+
+                              {notification.tipo === 'anamnese' && notification.detalhes && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Chip
+                                    size="small"
+                                    label={`${notification.detalhes.dataFormatada} às ${notification.detalhes.horario}`}
+                                    sx={{ mr: 1 }}
+                                  />
+                                  <Chip
+                                    size="small"
+                                    label={notification.detalhes.servicoNome}
+                                    sx={{ bgcolor: '#e3f2fd' }}
+                                  />
+                                </Box>
+                              )}
                             </Grid>
                             
                             <Grid item xs={12} sm={2}>
                               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleViewDetails(notification)}
-                                  sx={{ color: '#9c27b0' }}
-                                  title="Ver detalhes"
-                                >
-                                  <VisibilityIcon />
-                                </IconButton>
-                                {!notification.lida && (
+                                <Tooltip title="Ver detalhes">
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleMarkAsRead(notification.id)}
-                                    sx={{ color: '#4caf50' }}
-                                    title="Marcar como lida"
+                                    onClick={() => handleViewDetails(notification)}
+                                    sx={{ color: '#9c27b0' }}
                                   >
-                                    <CheckIcon />
+                                    <VisibilityIcon />
                                   </IconButton>
+                                </Tooltip>
+                                {!notification.lida && (
+                                  <Tooltip title="Marcar como lida">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleMarkAsRead(notification.id)}
+                                      sx={{ color: '#4caf50' }}
+                                    >
+                                      <CheckIcon />
+                                    </IconButton>
+                                  </Tooltip>
                                 )}
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => handleMenuOpen(e, notification)}
-                                >
-                                  <MoreIcon />
-                                </IconButton>
+                                <Tooltip title="Mais opções">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuOpen(e, notification)}
+                                  >
+                                    <MoreIcon />
+                                  </IconButton>
+                                </Tooltip>
                               </Box>
                             </Grid>
                           </Grid>
@@ -648,6 +885,14 @@ function ModernNotificacoes() {
             <CheckIcon sx={{ mr: 1, fontSize: 20 }} /> Marcar como lida
           </MenuItem>
         )}
+        {selectedNotification?.tipo === 'anamnese' && (
+          <MenuItem onClick={() => {
+            handleNavigate('anamnese', selectedNotification.detalhes);
+            handleCloseMenu();
+          }}>
+            <AssignmentIcon sx={{ mr: 1, fontSize: 20, color: '#2196f3' }} /> Preencher formulário
+          </MenuItem>
+        )}
         <MenuItem onClick={() => handleDelete(selectedNotification?.id)}>
           <DeleteIcon sx={{ mr: 1, fontSize: 20, color: '#f44336' }} /> Excluir
         </MenuItem>
@@ -655,7 +900,7 @@ function ModernNotificacoes() {
 
       {/* Dialog de Detalhes */}
       <Dialog open={openDetailsDialog} onClose={() => setOpenDetailsDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+        <DialogTitle sx={{ bgcolor: getNotificationTypeColor(notificationDetails?.tipo), color: 'white' }}>
           Detalhes da Notificação
         </DialogTitle>
         <DialogContent>
@@ -672,20 +917,42 @@ function ModernNotificacoes() {
               <Typography variant="body2">
                 <strong>Data:</strong> {formatDate(notificationDetails.data)}
               </Typography>
+              <Typography variant="body2">
+                <strong>Prioridade:</strong> {notificationDetails.prioridade || 'normal'}
+              </Typography>
+              
               {notificationDetails.detalhes && (
                 <>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    <strong>Cliente:</strong> {notificationDetails.detalhes.clienteNome}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Serviço:</strong> {notificationDetails.detalhes.servicoNome}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Profissional:</strong> {notificationDetails.detalhes.profissionalNome}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Horário:</strong> {notificationDetails.detalhes.dataFormatada} às {notificationDetails.detalhes.horario}
-                  </Typography>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" gutterBottom>Detalhes adicionais:</Typography>
+                  
+                  {notificationDetails.tipo === 'anamnese' ? (
+                    // 🔥 DETALHES ESPECÍFICOS PARA ANAMNESE
+                    <>
+                      <Typography variant="body2">
+                        <strong>Cliente:</strong> {notificationDetails.detalhes.clienteNome}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Serviço:</strong> {notificationDetails.detalhes.servicoNome}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Profissional:</strong> {notificationDetails.detalhes.profissionalNome}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Data/Horário:</strong> {notificationDetails.detalhes.dataFormatada} às {notificationDetails.detalhes.horario}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Formulário:</strong> {notificationDetails.detalhes.formularioTitulo}
+                      </Typography>
+                    </>
+                  ) : (
+                    // DETALHES GERAIS
+                    Object.entries(notificationDetails.detalhes).map(([key, value]) => (
+                      <Typography key={key} variant="body2">
+                        <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </Typography>
+                    ))
+                  )}
                 </>
               )}
             </Box>
@@ -698,7 +965,84 @@ function ModernNotificacoes() {
             onClick={() => handleNavigate(notificationDetails?.tipo, notificationDetails?.detalhes)}
             sx={{ bgcolor: getNotificationTypeColor(notificationDetails?.tipo) }}
           >
-            {notificationDetails?.tipo === 'agendamento' ? 'Ver Agendamentos' : 'Ir para'}
+            {notificationDetails?.tipo === 'anamnese' ? 'Preencher Formulário' : 'Ir para'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 🔥 DIALOG DE ANAMNESE PENDENTE */}
+      <Dialog open={openAnamneseDialog} onClose={() => setOpenAnamneseDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AssignmentIcon />
+            <Typography variant="h6">Formulário de Anamnese Pendente</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedAnamnese && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Este formulário precisa ser preenchido antes do atendimento.
+              </Alert>
+
+              <Paper sx={{ p: 3, bgcolor: '#f5f5f5' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Cliente
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      {selectedAnamnese.clienteNome}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Serviço
+                    </Typography>
+                    <Typography variant="body1">
+                      {selectedAnamnese.servicoNome}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Profissional
+                    </Typography>
+                    <Typography variant="body1">
+                      {selectedAnamnese.profissionalNome}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Data/Horário
+                    </Typography>
+                    <Typography variant="body1">
+                      {formatDateShort(selectedAnamnese.data)} às {selectedAnamnese.horaInicio}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Formulário
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#2196f3' }}>
+                      {selectedAnamnese.formularioTitulo}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAnamneseDialog(false)}>
+            Fechar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => handleIrParaAnamnese(selectedAnamnese?.agendamentoId)}
+            sx={{ bgcolor: '#2196f3' }}
+            startIcon={<QuizIcon />}
+          >
+            Preencher Formulário Agora
           </Button>
         </DialogActions>
       </Dialog>
