@@ -28,7 +28,7 @@ firebaseService.query = async function(collectionName, ...args) {
   // Se for cliente e tentar acessar usuarios, retorna array vazio SEM ERRO
   if (window.location.pathname.startsWith('/cliente') && collectionName === 'usuarios') {
     console.log('🚫 Bloqueando query em usuarios na área do cliente');
-    console.trace(); // 👈 Mostra de onde veio a chamada (opcional, pode remover depois)
+    console.trace();
     return [];
   }
   
@@ -351,7 +351,9 @@ function App() {
                   </AuthClienteProvider>
                 } />
                 
-                {/* Rotas protegidas do cliente - com layout compartilhado */}
+                {/* =========================================== */}
+                {/* 🔥 ROTAS PROTEGIDAS DO CLIENTE - TODAS DENTRO DO LAYOUT */}
+                {/* =========================================== */}
                 <Route path="/cliente" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
@@ -359,6 +361,7 @@ function App() {
                     </ClientePrivateRoute>
                   </AuthClienteProvider>
                 }>
+                  {/* Rotas principais */}
                   <Route path="dashboard" element={<ClienteDashboard />} />
                   <Route path="agendamentos" element={<ClienteAgendamentos />} />
                   <Route path="recompensas" element={<ClienteRecompensas />} />
@@ -367,32 +370,14 @@ function App() {
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
                   
-                  {/* 🔥 NOVAS ROTAS DE ANAMNESE PARA CLIENTE */}
+                  {/* 🔥 Rotas de Anamnese */}
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamnese />} />
+                  
+                  {/* 🔥 Rotas para responder formulários */}
+                  <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
+                  <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                 </Route>
-                
-                {/* 🔥 ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO DE ATENDIMENTO */}
-                <Route path="/cliente/atendimento/:atendimentoId/anamnese" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteAnamnese />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
-                
-                {/* 🔥 NOVA ROTA ESPECÍFICA PARA RESPONDER FORMULÁRIO DE AGENDAMENTO */}
-                <Route path="/cliente/agendamento/:agendamentoId/anamnese" element={
-                  <AuthClienteProvider>
-                    <ClientePrivateRoute>
-                      <ClienteLayout>
-                        <ClienteAnamnese />
-                      </ClienteLayout>
-                    </ClientePrivateRoute>
-                  </AuthClienteProvider>
-                } />
                 
                 {/* =========================================== */}
                 {/* ROTAS DO SISTEMA (FUNCIONÁRIOS) */}
