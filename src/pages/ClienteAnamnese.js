@@ -285,72 +285,73 @@ function ClienteAnamnese() {
     setActiveStep(prev => prev - 1);
   };
 
-  const handleEnviar = async () => {
-    try {
-      setEnviando(true);
+const handleEnviar = async () => {
+  try {
+    setEnviando(true);
 
-      const uid = firebaseUser?.uid || cliente?.id;
+    const uid = firebaseUser?.uid || cliente?.id;
 
-      const respostasFormatadas = Object.entries(respostas).map(([perguntaId, data]) => {
-        const questao = formulario.questoes?.find(q => q.id === perguntaId);
-        return {
-          perguntaId,
-          pergunta: questao?.pergunta || '',
-          resposta: data.valor,
-          tipo: data.tipo
-        };
-      });
-
-      const dadosResposta = {
-        formularioId: formulario.id,
-        formularioTitulo: formulario.titulo,
-        clienteId: uid,
-        clienteNome: cliente?.nome || 'Cliente',
-        profissionalId: atendimento?.profissionalId,
-        profissionalNome: atendimento?.profissionalNome,
-        servicoId: atendimento?.servicoId,
-        servicoNome: atendimento?.servicoNome,
-        status: 'respondido',
-        respostas: respostasFormatadas,
-        respondidoEm: new Date().toISOString(),
-        criadoEm: Timestamp.now(),
-        atualizadoEm: Timestamp.now()
+    const respostasFormatadas = Object.entries(respostas).map(([perguntaId, data]) => {
+      const questao = formulario.questoes?.find(q => q.id === perguntaId);
+      return {
+        perguntaId,
+        pergunta: questao?.pergunta || '',
+        resposta: data.valor || '',
+        tipo: data.tipo || ''
       };
+    });
 
-      if (atendimento?.agendamentoId) {
-        dadosResposta.agendamentoId = atendimento.agendamentoId;
-      } else {
-        dadosResposta.atendimentoId = atendimento?.id;
-      }
+    // 🔥 CORREÇÃO: Garantir que nenhum campo seja undefined
+    const dadosResposta = {
+      formularioId: formulario.id || '',
+      formularioTitulo: formulario.titulo || '',
+      clienteId: uid || '',
+      clienteNome: cliente?.nome || 'Cliente',
+      profissionalId: atendimento?.profissionalId || '',
+      profissionalNome: atendimento?.profissionalNome || 'Não informado',
+      servicoId: atendimento?.servicoId || '',
+      servicoNome: atendimento?.servicoNome || 'Serviço',
+      status: 'respondido',
+      respostas: respostasFormatadas,
+      respondidoEm: new Date().toISOString(),
+      criadoEm: Timestamp.now(),
+      atualizadoEm: Timestamp.now()
+    };
 
-      console.log('📤 Enviando dados:', dadosResposta);
-      
-      await firebaseService.add('respostas_anamnese', dadosResposta);
-
-      setSnackbar({
-        open: true,
-        message: 'Formulário enviado com sucesso!',
-        severity: 'success'
-      });
-      
-      toast.success('Formulário enviado com sucesso!');
-      
-      setTimeout(() => {
-        navigate('/cliente/anamnese');
-      }, 2000);
-      
-    } catch (error) {
-      console.error('❌ Erro ao enviar formulário:', error);
-      setSnackbar({
-        open: true,
-        message: 'Erro ao enviar formulário',
-        severity: 'error'
-      });
-      toast.error('Erro ao enviar formulário');
-    } finally {
-      setEnviando(false);
+    if (atendimento?.agendamentoId) {
+      dadosResposta.agendamentoId = atendimento.agendamentoId;
+    } else {
+      dadosResposta.atendimentoId = atendimento?.id || '';
     }
-  };
+
+    console.log('📤 Enviando dados:', dadosResposta);
+    
+    await firebaseService.add('respostas_anamnese', dadosResposta);
+
+    setSnackbar({
+      open: true,
+      message: 'Formulário enviado com sucesso!',
+      severity: 'success'
+    });
+    
+    toast.success('Formulário enviado com sucesso!');
+    
+    setTimeout(() => {
+      navigate('/cliente/anamnese');
+    }, 2000);
+    
+  } catch (error) {
+    console.error('❌ Erro ao enviar formulário:', error);
+    setSnackbar({
+      open: true,
+      message: 'Erro ao enviar formulário',
+      severity: 'error'
+    });
+    toast.error('Erro ao enviar formulário');
+  } finally {
+    setEnviando(false);
+  }
+};
 
   const formatarData = (data) => {
     if (!data) return '';
