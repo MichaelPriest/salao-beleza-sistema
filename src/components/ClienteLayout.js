@@ -98,7 +98,7 @@ function ClienteLayout() {
     }
   }, [cliente]);
 
-  // VERIFICAR FORMULÁRIOS PENDENTES
+  // 🔥 FUNÇÃO CORRIGIDA PARA VERIFICAR FORMULÁRIOS PENDENTES
   const verificarFormulariosPendentes = async () => {
     if (!cliente?.id) return;
     
@@ -107,37 +107,131 @@ function ClienteLayout() {
       
       // Buscar agendamentos futuros do cliente
       const hoje = new Date().toISOString().split('T')[0];
-      const agendamentos = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: uid },
-        { field: 'data', operator: '>=', value: hoje },
-        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
-      ]);
       
-      let pendentes = 0;
+      // 🔥 CORREÇÃO: Buscar separadamente para evitar operador 'in'
+      let agendamentos = [];
+      
+      // Buscar agendamentos confirmados
+      try {
+        const confirmados = await firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: uid },
+          { field: 'data', operator: '>=', value: hoje },
+          { field: 'status', operator: '==', value: 'confirmado' }
+        ]);
+        agendamentos = [...agendamentos, ...confirmados];
+      } catch (err) {
+        console.log('⚠️ Erro ao buscar confirmados:', err);
+      }
+      
+      // Buscar agendamentos pendentes
+      try {
+        const pendentes = await firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: uid },
+          { field: 'data', operator: '>=', value: hoje },
+          { field: 'status', operator: '==', value: 'pendente' }
+        ]);
+        agendamentos = [...agendamentos, ...pendentes];
+      } catch (err) {
+        console.log('⚠️ Erro ao buscar pendentes:', err);
+      }
+      
+      let pendentesCount = 0;
       
       // Para cada agendamento, verificar se tem formulário associado não respondido
       for (const agendamento of agendamentos) {
-        // Buscar formulários associados ao serviço
-        const formularios = await firebaseService.query('formularios_anamnese', [
-          { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
-          { field: 'ativo', operator: '==', value: true }
-        ]);
-        
-        if (formularios.length > 0) {
-          // Verificar se já respondeu
-          const respostas = await firebaseService.query('respostas_anamnese', [
-            { field: 'agendamentoId', operator: '==', value: agendamento.id }
-          ]);
+        try {
+          // Buscar formulários associados ao serviço
+          const formularios = await firebaseService.query('formularios_anamnese', [
+            { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
+            { field: 'ativo', operator: '==', value: true }
+          ]).catch(() => []);
           
-          if (respostas.length === 0) {
-            pendentes++;
+          if (formularios.length > 0) {
+            // Verificar se já respondeu
+            const respostas = await firebaseService.query('respostas_anamnese', [
+              { field: 'agendamentoId', operator: '==', value: agendamento.id }
+            ]).catch(() => []);
+            
+            if (respostas.length === 0) {
+              pendentesCount++;
+            }
           }
+        } catch (e) {
+          console.log('Erro ao verificar formulário para agendamento:', agendamento.id);
         }
       }
       
-      setFormulariosPendentes(pendentes);
+      setFormulariosPendentes(pendentesCount);
     } catch (error) {
       console.error('Erro ao verificar formulários pendentes:', error);
+    }
+  };
+
+  // 🔥 FUNÇÃO CORRIGIDA PARA IR AO PRIMEIRO FORMULÁRIO PENDENTE
+  const irParaPrimeiroFormularioPendente = async () => {
+    try {
+      const uid = firebaseUser?.uid || cliente?.id;
+      const hoje = new Date().toISOString().split('T')[0];
+      
+      // Buscar agendamentos futuros do cliente
+      let agendamentos = [];
+      
+      // Buscar agendamentos confirmados
+      try {
+        const confirmados = await firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: uid },
+          { field: 'data', operator: '>=', value: hoje },
+          { field: 'status', operator: '==', value: 'confirmado' }
+        ]);
+        agendamentos = [...agendamentos, ...confirmados];
+      } catch (err) {
+        console.log('⚠️ Erro ao buscar confirmados:', err);
+      }
+      
+      // Buscar agendamentos pendentes
+      try {
+        const pendentes = await firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: uid },
+          { field: 'data', operator: '>=', value: hoje },
+          { field: 'status', operator: '==', value: 'pendente' }
+        ]);
+        agendamentos = [...agendamentos, ...pendentes];
+      } catch (err) {
+        console.log('⚠️ Erro ao buscar pendentes:', err);
+      }
+      
+      // Ordenar por data (mais próximos primeiro)
+      agendamentos.sort((a, b) => a.data.localeCompare(b.data));
+      
+      // Procurar o primeiro agendamento com formulário pendente
+      for (const agendamento of agendamentos) {
+        try {
+          const formularios = await firebaseService.query('formularios_anamnese', [
+            { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
+            { field: 'ativo', operator: '==', value: true }
+          ]).catch(() => []);
+          
+          if (formularios.length > 0) {
+            const respostas = await firebaseService.query('respostas_anamnese', [
+              { field: 'agendamentoId', operator: '==', value: agendamento.id }
+            ]).catch(() => []);
+            
+            if (respostas.length === 0) {
+              // Encontrou um pendente, redirecionar para o formulário
+              navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Erro ao verificar formulário:', e);
+        }
+      }
+      
+      // Se não encontrar nenhum pendente, vai para a lista
+      navigate('/cliente/anamnese');
+    } catch (error) {
+      console.error('Erro ao redirecionar para formulário:', error);
+      navigate('/cliente/anamnese');
     }
   };
 
@@ -171,6 +265,7 @@ function ClienteLayout() {
       setNotificacoes(prev =>
         prev.map(n => n.id === notificacao.id ? { ...n, lida: true } : n)
       );
+      setNotificacoesNaoLidas(prev => prev - 1);
     }
     
     if (notificacao.link) {
@@ -242,47 +337,6 @@ function ClienteLayout() {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  };
-
-  // 🔥 FUNÇÃO PARA REDIRECIONAR PARA O PRIMEIRO FORMULÁRIO PENDENTE
-  const irParaPrimeiroFormularioPendente = async () => {
-    try {
-      const uid = firebaseUser?.uid || cliente?.id;
-      const hoje = new Date().toISOString().split('T')[0];
-      
-      // Buscar agendamentos futuros do cliente
-      const agendamentos = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: uid },
-        { field: 'data', operator: '>=', value: hoje },
-        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
-      ]);
-      
-      // Procurar o primeiro agendamento com formulário pendente
-      for (const agendamento of agendamentos) {
-        const formularios = await firebaseService.query('formularios_anamnese', [
-          { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
-          { field: 'ativo', operator: '==', value: true }
-        ]);
-        
-        if (formularios.length > 0) {
-          const respostas = await firebaseService.query('respostas_anamnese', [
-            { field: 'agendamentoId', operator: '==', value: agendamento.id }
-          ]);
-          
-          if (respostas.length === 0) {
-            // Encontrou um pendente, redirecionar para o formulário
-            navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
-            return;
-          }
-        }
-      }
-      
-      // Se não encontrar nenhum pendente, vai para a lista
-      navigate('/cliente/anamnese');
-    } catch (error) {
-      console.error('Erro ao redirecionar para formulário:', error);
-      navigate('/cliente/anamnese');
-    }
   };
 
   const drawer = (
@@ -519,7 +573,7 @@ function ClienteLayout() {
               zIndex: 999,
               cursor: 'pointer',
             }}
-            onClick={irParaPrimeiroFormularioPendente} // 🔥 FUNÇÃO MELHORADA
+            onClick={irParaPrimeiroFormularioPendente}
           >
             <Paper
               elevation={3}
