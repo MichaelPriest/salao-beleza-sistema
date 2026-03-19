@@ -41,7 +41,6 @@ import {
   EmojiEvents as TrophyIcon,
   Redeem as RedeemIcon,
   Info as InfoIcon,
-  // 🔥 NOVOS ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
   Quiz as QuizIcon,
   Checklist as ChecklistIcon,
@@ -51,7 +50,7 @@ import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
 import { firebaseService } from '../services/firebase';
 
-// 🔥 MENU ATUALIZADO COM OPÇÃO DE ANAMNESE
+// MENU ATUALIZADO COM OPÇÃO DE ANAMNESE
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/cliente/dashboard' },
   { text: 'Agendamentos', icon: <CalendarIcon />, path: '/cliente/agendamentos' },
@@ -60,7 +59,6 @@ const menuItems = [
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
-  // 🔥 NOVO ITEM DE MENU PARA ANAMNESE
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
 ];
 
@@ -72,13 +70,13 @@ function ClienteLayout() {
   const { cliente, logout, firebaseUser } = useAuthCliente();
   const [mobileOpen, setMobileOpen] = useState(false);
   
-  // 🔥 ESTADOS PARA NOTIFICAÇÕES
+  // ESTADOS PARA NOTIFICAÇÕES
   const [notificacoes, setNotificacoes] = useState([]);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
   
-  // 🔥 ESTADO PARA FORMULÁRIOS PENDENTES
+  // ESTADO PARA FORMULÁRIOS PENDENTES
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
 
   useEffect(() => {
@@ -100,7 +98,7 @@ function ClienteLayout() {
     }
   }, [cliente]);
 
-  // 🔥 VERIFICAR FORMULÁRIOS PENDENTES
+  // VERIFICAR FORMULÁRIOS PENDENTES
   const verificarFormulariosPendentes = async () => {
     if (!cliente?.id) return;
     
@@ -197,7 +195,6 @@ function ClienteLayout() {
       case 'recompensa': return <GiftIcon sx={{ color: '#ff4081' }} />;
       case 'resgate': return <RedeemIcon sx={{ color: '#2196f3' }} />;
       case 'lembrete': return <EventIcon sx={{ color: '#ff9800' }} />;
-      // 🔥 NOVO TIPO PARA FORMULÁRIOS
       case 'formulario': return <AssignmentIcon sx={{ color: '#9c27b0' }} />;
       default: return <InfoIcon sx={{ color: '#2196f3' }} />;
     }
@@ -245,6 +242,47 @@ function ClienteLayout() {
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  // 🔥 FUNÇÃO PARA REDIRECIONAR PARA O PRIMEIRO FORMULÁRIO PENDENTE
+  const irParaPrimeiroFormularioPendente = async () => {
+    try {
+      const uid = firebaseUser?.uid || cliente?.id;
+      const hoje = new Date().toISOString().split('T')[0];
+      
+      // Buscar agendamentos futuros do cliente
+      const agendamentos = await firebaseService.query('agendamentos', [
+        { field: 'clienteId', operator: '==', value: uid },
+        { field: 'data', operator: '>=', value: hoje },
+        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
+      ]);
+      
+      // Procurar o primeiro agendamento com formulário pendente
+      for (const agendamento of agendamentos) {
+        const formularios = await firebaseService.query('formularios_anamnese', [
+          { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
+          { field: 'ativo', operator: '==', value: true }
+        ]);
+        
+        if (formularios.length > 0) {
+          const respostas = await firebaseService.query('respostas_anamnese', [
+            { field: 'agendamentoId', operator: '==', value: agendamento.id }
+          ]);
+          
+          if (respostas.length === 0) {
+            // Encontrou um pendente, redirecionar para o formulário
+            navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
+            return;
+          }
+        }
+      }
+      
+      // Se não encontrar nenhum pendente, vai para a lista
+      navigate('/cliente/anamnese');
+    } catch (error) {
+      console.error('Erro ao redirecionar para formulário:', error);
+      navigate('/cliente/anamnese');
+    }
   };
 
   const drawer = (
@@ -296,7 +334,7 @@ function ClienteLayout() {
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
           
-          // 🔥 VERIFICAR SE É O ITEM DE ANAMNESE COM PENDÊNCIAS
+          // VERIFICAR SE É O ITEM DE ANAMNESE COM PENDÊNCIAS
           const isAnamnese = item.text === 'Anamnese';
           const badgeCount = isAnamnese ? formulariosPendentes : 0;
           
@@ -471,7 +509,7 @@ function ClienteLayout() {
           </Box>
         )}
 
-        {/* 🔥 BADGE PARA FORMULÁRIOS PENDENTES (visível apenas quando necessário) */}
+        {/* BADGE PARA FORMULÁRIOS PENDENTES (visível apenas quando necessário) */}
         {formulariosPendentes > 0 && (
           <Box
             sx={{
@@ -481,7 +519,7 @@ function ClienteLayout() {
               zIndex: 999,
               cursor: 'pointer',
             }}
-            onClick={() => navigate('/cliente/anamnese')}
+            onClick={irParaPrimeiroFormularioPendente} // 🔥 FUNÇÃO MELHORADA
           >
             <Paper
               elevation={3}
