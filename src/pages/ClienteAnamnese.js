@@ -36,6 +36,7 @@ import {
   StepLabel,
   StepContent,
   MobileStepper,
+  FormHelperText,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -56,14 +57,16 @@ import {
   KeyboardArrowRight,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { firebaseService } from '../services/firebase';
-import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { firebaseService } from '../../services/firebase';
+import { useAuthCliente } from '../../contexts/AuthClienteContext';
 import { Timestamp } from 'firebase/firestore';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function ClienteAnamnese() {
   const navigate = useNavigate();
-  const { atendimentoId } = useParams();
-  const { cliente } = useAuthCliente();
+  const { atendimentoId, agendamentoId } = useParams(); // 🔥 Aceita ambos
+  const { cliente, firebaseUser } = useAuthCliente();
   
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -74,16 +77,59 @@ function ClienteAnamnese() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [validacao, setValidacao] = useState({});
 
+  // Determinar qual ID usar
+  const entityId = atendimentoId || agendamentoId;
+  const entityType = atendimentoId ? 'atendimento' : 'agendamento';
+
   useEffect(() => {
-    carregarDados();
-  }, [atendimentoId]);
+    if (entityId) {
+      carregarDados();
+    }
+  }, [entityId]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
       
-      // Buscar atendimento
-      const atendimentoData = await firebaseService.getById('atendimentos', atendimentoId);
+      let atendimentoData;
+      
+      if (entityType === 'atendimento') {
+        // Buscar diretamente pelo atendimento
+        atendimentoData = await firebaseService.getById('atendimentos', entityId);
+      } else {
+        // Buscar o agendamento
+        const agendamento = await firebaseService.getById('agendamentos', entityId);
+        
+        if (!agendamento) {
+          toast.error('Agendamento não encontrado');
+          return;
+        }
+        
+        // Verificar se já existe atendimento para este agendamento
+        const atendimentosExistentes = await firebaseService.query('atendimentos', [
+          { field: 'agendamentoId', operator: '==', value: entityId }
+        ]);
+        
+        if (atendimentosExistentes.length > 0) {
+          // Se já existe atendimento, redirecionar para ele
+          navigate(`/cliente/atendimento/${atendimentosExistentes[0].id}/anamnese`, { replace: true });
+          return;
+        }
+        
+        // Se não existe, usar dados do agendamento
+        atendimentoData = {
+          id: agendamento.id,
+          agendamentoId: agendamento.id,
+          clienteId: agendamento.clienteId,
+          profissionalId: agendamento.profissionalId,
+          profissionalNome: agendamento.profissionalNome,
+          servicoId: agendamento.servicoId,
+          servicoNome: agendamento.servicoNome || (await buscarServicoNome(agendamento.servicoId)),
+          data: agendamento.data,
+          horaInicio: agendamento.horario,
+        };
+      }
+
       setAtendimento(atendimentoData);
 
       if (!atendimentoData) {
@@ -91,20 +137,28 @@ function ClienteAnamnese() {
         return;
       }
 
-      // Verificar se já existe resposta
-      const respostasExistentes = await firebaseService.query('respostas_anamnese', [
-        { field: 'atendimentoId', operator: '==', value: atendimentoId }
-      ]);
+      // Verificar se já existe resposta para este atendimento/agendamento
+      let respostasExistentes;
+      if (atendimentoData.agendamentoId) {
+        respostasExistentes = await firebaseService.query('respostas_anamnese', [
+          { field: 'agendamentoId', operator: '==', value: atendimentoData.agendamentoId }
+        ]);
+      } else {
+        respostasExistentes = await firebaseService.query('respostas_anamnese', [
+          { field: 'atendimentoId', operator: '==', value: atendimentoData.id }
+        ]);
+      }
 
       if (respostasExistentes.length > 0) {
-        // Se já respondeu, redirecionar
-        navigate(`/cliente/atendimentos/${atendimentoId}`);
+        // Se já respondeu, redirecionar para visualização
+        navigate(`/cliente/anamnese/${respostasExistentes[0].id}`);
         return;
       }
 
-      // Buscar formulário associado ao serviço
+      // Buscar formulários associados ao serviço
       const formularios = await firebaseService.query('formularios_anamnese', [
-        { field: 'servicoIds', operator: 'array-contains', value: atendimentoData.servicoId }
+        { field: 'servicoIds', operator: 'array-contains', value: atendimentoData.servicoId },
+        { field: 'ativo', operator: '==', value: true }
       ]);
 
       if (formularios.length > 0) {
@@ -119,6 +173,15 @@ function ClienteAnamnese() {
     }
   };
 
+  const buscarServicoNome = async (servicoId) => {
+    try {
+      const servico = await firebaseService.getById('servicos', servicoId);
+      return servico?.nome || 'Serviço';
+    } catch {
+      return 'Serviço';
+    }
+  };
+
   const handleRespostaChange = (perguntaId, value, tipo) => {
     setRespostas(prev => ({
       ...prev,
@@ -130,7 +193,7 @@ function ClienteAnamnese() {
     }));
 
     // Validar campo obrigatório
-    const questao = formulario.questoes.find(q => q.id === perguntaId);
+    const questao = formulario?.questoes.find(q => q.id === perguntaId);
     if (questao?.obrigatoria) {
       setValidacao(prev => ({
         ...prev,
@@ -145,6 +208,8 @@ function ClienteAnamnese() {
   };
 
   const validarFormulario = () => {
+    if (!formulario) return false;
+    
     const novosErros = {};
     
     formulario.questoes.forEach(questao => {
@@ -163,6 +228,8 @@ function ClienteAnamnese() {
   };
 
   const handleProximo = () => {
+    if (!formulario) return;
+    
     if (activeStep === formulario.questoes.length - 1) {
       // Última questão, validar tudo
       if (validarFormulario()) {
@@ -183,6 +250,8 @@ function ClienteAnamnese() {
     try {
       setEnviando(true);
 
+      const uid = firebaseUser?.uid || cliente?.id;
+
       // Montar respostas
       const respostasFormatadas = Object.entries(respostas).map(([perguntaId, data]) => {
         const questao = formulario.questoes.find(q => q.id === perguntaId);
@@ -194,11 +263,11 @@ function ClienteAnamnese() {
         };
       });
 
-      // Salvar no Firebase
-      await firebaseService.add('respostas_anamnese', {
+      // Preparar dados para salvar
+      const dadosResposta = {
         formularioId: formulario.id,
-        atendimentoId: atendimento.id,
-        clienteId: cliente.id,
+        formularioTitulo: formulario.titulo,
+        clienteId: uid,
         clienteNome: cliente.nome,
         profissionalId: atendimento.profissionalId,
         servicoId: atendimento.servicoId,
@@ -208,16 +277,35 @@ function ClienteAnamnese() {
         respondidoEm: new Date().toISOString(),
         criadoEm: Timestamp.now(),
         atualizadoEm: Timestamp.now()
-      });
+      };
+
+      // Adicionar IDs apropriados
+      if (atendimento.agendamentoId) {
+        dadosResposta.agendamentoId = atendimento.agendamentoId;
+      } else {
+        dadosResposta.atendimentoId = atendimento.id;
+      }
+
+      // Salvar no Firebase
+      await firebaseService.add('respostas_anamnese', dadosResposta);
 
       toast.success('Formulário enviado com sucesso!');
-      navigate(`/cliente/atendimentos/${atendimentoId}`);
+      navigate('/cliente/anamnese');
       
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
       toast.error('Erro ao enviar formulário');
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const formatarData = (data) => {
+    if (!data) return '';
+    try {
+      return format(new Date(data + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    } catch {
+      return data;
     }
   };
 
@@ -237,10 +325,10 @@ function ClienteAnamnese() {
         </Alert>
         <Button
           variant="contained"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/cliente/anamnese')}
           sx={{ mt: 2 }}
         >
-          Voltar
+          Voltar para lista
         </Button>
       </Box>
     );
@@ -252,7 +340,7 @@ function ClienteAnamnese() {
     <Box>
       {/* Cabeçalho */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
-        <IconButton onClick={() => navigate(-1)} sx={{ mr: 2 }}>
+        <IconButton onClick={() => navigate('/cliente/anamnese')} sx={{ mr: 2 }}>
           <ArrowBackIcon />
         </IconButton>
         <Box>
@@ -260,7 +348,7 @@ function ClienteAnamnese() {
             {formulario.titulo}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Atendimento: {atendimento?.servicoNome} • {new Date(atendimento?.data).toLocaleDateString('pt-BR')}
+            Atendimento: {atendimento?.servicoNome} • {formatarData(atendimento?.data)}
           </Typography>
         </Box>
       </Box>
@@ -275,7 +363,7 @@ function ClienteAnamnese() {
                 <Box>
                   <Typography variant="caption" color="textSecondary">Data</Typography>
                   <Typography variant="body2">
-                    {new Date(atendimento?.data).toLocaleDateString('pt-BR')}
+                    {formatarData(atendimento?.data)}
                   </Typography>
                 </Box>
               </Box>
@@ -391,9 +479,7 @@ function ClienteAnamnese() {
                   ))}
                 </Select>
                 {validacao[questaoAtual.id] === false && (
-                  <Typography variant="caption" color="error">
-                    Campo obrigatório
-                  </Typography>
+                  <FormHelperText>Campo obrigatório</FormHelperText>
                 )}
               </FormControl>
             )}
