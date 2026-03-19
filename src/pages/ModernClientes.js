@@ -1,5 +1,6 @@
 // src/pages/ModernClientes.js
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🔥 ADICIONADO
 import {
   Box,
   Card,
@@ -39,6 +40,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  // 🔥 COMPONENTES ADICIONADOS
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -87,6 +93,7 @@ function TabPanel({ children, value, index }) {
 }
 
 function ModernClientes() {
+  const navigate = useNavigate(); // 🔥 ADICIONADO
   const componentRef = useRef(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
