@@ -226,7 +226,7 @@ import { auditoriaService } from '../../services/auditoriaService';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { v4 as uuidv4 } from 'uuid';
 import SignatureCanvas from 'react-signature-canvas';
-import { NumericFormat } from 'react-number-format'; // 🔥 CORRIGIDO: importação correta
+import { NumericFormat } from 'react-number-format';
 import InputMask from 'react-input-mask';
 
 // ============================================
@@ -270,7 +270,6 @@ const tiposQuestao = [
 // COMPONENTES DE MÁSCARA
 // ============================================
 
-// 🔥 COMPONENTE CORRIGIDO PARA USAR NumericFormat
 const NumericFormatCustom = React.forwardRef(function NumericFormatCustom(props, ref) {
   const { onChange, ...other } = props;
   return (
@@ -374,6 +373,34 @@ const SignaturePad = ({ value, onChange, disabled }) => {
 };
 
 // ============================================
+// FUNÇÃO AUXILIAR PARA LIMPAR UNDEFINED
+// ============================================
+const limparObjeto = (obj) => {
+  if (obj === undefined || obj === null) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(item => limparObjeto(item)).filter(item => item !== undefined && item !== null);
+  }
+  if (typeof obj === 'object') {
+    const novoObj = {};
+    Object.keys(obj).forEach(key => {
+      const valor = obj[key];
+      if (valor !== undefined && valor !== null) {
+        if (typeof valor === 'object') {
+          const valorLimpo = limparObjeto(valor);
+          if (valorLimpo !== null && Object.keys(valorLimpo).length > 0) {
+            novoObj[key] = valorLimpo;
+          }
+        } else {
+          novoObj[key] = valor;
+        }
+      }
+    });
+    return novoObj;
+  }
+  return obj;
+};
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
@@ -395,7 +422,7 @@ function FormulariosAnamnese() {
   const [tabValue, setTabValue] = useState(0);
   const [secaoAtual, setSecaoAtual] = useState('geral');
   
-  // Estado do formulário com campos avançados
+  // Estado do formulário com campos avançados (todos com null em vez de undefined)
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -406,7 +433,7 @@ function FormulariosAnamnese() {
     instrucoes: '',
     categorias: [],
     tags: [],
-    secoes: [], // Organização em seções
+    secoes: [],
     questoes: [],
     configuracoes: {
       mostrarBarraProgresso: true,
@@ -514,7 +541,7 @@ function FormulariosAnamnese() {
     });
   };
 
-  // Adicionar nova questão
+  // 🔥 FUNÇÃO adicionarQuestao CORRIGIDA (sem undefined)
   const adicionarQuestao = (secaoId = null) => {
     const novaQuestao = {
       id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -530,8 +557,8 @@ function FormulariosAnamnese() {
       passo: null,
       formato: null,
       mascara: null,
-      condicional: null, // { perguntaId: 'q123', valor: 'Sim', operador: '==' }
-      calculado: null, // { formula: 'q1 + q2', resultadoEm: 'numero' }
+      condicional: null,
+      calculado: null,
       secaoId: secaoId,
       ordem: formData.questoes.filter(q => q.secaoId === secaoId).length,
       validacoes: {
@@ -559,7 +586,7 @@ function FormulariosAnamnese() {
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Atualizar questão
+  // 🔥 FUNÇÃO atualizarQuestao CORRIGIDA (sem undefined)
   const atualizarQuestao = (index, campo, valor) => {
     const novasQuestoes = [...formData.questoes];
     
@@ -568,7 +595,7 @@ function FormulariosAnamnese() {
       const novoTipo = valor;
       const questao = novasQuestoes[index];
       
-      // Resetar campos baseado no novo tipo
+      // Resetar campos baseado no novo tipo (usando null em vez de undefined)
       if (['select', 'multiselect', 'radio', 'checkbox'].includes(novoTipo)) {
         questao.opcoes = questao.opcoes || [];
       } else {
@@ -579,18 +606,32 @@ function FormulariosAnamnese() {
         questao.valorMinimo = null;
         questao.valorMaximo = null;
         questao.passo = 1;
+      } else {
+        questao.valorMinimo = null;
+        questao.valorMaximo = null;
+        questao.passo = null;
       }
       
       if (['cpf', 'cnpj', 'telefone', 'cep'].includes(novoTipo)) {
         questao.mascara = novoTipo;
+      } else {
+        questao.mascara = null;
       }
       
       if (novoTipo === 'dinheiro') {
         questao.formato = 'monetario';
+      } else {
+        questao.formato = null;
       }
+      
+      // Resetar condicional e calculado
+      questao.condicional = null;
+      questao.calculado = null;
     }
     
-    novasQuestoes[index][campo] = valor;
+    // Garantir que não estamos passando undefined
+    novasQuestoes[index][campo] = valor === undefined ? null : valor;
+    
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
@@ -660,17 +701,17 @@ function FormulariosAnamnese() {
   const handleSalvarCondicional = () => {
     if (questaoCondicional && questaoCondicional.index !== undefined) {
       const novasQuestoes = [...formData.questoes];
-      novasQuestoes[questaoCondicional.index].condicional = {
-        perguntaId: questaoCondicional.condicional?.perguntaId,
-        valor: questaoCondicional.condicional?.valor,
-        operador: questaoCondicional.condicional?.operador || '=='
-      };
+      novasQuestoes[questaoCondicional.index].condicional = questaoCondicional.condicional ? {
+        perguntaId: questaoCondicional.condicional.perguntaId || null,
+        valor: questaoCondicional.condicional.valor || null,
+        operador: questaoCondicional.condicional.operador || '=='
+      } : null;
       setFormData({ ...formData, questoes: novasQuestoes });
       setOpenCondicionalDialog(false);
     }
   };
 
-  // Salvar formulário
+  // 🔥 FUNÇÃO handleSalvar CORRIGIDA (com limpeza de undefined)
   const handleSalvar = async () => {
     try {
       if (!formData.titulo) {
@@ -683,12 +724,15 @@ function FormulariosAnamnese() {
         return;
       }
 
-      const dadosParaSalvar = {
+      // 🔥 LIMPAR DADOS ANTES DE ENVIAR
+      const dadosParaSalvar = limparObjeto({
         ...formData,
         criadoEm: formularioEditando ? formularioEditando.criadoEm : new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
         versao: formularioEditando ? (formularioEditando.versao || 1) + 1 : 1
-      };
+      });
+
+      console.log('📦 Dados limpos para salvar:', dadosParaSalvar);
 
       if (formularioEditando) {
         await firebaseService.update('formularios_anamnese', formularioEditando.id, dadosParaSalvar);
@@ -701,8 +745,9 @@ function FormulariosAnamnese() {
       setOpenDialog(false);
       carregarDados();
     } catch (error) {
-      console.error('Erro ao salvar formulário:', error);
-      mostrarSnackbar('Erro ao salvar formulário', 'error');
+      console.error('❌ Erro ao salvar formulário:', error);
+      console.error('Detalhes do erro:', JSON.stringify(error, null, 2));
+      mostrarSnackbar('Erro ao salvar formulário: ' + error.message, 'error');
     }
   };
 
@@ -723,13 +768,13 @@ function FormulariosAnamnese() {
   // Duplicar formulário
   const handleDuplicar = async (formulario) => {
     try {
-      const novoFormulario = {
+      const novoFormulario = limparObjeto({
         ...formulario,
         titulo: `${formulario.titulo} (cópia)`,
         criadoEm: new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
         versao: 1
-      };
+      });
       delete novoFormulario.id;
       
       await firebaseService.add('formularios_anamnese', novoFormulario);
@@ -1583,7 +1628,7 @@ function FormulariosAnamnese() {
                                       type="number"
                                       size="small"
                                       label="Passo"
-                                      value={questao.passo || 1}
+                                      value={questao.passo || ''}
                                       onChange={(e) => atualizarQuestao(index, 'passo', e.target.value)}
                                     />
                                   </Grid>
@@ -1848,7 +1893,7 @@ function FormulariosAnamnese() {
                       onChange={(e) => setQuestaoCondicional({
                         ...questaoCondicional,
                         condicional: {
-                          ...questaoCondicional.condicional,
+                          ...(questaoCondicional.condicional || {}),
                           perguntaId: e.target.value
                         }
                       })}
@@ -1875,7 +1920,7 @@ function FormulariosAnamnese() {
                       onChange={(e) => setQuestaoCondicional({
                         ...questaoCondicional,
                         condicional: {
-                          ...questaoCondicional.condicional,
+                          ...(questaoCondicional.condicional || {}),
                           operador: e.target.value
                         }
                       })}
@@ -1900,7 +1945,7 @@ function FormulariosAnamnese() {
                     onChange={(e) => setQuestaoCondicional({
                       ...questaoCondicional,
                       condicional: {
-                        ...questaoCondicional.condicional,
+                        ...(questaoCondicional.condicional || {}),
                         valor: e.target.value
                       }
                     })}
