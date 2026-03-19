@@ -36,6 +36,9 @@ import {
   Autocomplete,
   Tooltip,
   Badge,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -53,6 +56,10 @@ import {
   Star as StarIcon,
   EmojiEvents as TrophyIcon,
   PersonAdd as PersonAddIcon,
+  // 🔥 NOVOS ÍCONES PARA ANAMNESE
+  Assignment as AssignmentIcon,
+  Quiz as QuizIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -96,6 +103,12 @@ function ModernClientes() {
   const [indicacoes, setIndicacoes] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
   const [usuario, setUsuario] = useState(null);
+  
+  // 🔥 ESTADOS PARA ANAMNESE
+  const [respostasAnamnese, setRespostasAnamnese] = useState([]);
+  const [formularios, setFormularios] = useState([]);
+  const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
+  const [anamneseSelecionada, setAnamneseSelecionada] = useState(null);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -217,6 +230,26 @@ function ModernClientes() {
     }
   };
 
+  // 🔥 FUNÇÃO PARA CARREGAR RESPOSTAS DE ANAMNESE DO CLIENTE
+  const carregarRespostasAnamnese = async (clienteId) => {
+    try {
+      const respostas = await firebaseService.query('respostas_anamnese', [
+        { field: 'clienteId', operator: '==', value: clienteId }
+      ], 'respondidoEm', 'desc');
+      
+      setRespostasAnamnese(respostas || []);
+      
+      // Carregar títulos dos formulários
+      const formulariosIds = [...new Set(respostas.map(r => r.formularioId))];
+      const formulariosData = await Promise.all(
+        formulariosIds.map(id => firebaseService.getById('formularios_anamnese', id))
+      );
+      setFormularios(formulariosData.filter(Boolean));
+    } catch (error) {
+      console.error('Erro ao carregar respostas de anamnese:', error);
+    }
+  };
+
   // 🔥 FUNÇÃO DE IMPRESSÃO
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
@@ -262,10 +295,11 @@ function ModernClientes() {
     carregarClientes();
   }, []);
 
-  // Carregar indicações quando cliente é selecionado
+  // Carregar indicações e anamnese quando cliente é selecionado
   useEffect(() => {
     if (selectedCliente?.id) {
       carregarIndicacoes(selectedCliente.id);
+      carregarRespostasAnamnese(selectedCliente.id);
     }
   }, [selectedCliente]);
 
@@ -505,18 +539,16 @@ function ModernClientes() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA CONFIRMAR INDICAÇÃO (quando o indicado faz primeiro atendimento)
+  // 🔥 FUNÇÃO PARA CONFIRMAR INDICAÇÃO
   const handleConfirmarIndicacao = async (indicacaoId) => {
     try {
       const indicacao = indicacoes.find(i => i.id === indicacaoId);
       if (!indicacao) return;
 
-      // Buscar configurações de fidelidade
       const configFidelidade = await firebaseService.getAll('config_fidelidade');
       const config = configFidelidade[0] || { pontosIndicacao: 100 };
       const pontosBonus = config.pontosIndicacao || 100;
 
-      // Atualizar status da indicação
       await firebaseService.update('indicacoes', indicacaoId, {
         status: 'confirmada',
         pontosGanhos: pontosBonus,
@@ -524,7 +556,6 @@ function ModernClientes() {
         updatedAt: Timestamp.now()
       });
 
-      // Adicionar pontos ao cliente que indicou
       await firebaseService.add('pontuacao', {
         clienteId: indicacao.clienteId,
         clienteNome: indicacao.clienteNome,
@@ -560,6 +591,12 @@ function ModernClientes() {
         indicacaoId
       });
     }
+  };
+
+  // 🔥 FUNÇÃO PARA VER DETALHES DA ANAMNESE
+  const handleVerAnamnese = (resposta) => {
+    setAnamneseSelecionada(resposta);
+    setOpenAnamneseDialog(true);
   };
 
   const handleDelete = async (id) => {
@@ -725,6 +762,12 @@ function ModernClientes() {
       case 'bronze': return '#fff3e0';
       default: return '#fff3e0';
     }
+  };
+
+  // 🔥 FUNÇÃO PARA OBTER TÍTULO DO FORMULÁRIO
+  const getFormularioTitulo = (formularioId) => {
+    const formulario = formularios.find(f => f.id === formularioId);
+    return formulario?.titulo || 'Formulário';
   };
 
   if (loading) {
@@ -1507,6 +1550,88 @@ function ModernClientes() {
                     </Card>
                   </Grid>
                 )}
+
+                {/* 🔥 SEÇÃO DE ANAMNESE */}
+                {respostasAnamnese.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card variant="outlined" sx={{ mt: 2 }}>
+                      <CardContent>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
+                          <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                          Histórico de Anamnese
+                        </Typography>
+                        
+                        <List sx={{ width: '100%' }}>
+                          {respostasAnamnese.map((resposta, index) => {
+                            const formularioTitulo = getFormularioTitulo(resposta.formularioId);
+                            return (
+                              <React.Fragment key={resposta.id}>
+                                <ListItem
+                                  button
+                                  onClick={() => handleVerAnamnese(resposta)}
+                                  sx={{
+                                    borderRadius: 1,
+                                    '&:hover': { bgcolor: '#f3e5f5' },
+                                    py: 1.5
+                                  }}
+                                >
+                                  <ListItemAvatar>
+                                    <Avatar sx={{ bgcolor: '#9c27b0' }}>
+                                      <QuizIcon />
+                                    </Avatar>
+                                  </ListItemAvatar>
+                                  <ListItemText
+                                    primary={
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                          {formularioTitulo}
+                                        </Typography>
+                                        <Chip
+                                          label={resposta.status}
+                                          size="small"
+                                          color={
+                                            resposta.status === 'respondido' ? 'info' :
+                                            resposta.status === 'visto' ? 'success' : 'default'
+                                          }
+                                          sx={{ height: 20 }}
+                                        />
+                                      </Box>
+                                    }
+                                    secondary={
+                                      <>
+                                        <Typography variant="caption" color="textSecondary">
+                                          Respondido em: {new Date(resposta.respondidoEm || resposta.criadoEm).toLocaleDateString('pt-BR')}
+                                        </Typography>
+                                        <br />
+                                        <Typography variant="caption" color="textSecondary">
+                                          {resposta.respostas?.length || 0} respostas
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
+                                  <IconButton edge="end" onClick={() => handleVerAnamnese(resposta)}>
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                </ListItem>
+                                {index < respostasAnamnese.length - 1 && <Divider />}
+                              </React.Fragment>
+                            );
+                          })}
+                        </List>
+                        
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          startIcon={<AssignmentIcon />}
+                          onClick={() => navigate(`/anamnese/respostas?cliente=${selectedCliente.id}`)}
+                          sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
+                        >
+                          Ver todas no módulo de Anamnese
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
               </Grid>
             </Box>
           )}
@@ -1514,15 +1639,27 @@ function ModernClientes() {
         <DialogActions>
           <Button onClick={() => setOpenViewDialog(false)}>Fechar</Button>
           {selectedCliente && (
-            <Button
-              variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={handlePrintCliente}
-              disabled={isPrinting}
-              sx={{ mr: 1 }}
-            >
-              {isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<PrintIcon />}
+                onClick={handlePrintCliente}
+                disabled={isPrinting}
+                sx={{ mr: 1 }}
+              >
+                {isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}
+              </Button>
+              {respostasAnamnese.length > 0 && (
+                <Button
+                  variant="contained"
+                  startIcon={<AssignmentIcon />}
+                  onClick={() => handleVerAnamnese(respostasAnamnese[0])}
+                  sx={{ bgcolor: '#9c27b0' }}
+                >
+                  Ver Anamnese
+                </Button>
+              )}
+            </>
           )}
         </DialogActions>
       </Dialog>
@@ -1601,6 +1738,115 @@ function ModernClientes() {
             Registrar Indicação
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* 🔥 DIALOG DE ANAMNESE */}
+      <Dialog open={openAnamneseDialog} onClose={() => setOpenAnamneseDialog(false)} maxWidth="md" fullWidth>
+        {anamneseSelecionada && (
+          <>
+            <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AssignmentIcon />
+                <Typography variant="h6">
+                  {getFormularioTitulo(anamneseSelecionada.formularioId)}
+                </Typography>
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ mt: 2 }}>
+                {/* Informações do cliente */}
+                <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="textSecondary">
+                        Cliente
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {anamneseSelecionada.clienteNome}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="textSecondary">
+                        Serviço
+                      </Typography>
+                      <Typography variant="body1">
+                        {anamneseSelecionada.servicoNome}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="textSecondary">
+                        Profissional
+                      </Typography>
+                      <Typography variant="body1">
+                        {anamneseSelecionada.profissionalId || 'Não informado'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="textSecondary">
+                        Respondido em
+                      </Typography>
+                      <Typography variant="body1">
+                        {anamneseSelecionada.respondidoEm ? new Date(anamneseSelecionada.respondidoEm).toLocaleString('pt-BR') : '-'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                {/* Respostas */}
+                <Typography variant="h6" gutterBottom>
+                  Respostas:
+                </Typography>
+                
+                {anamneseSelecionada.respostas?.map((resposta, index) => (
+                  <Accordion key={index} defaultExpanded={index === 0}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        {resposta.pergunta}
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          {resposta.resposta.map((item, i) => (
+                            <Chip key={i} label={item} size="small" />
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography variant="body1">
+                          {resposta.resposta}
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+
+                {/* Observações do profissional */}
+                <TextField
+                  fullWidth
+                  label="Observações do profissional"
+                  multiline
+                  rows={3}
+                  value={anamneseSelecionada.observacoesProfissional || ''}
+                  placeholder="Adicione observações sobre este formulário..."
+                  sx={{ mt: 3 }}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenAnamneseDialog(false)}>Fechar</Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setOpenAnamneseDialog(false);
+                  // Opcional: navegar para página de edição
+                }}
+                sx={{ bgcolor: '#9c27b0' }}
+              >
+                Editar Observações
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
 
       {/* Componente oculto para impressão */}
