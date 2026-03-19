@@ -16,6 +16,70 @@ import { AuthClienteProvider } from './contexts/AuthClienteContext';
 // Services
 import firebaseService from './services/firebase';
 
+// ============================================
+// 🔥 OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO NA ÁREA DO CLIENTE
+// ============================================
+const originalQuery = firebaseService.query;
+const originalGetById = firebaseService.getById;
+const originalGetAll = firebaseService.getAll;
+
+// Sobrescrever query para ignorar erros de permissão em usuarios na área do cliente
+firebaseService.query = async function(collectionName, ...args) {
+  // Se for cliente e tentar acessar usuarios, retorna array vazio SEM ERRO
+  if (window.location.pathname.startsWith('/cliente') && collectionName === 'usuarios') {
+    console.log('🚫 Bloqueando query em usuarios na área do cliente');
+    console.trace(); // 👈 Mostra de onde veio a chamada (opcional, pode remover depois)
+    return [];
+  }
+  
+  try {
+    return await originalQuery.call(this, collectionName, ...args);
+  } catch (error) {
+    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+      console.log(`🚫 Ignorando erro de permissão em ${collectionName}`);
+      return [];
+    }
+    throw error;
+  }
+};
+
+// Sobrescrever getById para ignorar erros de permissão
+firebaseService.getById = async function(collectionName, id) {
+  if (window.location.pathname.startsWith('/cliente') && collectionName === 'usuarios') {
+    console.log('🚫 Bloqueando getById em usuarios na área do cliente');
+    return null;
+  }
+  
+  try {
+    return await originalGetById.call(this, collectionName, id);
+  } catch (error) {
+    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+      console.log(`🚫 Ignorando erro de permissão em ${collectionName}/${id}`);
+      return null;
+    }
+    throw error;
+  }
+};
+
+// Sobrescrever getAll para ignorar erros de permissão
+firebaseService.getAll = async function(collectionName) {
+  if (window.location.pathname.startsWith('/cliente') && collectionName === 'usuarios') {
+    console.log('🚫 Bloqueando getAll em usuarios na área do cliente');
+    return [];
+  }
+  
+  try {
+    return await originalGetAll.call(this, collectionName);
+  } catch (error) {
+    if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+      console.log(`🚫 Ignorando erro de permissão em ${collectionName}`);
+      return [];
+    }
+    throw error;
+  }
+};
+// ============================================
+
 // Components
 import ModernHeader from './components/ModernHeader';
 import ModernSidebar from './components/ModernSidebar';
