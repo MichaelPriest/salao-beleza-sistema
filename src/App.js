@@ -181,6 +181,7 @@ import ClienteNotificacoes from './pages/ClienteNotificacoes';
 // ============================================
 import ClienteAnamnese from './pages/ClienteAnamnese';
 import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
+import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar'; // NOVO COMPONENTE
 // ============================================
 
 // Página de Teste
@@ -372,7 +373,7 @@ function App() {
                   
                   {/* 🔥 Rotas de Anamnese */}
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
-                  <Route path="anamnese/:respostaId" element={<ClienteAnamnese />} />
+                  <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} /> {/* ALTERADO! */}
                   
                   {/* 🔥 Rotas para responder formulários */}
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
