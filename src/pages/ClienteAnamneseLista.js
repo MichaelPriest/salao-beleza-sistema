@@ -1,4 +1,4 @@
-// src/pages/Cliente/ClienteAnamneseLista.js
+// src/pages/ClienteAnamneseLista.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
