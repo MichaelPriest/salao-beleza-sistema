@@ -82,7 +82,7 @@ import {
   Download as DownloadIcon,
   Print as PrintIcon,
   Assignment as AssignmentIcon,
-  AssignmentTurnedIn as TurnedInIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
   AssignmentLate as LateIcon,
   Person as PersonIcon,
   CalendarToday as CalendarIcon,
@@ -93,6 +93,7 @@ import {
   Info as InfoIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  Archive as ArchiveIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -292,7 +293,7 @@ function RespostasAnamnese() {
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <Avatar sx={{ bgcolor: '#2196f3', width: 48, height: 48 }}>
-                    <TurnedInIcon />
+                    <AssignmentTurnedInIcon />
                   </Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#2196f3' }}>
@@ -593,7 +594,7 @@ function RespostasAnamnese() {
                           Profissional
                         </Typography>
                         <Typography variant="body1">
-                          {respostaSelecionada.profissionalId || 'Não informado'}
+                          {respostaSelecionada.profissionalNome || 'Não informado'}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
@@ -652,7 +653,6 @@ function RespostasAnamnese() {
                 <Button
                   variant="contained"
                   onClick={() => {
-                    // Implementar impressão
                     window.print();
                   }}
                 >
