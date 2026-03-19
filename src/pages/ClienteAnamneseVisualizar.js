@@ -1,4 +1,4 @@
-// src/pages//ClienteAnamneseVisualizar.js
+// src/pages/ClienteAnamneseVisualizar.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Avatar,
   Divider,
+  IconButton,  // ← ESTAVA FALTANDO!
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -84,18 +85,30 @@ function ClienteAnamneseVisualizar() {
     return format(new Date(data), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
   };
 
+  const formatarDataSimples = (data) => {
+    if (!data) return '';
+    return format(new Date(data), 'dd/MM/yyyy', { locale: ptBR });
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
+        <CircularProgress size={60} thickness={4} sx={{ color: '#9c27b0' }} />
       </Box>
     );
   }
 
   if (!resposta) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 3, maxWidth: 600, mx: 'auto', mt: 4 }}>
         <Alert severity="error">Resposta não encontrada</Alert>
+        <Button
+          variant="contained"
+          onClick={() => navigate('/cliente/anamnese')}
+          sx={{ mt: 2, bgcolor: '#9c27b0' }}
+        >
+          Voltar para lista
+        </Button>
       </Box>
     );
   }
@@ -128,7 +141,7 @@ function ClienteAnamneseVisualizar() {
                   <Box>
                     <Typography variant="caption" color="textSecondary">Data</Typography>
                     <Typography variant="body2">
-                      {format(new Date(atendimento.data), 'dd/MM/yyyy')}
+                      {formatarDataSimples(atendimento.data)}
                     </Typography>
                   </Box>
                 </Box>
