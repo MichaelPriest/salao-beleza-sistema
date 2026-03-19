@@ -1,5 +1,5 @@
 // src/pages/ModernDashboard.js - VERSÃO ATUALIZADA COM ANAMNESE
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Grid,
   Card,
