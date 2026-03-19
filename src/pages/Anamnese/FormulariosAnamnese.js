@@ -70,6 +70,52 @@ import {
   StepLabel,
   StepContent,
   StepButton,
+  Stack,
+  ButtonGroup,
+  ToggleButton,
+  ToggleButtonGroup,
+  Rating,
+  FormHelperText,
+  Input,
+  InputBase,
+  TextareaAutosize,
+  NativeSelect,
+  RadioGroup as MuiRadioGroup,
+  Checkbox as MuiCheckbox,
+  FormGroup,
+  FormLabel,
+  ListSubheader,
+  MenuList,
+  Popover,
+  Popper,
+  ClickAwayListener,
+  Grow as Grow2,
+  Menu as MuiMenu,
+  MenuItem as MuiMenuItem,
+  Drawer,
+  SwipeableDrawer,
+  BottomNavigation,
+  BottomNavigationAction,
+  AppBar,
+  Toolbar,
+  Container,
+  Hidden,
+  Backdrop,
+  Modal,
+  Portal,
+  NoSsr,
+  Skeleton,
+  Fade as MuiFade,
+  Zoom as MuiZoom,
+  Slide as MuiSlide,
+  Grow as MuiGrow,
+  Collapse as MuiCollapse,
+  alpha as muiAlpha,
+  styled,
+  ThemeProvider,
+  createTheme,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -111,24 +157,224 @@ import {
   AssignmentTurnedIn as TurnedInIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
+  CloudUpload as CloudUploadIcon,
+  AttachMoney as MoneyIcon,
+  Numbers as NumbersIcon,
+  Signature as SignatureIcon,
+  Brush as BrushIcon,
+  PhotoCamera as PhotoCameraIcon,
+  VideoLibrary as VideoIcon,
+  PictureAsPdf as PdfIcon,
+  Image as ImageIcon,
+  InsertDriveFile as FileGenericIcon,
+  Functions as FunctionsIcon,
+  CallSplit as ConditionalIcon,
+  Merge as MergeIcon,
+  Input as InputIcon,
+  Output as OutputIcon,
+  Code as CodeIcon,
+  Calculate as CalculateIcon,
+  Percent as PercentIcon,
+  Tag as TagIcon,
+  Label as LabelIcon,
+  Bookmark as BookmarkIcon,
+  BookmarkBorder as BookmarkBorderIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon,
+  Restore as RestoreIcon,
+  RestorePage as RestorePageIcon,
+  History as HistoryIcon,
+  Timeline as TimelineIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  ShowChart as ShowChartIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  DonutLarge as DonutLargeIcon,
+  BubbleChart as BubbleChartIcon,
+  MultilineChart as MultilineChartIcon,
+  ScatterPlot as ScatterPlotIcon,
+  TableChart as TableChartIcon,
+  TableRows as TableRowsIcon,
+  ViewColumn as ViewColumnIcon,
+  ViewModule as ViewModuleIcon,
+  ViewQuilt as ViewQuiltIcon,
+  ViewStream as ViewStreamIcon,
+  ViewWeek as ViewWeekIcon,
+  ViewDay as ViewDayIcon,
+  ViewCarousel as ViewCarouselIcon,
+  ViewComfy as ViewComfyIcon,
+  ViewCompact as ViewCompactIcon,
+  ViewAgenda as ViewAgendaIcon,
+  ViewArray as ViewArrayIcon,
+  ViewColumnOutlined as ViewColumnOutlinedIcon,
+  ViewModuleOutlined as ViewModuleOutlinedIcon,
+  ViewQuiltOutlined as ViewQuiltOutlinedIcon,
+  ViewStreamOutlined as ViewStreamOutlinedIcon,
+  ViewWeekOutlined as ViewWeekOutlinedIcon,
+  ViewDayOutlined as ViewDayOutlinedIcon,
+  ViewCarouselOutlined as ViewCarouselOutlinedIcon,
+  ViewComfyOutlined as ViewComfyOutlinedIcon,
+  ViewCompactOutlined as ViewCompactOutlinedIcon,
+  ViewAgendaOutlined as ViewAgendaOutlinedIcon,
+  ViewArrayOutlined as ViewArrayOutlinedIcon,
 } from '@mui/icons-material';
 import { motion, Reorder, useDragControls } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../../services/firebase';
 import { auditoriaService } from '../../services/auditoriaService';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { v4 as uuidv4 } from 'uuid';
+import SignatureCanvas from 'react-signature-canvas';
+import NumberFormat from 'react-number-format';
+import InputMask from 'react-input-mask';
 
-// Tipos de questões
+// ============================================
+// TIPOS DE QUESTÕES AVANÇADOS
+// ============================================
+
 const tiposQuestao = [
-  { value: 'texto', label: 'Texto curto', icon: <TextIcon /> },
-  { value: 'textarea', label: 'Texto longo', icon: <NotesIcon /> },
-  { value: 'select', label: 'Lista suspensa', icon: <ListIcon /> },
-  { value: 'radio', label: 'Opção única', icon: <RadioIcon /> },
-  { value: 'checkbox', label: 'Múltipla escolha', icon: <CheckBoxIcon /> },
-  { value: 'data', label: 'Data', icon: <DateIcon /> },
-  { value: 'hora', label: 'Hora', icon: <TimeIcon /> },
-  { value: 'arquivo', label: 'Upload de arquivo', icon: <FileIcon /> },
+  // Campos básicos
+  { value: 'texto', label: 'Texto curto', icon: <TextIcon />, categoria: 'Básico' },
+  { value: 'textarea', label: 'Texto longo', icon: <NotesIcon />, categoria: 'Básico' },
+  { value: 'numero', label: 'Número', icon: <NumbersIcon />, categoria: 'Básico' },
+  { value: 'data', label: 'Data', icon: <DateIcon />, categoria: 'Básico' },
+  { value: 'hora', label: 'Hora', icon: <TimeIcon />, categoria: 'Básico' },
+  
+  // Campos de seleção
+  { value: 'select', label: 'Lista suspensa (única)', icon: <ListIcon />, categoria: 'Seleção' },
+  { value: 'multiselect', label: 'Lista suspensa (múltipla)', icon: <ListIcon />, categoria: 'Seleção' },
+  { value: 'radio', label: 'Opção única', icon: <RadioIcon />, categoria: 'Seleção' },
+  { value: 'checkbox', label: 'Múltipla escolha', icon: <CheckBoxIcon />, categoria: 'Seleção' },
+  
+  // Campos especiais
+  { value: 'arquivo', label: 'Upload de arquivo', icon: <FileIcon />, categoria: 'Especial' },
+  { value: 'imagem', label: 'Upload de imagem', icon: <ImageIcon />, categoria: 'Especial' },
+  { value: 'pdf', label: 'Upload de PDF', icon: <PdfIcon />, categoria: 'Especial' },
+  { value: 'video', label: 'Upload de vídeo', icon: <VideoIcon />, categoria: 'Especial' },
+  { value: 'assinatura', label: 'Assinatura digital', icon: <BrushIcon />, categoria: 'Especial' },
+  
+  // Campos com máscara
+  { value: 'cpf', label: 'CPF', icon: <TagIcon />, categoria: 'Máscara' },
+  { value: 'cnpj', label: 'CNPJ', icon: <TagIcon />, categoria: 'Máscara' },
+  { value: 'telefone', label: 'Telefone', icon: <TagIcon />, categoria: 'Máscara' },
+  { value: 'cep', label: 'CEP', icon: <TagIcon />, categoria: 'Máscara' },
+  { value: 'dinheiro', label: 'Valor monetário', icon: <MoneyIcon />, categoria: 'Máscara' },
+  
+  // Campos condicionais e calculados
+  { value: 'condicional', label: 'Campo condicional', icon: <ConditionalIcon />, categoria: 'Avançado' },
+  { value: 'calculado', label: 'Campo calculado', icon: <CalculateIcon />, categoria: 'Avançado' },
 ];
+
+// ============================================
+// COMPONENTES DE MÁSCARA
+// ============================================
+
+const NumberFormatCustom = React.forwardRef(function NumberFormatCustom(props, ref) {
+  const { onChange, ...other } = props;
+  return (
+    <NumberFormat
+      {...other}
+      getInputRef={ref}
+      onValueChange={(values) => {
+        onChange({
+          target: {
+            name: props.name,
+            value: values.value,
+          },
+        });
+      }}
+      thousandSeparator="."
+      decimalSeparator=","
+      prefix="R$ "
+      decimalScale={2}
+      fixedDecimalScale
+    />
+  );
+});
+
+const MaskedInputCustom = ({ mask, value, onChange, ...props }) => {
+  return (
+    <InputMask
+      mask={mask}
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={props.disabled}
+      maskChar={null}
+    >
+      {(inputProps) => <TextField {...inputProps} {...props} fullWidth size="small" />}
+    </InputMask>
+  );
+};
+
+// ============================================
+// COMPONENTE DE ASSINATURA
+// ============================================
+
+const SignaturePad = ({ value, onChange, disabled }) => {
+  const [sigPad, setSigPad] = useState(null);
+  const [hasSignature, setHasSignature] = useState(false);
+
+  const clear = () => {
+    if (sigPad) {
+      sigPad.clear();
+      setHasSignature(false);
+      onChange('');
+    }
+  };
+
+  const save = () => {
+    if (sigPad && !sigPad.isEmpty()) {
+      const dataUrl = sigPad.getCanvas().toDataURL('image/png');
+      setHasSignature(true);
+      onChange(dataUrl);
+    }
+  };
+
+  return (
+    <Box>
+      <Paper variant="outlined" sx={{ p: 1, bgcolor: '#faf5ff' }}>
+        <SignatureCanvas
+          ref={(ref) => setSigPad(ref)}
+          canvasProps={{
+            width: 500,
+            height: 200,
+            className: 'sigCanvas',
+            style: {
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              width: '100%',
+              height: '200px',
+              backgroundColor: 'white',
+              cursor: disabled ? 'not-allowed' : 'crosshair'
+            }
+          }}
+          disabled={disabled}
+          onEnd={save}
+        />
+      </Paper>
+      {!disabled && (
+        <Button
+          size="small"
+          onClick={clear}
+          sx={{ mt: 1 }}
+          startIcon={<DeleteIcon />}
+        >
+          Limpar assinatura
+        </Button>
+      )}
+      {hasSignature && (
+        <Typography variant="caption" color="success.main" sx={{ ml: 2 }}>
+          ✓ Assinatura capturada
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 
 function FormulariosAnamnese() {
   const [loading, setLoading] = useState(true);
@@ -139,11 +385,16 @@ function FormulariosAnamnese() {
   const [formularioEditando, setFormularioEditando] = useState(null);
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
   const [formularioPreview, setFormularioPreview] = useState(null);
+  const [openCondicionalDialog, setOpenCondicionalDialog] = useState(false);
+  const [questaoCondicional, setQuestaoCondicional] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [tabValue, setTabValue] = useState(0);
+  const [secaoAtual, setSecaoAtual] = useState('geral');
   
+  // Estado do formulário com campos avançados
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -152,7 +403,17 @@ function FormulariosAnamnese() {
     obrigatorio: true,
     tempoEstimado: 5,
     instrucoes: '',
-    questoes: []
+    categorias: [],
+    tags: [],
+    secoes: [], // Organização em seções
+    questoes: [],
+    configuracoes: {
+      mostrarBarraProgresso: true,
+      permitirSalvarRascunho: true,
+      notificarProfissional: true,
+      expirarEm: null,
+      maximoTentativas: 0
+    }
   });
 
   // Carregar dados
@@ -199,7 +460,17 @@ function FormulariosAnamnese() {
         obrigatorio: formulario.obrigatorio !== false,
         tempoEstimado: formulario.tempoEstimado || 5,
         instrucoes: formulario.instrucoes || '',
-        questoes: formulario.questoes || []
+        categorias: formulario.categorias || [],
+        tags: formulario.tags || [],
+        secoes: formulario.secoes || [],
+        questoes: formulario.questoes || [],
+        configuracoes: formulario.configuracoes || {
+          mostrarBarraProgresso: true,
+          permitirSalvarRascunho: true,
+          notificarProfissional: true,
+          expirarEm: null,
+          maximoTentativas: 0
+        }
       });
     } else {
       setFormularioEditando(null);
@@ -211,16 +482,41 @@ function FormulariosAnamnese() {
         obrigatorio: true,
         tempoEstimado: 5,
         instrucoes: '',
-        questoes: []
+        categorias: [],
+        tags: [],
+        secoes: [],
+        questoes: [],
+        configuracoes: {
+          mostrarBarraProgresso: true,
+          permitirSalvarRascunho: true,
+          notificarProfissional: true,
+          expirarEm: null,
+          maximoTentativas: 0
+        }
       });
     }
+    setTabValue(0);
     setOpenDialog(true);
   };
 
+  // Adicionar nova seção
+  const adicionarSecao = () => {
+    const novaSecao = {
+      id: `secao_${Date.now()}`,
+      titulo: 'Nova Seção',
+      descricao: '',
+      ordem: formData.secoes.length
+    };
+    setFormData({
+      ...formData,
+      secoes: [...formData.secoes, novaSecao]
+    });
+  };
+
   // Adicionar nova questão
-  const adicionarQuestao = () => {
+  const adicionarQuestao = (secaoId = null) => {
     const novaQuestao = {
-      id: `q${Date.now()}`,
+      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       tipo: 'texto',
       pergunta: '',
       descricao: '',
@@ -228,7 +524,27 @@ function FormulariosAnamnese() {
       opcoes: [],
       multipla: false,
       placeholder: '',
-      ordem: formData.questoes.length
+      valorMinimo: null,
+      valorMaximo: null,
+      passo: null,
+      formato: null,
+      mascara: null,
+      condicional: null, // { perguntaId: 'q123', valor: 'Sim', operador: '==' }
+      calculado: null, // { formula: 'q1 + q2', resultadoEm: 'numero' }
+      secaoId: secaoId,
+      ordem: formData.questoes.filter(q => q.secaoId === secaoId).length,
+      validacoes: {
+        required: true,
+        minLength: null,
+        maxLength: null,
+        pattern: null,
+        custom: null
+      },
+      aparencia: {
+        cor: null,
+        icone: null,
+        tamanho: 'medio'
+      }
     };
     setFormData({
       ...formData,
@@ -245,7 +561,45 @@ function FormulariosAnamnese() {
   // Atualizar questão
   const atualizarQuestao = (index, campo, valor) => {
     const novasQuestoes = [...formData.questoes];
-    novasQuestoes[index] = { ...novasQuestoes[index], [campo]: valor };
+    
+    // Se for alterar o tipo, resetar campos específicos
+    if (campo === 'tipo') {
+      const novoTipo = valor;
+      const questao = novasQuestoes[index];
+      
+      // Resetar campos baseado no novo tipo
+      if (['select', 'multiselect', 'radio', 'checkbox'].includes(novoTipo)) {
+        questao.opcoes = questao.opcoes || [];
+      } else {
+        questao.opcoes = [];
+      }
+      
+      if (novoTipo === 'numero') {
+        questao.valorMinimo = null;
+        questao.valorMaximo = null;
+        questao.passo = 1;
+      }
+      
+      if (['cpf', 'cnpj', 'telefone', 'cep'].includes(novoTipo)) {
+        questao.mascara = novoTipo;
+      }
+      
+      if (novoTipo === 'dinheiro') {
+        questao.formato = 'monetario';
+      }
+    }
+    
+    novasQuestoes[index][campo] = valor;
+    setFormData({ ...formData, questoes: novasQuestoes });
+  };
+
+  // Adicionar opção a uma questão
+  const adicionarOpcao = (index) => {
+    const novasQuestoes = [...formData.questoes];
+    if (!novasQuestoes[index].opcoes) {
+      novasQuestoes[index].opcoes = [];
+    }
+    novasQuestoes[index].opcoes.push(`Opção ${novasQuestoes[index].opcoes.length + 1}`);
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
@@ -254,6 +608,12 @@ function FormulariosAnamnese() {
     if (index === 0) return;
     const novasQuestoes = [...formData.questoes];
     [novasQuestoes[index - 1], novasQuestoes[index]] = [novasQuestoes[index], novasQuestoes[index - 1]];
+    
+    // Recalcular ordens
+    novasQuestoes.forEach((q, i) => {
+      q.ordem = i;
+    });
+    
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
@@ -262,15 +622,51 @@ function FormulariosAnamnese() {
     if (index === formData.questoes.length - 1) return;
     const novasQuestoes = [...formData.questoes];
     [novasQuestoes[index + 1], novasQuestoes[index]] = [novasQuestoes[index], novasQuestoes[index + 1]];
+    
+    // Recalcular ordens
+    novasQuestoes.forEach((q, i) => {
+      q.ordem = i;
+    });
+    
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
   // Duplicar questão
   const duplicarQuestao = (index) => {
-    const questao = { ...formData.questoes[index], id: `q${Date.now()}` };
+    const questao = { 
+      ...formData.questoes[index], 
+      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      pergunta: `${questao.pergunta} (cópia)`
+    };
     const novasQuestoes = [...formData.questoes];
     novasQuestoes.splice(index + 1, 0, questao);
+    
+    // Recalcular ordens
+    novasQuestoes.forEach((q, i) => {
+      q.ordem = i;
+    });
+    
     setFormData({ ...formData, questoes: novasQuestoes });
+  };
+
+  // Abrir diálogo de condicional
+  const handleOpenCondicional = (index) => {
+    setQuestaoCondicional({ index, ...formData.questoes[index] });
+    setOpenCondicionalDialog(true);
+  };
+
+  // Salvar condicional
+  const handleSalvarCondicional = () => {
+    if (questaoCondicional && questaoCondicional.index !== undefined) {
+      const novasQuestoes = [...formData.questoes];
+      novasQuestoes[questaoCondicional.index].condicional = {
+        perguntaId: questaoCondicional.condicional?.perguntaId,
+        valor: questaoCondicional.condicional?.valor,
+        operador: questaoCondicional.condicional?.operador || '=='
+      };
+      setFormData({ ...formData, questoes: novasQuestoes });
+      setOpenCondicionalDialog(false);
+    }
   };
 
   // Salvar formulário
@@ -289,7 +685,8 @@ function FormulariosAnamnese() {
       const dadosParaSalvar = {
         ...formData,
         criadoEm: formularioEditando ? formularioEditando.criadoEm : new Date().toISOString(),
-        atualizadoEm: new Date().toISOString()
+        atualizadoEm: new Date().toISOString(),
+        versao: formularioEditando ? (formularioEditando.versao || 1) + 1 : 1
       };
 
       if (formularioEditando) {
@@ -329,7 +726,8 @@ function FormulariosAnamnese() {
         ...formulario,
         titulo: `${formulario.titulo} (cópia)`,
         criadoEm: new Date().toISOString(),
-        atualizadoEm: new Date().toISOString()
+        atualizadoEm: new Date().toISOString(),
+        versao: 1
       };
       delete novoFormulario.id;
       
@@ -346,6 +744,195 @@ function FormulariosAnamnese() {
   const handlePreview = (formulario) => {
     setFormularioPreview(formulario);
     setOpenPreviewDialog(true);
+  };
+
+  // Renderizar campo de acordo com o tipo
+  const renderizarCampoPreview = (questao) => {
+    const { tipo, pergunta, obrigatoria, placeholder, opcoes } = questao;
+    
+    switch(tipo) {
+      case 'texto':
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            placeholder={placeholder || 'Digite aqui...'}
+            label={pergunta}
+            required={obrigatoria}
+            disabled
+          />
+        );
+      
+      case 'textarea':
+        return (
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            placeholder={placeholder || 'Digite aqui...'}
+            label={pergunta}
+            required={obrigatoria}
+            disabled
+          />
+        );
+      
+      case 'numero':
+        return (
+          <TextField
+            type="number"
+            fullWidth
+            size="small"
+            placeholder={placeholder || '0'}
+            label={pergunta}
+            required={obrigatoria}
+            InputProps={{
+              inputProps: { min: questao.valorMinimo, max: questao.valorMaximo, step: questao.passo }
+            }}
+            disabled
+          />
+        );
+      
+      case 'data':
+        return (
+          <TextField
+            type="date"
+            fullWidth
+            size="small"
+            label={pergunta}
+            InputLabelProps={{ shrink: true }}
+            required={obrigatoria}
+            disabled
+          />
+        );
+      
+      case 'hora':
+        return (
+          <TextField
+            type="time"
+            fullWidth
+            size="small"
+            label={pergunta}
+            InputLabelProps={{ shrink: true }}
+            required={obrigatoria}
+            disabled
+          />
+        );
+      
+      case 'select':
+      case 'radio':
+        return (
+          <FormControl component="fieldset" fullWidth>
+            <FormLabel component="legend">
+              {pergunta} {obrigatoria && '*'}
+            </FormLabel>
+            <RadioGroup>
+              {opcoes?.map((op, i) => (
+                <FormControlLabel
+                  key={i}
+                  value={op}
+                  control={<Radio disabled />}
+                  label={op}
+                />
+              ))}
+            </RadioGroup>
+          </FormControl>
+        );
+      
+      case 'multiselect':
+      case 'checkbox':
+        return (
+          <FormControl component="fieldset" fullWidth>
+            <FormLabel component="legend">
+              {pergunta} {obrigatoria && '*'}
+            </FormLabel>
+            <FormGroup>
+              {opcoes?.map((op, i) => (
+                <FormControlLabel
+                  key={i}
+                  control={<Checkbox disabled />}
+                  label={op}
+                />
+              ))}
+            </FormGroup>
+          </FormControl>
+        );
+      
+      case 'cpf':
+      case 'cnpj':
+      case 'telefone':
+      case 'cep':
+        return (
+          <MaskedInputCustom
+            mask={
+              tipo === 'cpf' ? '999.999.999-99' :
+              tipo === 'cnpj' ? '99.999.999/9999-99' :
+              tipo === 'telefone' ? '(99) 99999-9999' :
+              tipo === 'cep' ? '99999-999' : ''
+            }
+            label={pergunta}
+            required={obrigatoria}
+            disabled
+          />
+        );
+      
+      case 'dinheiro':
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            label={pergunta}
+            required={obrigatoria}
+            InputProps={{
+              inputComponent: NumberFormatCustom,
+            }}
+            disabled
+          />
+        );
+      
+      case 'assinatura':
+        return (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              {pergunta} {obrigatoria && '*'}
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="body2" color="textSecondary">
+                [Área para assinatura digital]
+              </Typography>
+            </Paper>
+          </Box>
+        );
+      
+      case 'arquivo':
+      case 'imagem':
+      case 'pdf':
+      case 'video':
+        return (
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              {pergunta} {obrigatoria && '*'}
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<CloudUploadIcon />}
+              disabled
+            >
+              Upload de arquivo
+            </Button>
+          </Box>
+        );
+      
+      default:
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            label={pergunta}
+            required={obrigatoria}
+            disabled
+          />
+        );
+    }
   };
 
   const formulariosFiltrados = formularios.filter(f => 
@@ -370,7 +957,7 @@ function FormulariosAnamnese() {
             Formulários de Anamnese
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Crie e gerencie formulários para seus clientes preencherem
+            Crie formulários avançados com campos condicionais, calculados e muito mais
           </Typography>
         </Box>
         <Button
@@ -387,7 +974,7 @@ function FormulariosAnamnese() {
 
       {/* Cards de estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -407,7 +994,7 @@ function FormulariosAnamnese() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -427,11 +1014,31 @@ function FormulariosAnamnese() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
+                  <ConditionalIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                    {formularios.reduce((acc, f) => acc + (f.questoes?.filter(q => q.condicional).length || 0), 0)}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Campos Condicionais
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: '#2196f3', width: 48, height: 48 }}>
                   <TurnedInIcon />
                 </Avatar>
                 <Box>
@@ -456,7 +1063,7 @@ function FormulariosAnamnese() {
               <TextField
                 fullWidth
                 size="small"
-                placeholder="Buscar formulários..."
+                placeholder="Buscar formulários por título ou descrição..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
                 InputProps={{
@@ -488,6 +1095,7 @@ function FormulariosAnamnese() {
                 <TableCell><strong>Título</strong></TableCell>
                 <TableCell><strong>Serviços</strong></TableCell>
                 <TableCell><strong>Questões</strong></TableCell>
+                <TableCell><strong>Condicionais</strong></TableCell>
                 <TableCell><strong>Tempo</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
                 <TableCell align="center"><strong>Ações</strong></TableCell>
@@ -498,6 +1106,7 @@ function FormulariosAnamnese() {
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((form) => {
                   const servicosAssociados = servicos.filter(s => form.servicoIds?.includes(s.id));
+                  const condicionais = form.questoes?.filter(q => q.condicional).length || 0;
                   
                   return (
                     <TableRow key={form.id} hover>
@@ -509,6 +1118,13 @@ function FormulariosAnamnese() {
                           {form.descricao?.substring(0, 50)}
                           {form.descricao?.length > 50 ? '...' : ''}
                         </Typography>
+                        {form.tags?.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                            {form.tags.slice(0, 2).map(tag => (
+                              <Chip key={tag} label={tag} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -540,6 +1156,19 @@ function FormulariosAnamnese() {
                           size="small"
                           color="primary"
                         />
+                      </TableCell>
+                      <TableCell>
+                        {condicionais > 0 ? (
+                          <Chip
+                            label={condicionais}
+                            size="small"
+                            color="warning"
+                          />
+                        ) : (
+                          <Typography variant="caption" color="textSecondary">
+                            -
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -608,7 +1237,7 @@ function FormulariosAnamnese() {
                 })}
               {formulariosFiltrados.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                     <AssignmentIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
                     <Typography variant="body1" color="textSecondary">
                       Nenhum formulário encontrado
@@ -639,103 +1268,145 @@ function FormulariosAnamnese() {
           {formularioEditando ? 'Editar Formulário' : 'Novo Formulário'}
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <TextField
-                fullWidth
-                label="Título do Formulário"
-                value={formData.titulo}
-                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                required
-                size="small"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Tempo estimado (minutos)"
-                value={formData.tempoEstimado}
-                onChange={(e) => setFormData({ ...formData, tempoEstimado: parseInt(e.target.value) || 5 })}
-                size="small"
-              />
-            </Grid>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
+              <Tab label="Configurações Gerais" />
+              <Tab label="Questões" />
+              <Tab label="Avançado" />
+            </Tabs>
+          </Box>
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Descrição"
-                multiline
-                rows={2}
-                value={formData.descricao}
-                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                size="small"
-                placeholder="Descreva o objetivo deste formulário"
-              />
-            </Grid>
+          {/* Aba 0: Configurações Gerais */}
+          {tabValue === 0 && (
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <TextField
+                  fullWidth
+                  label="Título do Formulário"
+                  value={formData.titulo}
+                  onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+                  required
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Tempo estimado (minutos)"
+                  value={formData.tempoEstimado}
+                  onChange={(e) => setFormData({ ...formData, tempoEstimado: parseInt(e.target.value) || 5 })}
+                  size="small"
+                />
+              </Grid>
 
-            <Grid item xs={12}>
-              <Autocomplete
-                multiple
-                options={servicos}
-                getOptionLabel={(option) => option.nome}
-                value={servicos.filter(s => formData.servicoIds?.includes(s.id))}
-                onChange={(e, newValue) => {
-                  setFormData({
-                    ...formData,
-                    servicoIds: newValue.map(s => s.id)
-                  });
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Serviços associados (deixe em branco para todos)"
-                    size="small"
-                    placeholder="Selecione os serviços..."
-                  />
-                )}
-              />
-            </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Descrição"
+                  multiline
+                  rows={2}
+                  value={formData.descricao}
+                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                  size="small"
+                  placeholder="Descreva o objetivo deste formulário"
+                />
+              </Grid>
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Instruções para o cliente"
-                multiline
-                rows={2}
-                value={formData.instrucoes}
-                onChange={(e) => setFormData({ ...formData, instrucoes: e.target.value })}
-                size="small"
-                placeholder="Instruções que aparecerão antes do formulário"
-              />
-            </Grid>
+              <Grid item xs={12}>
+                <Autocomplete
+                  multiple
+                  options={servicos}
+                  getOptionLabel={(option) => option.nome}
+                  value={servicos.filter(s => formData.servicoIds?.includes(s.id))}
+                  onChange={(e, newValue) => {
+                    setFormData({
+                      ...formData,
+                      servicoIds: newValue.map(s => s.id)
+                    });
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Serviços associados (deixe em branco para todos)"
+                      size="small"
+                      placeholder="Selecione os serviços..."
+                    />
+                  )}
+                />
+              </Grid>
 
-            <Grid item xs={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.ativo}
-                    onChange={(e) => setFormData({ ...formData, ativo: e.target.checked })}
-                  />
-                }
-                label="Formulário ativo"
-              />
-            </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Instruções para o cliente"
+                  multiline
+                  rows={2}
+                  value={formData.instrucoes}
+                  onChange={(e) => setFormData({ ...formData, instrucoes: e.target.value })}
+                  size="small"
+                  placeholder="Instruções que aparecerão antes do formulário"
+                />
+              </Grid>
 
-            <Grid item xs={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.obrigatorio}
-                    onChange={(e) => setFormData({ ...formData, obrigatorio: e.target.checked })}
-                  />
-                }
-                label="Obrigatório para o serviço"
-              />
-            </Grid>
+              <Grid item xs={12}>
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={[]}
+                  value={formData.tags || []}
+                  onChange={(e, newValue) => setFormData({ ...formData, tags: newValue })}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, i) => (
+                      <Chip
+                        {...getTagProps({ index: i })}
+                        key={i}
+                        label={option}
+                        size="small"
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Tags / Palavras-chave"
+                      size="small"
+                      placeholder="Digite e pressione Enter"
+                      helperText="Tags para facilitar a busca"
+                    />
+                  )}
+                />
+              </Grid>
 
-            <Grid item xs={12}>
-              <Divider sx={{ my: 2 }} />
+              <Grid item xs={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.ativo}
+                      onChange={(e) => setFormData({ ...formData, ativo: e.target.checked })}
+                    />
+                  }
+                  label="Formulário ativo"
+                />
+              </Grid>
+
+              <Grid item xs={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.obrigatorio}
+                      onChange={(e) => setFormData({ ...formData, obrigatorio: e.target.checked })}
+                    />
+                  }
+                  label="Obrigatório para o serviço"
+                />
+              </Grid>
+            </Grid>
+          )}
+
+          {/* Aba 1: Questões */}
+          {tabValue === 1 && (
+            <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ color: '#9c27b0' }}>
                   Questões do Formulário
@@ -743,7 +1414,7 @@ function FormulariosAnamnese() {
                 <Button
                   variant="outlined"
                   startIcon={<AddIcon />}
-                  onClick={adicionarQuestao}
+                  onClick={() => adicionarQuestao()}
                   sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
                 >
                   Adicionar Questão
@@ -762,166 +1433,384 @@ function FormulariosAnamnese() {
                 </Paper>
               ) : (
                 <List>
-                  {formData.questoes.map((questao, index) => (
-                    <Paper
-                      key={questao.id}
-                      variant="outlined"
-                      sx={{ mb: 2, p: 2, position: 'relative' }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                        <Box sx={{ minWidth: 40, textAlign: 'center' }}>
-                          <Typography variant="h6" sx={{ color: '#9c27b0' }}>
-                            {index + 1}
-                          </Typography>
-                        </Box>
+                  {formData.questoes.map((questao, index) => {
+                    const tiposCategorizados = tiposQuestao.reduce((acc, tipo) => {
+                      if (!acc[tipo.categoria]) acc[tipo.categoria] = [];
+                      acc[tipo.categoria].push(tipo);
+                      return acc;
+                    }, {});
 
-                        <Box sx={{ flex: 1 }}>
-                          <Grid container spacing={2}>
-                            <Grid item xs={12} md={6}>
-                              <FormControl fullWidth size="small">
-                                <InputLabel>Tipo da questão</InputLabel>
-                                <Select
-                                  value={questao.tipo}
-                                  label="Tipo da questão"
-                                  onChange={(e) => atualizarQuestao(index, 'tipo', e.target.value)}
-                                >
-                                  {tiposQuestao.map(tipo => (
-                                    <MenuItem key={tipo.value} value={tipo.value}>
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        {tipo.icon}
-                                        {tipo.label}
-                                      </Box>
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </Grid>
+                    return (
+                      <Paper
+                        key={questao.id}
+                        variant="outlined"
+                        sx={{ mb: 2, p: 2, position: 'relative' }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                          <Box sx={{ minWidth: 40, textAlign: 'center' }}>
+                            <Typography variant="h6" sx={{ color: '#9c27b0' }}>
+                              {index + 1}
+                            </Typography>
+                          </Box>
 
-                            <Grid item xs={12} md={6}>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                label="Pergunta"
-                                value={questao.pergunta}
-                                onChange={(e) => atualizarQuestao(index, 'pergunta', e.target.value)}
-                              />
-                            </Grid>
+                          <Box sx={{ flex: 1 }}>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} md={6}>
+                                <FormControl fullWidth size="small">
+                                  <InputLabel>Tipo da questão</InputLabel>
+                                  <Select
+                                    value={questao.tipo}
+                                    label="Tipo da questão"
+                                    onChange={(e) => atualizarQuestao(index, 'tipo', e.target.value)}
+                                  >
+                                    {Object.entries(tiposCategorizados).map(([categoria, tipos]) => [
+                                      <ListSubheader key={categoria}>{categoria}</ListSubheader>,
+                                      ...tipos.map(tipo => (
+                                        <MenuItem key={tipo.value} value={tipo.value}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            {tipo.icon}
+                                            {tipo.label}
+                                          </Box>
+                                        </MenuItem>
+                                      ))
+                                    ])}
+                                  </Select>
+                                </FormControl>
+                              </Grid>
 
-                            <Grid item xs={12}>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                label="Descrição/Instrução (opcional)"
-                                value={questao.descricao}
-                                onChange={(e) => atualizarQuestao(index, 'descricao', e.target.value)}
-                              />
-                            </Grid>
-
-                            {['select', 'radio', 'checkbox'].includes(questao.tipo) && (
-                              <Grid item xs={12}>
-                                <Autocomplete
-                                  multiple
-                                  freeSolo
-                                  options={[]}
-                                  value={questao.opcoes || []}
-                                  onChange={(e, newValue) => atualizarQuestao(index, 'opcoes', newValue)}
-                                  renderTags={(value, getTagProps) =>
-                                    value.map((option, i) => (
-                                      <Chip
-                                        {...getTagProps({ index: i })}
-                                        key={i}
-                                        label={option}
-                                        size="small"
-                                      />
-                                    ))
-                                  }
-                                  renderInput={(params) => (
-                                    <TextField
-                                      {...params}
-                                      label="Opções"
-                                      size="small"
-                                      placeholder="Digite e pressione Enter"
-                                      helperText="Opções disponíveis para seleção"
-                                    />
-                                  )}
+                              <Grid item xs={12} md={6}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Pergunta"
+                                  value={questao.pergunta}
+                                  onChange={(e) => atualizarQuestao(index, 'pergunta', e.target.value)}
                                 />
                               </Grid>
-                            )}
 
-                            {questao.tipo === 'texto' && (
                               <Grid item xs={12}>
                                 <TextField
                                   fullWidth
                                   size="small"
-                                  label="Placeholder"
-                                  value={questao.placeholder || ''}
-                                  onChange={(e) => atualizarQuestao(index, 'placeholder', e.target.value)}
+                                  label="Descrição/Instrução (opcional)"
+                                  value={questao.descricao}
+                                  onChange={(e) => atualizarQuestao(index, 'descricao', e.target.value)}
                                 />
                               </Grid>
-                            )}
 
-                            <Grid item xs={12}>
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    checked={questao.obrigatoria}
-                                    onChange={(e) => atualizarQuestao(index, 'obrigatoria', e.target.checked)}
+                              {['select', 'multiselect', 'radio', 'checkbox'].includes(questao.tipo) && (
+                                <Grid item xs={12}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                    <Typography variant="subtitle2">Opções:</Typography>
+                                    <Button
+                                      size="small"
+                                      startIcon={<AddIcon />}
+                                      onClick={() => adicionarOpcao(index)}
+                                    >
+                                      Adicionar opção
+                                    </Button>
+                                  </Box>
+                                  <Autocomplete
+                                    multiple
+                                    freeSolo
+                                    options={[]}
+                                    value={questao.opcoes || []}
+                                    onChange={(e, newValue) => atualizarQuestao(index, 'opcoes', newValue)}
+                                    renderTags={(value, getTagProps) =>
+                                      value.map((option, i) => (
+                                        <Chip
+                                          {...getTagProps({ index: i })}
+                                          key={i}
+                                          label={option}
+                                          size="small"
+                                          onDelete={() => {
+                                            const novasOpcoes = value.filter((_, idx) => idx !== i);
+                                            atualizarQuestao(index, 'opcoes', novasOpcoes);
+                                          }}
+                                        />
+                                      ))
+                                    }
+                                    renderInput={(params) => (
+                                      <TextField
+                                        {...params}
+                                        size="small"
+                                        placeholder="Digite e pressione Enter"
+                                        helperText="Opções disponíveis para seleção"
+                                      />
+                                    )}
                                   />
-                                }
-                                label="Obrigatória"
-                              />
-                            </Grid>
-                          </Grid>
-                        </Box>
+                                </Grid>
+                              )}
 
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <Tooltip title="Mover para cima">
-                            <span>
+                              {['texto', 'textarea'].includes(questao.tipo) && (
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Placeholder"
+                                    value={questao.placeholder || ''}
+                                    onChange={(e) => atualizarQuestao(index, 'placeholder', e.target.value)}
+                                  />
+                                </Grid>
+                              )}
+
+                              {questao.tipo === 'numero' && (
+                                <Grid container item xs={12} spacing={2}>
+                                  <Grid item xs={4}>
+                                    <TextField
+                                      fullWidth
+                                      type="number"
+                                      size="small"
+                                      label="Valor mínimo"
+                                      value={questao.valorMinimo || ''}
+                                      onChange={(e) => atualizarQuestao(index, 'valorMinimo', e.target.value)}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={4}>
+                                    <TextField
+                                      fullWidth
+                                      type="number"
+                                      size="small"
+                                      label="Valor máximo"
+                                      value={questao.valorMaximo || ''}
+                                      onChange={(e) => atualizarQuestao(index, 'valorMaximo', e.target.value)}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={4}>
+                                    <TextField
+                                      fullWidth
+                                      type="number"
+                                      size="small"
+                                      label="Passo"
+                                      value={questao.passo || 1}
+                                      onChange={(e) => atualizarQuestao(index, 'passo', e.target.value)}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              )}
+
+                              {/* Campos condicionais */}
+                              {questao.condicional && (
+                                <Grid item xs={12}>
+                                  <Alert severity="info" sx={{ mt: 1 }}>
+                                    <Typography variant="body2">
+                                      Esta questão aparece apenas se: 
+                                      <strong>
+                                        {formData.questoes.find(q => q.id === questao.condicional.perguntaId)?.pergunta || 'Pergunta'} 
+                                        {' '}for igual a "{questao.condicional.valor}"
+                                      </strong>
+                                    </Typography>
+                                  </Alert>
+                                </Grid>
+                              )}
+
+                              <Grid item xs={6}>
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      checked={questao.obrigatoria}
+                                      onChange={(e) => atualizarQuestao(index, 'obrigatoria', e.target.checked)}
+                                    />
+                                  }
+                                  label="Obrigatória"
+                                />
+                              </Grid>
+
+                              <Grid item xs={6}>
+                                <Button
+                                  size="small"
+                                  startIcon={<ConditionalIcon />}
+                                  onClick={() => handleOpenCondicional(index)}
+                                  variant={questao.condicional ? 'contained' : 'outlined'}
+                                  color="warning"
+                                >
+                                  {questao.condicional ? 'Editar condicional' : 'Adicionar condicional'}
+                                </Button>
+                              </Grid>
+                            </Grid>
+                          </Box>
+
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <Tooltip title="Mover para cima">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => moverQuestaoCima(index)}
+                                  disabled={index === 0}
+                                >
+                                  <ArrowUpIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Mover para baixo">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => moverQuestaoBaixo(index)}
+                                  disabled={index === formData.questoes.length - 1}
+                                >
+                                  <ArrowDownIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Duplicar">
                               <IconButton
                                 size="small"
-                                onClick={() => moverQuestaoCima(index)}
-                                disabled={index === 0}
+                                onClick={() => duplicarQuestao(index)}
                               >
-                                <ArrowUpIcon fontSize="small" />
+                                <CopyIcon fontSize="small" />
                               </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Mover para baixo">
-                            <span>
+                            </Tooltip>
+                            <Tooltip title="Remover">
                               <IconButton
                                 size="small"
-                                onClick={() => moverQuestaoBaixo(index)}
-                                disabled={index === formData.questoes.length - 1}
+                                onClick={() => removerQuestao(index)}
+                                color="error"
                               >
-                                <ArrowDownIcon fontSize="small" />
+                                <DeleteIcon fontSize="small" />
                               </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Duplicar">
-                            <IconButton
-                              size="small"
-                              onClick={() => duplicarQuestao(index)}
-                            >
-                              <CopyIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Remover">
-                            <IconButton
-                              size="small"
-                              onClick={() => removerQuestao(index)}
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                            </Tooltip>
+                          </Box>
                         </Box>
-                      </Box>
-                    </Paper>
-                  ))}
+                      </Paper>
+                    );
+                  })}
                 </List>
               )}
+            </Box>
+          )}
+
+          {/* Aba 2: Avançado */}
+          {tabValue === 2 && (
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Configurações Avançadas
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.configuracoes?.mostrarBarraProgresso}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        configuracoes: {
+                          ...formData.configuracoes,
+                          mostrarBarraProgresso: e.target.checked
+                        }
+                      })}
+                    />
+                  }
+                  label="Mostrar barra de progresso durante o preenchimento"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.configuracoes?.permitirSalvarRascunho}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        configuracoes: {
+                          ...formData.configuracoes,
+                          permitirSalvarRascunho: e.target.checked
+                        }
+                      })}
+                    />
+                  }
+                  label="Permitir salvar rascunho"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.configuracoes?.notificarProfissional}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        configuracoes: {
+                          ...formData.configuracoes,
+                          notificarProfissional: e.target.checked
+                        }
+                      })}
+                    />
+                  }
+                  label="Notificar profissional quando respondido"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Número máximo de tentativas (0 = ilimitado)"
+                  value={formData.configuracoes?.maximoTentativas || 0}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    configuracoes: {
+                      ...formData.configuracoes,
+                      maximoTentativas: parseInt(e.target.value) || 0
+                    }
+                  })}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Data de expiração"
+                  value={formData.configuracoes?.expirarEm || ''}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    configuracoes: {
+                      ...formData.configuracoes,
+                      expirarEm: e.target.value
+                    }
+                  })}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, mt: 2 }}>
+                  Modelos Pré-definidos
+                </Typography>
+                <Autocomplete
+                  options={modelos}
+                  getOptionLabel={(option) => option.titulo}
+                  onChange={(e, modelo) => {
+                    if (modelo && modelo.questoes) {
+                      const novasQuestoes = modelo.questoes.map(q => ({
+                        ...q,
+                        id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        ordem: formData.questoes.length + (q.ordem || 0)
+                      }));
+                      setFormData({
+                        ...formData,
+                        questoes: [...formData.questoes, ...novasQuestoes]
+                      });
+                      mostrarSnackbar(`${modelo.questoes.length} questões importadas do modelo!`);
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Importar questões de um modelo"
+                      size="small"
+                      placeholder="Selecione um modelo..."
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
-          </Grid>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
@@ -931,6 +1820,103 @@ function FormulariosAnamnese() {
             sx={{ bgcolor: '#9c27b0' }}
           >
             {formularioEditando ? 'Atualizar' : 'Criar Formulário'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Condicional */}
+      <Dialog open={openCondicionalDialog} onClose={() => setOpenCondicionalDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
+          <ConditionalIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Configurar Campo Condicional
+        </DialogTitle>
+        <DialogContent>
+          {questaoCondicional && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Esta questão aparecerá apenas quando a condição abaixo for atendida:
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Pergunta base</InputLabel>
+                    <Select
+                      value={questaoCondicional.condicional?.perguntaId || ''}
+                      label="Pergunta base"
+                      onChange={(e) => setQuestaoCondicional({
+                        ...questaoCondicional,
+                        condicional: {
+                          ...questaoCondicional.condicional,
+                          perguntaId: e.target.value
+                        }
+                      })}
+                    >
+                      <MenuItem value="">Selecione uma pergunta</MenuItem>
+                      {formData.questoes
+                        .filter((q, idx) => idx !== questaoCondicional.index && 
+                          ['radio', 'select'].includes(q.tipo))
+                        .map(q => (
+                          <MenuItem key={q.id} value={q.id}>
+                            {q.pergunta}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Operador</InputLabel>
+                    <Select
+                      value={questaoCondicional.condicional?.operador || '=='}
+                      label="Operador"
+                      onChange={(e) => setQuestaoCondicional({
+                        ...questaoCondicional,
+                        condicional: {
+                          ...questaoCondicional.condicional,
+                          operador: e.target.value
+                        }
+                      })}
+                    >
+                      <MenuItem value="==">Igual a</MenuItem>
+                      <MenuItem value="!=">Diferente de</MenuItem>
+                      <MenuItem value=">">Maior que</MenuItem>
+                      <MenuItem value="<">Menor que</MenuItem>
+                      <MenuItem value=">=">Maior ou igual</MenuItem>
+                      <MenuItem value="<=">Menor ou igual</MenuItem>
+                      <MenuItem value="contains">Contém</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Valor"
+                    value={questaoCondicional.condicional?.valor || ''}
+                    onChange={(e) => setQuestaoCondicional({
+                      ...questaoCondicional,
+                      condicional: {
+                        ...questaoCondicional.condicional,
+                        valor: e.target.value
+                      }
+                    })}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCondicionalDialog(false)}>Cancelar</Button>
+          <Button
+            onClick={handleSalvarCondicional}
+            variant="contained"
+            sx={{ bgcolor: '#ff9800' }}
+          >
+            Salvar Condicional
           </Button>
         </DialogActions>
       </Dialog>
@@ -950,6 +1936,16 @@ function FormulariosAnamnese() {
               </Alert>
             )}
 
+            {/* Barra de progresso simulada */}
+            {formularioPreview?.configuracoes?.mostrarBarraProgresso && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" color="textSecondary">
+                  Progresso: 0/{formularioPreview.questoes?.length || 0}
+                </Typography>
+                <LinearProgress variant="determinate" value={0} sx={{ mt: 0.5 }} />
+              </Box>
+            )}
+
             {formularioPreview?.questoes?.map((questao, index) => (
               <Paper key={questao.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -961,92 +1957,24 @@ function FormulariosAnamnese() {
                     {questao.descricao}
                   </Typography>
                 )}
+                
+                {renderizarCampoPreview(questao)}
 
-                {questao.tipo === 'texto' && (
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder={questao.placeholder || 'Digite aqui...'}
-                    disabled
-                  />
-                )}
-
-                {questao.tipo === 'textarea' && (
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    size="small"
-                    placeholder="Digite aqui..."
-                    disabled
-                  />
-                )}
-
-                {questao.tipo === 'select' && (
-                  <FormControl fullWidth size="small">
-                    <Select value="" displayEmpty disabled>
-                      <MenuItem value="">Selecione uma opção</MenuItem>
-                      {questao.opcoes?.map((op, i) => (
-                        <MenuItem key={i} value={op}>{op}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
-
-                {questao.tipo === 'radio' && (
-                  <RadioGroup value="">
-                    {questao.opcoes?.map((op, i) => (
-                      <FormControlLabel
-                        key={i}
-                        value={op}
-                        control={<Radio disabled />}
-                        label={op}
-                      />
-                    ))}
-                  </RadioGroup>
-                )}
-
-                {questao.tipo === 'checkbox' && (
-                  <Box>
-                    {questao.opcoes?.map((op, i) => (
-                      <FormControlLabel
-                        key={i}
-                        control={<Checkbox disabled />}
-                        label={op}
-                      />
-                    ))}
-                  </Box>
-                )}
-
-                {questao.tipo === 'data' && (
-                  <TextField
-                    type="date"
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                    disabled
-                  />
-                )}
-
-                {questao.tipo === 'hora' && (
-                  <TextField
-                    type="time"
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                    disabled
-                  />
-                )}
-
-                {questao.tipo === 'arquivo' && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<FileIcon />}
-                    disabled
-                  >
-                    Upload de arquivo
-                  </Button>
+                {/* Indicador de condicional */}
+                {questao.condicional && (
+                  <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
+                    <ConditionalIcon fontSize="inherit" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
+                    Aparece apenas quando condição for atendida
+                  </Typography>
                 )}
               </Paper>
             ))}
+
+            {(!formularioPreview?.questoes || formularioPreview.questoes.length === 0) && (
+              <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
+                Este formulário não possui questões
+              </Typography>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
