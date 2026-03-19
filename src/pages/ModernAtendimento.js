@@ -47,6 +47,9 @@ import {
   Fade,
   Badge,
   Collapse,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -82,6 +85,9 @@ import {
   Search as SearchIcon,
   Lock as LockIcon,
   ReceiptLong as ReceiptLongIcon,
+  // 🔥 ÍCONES PARA ANAMNESE
+  Assignment as AssignmentIcon,
+  Quiz as QuizIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -377,6 +383,10 @@ function ModernAtendimento() {
   const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
   const [descontoTotalCupons, setDescontoTotalCupons] = useState(0);
   const [cuponsProximosExpiracao, setCuponsProximosExpiracao] = useState([]);
+  
+  // 🔥 ESTADOS PARA ANAMNESE
+  const [respostasAnamnese, setRespostasAnamnese] = useState(null);
+  const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
   
   // Itens do atendimento - ARRAYS
   const [itensServico, setItensServico] = useState([]);
@@ -687,6 +697,7 @@ function ModernAtendimento() {
     carregarServicosEProdutos();
     carregarConfigFidelidade();
     carregarConfiguracoes();
+    carregarRespostasAnamnese();
   }, [id]);
 
   useEffect(() => {
@@ -792,6 +803,37 @@ function ModernAtendimento() {
 
     setPontosGanhos(pontos);
     setBonusAplicados(bonus);
+  };
+
+  // 🔥 FUNÇÃO PARA CARREGAR RESPOSTAS DA ANAMNESE
+  const carregarRespostasAnamnese = async () => {
+    if (!id) return;
+    
+    try {
+      // Buscar respostas associadas ao atendimento
+      const respostas = await firebaseService.query('respostas_anamnese', [
+        { field: 'atendimentoId', operator: '==', value: id }
+      ]);
+      
+      if (respostas.length > 0) {
+        setRespostasAnamnese(respostas[0]);
+        console.log('✅ Respostas de anamnese carregadas:', respostas[0]);
+      } else {
+        // Se não encontrar pelo atendimento, tentar pelo agendamento
+        if (atendimento?.agendamentoId) {
+          const respostasAgendamento = await firebaseService.query('respostas_anamnese', [
+            { field: 'agendamentoId', operator: '==', value: atendimento.agendamentoId }
+          ]);
+          
+          if (respostasAgendamento.length > 0) {
+            setRespostasAnamnese(respostasAgendamento[0]);
+            console.log('✅ Respostas de anamnese carregadas via agendamento:', respostasAgendamento[0]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar respostas de anamnese:', error);
+    }
   };
 
   const carregarDados = async () => {
@@ -2154,8 +2196,6 @@ function ModernAtendimento() {
   const totalPago = calcularTotalPago();
   const saldoRestante = calcularSaldoRestante();
 
-  // ... (o restante do JSX continua igual)
-
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
@@ -2325,6 +2365,21 @@ function ModernAtendimento() {
                       sx={{ mt: 1, mr: 1, bgcolor: '#fff3e0' }}
                     />
                   ))}
+                </Box>
+              )}
+
+              {/* 🔥 BOTÃO DE ANAMNESE */}
+              {respostasAnamnese && (
+                <Box sx={{ mt: 2, mb: 2 }}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<AssignmentIcon />}
+                    onClick={() => setOpenAnamneseDialog(true)}
+                    sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                  >
+                    Ver Anamnese do Cliente
+                  </Button>
                 </Box>
               )}
 
@@ -3314,6 +3369,108 @@ function ModernAtendimento() {
             sx={{ bgcolor: '#9c27b0' }}
           >
             {pagamentoEditando ? 'Atualizar' : 'Registrar Pagamento'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 🔥 DIALOG DE ANAMNESE */}
+      <Dialog open={openAnamneseDialog} onClose={() => setOpenAnamneseDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AssignmentIcon />
+            <Typography variant="h6">Anamnese - {respostasAnamnese?.formularioTitulo}</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            {/* Informações do cliente */}
+            <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Cliente
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    {cliente?.nome}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Serviço
+                  </Typography>
+                  <Typography variant="body1">
+                    {atendimento?.servicoNome}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Profissional
+                  </Typography>
+                  <Typography variant="body1">
+                    {profissional?.nome}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    Respondido em
+                  </Typography>
+                  <Typography variant="body1">
+                    {respostasAnamnese?.respondidoEm ? new Date(respostasAnamnese.respondidoEm).toLocaleString('pt-BR') : '-'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Respostas */}
+            <Typography variant="h6" gutterBottom>
+              Respostas:
+            </Typography>
+            
+            {respostasAnamnese?.respostas?.map((resposta, index) => (
+              <Accordion key={index} defaultExpanded={index === 0}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    {resposta.pergunta}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {resposta.resposta.map((item, i) => (
+                        <Chip key={i} label={item} size="small" />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body1">
+                      {resposta.resposta}
+                    </Typography>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+
+            {/* Observações do profissional */}
+            <TextField
+              fullWidth
+              label="Observações do profissional"
+              multiline
+              rows={3}
+              value={respostasAnamnese?.observacoesProfissional || ''}
+              placeholder="Adicione observações sobre este formulário..."
+              sx={{ mt: 3 }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAnamneseDialog(false)}>Fechar</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setOpenAnamneseDialog(false);
+              // Opcional: navegar para página de edição
+            }}
+          >
+            Editar Observações
           </Button>
         </DialogActions>
       </Dialog>
