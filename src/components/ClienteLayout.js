@@ -138,6 +138,11 @@ function ClienteLayout() {
     ]).then(([notifData, pendentes]) => {
       console.log('✅ Dados carregados - Notificações:', notifData?.length);
       console.log('✅ Dados carregados - Formulários pendentes:', pendentes);
+      
+      // 🔥 CRIAR NOTIFICAÇÃO DE FORMULÁRIO PENDENTE
+      if (pendentes > 0) {
+        criarNotificacaoFormularioPendente(pendentes);
+      }
     });
 
     // Inscrever para receber atualizações em tempo real
@@ -183,6 +188,32 @@ function ClienteLayout() {
     }
   };
 
+  // 🔥 FUNÇÃO PARA CRIAR NOTIFICAÇÃO DE FORMULÁRIO PENDENTE
+  const criarNotificacaoFormularioPendente = (quantidade) => {
+    const notificacao = {
+      id: `form-${Date.now()}`,
+      tipo: 'formulario',
+      titulo: '📋 Formulário de Anamnese Pendente',
+      mensagem: `Você tem ${quantidade} formulário${quantidade > 1 ? 's' : ''} de anamnese para preencher.`,
+      icone: 'assignment',
+      link: '/cliente/anamnese',
+      data: new Date().toISOString(),
+      lida: false
+    };
+    
+    setNotificacoes(prev => [notificacao, ...prev]);
+    setNotificacoesNaoLidas(prev => prev + 1);
+    
+    // Também notificar via serviço
+    notificacoesPushService.criarNotificacao({
+      clienteId: cliente?.id,
+      tipo: 'formulario',
+      titulo: '📋 Formulário de Anamnese Pendente',
+      mensagem: `Você tem ${quantidade} formulário${quantidade > 1 ? 's' : ''} para preencher.`,
+      link: '/cliente/anamnese'
+    });
+  };
+
   const handleNotificacoesClick = (event) => {
     setNotificacoesAnchor(event.currentTarget);
   };
@@ -224,7 +255,6 @@ function ClienteLayout() {
 
   /**
    * 🔥 FUNÇÃO CORRIGIDA: Verifica formulários pendentes em TODOS os agendamentos
-   * Agora inclui agendamentos passados que ainda não foram respondidos
    */
   const verificarFormulariosPendentes = async () => {
     if (!cliente?.id) return 0;
@@ -232,11 +262,9 @@ function ClienteLayout() {
     try {
       const uid = firebaseUser?.uid || cliente?.id;
       
-      // 🔥 CORREÇÃO: Removido o filtro de data para incluir agendamentos passados
-      // Agora busca TODOS os agendamentos do cliente com status ativo
       let agendamentos = [];
       
-      // Buscar agendamentos confirmados (qualquer data)
+      // Buscar agendamentos confirmados
       try {
         const confirmados = await firebaseService.query('agendamentos', [
           { field: 'clienteId', operator: '==', value: uid },
@@ -248,7 +276,7 @@ function ClienteLayout() {
         console.log('⚠️ Erro ao buscar confirmados:', err);
       }
       
-      // Buscar agendamentos pendentes (qualquer data)
+      // Buscar agendamentos pendentes
       try {
         const pendentes = await firebaseService.query('agendamentos', [
           { field: 'clienteId', operator: '==', value: uid },
@@ -268,7 +296,6 @@ function ClienteLayout() {
         try {
           console.log(`🔍 Verificando agendamento ${agendamento.id} - Serviço: ${agendamento.servicoId}`);
           
-          // Buscar formulários associados ao serviço
           const formularios = await firebaseService.query('formularios_anamnese', [
             { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
             { field: 'ativo', operator: '==', value: true }
@@ -277,22 +304,17 @@ function ClienteLayout() {
           if (formularios.length > 0) {
             console.log(`📋 Encontrado formulário para o serviço: ${formularios[0].titulo}`);
             
-            // Verificar se já respondeu
-            const respostas = await firebaseService.query('respostas_amnese', [
+            const respostas = await firebaseService.query('respostas_anamnese', [
               { field: 'agendamentoId', operator: '==', value: agendamento.id }
             ]).catch(() => []);
             
             if (respostas.length === 0) {
               console.log(`⚠️ Agendamento ${agendamento.id} TEM formulário pendente!`);
               pendentesCount++;
-            } else {
-              console.log(`✅ Agendamento ${agendamento.id} já foi respondido`);
             }
-          } else {
-            console.log(`ℹ️ Nenhum formulário para o serviço ${agendamento.servicoId}`);
           }
         } catch (e) {
-          console.log('Erro ao verificar formulário para agendamento:', agendamento.id, e);
+          console.log('Erro ao verificar formulário:', e);
         }
       }
       
@@ -307,13 +329,12 @@ function ClienteLayout() {
 
   /**
    * 🔥 FUNÇÃO CORRIGIDA: Vai para o primeiro formulário pendente
-   * Agora considera TODOS os agendamentos, não apenas futuros
+   * Agora usa a rota CORRETA de agendamento
    */
   const irParaPrimeiroFormularioPendente = async () => {
     try {
       const uid = firebaseUser?.uid || cliente?.id;
       
-      // 🔥 CORREÇÃO: Removido filtro de data
       let agendamentos = [];
       
       // Buscar agendamentos confirmados
@@ -338,25 +359,27 @@ function ClienteLayout() {
         console.log('⚠️ Erro ao buscar pendentes:', err);
       }
       
-      // Ordenar por data (mais antigos primeiro para responder pendências antigas)
+      // Ordenar por data (mais antigos primeiro)
       agendamentos.sort((a, b) => a.data.localeCompare(b.data));
       
       console.log(`🔍 Buscando primeiro formulário pendente em ${agendamentos.length} agendamentos...`);
       
       for (const agendamento of agendamentos) {
         try {
-          const formularios = await firebaseService.query('formularios_amnese', [
+          const formularios = await firebaseService.query('formularios_anamnese', [
             { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
             { field: 'ativo', operator: '==', value: true }
           ]).catch(() => []);
           
           if (formularios.length > 0) {
-            const respostas = await firebaseService.query('respostas_amnese', [
+            const respostas = await firebaseService.query('respostas_anamnese', [
               { field: 'agendamentoId', operator: '==', value: agendamento.id }
             ]).catch(() => []);
             
             if (respostas.length === 0) {
               console.log(`✅ Redirecionando para formulário do agendamento ${agendamento.id}`);
+              
+              // 🔥 ROTA CORRIGIDA: Agora usa agendamento em vez de atendimento
               navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
               return;
             }
@@ -651,7 +674,7 @@ function ClienteLayout() {
           </Box>
         )}
 
-        {/* Badge de Formulários Pendentes */}
+        {/* Badge de Formulários Pendentes - Agora integrado ao sistema de notificações */}
         {formulariosPendentes > 0 && (
           <Box
             sx={{
