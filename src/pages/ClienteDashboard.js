@@ -26,16 +26,9 @@ import {
   CircularProgress,
   useTheme,
   useMediaQuery,
-  SwipeableDrawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  BottomNavigation,
-  BottomNavigationAction,
+  Badge,
   Fab,
   Zoom,
-  Badge,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -48,14 +41,10 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
-  Menu as MenuIcon,
   Home as HomeIcon,
   DateRange as DateRangeIcon,
   Redeem as RedeemIcon,
   Assessment as AssessmentIcon,
-  Close as CloseIcon,
-  FilterList as FilterIcon,
-  Sort as SortIcon,
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
@@ -139,8 +128,6 @@ function ClienteDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState(0);
   
   // Dados do cliente
   const [agendamentos, setAgendamentos] = useState([]);
@@ -420,11 +407,11 @@ function ClienteDashboard() {
   const progresso = getProgressoProximoNivel();
   const proximoNivel = getProximoNivelNome();
 
-  // Versão Mobile do Dashboard
+  // Versão Mobile do Dashboard (sem menu, apenas conteúdo)
   if (isMobile) {
     return (
       <Box sx={{ pb: 7 }}>
-        {/* Header Mobile */}
+        {/* Header Mobile simplificado (sem menu) */}
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
@@ -432,17 +419,22 @@ function ClienteDashboard() {
           p: 2,
           bgcolor: 'white',
           borderBottom: '1px solid #f0f0f0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={() => setMobileMenuOpen(true)}>
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              BeautyPro
-            </Typography>
+            <Avatar
+              src={cliente.foto}
+              sx={{ width: 40, height: 40, bgcolor: '#9c27b0' }}
+            >
+              {!cliente.foto && getInitials(cliente.nome)}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {cliente.nome?.split(' ')[0]}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {nivelInfo.nome} • {saldo} pts
+              </Typography>
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <IconButton size="small" onClick={handleRefresh}>
@@ -454,85 +446,10 @@ function ClienteDashboard() {
           </Box>
         </Box>
 
-        {/* Menu Mobile Drawer */}
-        <SwipeableDrawer
-          anchor="left"
-          open={mobileMenuOpen}
-          onClose={() => setMobileMenuOpen(false)}
-          onOpen={() => {}}
-          PaperProps={{
-            sx: { width: 280, bgcolor: '#faf5ff' }
-          }}
-        >
-          <Box sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <IconButton onClick={() => setMobileMenuOpen(false)}>
-                <CloseIcon />
-              </IconButton>
-            </Box>
-            
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Avatar
-                src={cliente.foto}
-                sx={{ 
-                  width: 80, 
-                  height: 80,
-                  mx: 'auto',
-                  mb: 2,
-                  bgcolor: '#9c27b0',
-                }}
-              >
-                {!cliente.foto && getInitials(cliente.nome)}
-              </Avatar>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                {cliente.nome}
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                {cliente.email}
-              </Typography>
-            </Box>
-
-            <List>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/dashboard'); }}>
-                <ListItemIcon><HomeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                <ListItemText primary="Dashboard" />
-              </ListItem>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/agendamentos'); }}>
-                <ListItemIcon><DateRangeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                <ListItemText primary="Agendamentos" />
-                {proximosAgendamentos.length > 0 && (
-                  <Chip label={proximosAgendamentos.length} size="small" color="warning" />
-                )}
-              </ListItem>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/recompensas'); }}>
-                <ListItemIcon><RedeemIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
-                <ListItemText primary="Recompensas" />
-              </ListItem>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/pontos'); }}>
-                <ListItemIcon><StarIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                <ListItemText primary="Meus Pontos" />
-                <Chip label={saldo} size="small" sx={{ bgcolor: '#ff9800', color: 'white' }} />
-              </ListItem>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/historico'); }}>
-                <ListItemIcon><HistoryIcon sx={{ color: '#2196f3' }} /></ListItemIcon>
-                <ListItemText primary="Histórico" />
-              </ListItem>
-              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/perfil'); }}>
-                <ListItemIcon><PersonIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                <ListItemText primary="Perfil" />
-              </ListItem>
-              <ListItem button onClick={handleLogout}>
-                <ListItemIcon><LogoutIcon sx={{ color: '#f44336' }} /></ListItemIcon>
-                <ListItemText primary="Sair" />
-              </ListItem>
-            </List>
-          </Box>
-        </SwipeableDrawer>
-
         {/* Conteúdo Principal Mobile */}
         <Box sx={{ p: 2 }}>
           {/* Card de Boas Vindas Mobile */}
-          <Card sx={{ mb: 2, bgcolor: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
+          <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Olá, {cliente.nome?.split(' ')[0]}! 👋
@@ -770,44 +687,7 @@ function ClienteDashboard() {
           </TabPanel>
         </Box>
 
-        {/* Bottom Navigation Mobile */}
-        <Paper 
-          sx={{ 
-            position: 'fixed', 
-            bottom: 0, 
-            left: 0, 
-            right: 0,
-            zIndex: 10,
-            borderTop: '1px solid #f0f0f0'
-          }} 
-          elevation={3}
-        >
-          <BottomNavigation
-            value={mobileTab}
-            onChange={(event, newValue) => {
-              setMobileTab(newValue);
-              if (newValue === 0) navigate('/cliente/dashboard');
-              if (newValue === 1) navigate('/cliente/agendamentos');
-              if (newValue === 2) navigate('/cliente/recompensas');
-              if (newValue === 3) navigate('/cliente/pontos');
-            }}
-            showLabels
-          >
-            <BottomNavigationAction label="Início" icon={<HomeIcon />} />
-            <BottomNavigationAction 
-              label="Agenda" 
-              icon={
-                <Badge badgeContent={proximosAgendamentos.length} color="secondary">
-                  <DateRangeIcon />
-                </Badge>
-              } 
-            />
-            <BottomNavigationAction label="Recompensas" icon={<GiftIcon />} />
-            <BottomNavigationAction label="Pontos" icon={<StarIcon />} />
-          </BottomNavigation>
-        </Paper>
-
-        {/* FAB para ações rápidas */}
+        {/* FAB para ações rápidas (apenas mobile) */}
         <Zoom in={true}>
           <Fab
             color="primary"
@@ -827,7 +707,7 @@ function ClienteDashboard() {
     );
   }
 
-  // Versão Desktop (original, mantida)
+  // Versão Desktop (mantida, sem alterações)
   return (
     <Box>
       {/* Header com botão de atualizar */}
