@@ -1,4 +1,6 @@
 // src/pages/ModernFinanceiro.js
+// ATUALIZAÇÃO COMPLETA - CORREÇÃO DA DUPLICIDADE DE COMISSÕES
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -173,12 +175,14 @@ function ModernFinanceiro() {
   const [tabValue, setTabValue] = useState(0);
   const [periodoSelecionado, setPeriodoSelecionado] = useState('mes'); // 'mes', 'ano', 'personalizado'
   
-  // Dados
-  const [transacoes, setTransacoes] = useState([]);
-  const [comissoes, setComissoes] = useState([]);
-  const [compras, setCompras] = useState([]);
-  const [contasPagar, setContasPagar] = useState([]);
-  const [contasReceber, setContasReceber] = useState([]);
+  // Dados separados por origem
+  const [transacoesManuais, setTransacoesManuais] = useState([]); // Apenas transações manuais
+  const [comissoes, setComissoes] = useState([]); // Comissões puras
+  const [compras, setCompras] = useState([]); // Compras puras
+  
+  // Dados combinados para visualização geral (sem comissões duplicadas)
+  const [transacoesCombinadas, setTransacoesCombinadas] = useState([]);
+  
   const [categorias, setCategorias] = useState([]);
   const [caixa, setCaixa] = useState(null);
   const [clientes, setClientes] = useState([]);
@@ -253,7 +257,7 @@ function ModernFinanceiro() {
       setLoading(true);
       
       const [
-        transacoesData,
+        transacoesManuaisData,
         comissoesData,
         comprasData,
         caixaData, 
@@ -273,7 +277,7 @@ function ModernFinanceiro() {
       ]);
       
       // Garantir que todos os dados são arrays
-      const transacoesArray = Array.isArray(transacoesData) ? transacoesData : [];
+      const transacoesArray = Array.isArray(transacoesManuaisData) ? transacoesManuaisData : [];
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       const comprasArray = Array.isArray(comprasData) ? comprasData : [];
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
@@ -281,15 +285,21 @@ function ModernFinanceiro() {
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
       const servicosArray = Array.isArray(servicosData) ? servicosData : [];
       
+      // Armazenar dados separadamente
+      setTransacoesManuais(transacoesArray);
       setComissoes(comissoesArray);
       setCompras(comprasArray);
+      setClientes(clientesArray);
+      setFornecedores(fornecedoresArray);
+      setProfissionais(profissionaisArray);
+      setServicos(servicosArray);
       
-      // Converter comissões para transações financeiras
-      const transacoesComissoes = comissoesArray
+      // Converter comissões para transações (apenas para exibição na aba de comissões)
+      const comissoesParaTransacao = comissoesArray
         .filter(c => c.status !== 'cancelado')
         .map(comissao => ({
           id: `comissao_${comissao.id}`,
-          tipo: 'despesa', // Comissão é despesa para o salão
+          tipo: 'comissao', // AGORA É 'COMISSAO', não 'despesa'
           origem: 'comissao',
           origemId: comissao.id,
           descricao: `Comissão - ${comissao.servicoNome || 'Serviço'} - ${comissao.profissionalNome || ''}`,
@@ -311,12 +321,12 @@ function ModernFinanceiro() {
           updatedAt: comissao.updatedAt,
         }));
 
-      // Converter compras para transações financeiras
-      const transacoesCompras = comprasArray
+      // Converter compras para transações (apenas para exibição na aba de compras)
+      const comprasParaTransacao = comprasArray
         .filter(c => c.status !== 'cancelada')
         .map(compra => ({
           id: `compra_${compra.id}`,
-          tipo: 'despesa',
+          tipo: 'compra', // AGORA É 'COMPRA', não 'despesa'
           origem: 'compra',
           origemId: compra.id,
           descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
@@ -335,33 +345,18 @@ function ModernFinanceiro() {
           updatedAt: compra.updatedAt,
         }));
 
-      // Combinar todas as transações
+      // Combinar transações para visualização geral (SOMENTE transações manuais)
+      // Comissões NÃO entram nas despesas gerais para evitar duplicidade
       const todasTransacoes = [
-        ...transacoesArray,
-        ...transacoesComissoes,
-        ...transacoesCompras
+        ...transacoesArray, // Apenas transações manuais
+        // COMISSÕES E COMPRAS NÃO ENTRAM AQUI - ELAS TÊM ABAS ESPECÍFICAS
       ];
 
       // Ordenar por data (mais recentes primeiro)
       todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-      setTransacoes(todasTransacoes);
       
-      // Separar contas a pagar e receber
-      const aPagar = todasTransacoes.filter(t => 
-        t.tipo === 'despesa' && t.status !== 'pago' && t.status !== 'cancelado'
-      );
-      const aReceber = todasTransacoes.filter(t => 
-        t.tipo === 'receita' && t.status !== 'pago' && t.status !== 'cancelado'
-      );
-      
-      setContasPagar(aPagar);
-      setContasReceber(aReceber);
-      
-      setClientes(clientesArray);
-      setFornecedores(fornecedoresArray);
-      setProfissionais(profissionaisArray);
-      setServicos(servicosArray);
+      // Armazenar combinadas (apenas manuais para geral)
+      setTransacoesCombinadas(todasTransacoes);
       
       // Extrair categorias únicas
       const categoriasUnicas = [...new Set(todasTransacoes
@@ -405,10 +400,7 @@ function ModernFinanceiro() {
       );
       setComissoes(comissoesAtualizadas);
 
-      // Recarregar transações
-      await carregarDados();
-
-      // Atualizar caixa
+      // Atualizar caixa (COMISSÃO É DESPESA DO SALÃO)
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const comissao = comissoes.find(c => c.id === comissaoId);
         if (comissao) {
@@ -463,9 +455,6 @@ function ModernFinanceiro() {
       );
       setCompras(comprasAtualizadas);
 
-      // Recarregar transações
-      await carregarDados();
-
       // Atualizar caixa
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const compra = compras.find(c => c.id === compraId);
@@ -502,80 +491,6 @@ function ModernFinanceiro() {
     } catch (error) {
       console.error('Erro ao pagar compra:', error);
       mostrarSnackbar('Erro ao pagar compra', 'error');
-    }
-  };
-
-  // Função para marcar transação como paga (genérica)
-  const handleMarcarComoPago = async (transacao) => {
-    try {
-      if (!transacao || !transacao.id) {
-        mostrarSnackbar('Transação inválida', 'error');
-        return;
-      }
-
-      // Se for uma comissão, chamar função específica
-      if (transacao.origem === 'comissao' && transacao.origemId) {
-        await handlePagarComissao(transacao.origemId);
-        return;
-      }
-
-      // Se for uma compra, chamar função específica
-      if (transacao.origem === 'compra' && transacao.origemId) {
-        await handlePagarCompra(transacao.origemId);
-        return;
-      }
-
-      // Para transações manuais
-      const dadosTransacao = {
-        status: 'pago',
-        dataPagamento: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      await firebaseService.update('transacoes', transacao.id, dadosTransacao);
-
-      // Atualizar estado local
-      const transacoesAtualizadas = transacoes.map(t => 
-        t.id === transacao.id ? { ...t, ...dadosTransacao } : t
-      );
-      setTransacoes(transacoesAtualizadas);
-      setContasPagar(transacoesAtualizadas.filter(t => t.tipo === 'despesa' && t.status !== 'pago'));
-      setContasReceber(transacoesAtualizadas.filter(t => t.tipo === 'receita' && t.status !== 'pago'));
-
-      // Atualizar caixa
-      if (caixa && caixa.status === 'aberto' && caixa.id) {
-        const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
-        const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
-        
-        const novaMovimentacao = {
-          id: Date.now().toString(),
-          tipo: transacao.tipo,
-          valor: Number(transacao.valor),
-          descricao: String(transacao.descricao || ''),
-          data: new Date().toISOString(),
-          transacaoId: String(transacao.id),
-        };
-        
-        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
-        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-        
-        await firebaseService.update('caixa', caixa.id, {
-          saldoAtual: Number(novoSaldo),
-          movimentacoes: novasMovimentacoes,
-          updatedAt: new Date().toISOString(),
-        });
-        
-        setCaixa({ 
-          ...caixa, 
-          saldoAtual: novoSaldo, 
-          movimentacoes: novasMovimentacoes 
-        });
-      }
-
-      mostrarSnackbar('✅ Transação marcada como paga!');
-    } catch (error) {
-      console.error('Erro ao marcar como pago:', error);
-      mostrarSnackbar('Erro ao processar pagamento', 'error');
     }
   };
 
@@ -681,10 +596,9 @@ function ModernFinanceiro() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Função para salvar transação
+  // Função para salvar transação manual
   const handleSalvar = async () => {
     try {
-      // Validações
       if (!formData.descricao?.trim()) {
         mostrarSnackbar('Descrição é obrigatória', 'error');
         return;
@@ -696,7 +610,6 @@ function ModernFinanceiro() {
         return;
       }
 
-      // Preparar dados para salvar
       const dadosParaSalvar = {
         tipo: String(formData.tipo),
         descricao: String(formData.descricao).trim(),
@@ -716,52 +629,25 @@ function ModernFinanceiro() {
         recorrente: Boolean(formData.recorrente),
         frequencia: formData.frequencia || 'mensal',
         tags: Array.isArray(formData.tags) ? formData.tags : [],
-        origem: formData.origem || 'manual',
-        origemId: formData.origemId || null,
-        itens: formData.itens || [],
-        numeroPedido: formData.numeroPedido || null,
-        prazoEntrega: formData.prazoEntrega || null,
+        origem: 'manual',
+        origemId: null,
         updatedAt: new Date().toISOString(),
       };
 
-      // Adicionar data de pagamento se status for pago
       if (formData.status === 'pago') {
         dadosParaSalvar.dataPagamento = new Date().toISOString();
       }
 
-      // Remover campos undefined
-      Object.keys(dadosParaSalvar).forEach(key => {
-        if (dadosParaSalvar[key] === undefined) {
-          delete dadosParaSalvar[key];
-        }
-      });
-
       if (transacaoEditando) {
-        // Se for uma transação manual, atualizar
-        if (transacaoEditando.origem === 'manual') {
-          await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
-        } else {
-          // Se for de origem externa (comissão/compra), não permitir edição direta
-          mostrarSnackbar('Transações de comissão/compra não podem ser editadas diretamente', 'warning');
-          handleCloseDialog();
-          return;
-        }
-        
-        // Recarregar dados
-        await carregarDados();
-        
+        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
         mostrarSnackbar('Transação atualizada com sucesso!');
       } else {
         dadosParaSalvar.createdAt = new Date().toISOString();
-        
-        const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
-        
-        // Recarregar dados
-        await carregarDados();
-        
+        await firebaseService.add('transacoes', dadosParaSalvar);
         mostrarSnackbar('Transação criada com sucesso!');
       }
 
+      await carregarDados();
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
@@ -773,7 +659,6 @@ function ModernFinanceiro() {
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
-        // Abrir caixa
         let usuarioId = 'sistema';
         try {
           const usuarioStr = localStorage.getItem('usuario');
@@ -785,9 +670,8 @@ function ModernFinanceiro() {
           console.warn('Erro ao parsear usuário do localStorage:', e);
         }
 
-        // Calcular saldo inicial baseado nas transações do dia
         const hoje = formatarDataBrasilia(new Date());
-        const transacoesHoje = transacoes.filter(t => 
+        const transacoesHoje = transacoesCombinadas.filter(t => 
           t.data === hoje && t.status === 'pago'
         );
         
@@ -819,7 +703,6 @@ function ModernFinanceiro() {
         setCaixa({ ...novoCaixa, id: novoId });
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
-        // Fechar caixa
         const dadosAtualizacao = {
           status: 'fechado',
           dataFechamento: new Date().toISOString(),
@@ -828,12 +711,7 @@ function ModernFinanceiro() {
         };
         
         await firebaseService.update('caixa', caixa.id, dadosAtualizacao);
-        
-        setCaixa({ 
-          ...caixa, 
-          ...dadosAtualizacao
-        });
-        
+        setCaixa({ ...caixa, ...dadosAtualizacao });
         mostrarSnackbar('✅ Caixa fechado com sucesso!');
       }
       handleCloseCaixaDialog();
@@ -869,7 +747,7 @@ function ModernFinanceiro() {
         updatedAt: new Date().toISOString(),
       });
       
-      setTransacoes(transacoes.map(t => 
+      setTransacoesManuais(transacoesManuais.map(t => 
         t.id === transacao.id ? { ...t, arquivado: novoStatus } : t
       ));
       
@@ -880,13 +758,13 @@ function ModernFinanceiro() {
     }
   };
 
-  // Cálculo das estatísticas
+  // Cálculo das estatísticas (apenas com transações manuais)
   const calcularEstatisticas = () => {
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
     fim.setHours(23, 59, 59, 999);
 
-    const transacoesPeriodo = transacoes.filter(t => {
+    const transacoesPeriodo = transacoesCombinadas.filter(t => {
       if (t.arquivado) return false;
       const data = new Date(t.data);
       return data >= inicio && data <= fim;
@@ -916,13 +794,15 @@ function ModernFinanceiro() {
       return vencimento < new Date();
     }).length;
 
-    const comissoesPendentes = transacoesPeriodo
-      .filter(t => t.origem === 'comissao' && t.status === 'pendente')
-      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    // Comissões pendentes - calculadas diretamente da coleção de comissões
+    const comissoesPendentes = comissoes
+      .filter(c => c.status === 'pendente')
+      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
 
-    const comprasPendentes = transacoesPeriodo
-      .filter(t => t.origem === 'compra' && t.status === 'pendente')
-      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    // Compras pendentes - calculadas diretamente da coleção de compras
+    const comprasPendentes = compras
+      .filter(c => c.status === 'pendente')
+      .reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0);
 
     const ticketMedio = receitas > 0 
       ? receitas / transacoesPeriodo.filter(t => t.tipo === 'receita' && t.status === 'pago').length 
@@ -943,7 +823,7 @@ function ModernFinanceiro() {
     };
   };
 
-  // Dados para gráficos
+  // Dados para gráficos (apenas transações manuais)
   const gerarDadosGraficoLinha = () => {
     const dias = {};
     const inicio = new Date(dataInicio);
@@ -955,13 +835,11 @@ function ModernFinanceiro() {
         receitas: 0, 
         despesas: 0, 
         saldo: 0,
-        comissoes: 0,
-        compras: 0,
         dia: format(d, 'dd/MM')
       };
     }
 
-    transacoes
+    transacoesCombinadas
       .filter(t => t.status === 'pago' && !t.arquivado)
       .forEach(t => {
         const data = t.data.split('T')[0];
@@ -971,11 +849,6 @@ function ModernFinanceiro() {
             dias[data].receitas += valor;
           } else {
             dias[data].despesas += valor;
-            if (t.origem === 'comissao') {
-              dias[data].comissoes += valor;
-            } else if (t.origem === 'compra') {
-              dias[data].compras += valor;
-            }
           }
           dias[data].saldo = dias[data].receitas - dias[data].despesas;
         }
@@ -986,13 +859,10 @@ function ModernFinanceiro() {
 
   const gerarDadosGraficoPizza = () => {
     const categorias = {};
-    transacoes
+    transacoesCombinadas
       .filter(t => t.status === 'pago' && !t.arquivado)
       .forEach(t => {
         let cat = t.categoria || 'Outros';
-        if (t.origem === 'comissao') cat = 'Comissões';
-        if (t.origem === 'compra') cat = 'Compras';
-        
         if (!categorias[cat]) {
           categorias[cat] = 0;
         }
@@ -1005,7 +875,7 @@ function ModernFinanceiro() {
         value: categorias[cat],
       }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8); // Top 8 categorias
+      .slice(0, 8);
   };
 
   const gerarDadosGraficoMensal = () => {
@@ -1019,14 +889,12 @@ function ModernFinanceiro() {
         mes, 
         receitas: 0, 
         despesas: 0,
-        comissoes: 0,
-        compras: 0,
         lucro: 0,
         data: data.getTime()
       };
     }
 
-    transacoes
+    transacoesCombinadas
       .filter(t => t.status === 'pago' && !t.arquivado)
       .forEach(t => {
         const data = new Date(t.data);
@@ -1037,11 +905,6 @@ function ModernFinanceiro() {
             meses[mes].receitas += valor;
           } else {
             meses[mes].despesas += valor;
-            if (t.origem === 'comissao') {
-              meses[mes].comissoes += valor;
-            } else if (t.origem === 'compra') {
-              meses[mes].compras += valor;
-            }
           }
           meses[mes].lucro = meses[mes].receitas - meses[mes].despesas;
         }
@@ -1055,15 +918,64 @@ function ModernFinanceiro() {
   const dadosGraficoPizza = gerarDadosGraficoPizza();
   const dadosGraficoMensal = gerarDadosGraficoMensal();
 
-  // Filtrar transações
+  // Filtrar transações conforme a aba selecionada
   const getTransacoesFiltradas = () => {
     let lista = [];
-    if (tabValue === 0) lista = transacoes.filter(t => !t.arquivado);
-    else if (tabValue === 1) lista = transacoes.filter(t => t.tipo === 'receita' && !t.arquivado);
-    else if (tabValue === 2) lista = transacoes.filter(t => t.tipo === 'despesa' && !t.arquivado);
-    else if (tabValue === 3) lista = transacoes.filter(t => t.origem === 'comissao' && !t.arquivado); // Comissões
-    else if (tabValue === 4) lista = transacoes.filter(t => t.origem === 'compra' && !t.arquivado); // Compras
-    else if (tabValue === 5) lista = transacoes.filter(t => t.arquivado); // Arquivados
+    
+    if (tabValue === 0) {
+      // Todas - apenas transações manuais
+      lista = transacoesCombinadas.filter(t => !t.arquivado);
+    } else if (tabValue === 1) {
+      // Receitas - apenas transações manuais do tipo receita
+      lista = transacoesCombinadas.filter(t => t.tipo === 'receita' && !t.arquivado);
+    } else if (tabValue === 2) {
+      // Despesas - apenas transações manuais do tipo despesa (SEM COMISSÕES)
+      lista = transacoesCombinadas.filter(t => t.tipo === 'despesa' && !t.arquivado);
+    } else if (tabValue === 3) {
+      // Comissões - APENAS comissões, convertidas para formato de exibição
+      lista = comissoes
+        .filter(c => c.status !== 'cancelado')
+        .map(c => ({
+          id: `comissao_${c.id}`,
+          tipo: 'comissao',
+          origem: 'comissao',
+          origemId: c.id,
+          descricao: `Comissão - ${c.servicoNome || 'Serviço'} - ${c.profissionalNome || ''}`,
+          valor: c.valor || 0,
+          data: c.dataRegistro ? c.dataRegistro.split('T')[0] : c.data,
+          dataVencimento: c.data,
+          categoria: 'Comissões',
+          status: c.status === 'pago' ? 'pago' : 'pendente',
+          profissionalNome: c.profissionalNome,
+          servicoNome: c.servicoNome,
+          percentual: c.percentual,
+          valorAtendimento: c.valorAtendimento,
+          observacoes: c.observacoes,
+        }));
+    } else if (tabValue === 4) {
+      // Compras - APENAS compras
+      lista = compras
+        .filter(c => c.status !== 'cancelada')
+        .map(c => ({
+          id: `compra_${c.id}`,
+          tipo: 'compra',
+          origem: 'compra',
+          origemId: c.id,
+          descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
+          valor: c.valorTotal || 0,
+          data: c.dataCompra,
+          dataVencimento: c.dataCompra,
+          categoria: 'Compras',
+          status: c.status === 'pago' ? 'pago' : 'pendente',
+          fornecedorId: c.fornecedorId,
+          numeroPedido: c.numeroPedido,
+          itens: c.itens || [],
+          observacoes: c.observacoes,
+        }));
+    } else if (tabValue === 5) {
+      // Arquivados
+      lista = transacoesCombinadas.filter(t => t.arquivado);
+    }
 
     return lista.filter(t => {
       const matchesTexto = filtro === '' || 
@@ -1071,14 +983,12 @@ function ModernFinanceiro() {
         t.categoria?.toLowerCase().includes(filtro.toLowerCase()) ||
         (t.profissionalNome?.toLowerCase().includes(filtro.toLowerCase())) ||
         (t.servicoNome?.toLowerCase().includes(filtro.toLowerCase())) ||
-        (t.numeroPedido?.toLowerCase().includes(filtro.toLowerCase())) ||
-        (t.clienteId && clientes.find(c => c.id === t.clienteId)?.nome?.toLowerCase().includes(filtro.toLowerCase()));
+        (t.numeroPedido?.toLowerCase().includes(filtro.toLowerCase()));
 
       const matchesStatus = filtroStatus === 'todos' || t.status === filtroStatus;
-      const matchesTipo = filtroTipo === 'todos' || t.tipo === filtroTipo;
       const matchesCategoria = filtroCategoria === 'todas' || t.categoria === filtroCategoria;
 
-      return matchesTexto && matchesStatus && matchesTipo && matchesCategoria;
+      return matchesTexto && matchesStatus && matchesCategoria;
     });
   };
 
@@ -1445,8 +1355,6 @@ function ModernFinanceiro() {
                         <Legend />
                         <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
                         <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
-                        <Line type="monotone" dataKey="comissoes" stroke="#9c27b0" strokeWidth={2} name="Comissões" />
-                        <Line type="monotone" dataKey="compras" stroke="#ff9800" strokeWidth={2} name="Compras" />
                         <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -1514,8 +1422,6 @@ function ModernFinanceiro() {
                   <Legend />
                   <Bar dataKey="receitas" fill="#4caf50" name="Receitas" />
                   <Bar dataKey="despesas" fill="#f44336" name="Despesas" />
-                  <Bar dataKey="comissoes" fill="#9c27b0" name="Comissões" />
-                  <Bar dataKey="compras" fill="#ff9800" name="Compras" />
                   <Bar dataKey="lucro" fill="#2196f3" name="Lucro" />
                 </BarChart>
               </ResponsiveContainer>
@@ -1583,21 +1489,6 @@ function ModernFinanceiro() {
 
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Tipo</InputLabel>
-                  <Select
-                    value={filtroTipo}
-                    label="Tipo"
-                    onChange={(e) => setFiltroTipo(e.target.value)}
-                  >
-                    <MenuItem value="todos">Todos</MenuItem>
-                    <MenuItem value="receita">Receitas</MenuItem>
-                    <MenuItem value="despesa">Despesas</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
                   <InputLabel>Categoria</InputLabel>
                   <Select
                     value={filtroCategoria}
@@ -1621,7 +1512,6 @@ function ModernFinanceiro() {
                   onClick={() => {
                     setFiltro('');
                     setFiltroStatus('todos');
-                    setFiltroTipo('todos');
                     setFiltroCategoria('todas');
                   }}
                 >
@@ -1653,19 +1543,24 @@ function ModernFinanceiro() {
                       
                       let iconeTipo = <ReceiptIcon />;
                       let corTipo = '#757575';
+                      let tipoLabel = '';
                       
                       if (transacao.origem === 'comissao') {
                         iconeTipo = <PercentIcon />;
                         corTipo = '#9c27b0';
+                        tipoLabel = 'Comissão';
                       } else if (transacao.origem === 'compra') {
                         iconeTipo = <ShoppingCartIcon />;
                         corTipo = '#ff9800';
+                        tipoLabel = 'Compra';
                       } else if (transacao.tipo === 'receita') {
                         iconeTipo = <TrendingUpIcon />;
                         corTipo = '#4caf50';
+                        tipoLabel = 'Receita';
                       } else if (transacao.tipo === 'despesa') {
                         iconeTipo = <TrendingDownIcon />;
                         corTipo = '#f44336';
+                        tipoLabel = 'Despesa';
                       }
                       
                       return (
@@ -1736,9 +1631,7 @@ function ModernFinanceiro() {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={transacao.origem === 'comissao' ? 'Comissão' : 
-                                    transacao.origem === 'compra' ? 'Compra' : 
-                                    transacao.tipo === 'receita' ? 'Receita' : 'Despesa'}
+                              label={tipoLabel}
                               size="small"
                               sx={{
                                 bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' :
@@ -1755,10 +1648,10 @@ function ModernFinanceiro() {
                               variant="body2"
                               sx={{
                                 fontWeight: 600,
-                                color: transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
+                                color: transacao.tipo === 'receita' || transacao.origem === 'comissao' ? '#4caf50' : '#f44336',
                               }}
                             >
-                              {transacao.tipo === 'receita' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
+                              {transacao.tipo === 'receita' || transacao.origem === 'comissao' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -1805,11 +1698,19 @@ function ModernFinanceiro() {
                                 </IconButton>
                               </Tooltip>
 
-                              {transacao.status === 'pendente' && !transacao.arquivado && (
+                              {transacao.status === 'pendente' && (
                                 <Tooltip title="Marcar como Pago">
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleMarcarComoPago(transacao)}
+                                    onClick={() => {
+                                      if (transacao.origem === 'comissao') {
+                                        handlePagarComissao(transacao.origemId);
+                                      } else if (transacao.origem === 'compra') {
+                                        handlePagarCompra(transacao.origemId);
+                                      } else {
+                                        handleMarcarComoPago(transacao);
+                                      }
+                                    }}
                                     sx={{ color: '#4caf50' }}
                                   >
                                     <CheckCircleIcon fontSize="small" />
@@ -1864,14 +1765,16 @@ function ModernFinanceiro() {
                         <Typography variant="body1" color="textSecondary">
                           Nenhuma transação encontrada
                         </Typography>
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={() => handleOpenDialog()}
-                          sx={{ mt: 2 }}
-                        >
-                          Nova Transação
-                        </Button>
+                        {tabValue !== 3 && tabValue !== 4 && (
+                          <Button
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            onClick={() => handleOpenDialog()}
+                            sx={{ mt: 2 }}
+                          >
+                            Nova Transação
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   )}
