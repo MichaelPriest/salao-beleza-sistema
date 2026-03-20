@@ -2386,7 +2386,7 @@ function ModernAgendamentos() {
                                                 <Tooltip title="Preencher formulário">
                                                   <IconButton
                                                     size="small"
-                                                    onClick={() => navigate(`/cliente/atendimento/${event.id}/anamnese`)}
+                                                    onClick={() => navigate(`/cliente/agendamento/${event.id}/anamnese`)}
                                                     sx={{ color: '#ff9800' }}
                                                   >
                                                     <AssignmentIcon fontSize="small" />
@@ -2838,7 +2838,7 @@ function ModernAgendamentos() {
                         startIcon={<AssignmentIcon />}
                         onClick={() => {
                           setOpenDayDialog(false);
-                          navigate(`/cliente/atendimento/${event.id}/anamnese`);
+                          navigate(`/cliente/agendamento/${event.id}/anamnese`);
                         }}
                         sx={{ mr: 1 }}
                       >
