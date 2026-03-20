@@ -11,8 +11,6 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  Avatar,
-  Divider,
   IconButton,
   Dialog,
   DialogTitle,
@@ -49,14 +47,6 @@ function ClienteAnamneseVisualizar() {
       carregarResposta();
     }
   }, [respostaId]);
-
-  useEffect(() => {
-    if (resposta) {
-      console.log('📄 Estrutura completa da resposta:', resposta);
-      console.log('📝 Campo assinaturaUrl:', resposta.assinaturaUrl);
-      console.log('🔍 Todos os campos disponíveis:', Object.keys(resposta));
-    }
-  }, [resposta]);
 
   const carregarResposta = async () => {
     try {
@@ -105,28 +95,43 @@ function ClienteAnamneseVisualizar() {
     return format(new Date(data), 'dd/MM/yyyy', { locale: ptBR });
   };
 
-  // Função para renderizar a assinatura
-  const renderizarAssinatura = () => {
-    // Tenta diferentes possíveis nomes de campo para a assinatura
-    const assinatura = resposta.assinaturaUrl || resposta.assinatura || resposta.assinaturaBase64;
+  // Função para processar a assinatura base64
+  const processarAssinatura = () => {
+    // Verifica todos os campos possíveis para a assinatura
+    const assinaturaRaw = resposta.assinaturaUrl || resposta.assinatura || resposta.assinaturaDigital || resposta.assinaturaBase64;
     
-    if (!assinatura) {
-      console.log('❌ Nenhuma assinatura encontrada nos campos:', {
-        assinaturaUrl: resposta.assinaturaUrl,
-        assinatura: resposta.assinatura,
-        assinaturaBase64: resposta.assinaturaBase64
-      });
+    if (!assinaturaRaw) {
       return null;
     }
 
-    console.log('✅ Assinatura encontrada, tipo:', typeof assinatura);
-    console.log('✅ Primeiros 50 caracteres:', assinatura.substring(0, 50));
+    console.log('📸 Assinatura encontrada (primeiros 50 caracteres):', assinaturaRaw.substring(0, 50));
 
-    // Se for base64, garante que tem o prefixo correto
-    let src = assinatura;
-    if (typeof assinatura === 'string' && !assinatura.startsWith('data:image')) {
-      // Se não tiver o prefixo data:image, adiciona
-      src = `data:image/png;base64,${assinatura}`;
+    // Se já for uma data URL completa, retorna ela
+    if (assinaturaRaw.startsWith('data:image')) {
+      return assinaturaRaw;
+    }
+
+    // Se começar com o padrão base64 puro
+    if (assinaturaRaw.match(/^[A-Za-z0-9+/=]+$/)) {
+      return `data:image/png;base64,${assinaturaRaw}`;
+    }
+
+    // Se tiver o texto "data:image/png;base64," no meio
+    if (assinaturaRaw.includes('base64,')) {
+      const parts = assinaturaRaw.split('base64,');
+      return `data:image/png;base64,${parts[1]}`;
+    }
+
+    // Se for apenas o código base64
+    return `data:image/png;base64,${assinaturaRaw}`;
+  };
+
+  // Função para renderizar a assinatura
+  const renderizarAssinatura = () => {
+    const src = processarAssinatura();
+    
+    if (!src) {
+      return null;
     }
 
     return (
@@ -140,7 +145,7 @@ function ClienteAnamneseVisualizar() {
             fontWeight: 600
           }}
         >
-          Assinatura do Cliente
+          Assinatura Digital
         </Typography>
         <Paper 
           variant="outlined" 
@@ -157,7 +162,6 @@ function ClienteAnamneseVisualizar() {
             '&:hover': {
               bgcolor: '#f3e5f5',
               border: '1px solid #9c27b0',
-              transform: 'scale(1.02)'
             }
           }}
           onClick={() => setModalAssinaturaAberta(true)}
@@ -174,33 +178,40 @@ function ClienteAnamneseVisualizar() {
               Clique para ampliar
             </Typography>
           </Box>
-          <img 
-            src={src}
-            alt="Assinatura do cliente"
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '80px',
-              width: 'auto',
-              height: 'auto',
-              objectFit: 'contain',
-              display: 'block'
-            }}
-            onLoad={() => console.log('✅ Assinatura carregada com sucesso')}
-            onError={(e) => {
-              console.error('❌ Erro ao carregar assinatura');
-              e.target.style.display = 'none';
-              // Mostra fallback
-              const parent = e.target.parentNode;
-              const fallback = document.createElement('div');
-              fallback.innerHTML = `
-                <div style="text-align: center; color: #666; padding: 10px;">
-                  <p style="margin: 0; font-size: 0.875rem;">⚠️ Assinatura indisponível</p>
-                  <p style="margin: 0; font-size: 0.7rem; color: #999;">Formato: base64</p>
-                </div>
-              `;
-              parent.appendChild(fallback);
-            }}
-          />
+          
+          {/* Miniatura da assinatura */}
+          <Box sx={{
+            width: '100%',
+            maxHeight: '80px',
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <img 
+              src={src}
+              alt="Assinatura digital"
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '80px',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain'
+              }}
+              onError={(e) => {
+                console.error('❌ Erro ao carregar imagem');
+                e.target.style.display = 'none';
+                const parent = e.target.parentNode;
+                const fallback = document.createElement('div');
+                fallback.innerHTML = `
+                  <div style="text-align: center; color: #666; padding: 10px;">
+                    <p style="margin: 0; font-size: 0.875rem;">⚠️ Erro ao carregar assinatura</p>
+                  </div>
+                `;
+                parent.appendChild(fallback);
+              }}
+            />
+          </Box>
         </Paper>
 
         {/* Modal para visualização ampliada */}
@@ -229,7 +240,7 @@ function ClienteAnamneseVisualizar() {
               color: '#9c27b0',
               fontWeight: 600
             }}>
-              Assinatura do Cliente
+              Assinatura Digital
             </Typography>
             <IconButton
               onClick={() => setModalAssinaturaAberta(false)}
@@ -244,14 +255,14 @@ function ClienteAnamneseVisualizar() {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            minHeight: { xs: '250px', sm: '300px', md: '400px' }
+            minHeight: { xs: '250px', sm: '300px' }
           }}>
             <img 
               src={src}
-              alt="Assinatura do cliente"
+              alt="Assinatura digital"
               style={{ 
                 maxWidth: '100%', 
-                maxHeight: { xs: '300px', sm: '400px', md: '500px' },
+                maxHeight: { xs: '300px', sm: '400px' },
                 width: 'auto',
                 height: 'auto',
                 objectFit: 'contain'
@@ -351,110 +362,44 @@ function ClienteAnamneseVisualizar() {
           <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 2.5 } }}>
             <Grid container spacing={1.5}>
               <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1,
-                  flexWrap: 'wrap'
-                }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <EventIcon sx={{ color: '#9c27b0', fontSize: { xs: 20, sm: 24 } }} />
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography 
-                      variant="caption" 
-                      color="textSecondary"
-                      sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
-                    >
-                      Data
-                    </Typography>
-                    <Typography 
-                      variant="body2"
-                      sx={{ 
-                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                        wordBreak: 'break-word'
-                      }}
-                    >
+                  <Box>
+                    <Typography variant="caption" color="textSecondary">Data</Typography>
+                    <Typography variant="body2">
                       {formatarDataSimples(atendimento.data)}
                     </Typography>
                   </Box>
                 </Box>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1,
-                  flexWrap: 'wrap'
-                }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ScheduleIcon sx={{ color: '#9c27b0', fontSize: { xs: 20, sm: 24 } }} />
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography 
-                      variant="caption" 
-                      color="textSecondary"
-                      sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
-                    >
-                      Horário
-                    </Typography>
-                    <Typography 
-                      variant="body2"
-                      sx={{ 
-                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {atendimento.horario || atendimento.horaInicio}
-                    </Typography>
+                  <Box>
+                    <Typography variant="caption" color="textSecondary">Horário</Typography>
+                    <Typography variant="body2">{atendimento.horario || atendimento.horaInicio}</Typography>
                   </Box>
                 </Box>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1,
-                  flexWrap: 'wrap'
-                }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PersonIcon sx={{ color: '#9c27b0', fontSize: { xs: 20, sm: 24 } }} />
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography 
-                      variant="caption" 
-                      color="textSecondary"
-                      sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
-                    >
-                      Profissional
-                    </Typography>
-                    <Typography 
-                      variant="body2"
-                      sx={{ 
-                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {resposta.profissionalNome || 'Não informado'}
-                    </Typography>
+                  <Box>
+                    <Typography variant="caption" color="textSecondary">Profissional</Typography>
+                    <Typography variant="body2">{resposta.profissionalNome || 'Não informado'}</Typography>
                   </Box>
                 </Box>
               </Grid>
             </Grid>
             
-            {/* Data da resposta */}
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 1, 
-              mt: 2,
-              flexWrap: 'wrap'
-            }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
               <AssignmentIcon sx={{ color: '#9c27b0', fontSize: { xs: 18, sm: 20 } }} />
-              <Typography 
-                variant="caption" 
-                color="textSecondary"
-                sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
-              >
+              <Typography variant="caption" color="textSecondary">
                 Respondido em: {formatarData(resposta.respondidoEm)}
               </Typography>
             </Box>
 
-            {/* Assinatura do cliente */}
+            {/* Assinatura */}
             {renderizarAssinatura()}
           </CardContent>
         </Card>
@@ -463,14 +408,7 @@ function ClienteAnamneseVisualizar() {
       {/* Respostas */}
       <Card sx={{ borderRadius: { xs: 2, sm: 3 } }}>
         <CardContent sx={{ p: { xs: 1.5, sm: 2, md: 2.5 } }}>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              mb: { xs: 2, sm: 3 }, 
-              fontWeight: 600,
-              fontSize: { xs: '1rem', sm: '1.1rem', md: '1.25rem' }
-            }}
-          >
+          <Typography variant="h6" sx={{ mb: { xs: 2, sm: 3 }, fontWeight: 600 }}>
             Respostas
           </Typography>
 
@@ -485,71 +423,31 @@ function ClienteAnamneseVisualizar() {
                 borderRadius: 2
               }}
             >
-              <Typography 
-                variant="subtitle2" 
-                color="textSecondary" 
-                gutterBottom
-                sx={{ 
-                  fontSize: { xs: '0.7rem', sm: '0.8rem' },
-                  fontWeight: 600
-                }}
-              >
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
                 {item.pergunta}
               </Typography>
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  fontWeight: 500,
-                  fontSize: { xs: '0.85rem', sm: '0.95rem', md: '1rem' },
-                  wordBreak: 'break-word'
-                }}
-              >
+              <Typography variant="body1" sx={{ fontWeight: 500 }}>
                 {Array.isArray(item.resposta) ? (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    gap: 0.5, 
-                    flexWrap: 'wrap',
-                    mt: 0.5
-                  }}>
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                     {item.resposta.map((opt, i) => (
-                      <Chip 
-                        key={i} 
-                        label={opt} 
-                        size="small"
-                        sx={{ 
-                          fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                          height: { xs: 24, sm: 28 }
-                        }}
-                      />
+                      <Chip key={i} label={opt} size="small" />
                     ))}
                   </Box>
                 ) : (
-                  item.resposta || (
-                    <span style={{ color: '#999', fontStyle: 'italic' }}>
-                      Não respondido
-                    </span>
-                  )
+                  item.resposta || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>
                 )}
               </Typography>
             </Paper>
           ))}
 
-          {/* Botão de voltar */}
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            mt: { xs: 2, sm: 3 },
-            px: 2
-          }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
             <Button
               fullWidth
               variant="contained"
               onClick={() => navigate('/cliente/anamnese')}
               sx={{ 
                 bgcolor: '#9c27b0',
-                maxWidth: { sm: '300px' },
-                py: { xs: 1, sm: 1.5 },
-                fontSize: { xs: '0.85rem', sm: '0.95rem' }
+                maxWidth: { sm: '300px' }
               }}
             >
               Voltar para lista
