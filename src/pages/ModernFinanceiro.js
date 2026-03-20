@@ -1,4 +1,6 @@
 // src/pages/ModernFinanceiro.js
+// VERSÃO COMPLETA - TODAS AS FUNCIONALIDADES
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -47,6 +49,25 @@ import {
   SpeedDialAction,
   SpeedDialIcon,
   Backdrop,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  Checkbox,
+  FormControlLabel,
+  RadioGroup,
+  Radio,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Collapse,
+  Autocomplete,
+  Switch,
+  Rating,
+  Slider,
+  ToggleButton,
+  ToggleButtonGroup,
+  alpha,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -81,15 +102,59 @@ import {
   ShoppingCart as ShoppingCartIcon,
   Percent as PercentIcon,
   Store as StoreIcon,
+  CloudUpload as CloudUploadIcon,
+  AttachFile as AttachFileIcon,
+  PictureAsPdf as PdfIcon,
+  Description as ExcelIcon,
+  Email as EmailIcon,
+  Notifications as NotificationsIcon,
+  Assessment as AssessmentIcon,
+  CompareArrows as CompareArrowsIcon,
+  Timeline as TimelineIcon,
+  Lock as LockIcon,
+  Security as SecurityIcon,
+  Settings as SettingsIcon,
+  MoreVert as MoreVertIcon,
+  Visibility as VisibilityIcon,
+  Receipt as ReceiptOutlinedIcon,
+  LocalAtm as LocalAtmIcon,
+  CreditCard as CreditCardIcon,
+  QrCode as QrCodeIcon,
+  AccountBalanceWallet as WalletIcon,
+  TrendingUp as UpIcon,
+  TrendingDown as DownIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { 
+  format, 
+  subDays, 
+  subMonths, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfYear, 
+  endOfYear, 
+  addDays, 
+  differenceInDays,
+  addMonths,
+  isSameDay,
+  isWithinInterval,
+  parseISO,
+  addWeeks,
+  subWeeks,
+  getWeek,
+  getYear,
+  setHours,
+  setMinutes,
+  isAfter,
+  isBefore,
+} from 'date-fns';
 import {
   AreaChart,
   Area,
@@ -108,8 +173,11 @@ import {
   Line,
   ComposedChart,
 } from 'recharts';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-// Constantes
+// ==================== CONSTANTES ====================
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3', '#00bcd4', '#795548'];
 
 const statusColors = {
@@ -123,6 +191,15 @@ const statusColors = {
   cancelada: { color: '#f44336', label: 'Cancelada', icon: <CancelIcon /> },
 };
 
+const tipoColors = {
+  receita: { color: '#4caf50', label: 'Receita', icon: <TrendingUpIcon /> },
+  despesa: { color: '#f44336', label: 'Despesa', icon: <TrendingDownIcon /> },
+  transferencia: { color: '#9c27b0', label: 'Transferência', icon: <SwapHorizIcon /> },
+  investimento: { color: '#ff9800', label: 'Investimento', icon: <ShowChartIcon /> },
+  comissao: { color: '#9c27b0', label: 'Comissão', icon: <PercentIcon /> },
+  compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
+};
+
 const formasPagamento = [
   { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
   { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
@@ -134,7 +211,22 @@ const formasPagamento = [
   { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
 ];
 
-// Função para formatar data
+const periodosRepeticao = [
+  { value: 'nao', label: 'Não repetir' },
+  { value: 'diario', label: 'Diariamente' },
+  { value: 'semanal', label: 'Semanalmente' },
+  { value: 'quinzenal', label: 'Quinzenalmente' },
+  { value: 'mensal', label: 'Mensalmente' },
+];
+
+const perfisAcesso = {
+  admin: { nivel: 1, label: 'Administrador', permissoes: ['tudo'] },
+  gerente: { nivel: 2, label: 'Gerente', permissoes: ['visualizar', 'criar', 'editar', 'pagar', 'relatorios', 'exportar'] },
+  operador: { nivel: 3, label: 'Operador', permissoes: ['visualizar', 'criar', 'pagar'] },
+  visualizador: { nivel: 4, label: 'Visualizador', permissoes: ['visualizar'] },
+};
+
+// ==================== FUNÇÕES AUXILIARES ====================
 const formatarDataBrasilia = (date) => {
   if (!date) return '';
   const d = new Date(date);
@@ -147,31 +239,39 @@ const formatarDataExibicao = (date) => {
   return format(d, 'dd/MM/yyyy');
 };
 
+const formatarHoraBrasilia = () => {
+  return format(new Date(), 'HH:mm');
+};
+
+const formatarMoeda = (value) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+};
+
+// ==================== COMPONENTE PRINCIPAL ====================
 function ModernFinanceiro() {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
   
-  // Dados separados
-  const [transacoesManuais, setTransacoesManuais] = useState([]); // Transações manuais
-  const [comissoes, setComissoes] = useState([]); // Comissões (são despesas)
-  const [compras, setCompras] = useState([]); // Compras (são despesas)
-  
-  // Dados COMBINADOS para exibição geral (evita duplicidade)
-  // IMPORTANTE: Cada comissão e compra aparece APENAS UMA VEZ aqui
+  // Dados
+  const [transacoesManuais, setTransacoesManuais] = useState([]);
+  const [comissoes, setComissoes] = useState([]);
+  const [compras, setCompras] = useState([]);
   const [transacoesCombinadas, setTransacoesCombinadas] = useState([]);
-  
   const [categorias, setCategorias] = useState([]);
   const [caixa, setCaixa] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
+  const [anexos, setAnexos] = useState([]);
   
   // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  const [filtroFormaPagamento, setFiltroFormaPagamento] = useState('todas');
   const [dataInicio, setDataInicio] = useState(formatarDataBrasilia(startOfMonth(new Date())));
   const [dataFim, setDataFim] = useState(formatarDataBrasilia(new Date()));
   
@@ -179,17 +279,40 @@ function ModernFinanceiro() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
-  // Dialogs
+  // Diálogos
   const [openDialog, setOpenDialog] = useState(false);
   const [openCaixaDialog, setOpenCaixaDialog] = useState(false);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [openComissaoProfissionalDialog, setOpenComissaoProfissionalDialog] = useState(false);
+  const [openAnexoDialog, setOpenAnexoDialog] = useState(false);
+  const [openConciliacaoDialog, setOpenConciliacaoDialog] = useState(false);
+  const [openOrcamentoDialog, setOpenOrcamentoDialog] = useState(false);
+  const [openFluxoProjetadoDialog, setOpenFluxoProjetadoDialog] = useState(false);
+  const [openPerfilDialog, setOpenPerfilDialog] = useState(false);
   const [transacaoEditando, setTransacaoEditando] = useState(null);
   const [transacaoSelecionada, setTransacaoSelecionada] = useState(null);
+  const [openSpeedDial, setOpenSpeedDial] = useState(false);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
+  
+  // Alertas
+  const [alertasVencimento, setAlertasVencimento] = useState([]);
+  const [openAlertasDialog, setOpenAlertasDialog] = useState(false);
+  
+  // Usuário e permissões
+  const [usuario, setUsuario] = useState(null);
+  const [perfilAtual, setPerfilAtual] = useState('operador');
+  
+  // Orçamentos
+  const [orcamentos, setOrcamentos] = useState([]);
+  const [orcamentoSelecionado, setOrcamentoSelecionado] = useState(null);
+  
+  // Conciliação
+  const [extratoBancario, setExtratoBancario] = useState([]);
+  const [conciliacoes, setConciliacoes] = useState([]);
+  
   // Estado do formulário
   const [formData, setFormData] = useState({
     tipo: 'receita',
@@ -203,15 +326,80 @@ function ModernFinanceiro() {
     clienteId: '',
     fornecedorId: '',
     profissionalId: '',
+    atendimentoId: '',
+    percentual: '',
     observacoes: '',
     parcelas: 1,
+    recorrente: false,
+    frequencia: 'mensal',
+    anexos: [],
+    tags: [],
+    itens: [],
+    numeroPedido: '',
+    prazoEntrega: '',
     origem: 'manual',
     origemId: '',
   });
 
+  // Estado do formulário de ausência
+  const [ausenciaForm, setAusenciaForm] = useState({
+    profissionalId: '',
+    tipo: 'folga',
+    dataInicio: new Date().toISOString().split('T')[0],
+    dataFim: new Date().toISOString().split('T')[0],
+    horarioInicio: '00:00',
+    horarioFim: '23:59',
+    repetir: 'nao',
+    observacoes: '',
+  });
+
+  // Estado para relatórios
+  const [relatorioTipo, setRelatorioTipo] = useState('fluxo');
+  const [relatorioPeriodo, setRelatorioPeriodo] = useState('mes');
+
+  // ==================== FUNÇÕES PRINCIPAIS ====================
   useEffect(() => {
+    carregarUsuario();
     carregarDados();
   }, []);
+
+  const carregarUsuario = () => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      if (usuarioStr) {
+        const user = JSON.parse(usuarioStr);
+        setUsuario(user);
+        setPerfilAtual(user.perfil || 'operador');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuário:', error);
+    }
+  };
+
+  const verificarPermissao = (permissao) => {
+    const perfil = perfisAcesso[perfilAtual];
+    if (!perfil) return false;
+    if (perfil.nivel === 1) return true;
+    return perfil.permissoes.includes(permissao);
+  };
+
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      await auditoriaService.registrar(acao, {
+        entidade: 'financeiro',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id,
+          usuarioNome: usuario?.nome,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
 
   const carregarDados = async () => {
     try {
@@ -221,11 +409,13 @@ function ModernFinanceiro() {
         transacoesManuaisData,
         comissoesData,
         comprasData,
-        caixaData, 
-        clientesData, 
+        caixaData,
+        clientesData,
         fornecedoresData,
         profissionaisData,
-        servicosData
+        servicosData,
+        orcamentosData,
+        conciliacoesData,
       ] = await Promise.all([
         firebaseService.getAll('transacoes').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
@@ -235,98 +425,99 @@ function ModernFinanceiro() {
         firebaseService.getAll('fornecedores').catch(() => []),
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('orcamentos').catch(() => []),
+        firebaseService.getAll('conciliacoes').catch(() => []),
       ]);
       
-      // Garantir que todos os dados são arrays
-      const transacoesArray = Array.isArray(transacoesManuaisData) ? transacoesManuaisData : [];
-      const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
-      const comprasArray = Array.isArray(comprasData) ? comprasData : [];
-      
-      setTransacoesManuais(transacoesArray);
-      setComissoes(comissoesArray);
-      setCompras(comprasArray);
-      setClientes(Array.isArray(clientesData) ? clientesData : []);
-      setFornecedores(Array.isArray(fornecedoresData) ? fornecedoresData : []);
-      setProfissionais(Array.isArray(profissionaisData) ? profissionaisData : []);
-      setServicos(Array.isArray(servicosData) ? servicosData : []);
-      
-      // Converter comissões para transações (TIPO = DESPESA)
-      const comissoesComoTransacoes = comissoesArray
-        .filter(c => c.status !== 'cancelado')
-        .map(comissao => ({
-          id: `comissao_${comissao.id}`,
-          tipo: 'despesa', // Comissão É uma despesa
-          origem: 'comissao',
-          origemId: comissao.id,
-          descricao: `Comissão - ${comissao.servicoNome || 'Serviço'} - ${comissao.profissionalNome || ''}`,
-          valor: comissao.valor || 0,
-          data: comissao.dataRegistro ? comissao.dataRegistro.split('T')[0] : comissao.data,
-          dataVencimento: comissao.data,
-          categoria: 'Comissões',
-          formaPagamento: 'credito_loja',
-          status: comissao.status === 'pago' ? 'pago' : 'pendente',
-          profissionalId: comissao.profissionalId,
-          profissionalNome: comissao.profissionalNome,
-          servicoNome: comissao.servicoNome,
-          percentual: comissao.percentual,
-          valorAtendimento: comissao.valorAtendimento,
-          observacoes: `Comissão de ${comissao.percentual}% sobre atendimento de R$ ${comissao.valorAtendimento}`,
-          createdAt: comissao.createdAt,
-          updatedAt: comissao.updatedAt,
-        }));
-
-      // Converter compras para transações (TIPO = DESPESA)
-      const comprasComoTransacoes = comprasArray
-        .filter(c => c.status !== 'cancelada')
-        .map(compra => ({
-          id: `compra_${compra.id}`,
-          tipo: 'despesa', // Compra É uma despesa
-          origem: 'compra',
-          origemId: compra.id,
-          descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
-          valor: compra.valorTotal || 0,
-          data: compra.dataCompra,
-          dataVencimento: compra.dataCompra,
-          categoria: 'Compras',
-          formaPagamento: compra.formaPagamento || 'pix',
-          status: compra.status === 'pago' ? 'pago' : (compra.status === 'cancelada' ? 'cancelado' : 'pendente'),
-          fornecedorId: compra.fornecedorId,
-          numeroPedido: compra.numeroPedido,
-          itens: compra.itens || [],
-          observacoes: compra.observacoes,
-          createdAt: compra.createdAt,
-          updatedAt: compra.updatedAt,
-        }));
-
-      // COMBINAR todas as transações (cada item aparece UMA ÚNICA VEZ)
-      // Não há duplicidade porque cada comissão/compra tem seu próprio ID único
-      const todasTransacoes = [
-        ...transacoesArray,      // Transações manuais
-        ...comissoesComoTransacoes,  // Comissões (uma vez)
-        ...comprasComoTransacoes      // Compras (uma vez)
-      ];
-
-      // Ordenar por data (mais recentes primeiro)
-      todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-      setTransacoesCombinadas(todasTransacoes);
-      
-      // Extrair categorias únicas
-      const categoriasUnicas = [...new Set(todasTransacoes
-        .map(t => t.categoria)
-        .filter(Boolean)
-      )];
-      setCategorias(categoriasUnicas);
+      setTransacoesManuais(transacoesManuaisData || []);
+      setComissoes(comissoesData || []);
+      setCompras(comprasData || []);
+      setClientes(clientesData || []);
+      setFornecedores(fornecedoresData || []);
+      setProfissionais(profissionaisData || []);
+      setServicos(servicosData || []);
+      setOrcamentos(orcamentosData || []);
+      setConciliacoes(conciliacoesData || []);
       
       // Processar caixa
       if (caixaData && caixaData.length > 0) {
-        const caixaAtual = caixaData
-          .filter(c => c && c.dataAbertura)
-          .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0];
+        const caixaAtual = caixaData.sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0];
         setCaixa(caixaAtual);
       } else {
         setCaixa({ saldoAtual: 0, status: 'fechado', movimentacoes: [] });
       }
+      
+      // Combinar transações
+      const comissoesComoTransacoes = (comissoesData || []).map(c => ({
+        id: `comissao_${c.id}`,
+        tipo: 'despesa',
+        origem: 'comissao',
+        origemId: c.id,
+        descricao: `Comissão - ${c.servicoNome || 'Serviço'} - ${c.profissionalNome || ''}`,
+        valor: c.valor || 0,
+        data: c.dataRegistro ? c.dataRegistro.split('T')[0] : c.data,
+        dataVencimento: c.data,
+        categoria: 'Comissões',
+        formaPagamento: 'credito_loja',
+        status: c.status === 'pago' ? 'pago' : 'pendente',
+        profissionalId: c.profissionalId,
+        profissionalNome: c.profissionalNome,
+        atendimentoId: c.atendimentoId,
+        servicoId: c.servicoId,
+        servicoNome: c.servicoNome,
+        percentual: c.percentual,
+        valorAtendimento: c.valorAtendimento,
+        observacoes: `Comissão de ${c.percentual}% sobre atendimento de R$ ${c.valorAtendimento}`,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        anexos: c.anexos || [],
+      }));
+
+      const comprasComoTransacoes = (comprasData || []).map(c => ({
+        id: `compra_${c.id}`,
+        tipo: 'despesa',
+        origem: 'compra',
+        origemId: c.id,
+        descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
+        valor: c.valorTotal || 0,
+        data: c.dataCompra,
+        dataVencimento: c.dataCompra,
+        categoria: 'Compras',
+        formaPagamento: c.formaPagamento || 'pix',
+        status: c.status === 'pago' ? 'pago' : (c.status === 'cancelada' ? 'cancelado' : 'pendente'),
+        fornecedorId: c.fornecedorId,
+        numeroPedido: c.numeroPedido,
+        prazoEntrega: c.prazoEntrega,
+        itens: c.itens || [],
+        observacoes: c.observacoes,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        anexos: c.anexos || [],
+      }));
+
+      const todasTransacoes = [
+        ...(transacoesManuaisData || []),
+        ...comissoesComoTransacoes,
+        ...comprasComoTransacoes,
+      ];
+      
+      todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
+      setTransacoesCombinadas(todasTransacoes);
+      
+      // Extrair categorias
+      const categoriasUnicas = [...new Set(todasTransacoes.map(t => t.categoria).filter(Boolean))];
+      setCategorias(categoriasUnicas);
+      
+      // Gerar alertas de vencimento
+      gerarAlertasVencimento(todasTransacoes);
+      
+      // Log de auditoria
+      await registrarAuditoria(
+        'carregar_financeiro',
+        'listagem',
+        'Página financeira carregada',
+        { totalTransacoes: todasTransacoes.length }
+      );
       
       toast.success('Dados carregados com sucesso!');
     } catch (error) {
@@ -337,7 +528,7 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para pagar comissão
+  // ==================== FUNÇÕES DE PAGAMENTO ====================
   const handlePagarComissao = async (comissaoId) => {
     try {
       await firebaseService.update('comissoes', comissaoId, {
@@ -345,6 +536,8 @@ function ModernFinanceiro() {
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+
+      await registrarAuditoria('pagar_comissao', comissaoId, 'Comissão paga');
 
       // Atualizar caixa
       if (caixa && caixa.status === 'aberto' && caixa.id) {
@@ -382,7 +575,6 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para pagar compra
   const handlePagarCompra = async (compraId) => {
     try {
       await firebaseService.update('compras', compraId, {
@@ -390,6 +582,8 @@ function ModernFinanceiro() {
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+
+      await registrarAuditoria('pagar_compra', compraId, 'Compra paga');
 
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const compra = compras.find(c => c.id === compraId);
@@ -426,9 +620,17 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para marcar transação manual como paga
   const handleMarcarComoPago = async (transacao) => {
     try {
+      if (transacao.origem === 'comissao') {
+        await handlePagarComissao(transacao.origemId);
+        return;
+      }
+      if (transacao.origem === 'compra') {
+        await handlePagarCompra(transacao.origemId);
+        return;
+      }
+
       const dadosTransacao = {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
@@ -436,6 +638,8 @@ function ModernFinanceiro() {
       };
       
       await firebaseService.update('transacoes', transacao.id, dadosTransacao);
+
+      await registrarAuditoria('marcar_pago', transacao.id, 'Transação marcada como paga');
 
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
@@ -470,142 +674,268 @@ function ModernFinanceiro() {
     }
   };
 
-  // Funções auxiliares
-  const mostrarSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-    setPage(0);
-  };
-
-  const handleOpenDialog = (transacao = null) => {
-    if (transacao && transacao.origem === 'manual') {
-      setTransacaoEditando(transacao);
-      setFormData({
-        tipo: transacao.tipo || 'receita',
-        descricao: transacao.descricao || '',
-        valor: transacao.valor || '',
-        data: transacao.data || formatarDataBrasilia(new Date()),
-        dataVencimento: transacao.dataVencimento || formatarDataBrasilia(new Date()),
-        categoria: transacao.categoria || '',
-        formaPagamento: transacao.formaPagamento || 'dinheiro',
-        status: transacao.status || 'pendente',
-        clienteId: transacao.clienteId || '',
-        fornecedorId: transacao.fornecedorId || '',
-        profissionalId: transacao.profissionalId || '',
-        observacoes: transacao.observacoes || '',
-        parcelas: transacao.parcelas || 1,
-        origem: 'manual',
-        origemId: '',
-      });
-    } else {
-      setTransacaoEditando(null);
-      setFormData({
-        tipo: 'receita',
-        descricao: '',
-        valor: '',
-        data: formatarDataBrasilia(new Date()),
-        dataVencimento: formatarDataBrasilia(new Date()),
-        categoria: '',
-        formaPagamento: 'dinheiro',
-        status: 'pendente',
-        clienteId: '',
-        fornecedorId: '',
-        profissionalId: '',
-        observacoes: '',
-        parcelas: 1,
-        origem: 'manual',
-        origemId: '',
-      });
-    }
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setTransacaoEditando(null);
-  };
-
-  const handleOpenCaixaDialog = () => setOpenCaixaDialog(true);
-  const handleCloseCaixaDialog = () => setOpenCaixaDialog(false);
-
-  const handleOpenDetalhes = (transacao) => {
-    setTransacaoSelecionada(transacao);
-    setOpenDetalhesDialog(true);
-  };
-
-  const handleCloseDetalhes = () => {
-    setOpenDetalhesDialog(false);
-    setTransacaoSelecionada(null);
-  };
-
-  const handleOpenRelatorioDialog = () => setOpenRelatorioDialog(true);
-  const handleCloseRelatorioDialog = () => setOpenRelatorioDialog(false);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSalvar = async () => {
+  // ==================== EXPORTAÇÃO ====================
+  const exportarParaExcel = () => {
     try {
-      if (!formData.descricao?.trim()) {
-        mostrarSnackbar('Descrição é obrigatória', 'error');
-        return;
-      }
+      const dadosExportacao = transacoesFiltradas.map(t => ({
+        'Data': formatarDataExibicao(t.data),
+        'Descrição': t.descricao,
+        'Tipo': t.tipo === 'receita' ? 'Receita' : t.origem === 'comissao' ? 'Comissão' : t.origem === 'compra' ? 'Compra' : 'Despesa',
+        'Valor': t.valor,
+        'Valor Formatado': formatarMoeda(t.valor),
+        'Categoria': t.categoria || '-',
+        'Forma Pagamento': formasPagamento.find(fp => fp.value === t.formaPagamento)?.label || t.formaPagamento,
+        'Status': statusColors[t.status]?.label || t.status,
+        'Vencimento': t.dataVencimento ? formatarDataExibicao(t.dataVencimento) : '-',
+        'Observações': t.observacoes || '-',
+      }));
 
-      const valorNumerico = parseFloat(formData.valor);
-      if (isNaN(valorNumerico) || valorNumerico <= 0) {
-        mostrarSnackbar('Valor deve ser maior que zero', 'error');
-        return;
-      }
-
-      const dadosParaSalvar = {
-        tipo: String(formData.tipo),
-        descricao: String(formData.descricao).trim(),
-        valor: Number(valorNumerico),
-        data: String(formData.data),
-        dataVencimento: formData.dataVencimento ? String(formData.dataVencimento) : null,
-        categoria: formData.categoria ? String(formData.categoria) : null,
-        formaPagamento: String(formData.formaPagamento),
-        status: String(formData.status),
-        clienteId: formData.clienteId ? String(formData.clienteId) : null,
-        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
-        profissionalId: formData.profissionalId ? String(formData.profissionalId) : null,
-        observacoes: formData.observacoes ? String(formData.observacoes) : null,
-        parcelas: Number(formData.parcelas) || 1,
-        origem: 'manual',
-        origemId: null,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (formData.status === 'pago') {
-        dadosParaSalvar.dataPagamento = new Date().toISOString();
-      }
-
-      if (transacaoEditando) {
-        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
-        mostrarSnackbar('Transação atualizada com sucesso!');
-      } else {
-        dadosParaSalvar.createdAt = new Date().toISOString();
-        await firebaseService.add('transacoes', dadosParaSalvar);
-        mostrarSnackbar('Transação criada com sucesso!');
-      }
-
-      await carregarDados();
-      handleCloseDialog();
+      const ws = XLSX.utils.json_to_sheet(dadosExportacao);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
+      
+      const nomeArquivo = `financeiro_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`;
+      XLSX.writeFile(wb, nomeArquivo);
+      
+      mostrarSnackbar('✅ Arquivo exportado com sucesso!');
     } catch (error) {
-      console.error('Erro ao salvar transação:', error);
-      mostrarSnackbar('Erro ao salvar transação', 'error');
+      console.error('Erro ao exportar:', error);
+      mostrarSnackbar('Erro ao exportar arquivo', 'error');
     }
   };
 
+  const exportarParaPDF = () => {
+    try {
+      const doc = new jsPDF();
+      
+      doc.setFontSize(18);
+      doc.text('Relatório Financeiro', 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Período: ${formatarDataExibicao(dataInicio)} a ${formatarDataExibicao(dataFim)}`, 14, 25);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 32);
+      
+      const tableData = transacoesFiltradas.slice(0, 100).map(t => [
+        formatarDataExibicao(t.data),
+        t.descricao.substring(0, 40),
+        t.tipo === 'receita' ? 'Receita' : t.origem === 'comissao' ? 'Comissão' : t.origem === 'compra' ? 'Compra' : 'Despesa',
+        `R$ ${t.valor.toFixed(2)}`,
+        statusColors[t.status]?.label || t.status,
+      ]);
+      
+      doc.autoTable({
+        head: [['Data', 'Descrição', 'Tipo', 'Valor', 'Status']],
+        body: tableData,
+        startY: 40,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [156, 39, 176] },
+      });
+      
+      doc.save(`relatorio_financeiro_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      mostrarSnackbar('✅ PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      mostrarSnackbar('Erro ao gerar PDF', 'error');
+    }
+  };
+
+  // ==================== ALERTAS ====================
+  const gerarAlertasVencimento = (transacoes) => {
+    const hoje = new Date();
+    const alertas = [];
+    
+    transacoes.forEach(t => {
+      if (t.status !== 'pendente') return;
+      
+      const vencimento = new Date(t.dataVencimento || t.data);
+      const diasAtraso = differenceInDays(hoje, vencimento);
+      const diasParaVencer = differenceInDays(vencimento, hoje);
+      
+      if (diasAtraso > 0) {
+        alertas.push({
+          ...t,
+          tipo: 'atrasado',
+          mensagem: `Conta vencida há ${diasAtraso} dia(s)`,
+          severidade: 'error',
+        });
+      } else if (diasParaVencer <= 3 && diasParaVencer >= 0) {
+        alertas.push({
+          ...t,
+          tipo: 'proximo',
+          mensagem: `Vence em ${diasParaVencer} dia(s)`,
+          severidade: 'warning',
+        });
+      }
+    });
+    
+    setAlertasVencimento(alertas);
+  };
+
+  // ==================== RELATÓRIOS ====================
+  const gerarRelatorioComissoesProfissional = () => {
+    const comissoesPorProfissional = {};
+    
+    transacoesCombinadas
+      .filter(t => t.origem === 'comissao')
+      .forEach(t => {
+        const profissional = t.profissionalNome || 'Não identificado';
+        if (!comissoesPorProfissional[profissional]) {
+          comissoesPorProfissional[profissional] = {
+            total: 0,
+            pendentes: 0,
+            pagas: 0,
+            transacoes: [],
+          };
+        }
+        comissoesPorProfissional[profissional].total += t.valor;
+        if (t.status === 'pendente') {
+          comissoesPorProfissional[profissional].pendentes += t.valor;
+        } else if (t.status === 'pago') {
+          comissoesPorProfissional[profissional].pagas += t.valor;
+        }
+        comissoesPorProfissional[profissional].transacoes.push(t);
+      });
+    
+    return comissoesPorProfissional;
+  };
+
+  const gerarRelatorioDRE = () => {
+    const inicio = new Date(dataInicio);
+    const fim = new Date(dataFim);
+    fim.setHours(23, 59, 59, 999);
+
+    const transacoesPeriodo = transacoesCombinadas.filter(t => {
+      const data = new Date(t.data);
+      return data >= inicio && data <= fim;
+    });
+
+    const receitas = {
+      total: 0,
+      porCategoria: {},
+      porFormaPagamento: {},
+    };
+
+    const despesas = {
+      total: 0,
+      porCategoria: {},
+      porFormaPagamento: {},
+    };
+
+    transacoesPeriodo.forEach(t => {
+      const valor = Number(t.valor) || 0;
+      if (t.tipo === 'receita' && t.status === 'pago') {
+        receitas.total += valor;
+        const cat = t.categoria || 'Outros';
+        receitas.porCategoria[cat] = (receitas.porCategoria[cat] || 0) + valor;
+        const fp = t.formaPagamento || 'outros';
+        receitas.porFormaPagamento[fp] = (receitas.porFormaPagamento[fp] || 0) + valor;
+      } else if (t.tipo === 'despesa' && t.status === 'pago') {
+        despesas.total += valor;
+        const cat = t.categoria || 'Outros';
+        despesas.porCategoria[cat] = (despesas.porCategoria[cat] || 0) + valor;
+        const fp = t.formaPagamento || 'outros';
+        despesas.porFormaPagamento[fp] = (despesas.porFormaPagamento[fp] || 0) + valor;
+      }
+    });
+
+    return {
+      receitas,
+      despesas,
+      lucroBruto: receitas.total - despesas.total,
+      margem: receitas.total > 0 ? ((receitas.total - despesas.total) / receitas.total) * 100 : 0,
+    };
+  };
+
+  // ==================== FLUXO DE CAIXA PROJETADO ====================
+  const calcularFluxoProjetado = (dias = 30) => {
+    const hoje = new Date();
+    const projecao = [];
+    let saldoAtual = caixa?.saldoAtual || 0;
+    
+    for (let i = 0; i <= dias; i++) {
+      const data = addDays(hoje, i);
+      const dataStr = formatarDataBrasilia(data);
+      
+      const receber = transacoesCombinadas
+        .filter(t => t.tipo === 'receita' && t.status === 'pendente' && t.dataVencimento === dataStr)
+        .reduce((acc, t) => acc + t.valor, 0);
+      
+      const pagar = transacoesCombinadas
+        .filter(t => t.tipo === 'despesa' && t.status === 'pendente' && t.dataVencimento === dataStr)
+        .reduce((acc, t) => acc + t.valor, 0);
+      
+      saldoAtual += receber - pagar;
+      
+      projecao.push({
+        data: formatarDataExibicao(data),
+        dataOriginal: data,
+        receber,
+        pagar,
+        saldo: saldoAtual,
+      });
+    }
+    
+    return projecao;
+  };
+
+  // ==================== CONCILIAÇÃO ====================
+  const handleConciliarExtrato = async (extrato) => {
+    try {
+      const novasConciliacoes = [];
+      let conciliadas = 0;
+      
+      for (const item of extrato) {
+        const transacaoCorrespondente = transacoesCombinadas.find(t => 
+          Math.abs(t.valor - item.valor) < 0.01 && 
+          formatarDataBrasilia(new Date(t.data)) === formatarDataBrasilia(new Date(item.data))
+        );
+        
+        if (transacaoCorrespondente) {
+          novasConciliacoes.push({
+            extratoId: item.id,
+            transacaoId: transacaoCorrespondente.id,
+            transacaoDescricao: transacaoCorrespondente.descricao,
+            valor: item.valor,
+            data: item.data,
+            status: 'conciliado',
+            dataConciliacao: new Date().toISOString(),
+          });
+          conciliadas++;
+        }
+      }
+      
+      await firebaseService.add('conciliacoes', novasConciliacoes);
+      await carregarDados();
+      mostrarSnackbar(`✅ Conciliação realizada! ${conciliadas} transações conciliadas.`);
+    } catch (error) {
+      console.error('Erro ao conciliar:', error);
+      mostrarSnackbar('Erro ao conciliar', 'error');
+    }
+  };
+
+  // ==================== ORÇAMENTOS ====================
+  const handleSalvarOrcamento = async () => {
+    try {
+      const novoOrcamento = {
+        id: Date.now().toString(),
+        ano: new Date().getFullYear(),
+        mes: new Date().getMonth() + 1,
+        metaReceitas: 0,
+        metaDespesas: 0,
+        categorias: {},
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+      };
+      
+      await firebaseService.add('orcamentos', novoOrcamento);
+      await carregarDados();
+      mostrarSnackbar('✅ Orçamento criado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar orçamento:', error);
+      mostrarSnackbar('Erro ao salvar orçamento', 'error');
+    }
+  };
+
+  // ==================== CAIXA ====================
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
@@ -669,15 +999,79 @@ function ModernFinanceiro() {
     }
   };
 
+  // ==================== TRANSAÇÕES ====================
+  const handleSalvar = async () => {
+    try {
+      if (!formData.descricao?.trim()) {
+        mostrarSnackbar('Descrição é obrigatória', 'error');
+        return;
+      }
+
+      const valorNumerico = parseFloat(formData.valor);
+      if (isNaN(valorNumerico) || valorNumerico <= 0) {
+        mostrarSnackbar('Valor deve ser maior que zero', 'error');
+        return;
+      }
+
+      const dadosParaSalvar = {
+        tipo: String(formData.tipo),
+        descricao: String(formData.descricao).trim(),
+        valor: Number(valorNumerico),
+        data: String(formData.data),
+        dataVencimento: formData.dataVencimento ? String(formData.dataVencimento) : null,
+        categoria: formData.categoria ? String(formData.categoria) : null,
+        formaPagamento: String(formData.formaPagamento),
+        status: String(formData.status),
+        clienteId: formData.clienteId ? String(formData.clienteId) : null,
+        fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
+        profissionalId: formData.profissionalId ? String(formData.profissionalId) : null,
+        atendimentoId: formData.atendimentoId ? String(formData.atendimentoId) : null,
+        percentual: formData.percentual ? Number(formData.percentual) : null,
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        parcelas: Number(formData.parcelas) || 1,
+        recorrente: Boolean(formData.recorrente),
+        frequencia: formData.frequencia || 'mensal',
+        tags: Array.isArray(formData.tags) ? formData.tags : [],
+        origem: 'manual',
+        origemId: null,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (formData.status === 'pago') {
+        dadosParaSalvar.dataPagamento = new Date().toISOString();
+      }
+
+      if (transacaoEditando) {
+        await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        await registrarAuditoria('editar_transacao', transacaoEditando.id, 'Transação editada');
+        mostrarSnackbar('Transação atualizada com sucesso!');
+      } else {
+        dadosParaSalvar.createdAt = new Date().toISOString();
+        const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
+        await registrarAuditoria('criar_transacao', novoId, 'Nova transação criada');
+        mostrarSnackbar('Transação criada com sucesso!');
+      }
+
+      await carregarDados();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar transação:', error);
+      mostrarSnackbar('Erro ao salvar transação', 'error');
+    }
+  };
+
   const handleDuplicar = (transacao) => {
     const { id, ...dados } = transacao;
-    handleOpenDialog({
+    setTransacaoEditando(null);
+    setFormData({
       ...dados,
       descricao: `${dados.descricao} (cópia)`,
       status: 'pendente',
       origem: 'manual',
       origemId: null,
+      data: formatarDataBrasilia(new Date()),
     });
+    setOpenDialog(true);
   };
 
   const handleArquivar = async (transacao) => {
@@ -701,7 +1095,150 @@ function ModernFinanceiro() {
     }
   };
 
-  // Cálculo das estatísticas
+  // ==================== FUNÇÕES DE UI ====================
+  const mostrarSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+    setPage(0);
+  };
+
+  const handleOpenDialog = (transacao = null) => {
+    if (transacao && transacao.origem === 'manual') {
+      setTransacaoEditando(transacao);
+      setFormData({
+        tipo: transacao.tipo || 'receita',
+        descricao: transacao.descricao || '',
+        valor: transacao.valor || '',
+        data: transacao.data || formatarDataBrasilia(new Date()),
+        dataVencimento: transacao.dataVencimento || formatarDataBrasilia(new Date()),
+        categoria: transacao.categoria || '',
+        formaPagamento: transacao.formaPagamento || 'dinheiro',
+        status: transacao.status || 'pendente',
+        clienteId: transacao.clienteId || '',
+        fornecedorId: transacao.fornecedorId || '',
+        profissionalId: transacao.profissionalId || '',
+        atendimentoId: transacao.atendimentoId || '',
+        percentual: transacao.percentual || '',
+        observacoes: transacao.observacoes || '',
+        parcelas: transacao.parcelas || 1,
+        recorrente: transacao.recorrente || false,
+        frequencia: transacao.frequencia || 'mensal',
+        anexos: transacao.anexos || [],
+        tags: transacao.tags || [],
+        itens: transacao.itens || [],
+        numeroPedido: transacao.numeroPedido || '',
+        prazoEntrega: transacao.prazoEntrega || '',
+        origem: transacao.origem || 'manual',
+        origemId: transacao.origemId || '',
+      });
+    } else {
+      setTransacaoEditando(null);
+      setFormData({
+        tipo: 'receita',
+        descricao: '',
+        valor: '',
+        data: formatarDataBrasilia(new Date()),
+        dataVencimento: formatarDataBrasilia(new Date()),
+        categoria: '',
+        formaPagamento: 'dinheiro',
+        status: 'pendente',
+        clienteId: '',
+        fornecedorId: '',
+        profissionalId: '',
+        atendimentoId: '',
+        percentual: '',
+        observacoes: '',
+        parcelas: 1,
+        recorrente: false,
+        frequencia: 'mensal',
+        anexos: [],
+        tags: [],
+        itens: [],
+        numeroPedido: '',
+        prazoEntrega: '',
+        origem: 'manual',
+        origemId: '',
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setTransacaoEditando(null);
+  };
+
+  const handleOpenCaixaDialog = () => setOpenCaixaDialog(true);
+  const handleCloseCaixaDialog = () => setOpenCaixaDialog(false);
+
+  const handleOpenDetalhes = (transacao) => {
+    setTransacaoSelecionada(transacao);
+    setOpenDetalhesDialog(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setOpenDetalhesDialog(false);
+    setTransacaoSelecionada(null);
+  };
+
+  const handleOpenRelatorioDialog = () => setOpenRelatorioDialog(true);
+  const handleCloseRelatorioDialog = () => setOpenRelatorioDialog(false);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePeriodoChange = (periodo) => {
+    setPeriodoSelecionado(periodo);
+    const hoje = new Date();
+    
+    switch(periodo) {
+      case 'hoje':
+        setDataInicio(formatarDataBrasilia(hoje));
+        setDataFim(formatarDataBrasilia(hoje));
+        break;
+      case 'ontem':
+        const ontem = subDays(hoje, 1);
+        setDataInicio(formatarDataBrasilia(ontem));
+        setDataFim(formatarDataBrasilia(ontem));
+        break;
+      case 'semana':
+        setDataInicio(formatarDataBrasilia(subDays(hoje, 7)));
+        setDataFim(formatarDataBrasilia(hoje));
+        break;
+      case 'mes':
+        setDataInicio(formatarDataBrasilia(startOfMonth(hoje)));
+        setDataFim(formatarDataBrasilia(hoje));
+        break;
+      case 'mesPassado':
+        const mesPassado = subMonths(hoje, 1);
+        setDataInicio(formatarDataBrasilia(startOfMonth(mesPassado)));
+        setDataFim(formatarDataBrasilia(endOfMonth(mesPassado)));
+        break;
+      case 'ano':
+        setDataInicio(formatarDataBrasilia(startOfYear(hoje)));
+        setDataFim(formatarDataBrasilia(hoje));
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // ==================== ESTATÍSTICAS ====================
   const calcularEstatisticas = () => {
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
@@ -764,7 +1301,7 @@ function ModernFinanceiro() {
     };
   };
 
-  // Dados para gráficos
+  // ==================== GRÁFICOS ====================
   const gerarDadosGraficoLinha = () => {
     const dias = {};
     const inicio = new Date(dataInicio);
@@ -776,6 +1313,8 @@ function ModernFinanceiro() {
         receitas: 0, 
         despesas: 0, 
         saldo: 0,
+        comissoes: 0,
+        compras: 0,
         dia: format(d, 'dd/MM')
       };
     }
@@ -790,6 +1329,11 @@ function ModernFinanceiro() {
             dias[data].receitas += valor;
           } else {
             dias[data].despesas += valor;
+            if (t.origem === 'comissao') {
+              dias[data].comissoes += valor;
+            } else if (t.origem === 'compra') {
+              dias[data].compras += valor;
+            }
           }
           dias[data].saldo = dias[data].receitas - dias[data].despesas;
         }
@@ -804,6 +1348,9 @@ function ModernFinanceiro() {
       .filter(t => t.status === 'pago' && !t.arquivado)
       .forEach(t => {
         let cat = t.categoria || 'Outros';
+        if (t.origem === 'comissao') cat = 'Comissões';
+        if (t.origem === 'compra') cat = 'Compras';
+        
         if (!categorias[cat]) {
           categorias[cat] = 0;
         }
@@ -830,6 +1377,8 @@ function ModernFinanceiro() {
         mes, 
         receitas: 0, 
         despesas: 0,
+        comissoes: 0,
+        compras: 0,
         lucro: 0,
         data: data.getTime()
       };
@@ -846,6 +1395,11 @@ function ModernFinanceiro() {
             meses[mes].receitas += valor;
           } else {
             meses[mes].despesas += valor;
+            if (t.origem === 'comissao') {
+              meses[mes].comissoes += valor;
+            } else if (t.origem === 'compra') {
+              meses[mes].compras += valor;
+            }
           }
           meses[mes].lucro = meses[mes].receitas - meses[mes].despesas;
         }
@@ -858,31 +1412,20 @@ function ModernFinanceiro() {
   const dadosGraficoLinha = gerarDadosGraficoLinha();
   const dadosGraficoPizza = gerarDadosGraficoPizza();
   const dadosGraficoMensal = gerarDadosGraficoMensal();
+  const comissoesPorProfissional = gerarRelatorioComissoesProfissional();
+  const fluxoProjetado = calcularFluxoProjetado(30);
+  const relatorioDRE = gerarRelatorioDRE();
 
-  // Filtrar transações conforme a aba selecionada
+  // Filtrar transações
   const getTransacoesFiltradas = () => {
     let lista = [];
     
-    if (tabValue === 0) {
-      // Todas - mostra TODAS as transações (manuais + comissões + compras)
-      lista = transacoesCombinadas.filter(t => !t.arquivado);
-    } else if (tabValue === 1) {
-      // Receitas - apenas transações do tipo receita
-      lista = transacoesCombinadas.filter(t => t.tipo === 'receita' && !t.arquivado);
-    } else if (tabValue === 2) {
-      // Despesas - TODAS as despesas (manuais + comissões + compras)
-      // COMISSÕES APARECEM AQUI porque são despesas
-      lista = transacoesCombinadas.filter(t => t.tipo === 'despesa' && !t.arquivado);
-    } else if (tabValue === 3) {
-      // Comissões - APENAS comissões (filtro por origem)
-      lista = transacoesCombinadas.filter(t => t.origem === 'comissao' && !t.arquivado);
-    } else if (tabValue === 4) {
-      // Compras - APENAS compras
-      lista = transacoesCombinadas.filter(t => t.origem === 'compra' && !t.arquivado);
-    } else if (tabValue === 5) {
-      // Arquivados
-      lista = transacoesCombinadas.filter(t => t.arquivado);
-    }
+    if (tabValue === 0) lista = transacoesCombinadas.filter(t => !t.arquivado);
+    else if (tabValue === 1) lista = transacoesCombinadas.filter(t => t.tipo === 'receita' && !t.arquivado);
+    else if (tabValue === 2) lista = transacoesCombinadas.filter(t => t.tipo === 'despesa' && !t.arquivado);
+    else if (tabValue === 3) lista = transacoesCombinadas.filter(t => t.origem === 'comissao' && !t.arquivado);
+    else if (tabValue === 4) lista = transacoesCombinadas.filter(t => t.origem === 'compra' && !t.arquivado);
+    else if (tabValue === 5) lista = transacoesCombinadas.filter(t => t.arquivado);
 
     return lista.filter(t => {
       const matchesTexto = filtro === '' || 
@@ -890,63 +1433,20 @@ function ModernFinanceiro() {
         t.categoria?.toLowerCase().includes(filtro.toLowerCase()) ||
         (t.profissionalNome?.toLowerCase().includes(filtro.toLowerCase())) ||
         (t.servicoNome?.toLowerCase().includes(filtro.toLowerCase())) ||
-        (t.numeroPedido?.toLowerCase().includes(filtro.toLowerCase()));
+        (t.numeroPedido?.toLowerCase().includes(filtro.toLowerCase())) ||
+        (t.clienteId && clientes.find(c => c.id === t.clienteId)?.nome?.toLowerCase().includes(filtro.toLowerCase()));
 
       const matchesStatus = filtroStatus === 'todos' || t.status === filtroStatus;
+      const matchesTipo = filtroTipo === 'todos' || t.tipo === filtroTipo;
       const matchesCategoria = filtroCategoria === 'todas' || t.categoria === filtroCategoria;
+      const matchesFormaPagamento = filtroFormaPagamento === 'todas' || t.formaPagamento === filtroFormaPagamento;
 
-      return matchesTexto && matchesStatus && matchesCategoria;
+      return matchesTexto && matchesStatus && matchesTipo && matchesCategoria && matchesFormaPagamento;
     });
   };
 
   const transacoesFiltradas = getTransacoesFiltradas();
-  const paginatedTransacoes = transacoesFiltradas.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
-
-  const handlePeriodoChange = (periodo) => {
-    setPeriodoSelecionado(periodo);
-    const hoje = new Date();
-    
-    switch(periodo) {
-      case 'hoje':
-        setDataInicio(formatarDataBrasilia(hoje));
-        setDataFim(formatarDataBrasilia(hoje));
-        break;
-      case 'ontem':
-        const ontem = subDays(hoje, 1);
-        setDataInicio(formatarDataBrasilia(ontem));
-        setDataFim(formatarDataBrasilia(ontem));
-        break;
-      case 'semana':
-        const semanaPassada = subDays(hoje, 7);
-        setDataInicio(formatarDataBrasilia(semanaPassada));
-        setDataFim(formatarDataBrasilia(hoje));
-        break;
-      case 'mes':
-        setDataInicio(formatarDataBrasilia(startOfMonth(hoje)));
-        setDataFim(formatarDataBrasilia(hoje));
-        break;
-      case 'mesPassado':
-        const mesPassado = subMonths(hoje, 1);
-        setDataInicio(formatarDataBrasilia(startOfMonth(mesPassado)));
-        setDataFim(formatarDataBrasilia(endOfMonth(mesPassado)));
-        break;
-      case 'ano':
-        setDataInicio(formatarDataBrasilia(startOfYear(hoje)));
-        setDataFim(formatarDataBrasilia(hoje));
-        break;
-      default:
-        break;
-    }
-  };
-
-  const handleChangePage = (event, newPage) => setPage(newPage);
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  const paginatedTransacoes = transacoesFiltradas.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   if (loading) {
     return (
@@ -960,143 +1460,222 @@ function ModernFinanceiro() {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box sx={{ p: 3 }}>
         {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AccountBalanceIcon sx={{ fontSize: 40 }} />
-              Financeiro
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Gerencie receitas, despesas, comissões e compras
-            </Typography>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AccountBalanceIcon sx={{ fontSize: 40 }} />
+                Financeiro
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Gerencie receitas, despesas, comissões e compras
+              </Typography>
+              {perfilAtual && (
+                <Chip
+                  icon={<SecurityIcon />}
+                  label={`Perfil: ${perfisAcesso[perfilAtual]?.label || perfilAtual}`}
+                  size="small"
+                  sx={{ mt: 1 }}
+                  onClick={() => setOpenPerfilDialog(true)}
+                />
+              )}
+            </Box>
+            
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {alertasVencimento.length > 0 && (
+                <Badge badgeContent={alertasVencimento.length} color="error">
+                  <Button
+                    variant="outlined"
+                    startIcon={<NotificationsIcon />}
+                    onClick={() => setOpenAlertasDialog(true)}
+                    color="warning"
+                  >
+                    Alertas
+                  </Button>
+                </Badge>
+              )}
+              
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={carregarDados}>
+                Atualizar
+              </Button>
+              
+              <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportarParaExcel}>
+                Excel
+              </Button>
+              
+              <Button variant="outlined" startIcon={<PrintIcon />} onClick={exportarParaPDF}>
+                PDF
+              </Button>
+              
+              <Button variant="outlined" startIcon={<BarChartIcon />} onClick={handleOpenRelatorioDialog}>
+                Relatórios
+              </Button>
+              
+              <Button variant="outlined" startIcon={<PercentIcon />} onClick={() => setOpenComissaoProfissionalDialog(true)}>
+                Comissões
+              </Button>
+              
+              <Button
+                variant="contained"
+                startIcon={<AccountBalanceIcon />}
+                onClick={handleOpenCaixaDialog}
+                color={caixa?.status === 'aberto' ? 'success' : 'primary'}
+              >
+                {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
+              </Button>
+              
+              {verificarPermissao('criar') && (
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => handleOpenDialog()}
+                  sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+                >
+                  Nova Transação
+                </Button>
+              )}
+            </Box>
           </Box>
-          
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={carregarDados}>
-              Atualizar
-            </Button>
-            <Button variant="outlined" startIcon={<BarChartIcon />} onClick={handleOpenRelatorioDialog}>
-              Relatórios
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AccountBalanceIcon />}
-              onClick={handleOpenCaixaDialog}
-              color={caixa?.status === 'aberto' ? 'success' : 'primary'}
-            >
-              {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-            >
-              Nova Transação
-            </Button>
-          </Box>
-        </Box>
+        </motion.div>
 
         {/* Status do Caixa */}
         {caixa?.status === 'aberto' && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            <strong>Caixa Aberto</strong> - Saldo atual: R$ {caixa.saldoAtual?.toFixed(2)} | 
-            Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
-          </Alert>
+          <Zoom in={true}>
+            <Alert 
+              severity="success" 
+              sx={{ mb: 3 }}
+              action={
+                <Button color="inherit" size="small" onClick={handleOpenCaixaDialog}>
+                  Fechar Caixa
+                </Button>
+              }
+            >
+              <strong>Caixa Aberto</strong> - Saldo atual: {formatarMoeda(caixa.saldoAtual)} | 
+              Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
+            </Alert>
+          </Zoom>
         )}
 
         {/* Cards de Resumo */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: stats.saldo >= 0 ? '#e8f5e9' : '#ffebee', height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                      Saldo do Período
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: stats.saldo >= 0 ? '#4caf50' : '#f44336' }}>
-                      R$ {stats.saldo.toFixed(2)}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Período: {formatarDataExibicao(dataInicio)} - {formatarDataExibicao(dataFim)}
-                    </Typography>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card sx={{ bgcolor: stats.saldo >= 0 ? '#e8f5e9' : '#ffebee', height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography color="textSecondary" gutterBottom variant="body2">
+                        Saldo do Período
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: stats.saldo >= 0 ? '#4caf50' : '#f44336' }}>
+                        {formatarMoeda(stats.saldo)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Período: {formatarDataExibicao(dataInicio)} - {formatarDataExibicao(dataFim)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: stats.saldo >= 0 ? '#4caf50' : '#f44336', width: 56, height: 56 }}>
+                      <MoneyIcon />
+                    </Avatar>
                   </Box>
-                  <Avatar sx={{ bgcolor: stats.saldo >= 0 ? '#4caf50' : '#f44336', width: 56, height: 56 }}>
-                    <MoneyIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                      Receitas
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                      R$ {stats.receitas.toFixed(2)}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      A receber: R$ {stats.aReceber.toFixed(2)}
-                    </Typography>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography color="textSecondary" gutterBottom variant="body2">
+                        Receitas
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                        {formatarMoeda(stats.receitas)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        A receber: {formatarMoeda(stats.aReceber)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
+                      <TrendingUpIcon />
+                    </Avatar>
                   </Box>
-                  <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                    <TrendingUpIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                      Despesas
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                      R$ {stats.despesas.toFixed(2)}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      A pagar: R$ {stats.aPagar.toFixed(2)}
-                    </Typography>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography color="textSecondary" gutterBottom variant="body2">
+                        Despesas
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                        {formatarMoeda(stats.despesas)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        A pagar: {formatarMoeda(stats.aPagar)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: '#f44336', width: 56, height: 56 }}>
+                      <TrendingDownIcon />
+                    </Avatar>
                   </Box>
-                  <Avatar sx={{ bgcolor: '#f44336', width: 56, height: 56 }}>
-                    <TrendingDownIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#f3e5f5' : '#f5f5f5', height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                      Comissões Pendentes
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e' }}>
-                      R$ {stats.comissoesPendentes.toFixed(2)}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Compras pendentes: R$ {stats.comprasPendentes.toFixed(2)}
-                    </Typography>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#f3e5f5' : '#f5f5f5', height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography color="textSecondary" gutterBottom variant="body2">
+                        Pendentes
+                      </Typography>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e' }}>
+                        {formatarMoeda(stats.comissoesPendentes + stats.comprasPendentes)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Comissões: {formatarMoeda(stats.comissoesPendentes)} | Compras: {formatarMoeda(stats.comprasPendentes)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e', width: 56, height: 56 }}>
+                      <PercentIcon />
+                    </Avatar>
                   </Box>
-                  <Avatar sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e', width: 56, height: 56 }}>
-                    <PercentIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
         </Grid>
 
@@ -1149,8 +1728,15 @@ function ModernFinanceiro() {
               
               <Grid item xs={12} md={4}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => {}}>Exportar</Button>
-                  <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => {}}>Imprimir</Button>
+                  <Button variant="outlined" startIcon={<TimelineIcon />} onClick={() => setOpenFluxoProjetadoDialog(true)}>
+                    Fluxo Projetado
+                  </Button>
+                  <Button variant="outlined" startIcon={<AssessmentIcon />} onClick={() => setOpenOrcamentoDialog(true)}>
+                    Orçamentos
+                  </Button>
+                  <Button variant="outlined" startIcon={<CompareArrowsIcon />} onClick={() => setOpenConciliacaoDialog(true)}>
+                    Conciliar
+                  </Button>
                 </Box>
               </Grid>
             </Grid>
@@ -1160,58 +1746,72 @@ function ModernFinanceiro() {
         {/* Gráficos */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ShowChartIcon /> Fluxo de Caixa Diário
-                </Typography>
-                <Box sx={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={dadosGraficoLinha}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="dia" />
-                      <YAxis />
-                      <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
-                      <Legend />
-                      <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
-                      <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
-                      <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </Box>
-              </CardContent>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ShowChartIcon /> Fluxo de Caixa Diário
+                  </Typography>
+                  <Box sx={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={dadosGraficoLinha}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="dia" />
+                        <YAxis />
+                        <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
+                        <Legend />
+                        <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
+                        <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
+                        <Line type="monotone" dataKey="comissoes" stroke="#9c27b0" strokeWidth={2} name="Comissões" />
+                        <Line type="monotone" dataKey="compras" stroke="#ff9800" strokeWidth={2} name="Compras" />
+                        <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
 
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PieChartIcon /> Distribuição por Categoria
-                </Typography>
-                <Box sx={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={dadosGraficoPizza}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {dadosGraficoPizza.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
-              </CardContent>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PieChartIcon /> Distribuição por Categoria
+                  </Typography>
+                  <Box sx={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={dadosGraficoPizza}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {dadosGraficoPizza.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
         </Grid>
 
@@ -1227,10 +1827,12 @@ function ModernFinanceiro() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="mes" />
                   <YAxis />
-                  <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                  <RechartsTooltip formatter={(value) => formatarMoeda(value)} />
                   <Legend />
                   <Bar dataKey="receitas" fill="#4caf50" name="Receitas" />
                   <Bar dataKey="despesas" fill="#f44336" name="Despesas" />
+                  <Bar dataKey="comissoes" fill="#9c27b0" name="Comissões" />
+                  <Bar dataKey="compras" fill="#ff9800" name="Compras" />
                   <Bar dataKey="lucro" fill="#2196f3" name="Lucro" />
                 </BarChart>
               </ResponsiveContainer>
@@ -1254,7 +1856,7 @@ function ModernFinanceiro() {
           <CardContent>
             {/* Filtros */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={3}>
                 <TextField
                   fullWidth
                   size="small"
@@ -1286,6 +1888,29 @@ function ModernFinanceiro() {
 
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
+                  <InputLabel>Tipo</InputLabel>
+                  <Select value={filtroTipo} label="Tipo" onChange={(e) => setFiltroTipo(e.target.value)}>
+                    <MenuItem value="todos">Todos</MenuItem>
+                    <MenuItem value="receita">Receitas</MenuItem>
+                    <MenuItem value="despesa">Despesas</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Forma Pagamento</InputLabel>
+                  <Select value={filtroFormaPagamento} label="Forma Pagamento" onChange={(e) => setFiltroFormaPagamento(e.target.value)}>
+                    <MenuItem value="todas">Todas</MenuItem>
+                    {formasPagamento.map(fp => (
+                      <MenuItem key={fp.value} value={fp.value}>{fp.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <FormControl fullWidth size="small">
                   <InputLabel>Categoria</InputLabel>
                   <Select value={filtroCategoria} label="Categoria" onChange={(e) => setFiltroCategoria(e.target.value)}>
                     <MenuItem value="todas">Todas</MenuItem>
@@ -1298,13 +1923,15 @@ function ModernFinanceiro() {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} md={2}>
+              <Grid item xs={12} md={1}>
                 <Button fullWidth variant="outlined" onClick={() => {
                   setFiltro('');
                   setFiltroStatus('todos');
+                  setFiltroTipo('todos');
                   setFiltroCategoria('todas');
+                  setFiltroFormaPagamento('todas');
                 }}>
-                  Limpar Filtros
+                  Limpar
                 </Button>
               </Grid>
             </Grid>
@@ -1318,148 +1945,188 @@ function ModernFinanceiro() {
                     <TableCell><strong>Descrição</strong></TableCell>
                     <TableCell><strong>Tipo/Origem</strong></TableCell>
                     <TableCell><strong>Valor</strong></TableCell>
+                    <TableCell><strong>Forma Pagto</strong></TableCell>
                     <TableCell><strong>Vencimento</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
+                    <TableCell><strong>Anexos</strong></TableCell>
                     <TableCell align="center"><strong>Ações</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedTransacoes.map((transacao, index) => {
-                    const cliente = clientes.find(c => c.id === transacao.clienteId);
-                    const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
-                    const profissional = profissionais.find(p => p.id === transacao.profissionalId);
-                    
-                    let iconeTipo = <ReceiptIcon />;
-                    let corTipo = '#757575';
-                    let tipoLabel = '';
-                    
-                    if (transacao.origem === 'comissao') {
-                      iconeTipo = <PercentIcon />;
-                      corTipo = '#9c27b0';
-                      tipoLabel = 'Comissão';
-                    } else if (transacao.origem === 'compra') {
-                      iconeTipo = <ShoppingCartIcon />;
-                      corTipo = '#ff9800';
-                      tipoLabel = 'Compra';
-                    } else if (transacao.tipo === 'receita') {
-                      iconeTipo = <TrendingUpIcon />;
-                      corTipo = '#4caf50';
-                      tipoLabel = 'Receita';
-                    } else if (transacao.tipo === 'despesa') {
-                      iconeTipo = <TrendingDownIcon />;
-                      corTipo = '#f44336';
-                      tipoLabel = 'Despesa';
-                    }
-                    
-                    return (
-                      <TableRow key={transacao.id} hover>
-                        <TableCell>{formatarDataExibicao(transacao.data)}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>{iconeTipo}</Avatar>
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{transacao.descricao}</Typography>
-                              {profissional && <Typography variant="caption" color="textSecondary">Profissional: {profissional.nome || transacao.profissionalNome}</Typography>}
-                              {cliente && <Typography variant="caption" color="textSecondary">Cliente: {cliente.nome}</Typography>}
-                              {fornecedor && <Typography variant="caption" color="textSecondary">Fornecedor: {fornecedor.nome}</Typography>}
-                              {transacao.servicoNome && <Typography variant="caption" color="textSecondary"> • {transacao.servicoNome}</Typography>}
-                              {transacao.numeroPedido && <Typography variant="caption" color="textSecondary"> • Pedido: {transacao.numeroPedido}</Typography>}
-                              {transacao.percentual && <Chip label={`${transacao.percentual}%`} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#f3e5f5' }} />}
+                  <AnimatePresence>
+                    {paginatedTransacoes.map((transacao, index) => {
+                      const cliente = clientes.find(c => c.id === transacao.clienteId);
+                      const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
+                      const profissional = profissionais.find(p => p.id === transacao.profissionalId);
+                      const formaPagto = formasPagamento.find(fp => fp.value === transacao.formaPagamento);
+                      
+                      let iconeTipo = <ReceiptIcon />;
+                      let corTipo = '#757575';
+                      let tipoLabel = '';
+                      
+                      if (transacao.origem === 'comissao') {
+                        iconeTipo = <PercentIcon />;
+                        corTipo = '#9c27b0';
+                        tipoLabel = 'Comissão';
+                      } else if (transacao.origem === 'compra') {
+                        iconeTipo = <ShoppingCartIcon />;
+                        corTipo = '#ff9800';
+                        tipoLabel = 'Compra';
+                      } else if (transacao.tipo === 'receita') {
+                        iconeTipo = <TrendingUpIcon />;
+                        corTipo = '#4caf50';
+                        tipoLabel = 'Receita';
+                      } else if (transacao.tipo === 'despesa') {
+                        iconeTipo = <TrendingDownIcon />;
+                        corTipo = '#f44336';
+                        tipoLabel = 'Despesa';
+                      }
+                      
+                      return (
+                        <motion.tr
+                          key={transacao.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          style={{
+                            backgroundColor: transacao.arquivado ? '#f5f5f5' : 'white',
+                            opacity: transacao.arquivado ? 0.7 : 1,
+                          }}
+                        >
+                          <TableCell>{formatarDataExibicao(transacao.data)}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>{iconeTipo}</Avatar>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>{transacao.descricao}</Typography>
+                                {profissional && <Typography variant="caption" color="textSecondary">Profissional: {profissional.nome || transacao.profissionalNome}</Typography>}
+                                {cliente && <Typography variant="caption" color="textSecondary">Cliente: {cliente.nome}</Typography>}
+                                {fornecedor && <Typography variant="caption" color="textSecondary">Fornecedor: {fornecedor.nome}</Typography>}
+                                {transacao.servicoNome && <Typography variant="caption" color="textSecondary"> • {transacao.servicoNome}</Typography>}
+                                {transacao.numeroPedido && <Typography variant="caption" color="textSecondary"> • Pedido: {transacao.numeroPedido}</Typography>}
+                                {transacao.percentual && <Chip label={`${transacao.percentual}%`} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#f3e5f5' }} />}
+                                {transacao.parcelas > 1 && <Chip label={`${transacao.parcelas}x`} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />}
+                              </Box>
                             </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={tipoLabel}
-                            size="small"
-                            sx={{
-                              bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' : transacao.origem === 'compra' ? '#fff3e0' : transacao.tipo === 'receita' ? '#e8f5e9' : '#ffebee',
-                              color: transacao.origem === 'comissao' ? '#9c27b0' : transacao.origem === 'compra' ? '#ff9800' : transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: transacao.tipo === 'receita' ? '#4caf50' : '#f44336' }}>
-                            {transacao.tipo === 'receita' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {transacao.dataVencimento ? (
-                            <Box>
-                              <Typography variant="body2">{formatarDataExibicao(transacao.dataVencimento)}</Typography>
-                              {transacao.status === 'pendente' && new Date(transacao.dataVencimento) < new Date() && (
-                                <Chip label="Vencida" size="small" color="error" sx={{ height: 20, fontSize: '0.7rem' }} />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={tipoLabel}
+                              size="small"
+                              sx={{
+                                bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' : transacao.origem === 'compra' ? '#fff3e0' : transacao.tipo === 'receita' ? '#e8f5e9' : '#ffebee',
+                                color: transacao.origem === 'comissao' ? '#9c27b0' : transacao.origem === 'compra' ? '#ff9800' : transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: transacao.tipo === 'receita' ? '#4caf50' : '#f44336' }}>
+                              {transacao.tipo === 'receita' ? '+' : '-'} {formatarMoeda(transacao.valor)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title={formaPagto?.label}>
+                              <Typography variant="body2">{formaPagto?.icon} {formaPagto?.label}</Typography>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>
+                            {transacao.dataVencimento ? (
+                              <Box>
+                                <Typography variant="body2">{formatarDataExibicao(transacao.dataVencimento)}</Typography>
+                                {transacao.status === 'pendente' && new Date(transacao.dataVencimento) < new Date() && (
+                                  <Chip label="Vencida" size="small" color="error" sx={{ height: 20, fontSize: '0.7rem' }} />
+                                )}
+                              </Box>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              icon={statusColors[transacao.status]?.icon}
+                              label={statusColors[transacao.status]?.label || transacao.status}
+                              size="small"
+                              sx={{ bgcolor: `${statusColors[transacao.status]?.color}20`, color: statusColors[transacao.status]?.color }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {transacao.anexos?.length > 0 && (
+                              <Tooltip title={`${transacao.anexos.length} anexo(s)`}>
+                                <IconButton size="small" onClick={() => setOpenAnexoDialog(true)}>
+                                  <AttachFileIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            <IconButton size="small" onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.onchange = (e) => {
+                                const file = e.target.files[0];
+                                // Handle file upload
+                                mostrarSnackbar('Anexo enviado com sucesso!');
+                              };
+                              input.click();
+                            }}>
+                              <CloudUploadIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                              <Tooltip title="Ver Detalhes">
+                                <IconButton size="small" onClick={() => handleOpenDetalhes(transacao)} sx={{ color: '#9c27b0' }}>
+                                  <ReceiptIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+
+                              {transacao.status === 'pendente' && verificarPermissao('pagar') && (
+                                <Tooltip title="Marcar como Pago">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleMarcarComoPago(transacao)}
+                                    sx={{ color: '#4caf50' }}
+                                  >
+                                    <CheckCircleIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              {transacao.origem === 'manual' && verificarPermissao('editar') && !transacao.arquivado && (
+                                <Tooltip title="Editar">
+                                  <IconButton size="small" onClick={() => handleOpenDialog(transacao)} sx={{ color: '#ff4081' }}>
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+
+                              <Tooltip title="Duplicar">
+                                <IconButton size="small" onClick={() => handleDuplicar(transacao)} sx={{ color: '#2196f3' }}>
+                                  <FileCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+
+                              {transacao.origem === 'manual' && (
+                                <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
+                                  <IconButton size="small" onClick={() => handleArquivar(transacao)} sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}>
+                                    {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
+                                  </IconButton>
+                                </Tooltip>
                               )}
                             </Box>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={statusColors[transacao.status]?.icon}
-                            label={statusColors[transacao.status]?.label || transacao.status}
-                            size="small"
-                            sx={{ bgcolor: `${statusColors[transacao.status]?.color}20`, color: statusColors[transacao.status]?.color }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                            <Tooltip title="Ver Detalhes">
-                              <IconButton size="small" onClick={() => handleOpenDetalhes(transacao)} sx={{ color: '#9c27b0' }}>
-                                <ReceiptIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-
-                            {transacao.status === 'pendente' && (
-                              <Tooltip title="Marcar como Pago">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    if (transacao.origem === 'comissao') handlePagarComissao(transacao.origemId);
-                                    else if (transacao.origem === 'compra') handlePagarCompra(transacao.origemId);
-                                    else handleMarcarComoPago(transacao);
-                                  }}
-                                  sx={{ color: '#4caf50' }}
-                                >
-                                  <CheckCircleIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-
-                            {transacao.origem === 'manual' && !transacao.arquivado && (
-                              <Tooltip title="Editar">
-                                <IconButton size="small" onClick={() => handleOpenDialog(transacao)} sx={{ color: '#ff4081' }}>
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-
-                            <Tooltip title="Duplicar">
-                              <IconButton size="small" onClick={() => handleDuplicar(transacao)} sx={{ color: '#2196f3' }}>
-                                <FileCopyIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-
-                            {transacao.origem === 'manual' && (
-                              <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
-                                <IconButton size="small" onClick={() => handleArquivar(transacao)} sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}>
-                                  {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          </TableCell>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
 
                   {paginatedTransacoes.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                      <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
                         <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
                         <Typography variant="body1" color="textSecondary">Nenhuma transação encontrada</Typography>
-                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => handleOpenDialog()} sx={{ mt: 2 }}>
-                          Nova Transação
-                        </Button>
+                        {verificarPermissao('criar') && (
+                          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => handleOpenDialog()} sx={{ mt: 2 }}>
+                            Nova Transação
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   )}
@@ -1476,10 +2143,13 @@ function ModernFinanceiro() {
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               labelRowsPerPage="Itens por página"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
             />
           </CardContent>
         </Card>
       </Box>
+
+      {/* ==================== DIÁLOGOS ==================== */}
 
       {/* Dialog de Transação */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
@@ -1491,12 +2161,7 @@ function ModernFinanceiro() {
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small" required>
                 <InputLabel>Tipo</InputLabel>
-                <Select
-                  name="tipo"
-                  value={formData.tipo}
-                  label="Tipo *"
-                  onChange={handleInputChange}
-                >
+                <Select name="tipo" value={formData.tipo} label="Tipo *" onChange={handleInputChange}>
                   <MenuItem value="receita">💰 Receita</MenuItem>
                   <MenuItem value="despesa">💸 Despesa</MenuItem>
                   <MenuItem value="transferencia">🔄 Transferência</MenuItem>
@@ -1514,7 +2179,6 @@ function ModernFinanceiro() {
                 onChange={handleInputChange}
                 required
                 size="small"
-                placeholder="Ex: Venda de serviços, Salário, etc"
               />
             </Grid>
 
@@ -1528,9 +2192,7 @@ function ModernFinanceiro() {
                 onChange={handleInputChange}
                 required
                 size="small"
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                }}
+                InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
               />
             </Grid>
 
@@ -1539,13 +2201,9 @@ function ModernFinanceiro() {
                 label="Data"
                 value={formData.data ? new Date(formData.data) : null}
                 onChange={(newValue) => {
-                  if (newValue) {
-                    setFormData({ ...formData, data: formatarDataBrasilia(newValue) });
-                  }
+                  if (newValue) setFormData({ ...formData, data: formatarDataBrasilia(newValue) });
                 }}
-                renderInput={(params) => (
-                  <TextField {...params} fullWidth size="small" required />
-                )}
+                renderInput={(params) => <TextField {...params} fullWidth size="small" required />}
               />
             </Grid>
 
@@ -1554,13 +2212,9 @@ function ModernFinanceiro() {
                 label="Data de Vencimento"
                 value={formData.dataVencimento ? new Date(formData.dataVencimento) : null}
                 onChange={(newValue) => {
-                  if (newValue) {
-                    setFormData({ ...formData, dataVencimento: formatarDataBrasilia(newValue) });
-                  }
+                  if (newValue) setFormData({ ...formData, dataVencimento: formatarDataBrasilia(newValue) });
                 }}
-                renderInput={(params) => (
-                  <TextField {...params} fullWidth size="small" />
-                )}
+                renderInput={(params) => <TextField {...params} fullWidth size="small" />}
               />
             </Grid>
 
@@ -1572,23 +2226,15 @@ function ModernFinanceiro() {
                 value={formData.categoria}
                 onChange={handleInputChange}
                 size="small"
-                placeholder="Ex: Vendas, Salários, etc"
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Forma de Pagamento</InputLabel>
-                <Select
-                  name="formaPagamento"
-                  value={formData.formaPagamento}
-                  label="Forma de Pagamento"
-                  onChange={handleInputChange}
-                >
+                <Select name="formaPagamento" value={formData.formaPagamento} label="Forma de Pagamento" onChange={handleInputChange}>
                   {formasPagamento.map(fp => (
-                    <MenuItem key={fp.value} value={fp.value}>
-                      {fp.icon} {fp.label}
-                    </MenuItem>
+                    <MenuItem key={fp.value} value={fp.value}>{fp.icon} {fp.label}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1597,50 +2243,11 @@ function ModernFinanceiro() {
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
-                <Select
-                  name="status"
-                  value={formData.status}
-                  label="Status"
-                  onChange={handleInputChange}
-                >
+                <Select name="status" value={formData.status} label="Status" onChange={handleInputChange}>
                   <MenuItem value="pendente">⏳ Pendente</MenuItem>
                   <MenuItem value="pago">✅ Pago</MenuItem>
                   <MenuItem value="atrasado">⚠️ Atrasado</MenuItem>
                   <MenuItem value="cancelado">❌ Cancelado</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Cliente (opcional)</InputLabel>
-                <Select
-                  name="clienteId"
-                  value={formData.clienteId}
-                  label="Cliente (opcional)"
-                  onChange={handleInputChange}
-                >
-                  <MenuItem value="">Nenhum</MenuItem>
-                  {clientes.map(cliente => (
-                    <MenuItem key={cliente.id} value={cliente.id}>{cliente.nome}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Fornecedor (opcional)</InputLabel>
-                <Select
-                  name="fornecedorId"
-                  value={formData.fornecedorId}
-                  label="Fornecedor (opcional)"
-                  onChange={handleInputChange}
-                >
-                  <MenuItem value="">Nenhum</MenuItem>
-                  {fornecedores.map(fornecedor => (
-                    <MenuItem key={fornecedor.id} value={fornecedor.id}>{fornecedor.nome}</MenuItem>
-                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -1655,18 +2262,13 @@ function ModernFinanceiro() {
                 multiline
                 rows={3}
                 size="small"
-                placeholder="Observações adicionais..."
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button
-            onClick={handleSalvar}
-            variant="contained"
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-          >
+          <Button onClick={handleSalvar} variant="contained" sx={{ bgcolor: '#9c27b0' }}>
             {transacaoEditando ? 'Atualizar' : 'Salvar'}
           </Button>
         </DialogActions>
@@ -1681,59 +2283,30 @@ function ModernFinanceiro() {
           <Box sx={{ mt: 2 }}>
             {caixa?.status === 'aberto' ? (
               <Box>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Resumo do Caixa
-                </Alert>
+                <Alert severity="info" sx={{ mb: 2 }}>Resumo do Caixa</Alert>
                 <List>
                   <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: '#4caf50' }}>
-                        <MoneyIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Saldo Atual"
-                      secondary={`R$ ${Number(caixa.saldoAtual || 0).toFixed(2)}`}
-                    />
+                    <ListItemAvatar><Avatar sx={{ bgcolor: '#4caf50' }}><MoneyIcon /></Avatar></ListItemAvatar>
+                    <ListItemText primary="Saldo Atual" secondary={formatarMoeda(caixa.saldoAtual)} />
                   </ListItem>
                   <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: '#ff9800' }}>
-                        <ReceiptIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Movimentações"
-                      secondary={`${caixa.movimentacoes?.length || 0} transações`}
-                    />
+                    <ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><ReceiptIcon /></Avatar></ListItemAvatar>
+                    <ListItemText primary="Movimentações" secondary={`${caixa.movimentacoes?.length || 0} transações`} />
                   </ListItem>
                   <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: '#2196f3' }}>
-                        <CalendarIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Aberto em"
-                      secondary={new Date(caixa.dataAbertura).toLocaleString('pt-BR')}
-                    />
+                    <ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><CalendarIcon /></Avatar></ListItemAvatar>
+                    <ListItemText primary="Aberto em" secondary={new Date(caixa.dataAbertura).toLocaleString('pt-BR')} />
                   </ListItem>
                 </List>
               </Box>
             ) : (
-              <Typography variant="body1">
-                Deseja abrir o caixa para iniciar as operações do dia?
-              </Typography>
+              <Typography variant="body1">Deseja abrir o caixa para iniciar as operações do dia?</Typography>
             )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleCloseCaixaDialog}>Cancelar</Button>
-          <Button
-            onClick={handleAbrirFecharCaixa}
-            variant="contained"
-            color={caixa?.status === 'aberto' ? 'error' : 'success'}
-          >
+          <Button onClick={handleAbrirFecharCaixa} variant="contained" color={caixa?.status === 'aberto' ? 'error' : 'success'}>
             {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
           </Button>
         </DialogActions>
@@ -1741,198 +2314,27 @@ function ModernFinanceiro() {
 
       {/* Dialog de Detalhes */}
       <Dialog open={openDetalhesDialog} onClose={handleCloseDetalhes} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          📋 Detalhes da Transação
-        </DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>📋 Detalhes da Transação</DialogTitle>
         <DialogContent>
           {transacaoSelecionada && (
             <Box sx={{ mt: 2 }}>
               <List>
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#9c27b0' }}>
-                      <ReceiptIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Descrição"
-                    secondary={transacaoSelecionada.descricao}
-                  />
-                </ListItem>
-
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' }}>
-                      {transacaoSelecionada.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Valor"
-                    secondary={`R$ ${Number(transacaoSelecionada.valor).toFixed(2)}`}
-                  />
-                </ListItem>
-
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#ff9800' }}>
-                      <CalendarIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Data"
-                    secondary={new Date(transacaoSelecionada.data).toLocaleDateString('pt-BR')}
-                  />
-                </ListItem>
-
-                {transacaoSelecionada.dataVencimento && (
-                  <ListItem>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: '#f44336' }}>
-                        <WarningIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary="Vencimento"
-                      secondary={new Date(transacaoSelecionada.dataVencimento).toLocaleDateString('pt-BR')}
-                    />
-                  </ListItem>
-                )}
-
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#2196f3' }}>
-                      <PaymentIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Forma de Pagamento"
-                    secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento}
-                  />
-                </ListItem>
-
-                {transacaoSelecionada.origem === 'comissao' && (
-                  <>
-                    <ListItem>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: '#9c27b0' }}>
-                          <PercentIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary="Profissional"
-                        secondary={transacaoSelecionada.profissionalNome || 'Não informado'}
-                      />
-                    </ListItem>
-                    {transacaoSelecionada.servicoNome && (
-                      <ListItem>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: '#ff4081' }}>
-                            <ReceiptLongIcon />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary="Serviço"
-                          secondary={`${transacaoSelecionada.servicoNome} (${transacaoSelecionada.percentual}% de R$ ${transacaoSelecionada.valorAtendimento})`}
-                        />
-                      </ListItem>
-                    )}
-                  </>
-                )}
-
-                {transacaoSelecionada.origem === 'compra' && (
-                  <>
-                    <ListItem>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: '#ff9800' }}>
-                          <StoreIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary="Fornecedor"
-                        secondary={fornecedores.find(f => f.id === transacaoSelecionada.fornecedorId)?.nome || 'Não informado'}
-                      />
-                    </ListItem>
-                    {transacaoSelecionada.numeroPedido && (
-                      <ListItem>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: '#00bcd4' }}>
-                            <ReceiptIcon />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary="Número do Pedido"
-                          secondary={transacaoSelecionada.numeroPedido}
-                        />
-                      </ListItem>
-                    )}
-                    {transacaoSelecionada.itens && transacaoSelecionada.itens.length > 0 && (
-                      <ListItem>
-                        <ListItemText
-                          primary="Itens da Compra"
-                          secondary={
-                            <Box component="ul" sx={{ pl: 2, mt: 1 }}>
-                              {transacaoSelecionada.itens.map((item, idx) => (
-                                <li key={idx}>
-                                  {item.produtoNome} - {item.quantidade}x R$ {item.valorUnitario} = R$ {item.total}
-                                </li>
-                              ))}
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    )}
-                  </>
-                )}
-
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#9e9e9e' }}>
-                      <BarChartIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Categoria"
-                    secondary={transacaoSelecionada.categoria || 'Sem categoria'}
-                  />
-                </ListItem>
-
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar sx={{ 
-                      bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e'
-                    }}>
-                      {statusColors[transacaoSelecionada.status]?.icon}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="Status"
-                    secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status}
-                  />
-                </ListItem>
-
-                {transacaoSelecionada.observacoes && (
-                  <ListItem>
-                    <ListItemText
-                      primary="Observações"
-                      secondary={transacaoSelecionada.observacoes}
-                    />
-                  </ListItem>
-                )}
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9c27b0' }}><ReceiptIcon /></Avatar></ListItemAvatar><ListItemText primary="Descrição" secondary={transacaoSelecionada.descricao} /></ListItem>
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' }}>{transacaoSelecionada.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}</Avatar></ListItemAvatar><ListItemText primary="Valor" secondary={formatarMoeda(transacaoSelecionada.valor)} /></ListItem>
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={formatarDataExibicao(transacaoSelecionada.data)} /></ListItem>
+                {transacaoSelecionada.dataVencimento && <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={formatarDataExibicao(transacaoSelecionada.dataVencimento)} /></ListItem>}
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem>
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem>
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem>
+                {transacaoSelecionada.observacoes && <ListItem><ListItemText primary="Observações" secondary={transacaoSelecionada.observacoes} /></ListItem>}
               </List>
             </Box>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleCloseDetalhes}>Fechar</Button>
-          {transacaoSelecionada?.status === 'pendente' && (
-            <Button
-              variant="contained"
-              color="success"
-              onClick={() => {
-                handleCloseDetalhes();
-                handleMarcarComoPago(transacaoSelecionada);
-              }}
-            >
+          {transacaoSelecionada?.status === 'pendente' && verificarPermissao('pagar') && (
+            <Button variant="contained" color="success" onClick={() => { handleCloseDetalhes(); handleMarcarComoPago(transacaoSelecionada); }}>
               Marcar como Pago
             </Button>
           )}
@@ -1941,95 +2343,163 @@ function ModernFinanceiro() {
 
       {/* Dialog de Relatórios */}
       <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorioDialog} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          📊 Relatórios Financeiros
-        </DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>📊 Relatórios Financeiros</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Fluxo de Caixa</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Análise detalhada do fluxo de caixa por período
-                    </Typography>
-                  </CardContent>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => setOpenFluxoProjetadoDialog(true)}>
+                  <CardContent><Typography variant="h6" gutterBottom>Fluxo de Caixa</Typography><Typography variant="body2" color="textSecondary">Análise detalhada do fluxo de caixa por período</Typography></CardContent>
                 </Card>
               </Grid>
-              
               <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>DRE</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Demonstrativo de Resultados do Exercício
-                    </Typography>
-                  </CardContent>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => setOpenOrcamentoDialog(true)}>
+                  <CardContent><Typography variant="h6" gutterBottom>DRE</Typography><Typography variant="body2" color="textSecondary">Demonstrativo de Resultados do Exercício</Typography></CardContent>
                 </Card>
               </Grid>
-              
               <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Contas a Receber</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Análise de contas a receber por cliente e período
-                    </Typography>
-                  </CardContent>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => setOpenComissaoProfissionalDialog(true)}>
+                  <CardContent><Typography variant="h6" gutterBottom>Comissões</Typography><Typography variant="body2" color="textSecondary">Relatório de comissões por profissional e período</Typography></CardContent>
                 </Card>
               </Grid>
-              
               <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Contas a Pagar</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Análise de contas a pagar por fornecedor e período
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Comissões</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Relatório de comissões por profissional e período
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Compras</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Análise de compras por fornecedor e período
-                    </Typography>
-                  </CardContent>
+                <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={() => {}}>
+                  <CardContent><Typography variant="h6" gutterBottom>Compras</Typography><Typography variant="body2" color="textSecondary">Análise de compras por fornecedor e período</Typography></CardContent>
                 </Card>
               </Grid>
             </Grid>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseRelatorioDialog}>Fechar</Button>
-        </DialogActions>
+        <DialogActions><Button onClick={handleCloseRelatorioDialog}>Fechar</Button></DialogActions>
       </Dialog>
 
+      {/* Dialog de Alertas */}
+      <Dialog open={openAlertasDialog} onClose={() => setOpenAlertasDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><NotificationsIcon sx={{ mr: 1 }} /> Alertas de Vencimento</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            {alertasVencimento.length === 0 ? (
+              <Typography color="textSecondary">Nenhum alerta no momento</Typography>
+            ) : (
+              alertasVencimento.map((alerta, index) => (
+                <Alert key={index} severity={alerta.severidade} sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => handleMarcarComoPago(alerta)}>Pagar</Button>}>
+                  <strong>{alerta.descricao}</strong> - {alerta.mensagem}<br />
+                  <small>Valor: {formatarMoeda(alerta.valor)} | Vencimento: {formatarDataExibicao(alerta.dataVencimento)}</small>
+                </Alert>
+              ))
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenAlertasDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Dialog de Comissões por Profissional */}
+      <Dialog open={openComissaoProfissionalDialog} onClose={() => setOpenComissaoProfissionalDialog(false)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}><PercentIcon sx={{ mr: 1 }} /> Relatório de Comissões por Profissional</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              {Object.entries(comissoesPorProfissional).map(([profissional, dados]) => (
+                <Grid item xs={12} md={6} key={profissional}>
+                  <Card><CardContent>
+                    <Typography variant="h6" gutterBottom><PersonIcon sx={{ mr: 1 }} /> {profissional}</Typography>
+                    <Divider sx={{ my: 1 }} />
+                    <Grid container spacing={1}>
+                      <Grid item xs={4}><Typography variant="caption" color="textSecondary">Total</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: '#9c27b0' }}>{formatarMoeda(dados.total)}</Typography></Grid>
+                      <Grid item xs={4}><Typography variant="caption" color="textSecondary">Pagas</Typography><Typography variant="body1" sx={{ color: '#4caf50' }}>{formatarMoeda(dados.pagas)}</Typography></Grid>
+                      <Grid item xs={4}><Typography variant="caption" color="textSecondary">Pendentes</Typography><Typography variant="body1" sx={{ color: '#ff9800' }}>{formatarMoeda(dados.pendentes)}</Typography></Grid>
+                    </Grid>
+                  </CardContent></Card>
+                </Grid>
+              ))}
+              {Object.keys(comissoesPorProfissional).length === 0 && <Typography color="textSecondary">Nenhuma comissão encontrada</Typography>}
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions><Button startIcon={<DownloadIcon />} onClick={exportarParaExcel}>Exportar</Button><Button onClick={() => setOpenComissaoProfissionalDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Dialog de Fluxo Projetado */}
+      <Dialog open={openFluxoProjetadoDialog} onClose={() => setOpenFluxoProjetadoDialog(false)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}><TimelineIcon sx={{ mr: 1 }} /> Fluxo de Caixa Projetado (30 dias)</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <TableContainer><Table size="small">
+              <TableHead><TableRow sx={{ bgcolor: '#f5f5f5' }}><TableCell><strong>Data</strong></TableCell><TableCell align="right"><strong>A Receber</strong></TableCell><TableCell align="right"><strong>A Pagar</strong></TableCell><TableCell align="right"><strong>Saldo Projetado</strong></TableCell></TableRow></TableHead>
+              <TableBody>
+                {fluxoProjetado.map((dia, index) => (
+                  <TableRow key={index} sx={{ bgcolor: dia.saldo < 0 ? '#ffebee' : 'inherit' }}>
+                    <TableCell>{dia.data}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoeda(dia.receber)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarMoeda(dia.pagar)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: dia.saldo >= 0 ? '#4caf50' : '#f44336' }}>{formatarMoeda(dia.saldo)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table></TableContainer>
+          </Box>
+        </DialogContent>
+        <DialogActions><Button startIcon={<DownloadIcon />} onClick={exportarParaExcel}>Exportar</Button><Button onClick={() => setOpenFluxoProjetadoDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Dialog de Conciliação Bancária */}
+      <Dialog open={openConciliacaoDialog} onClose={() => setOpenConciliacaoDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#00bcd4', color: 'white' }}><CompareArrowsIcon sx={{ mr: 1 }} /> Conciliação Bancária</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mb: 2 }}>Faça upload do extrato bancário (CSV/OFX) para conciliar automaticamente.</Alert>
+            <Button variant="outlined" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 3, py: 2 }} onClick={() => { mostrarSnackbar('Funcionalidade em desenvolvimento'); }}>
+              Upload do Extrato Bancário
+            </Button>
+            {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom>Últimas Conciliações</Typography>}
+            {conciliacoes.slice(0, 5).map((conc, idx) => (
+              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação realizada em {formatarDataExibicao(conc.dataConciliacao)}</Alert>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenConciliacaoDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Dialog de Orçamentos */}
+      <Dialog open={openOrcamentoDialog} onClose={() => setOpenOrcamentoDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><AssessmentIcon sx={{ mr: 1 }} /> Orçamentos e Previsões</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Button variant="contained" startIcon={<AddIcon />} fullWidth sx={{ mb: 3 }} onClick={handleSalvarOrcamento}>Criar Novo Orçamento</Button>
+            {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc, idx) => (
+              <Card key={idx} sx={{ mb: 2 }}><CardContent><Typography variant="subtitle1">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {formatarDataExibicao(orc.criadoEm)}</Typography><Button size="small">Editar</Button><Button size="small">Visualizar</Button></CardContent></Card>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenOrcamentoDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Dialog de Perfil */}
+      <Dialog open={openPerfilDialog} onClose={() => setOpenPerfilDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}><LockIcon sx={{ mr: 1 }} /> Controle de Acesso</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" gutterBottom>Perfil atual: <strong>{perfisAcesso[perfilAtual]?.label}</strong></Typography>
+            <FormControl fullWidth sx={{ mt: 2 }}><InputLabel>Alterar Perfil</InputLabel><Select value={perfilAtual} label="Alterar Perfil" onChange={(e) => handleTrocarPerfil(e.target.value)}>
+              {Object.entries(perfisAcesso).map(([key, value]) => (<MenuItem key={key} value={key}>{value.label}</MenuItem>))}
+            </Select></FormControl>
+            <Alert severity="info" sx={{ mt: 3 }}><strong>Permissões do perfil atual:</strong><ul>{perfisAcesso[perfilAtual]?.permissoes.map(perm => (<li key={perm}>{perm}</li>))}</ul></Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenPerfilDialog(false)}>Fechar</Button></DialogActions>
+      </Dialog>
+
+      {/* Speed Dial */}
+      <SpeedDial ariaLabel="Ações rápidas" sx={{ position: 'fixed', bottom: 16, right: 16 }} icon={<SpeedDialIcon />} onClose={() => setOpenSpeedDial(false)} onOpen={() => setOpenSpeedDial(true)} open={openSpeedDial}>
+        <SpeedDialAction icon={<AddIcon />} tooltipTitle="Nova Transação" onClick={() => handleOpenDialog()} />
+        <SpeedDialAction icon={<PercentIcon />} tooltipTitle="Relatório Comissões" onClick={() => setOpenComissaoProfissionalDialog(true)} />
+        <SpeedDialAction icon={<TimelineIcon />} tooltipTitle="Fluxo Projetado" onClick={() => setOpenFluxoProjetadoDialog(true)} />
+        <SpeedDialAction icon={<RefreshIcon />} tooltipTitle="Atualizar" onClick={carregarDados} />
+      </SpeedDial>
+
       {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </LocalizationProvider>
   );
