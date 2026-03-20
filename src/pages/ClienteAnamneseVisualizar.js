@@ -14,6 +14,9 @@ import {
   Avatar,
   Divider,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -21,6 +24,8 @@ import {
   Event as EventIcon,
   Schedule as ScheduleIcon,
   Assignment as AssignmentIcon,
+  Close as CloseIcon,
+  ZoomIn as ZoomInIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
@@ -37,12 +42,21 @@ function ClienteAnamneseVisualizar() {
   const [resposta, setResposta] = useState(null);
   const [formulario, setFormulario] = useState(null);
   const [atendimento, setAtendimento] = useState(null);
+  const [modalAssinaturaAberta, setModalAssinaturaAberta] = useState(false);
 
   useEffect(() => {
     if (respostaId) {
       carregarResposta();
     }
   }, [respostaId]);
+
+  useEffect(() => {
+    if (resposta) {
+      console.log('📄 Estrutura completa da resposta:', resposta);
+      console.log('📝 Campo assinaturaUrl:', resposta.assinaturaUrl);
+      console.log('🔍 Todos os campos disponíveis:', Object.keys(resposta));
+    }
+  }, [resposta]);
 
   const carregarResposta = async () => {
     try {
@@ -93,35 +107,160 @@ function ClienteAnamneseVisualizar() {
 
   // Função para renderizar a assinatura
   const renderizarAssinatura = () => {
-    if (resposta.assinaturaUrl) {
-      return (
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            Assinatura do Cliente
-          </Typography>
-          <Paper 
-            variant="outlined" 
-            sx={{ 
-              p: 2, 
-              bgcolor: '#faf5ff',
-              display: 'inline-block',
-              maxWidth: '100%'
+    // Tenta diferentes possíveis nomes de campo para a assinatura
+    const assinatura = resposta.assinaturaUrl || resposta.assinatura || resposta.assinaturaBase64;
+    
+    if (!assinatura) {
+      console.log('❌ Nenhuma assinatura encontrada nos campos:', {
+        assinaturaUrl: resposta.assinaturaUrl,
+        assinatura: resposta.assinatura,
+        assinaturaBase64: resposta.assinaturaBase64
+      });
+      return null;
+    }
+
+    console.log('✅ Assinatura encontrada, tipo:', typeof assinatura);
+    console.log('✅ Primeiros 50 caracteres:', assinatura.substring(0, 50));
+
+    // Se for base64, garante que tem o prefixo correto
+    let src = assinatura;
+    if (typeof assinatura === 'string' && !assinatura.startsWith('data:image')) {
+      // Se não tiver o prefixo data:image, adiciona
+      src = `data:image/png;base64,${assinatura}`;
+    }
+
+    return (
+      <Box sx={{ mt: 3, textAlign: 'center' }}>
+        <Typography 
+          variant="subtitle2" 
+          color="textSecondary" 
+          gutterBottom
+          sx={{ 
+            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            fontWeight: 600
+          }}
+        >
+          Assinatura do Cliente
+        </Typography>
+        <Paper 
+          variant="outlined" 
+          sx={{ 
+            p: 2, 
+            bgcolor: '#faf5ff',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 1,
+            cursor: 'pointer',
+            border: '1px dashed #9c27b0',
+            transition: 'all 0.2s',
+            '&:hover': {
+              bgcolor: '#f3e5f5',
+              border: '1px solid #9c27b0',
+              transform: 'scale(1.02)'
+            }
+          }}
+          onClick={() => setModalAssinaturaAberta(true)}
+        >
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            gap: 1,
+            mb: 1
+          }}>
+            <ZoomInIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
+            <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 500 }}>
+              Clique para ampliar
+            </Typography>
+          </Box>
+          <img 
+            src={src}
+            alt="Assinatura do cliente"
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '80px',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              display: 'block'
             }}
-          >
+            onLoad={() => console.log('✅ Assinatura carregada com sucesso')}
+            onError={(e) => {
+              console.error('❌ Erro ao carregar assinatura');
+              e.target.style.display = 'none';
+              // Mostra fallback
+              const parent = e.target.parentNode;
+              const fallback = document.createElement('div');
+              fallback.innerHTML = `
+                <div style="text-align: center; color: #666; padding: 10px;">
+                  <p style="margin: 0; font-size: 0.875rem;">⚠️ Assinatura indisponível</p>
+                  <p style="margin: 0; font-size: 0.7rem; color: #999;">Formato: base64</p>
+                </div>
+              `;
+              parent.appendChild(fallback);
+            }}
+          />
+        </Paper>
+
+        {/* Modal para visualização ampliada */}
+        <Dialog
+          open={modalAssinaturaAberta}
+          onClose={() => setModalAssinaturaAberta(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: { xs: 2, sm: 3 },
+              m: { xs: 1, sm: 2 }
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            borderBottom: '1px solid #f0f0f0',
+            py: { xs: 1.5, sm: 2 },
+            px: { xs: 2, sm: 3 }
+          }}>
+            <Typography variant="h6" sx={{ 
+              fontSize: { xs: '1rem', sm: '1.25rem' },
+              color: '#9c27b0',
+              fontWeight: 600
+            }}>
+              Assinatura do Cliente
+            </Typography>
+            <IconButton
+              onClick={() => setModalAssinaturaAberta(false)}
+              size="small"
+              sx={{ color: '#666' }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ 
+            p: { xs: 2, sm: 3 },
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: { xs: '250px', sm: '300px', md: '400px' }
+          }}>
             <img 
-              src={resposta.assinaturaUrl} 
+              src={src}
               alt="Assinatura do cliente"
               style={{ 
                 maxWidth: '100%', 
-                maxHeight: '150px',
+                maxHeight: { xs: '300px', sm: '400px', md: '500px' },
+                width: 'auto',
+                height: 'auto',
                 objectFit: 'contain'
               }}
             />
-          </Paper>
-        </Box>
-      );
-    }
-    return null;
+          </DialogContent>
+        </Dialog>
+      </Box>
+    );
   };
 
   if (loading) {
@@ -315,7 +454,7 @@ function ClienteAnamneseVisualizar() {
               </Typography>
             </Box>
 
-            {/* Assinatura - AGORA MOSTRA A ASSINATURA EM VEZ DA DATA */}
+            {/* Assinatura do cliente */}
             {renderizarAssinatura()}
           </CardContent>
         </Card>
