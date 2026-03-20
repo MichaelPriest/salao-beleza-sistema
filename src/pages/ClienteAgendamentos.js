@@ -38,6 +38,19 @@ import {
   FormGroup,
   FormControlLabel,
   Collapse,
+  useTheme,
+  useMediaQuery,
+  Fab,
+  Zoom,
+  SwipeableDrawer,
+  BottomNavigation,
+  BottomNavigationAction,
+  Badge,
+  Stepper,
+  Step,
+  StepLabel,
+  MobileStepper,
+  Slide,
 } from '@mui/material';
 import {
   CalendarToday as CalendarIcon,
@@ -54,6 +67,13 @@ import {
   ExpandLess as ExpandLessIcon,
   Delete as DeleteIcon,
   AttachMoney as MoneyIcon,
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  HighlightOff as HighlightOffIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -61,8 +81,168 @@ import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
+// Componente Mobile para cards de agendamento
+const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancelar }) => {
+  const getStatusColor = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'confirmado': return '#4caf50';
+      case 'pendente': return '#ff9800';
+      case 'cancelado': return '#f44336';
+      case 'finalizado': return '#2196f3';
+      default: return '#9e9e9e';
+    }
+  };
+
+  const getStatusBg = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'confirmado': return '#e8f5e9';
+      case 'pendente': return '#fff3e0';
+      case 'cancelado': return '#ffebee';
+      case 'finalizado': return '#e3f2fd';
+      default: return '#f5f5f5';
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <Card 
+        variant="outlined" 
+        sx={{ 
+          mb: 2,
+          borderLeft: '4px solid',
+          borderLeftColor: getStatusColor(agendamento.status),
+          borderRadius: 2,
+          overflow: 'hidden'
+        }}
+      >
+        <CardContent sx={{ p: 2 }}>
+          {/* Cabeçalho com data e status */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CalendarIcon sx={{ color: '#9c27b0', fontSize: 20 }} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {new Date(agendamento.data).toLocaleDateString('pt-BR')}
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              label={agendamento.status}
+              sx={{
+                bgcolor: getStatusBg(agendamento.status),
+                color: getStatusColor(agendamento.status),
+                fontWeight: 600,
+                height: 24
+              }}
+            />
+          </Box>
+
+          {/* Horário e serviços */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TimeIcon sx={{ color: '#ff4081', fontSize: 16 }} />
+            <Typography variant="body2" color="textSecondary">
+              {agendamento.horario}
+            </Typography>
+          </Box>
+
+          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+            {agendamento.quantidadeServicos > 1 
+              ? `${agendamento.quantidadeServicos} serviços` 
+              : agendamento.servicosNomes || agendamento.servicoNome}
+          </Typography>
+
+          {/* Chips de serviços (apenas os primeiros 2) */}
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
+            {agendamento.servicos?.slice(0, 2).map((servico, idx) => (
+              <Chip
+                key={idx}
+                label={servico.nome}
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: '0.7rem' }}
+              />
+            ))}
+            {agendamento.servicos?.length > 2 && (
+              <Chip
+                label={`+${agendamento.servicos.length - 2}`}
+                size="small"
+                sx={{ fontSize: '0.7rem' }}
+              />
+            )}
+          </Box>
+
+          {/* Profissional e valor */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar 
+                src={profissional?.foto}
+                sx={{ width: 24, height: 24, bgcolor: '#ff9800' }}
+              >
+                {!profissional?.foto && (agendamento.profissionalNome?.charAt(0) || '?')}
+              </Avatar>
+              <Typography variant="caption">
+                {agendamento.profissionalNome || 'A definir'}
+              </Typography>
+            </Box>
+            {agendamento.valorTotal > 0 && (
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                R$ {agendamento.valorTotal.toFixed(2)}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Observações (se houver) */}
+          {agendamento.observacoes && (
+            <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
+              Obs: {agendamento.observacoes}
+            </Typography>
+          )}
+
+          {/* Ações */}
+          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 2 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => onDetalhes(agendamento)}
+              sx={{ borderColor: '#9c27b0', color: '#9c27b0', flex: 1 }}
+            >
+              Detalhes
+            </Button>
+            {agendamento.status?.toLowerCase() === 'pendente' && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={() => onCancelar(agendamento)}
+                sx={{ flex: 1 }}
+              >
+                Cancelar
+              </Button>
+            )}
+          </Box>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
+// Componente de carregamento
+const LoadingSkeleton = () => (
+  <Box sx={{ width: '100%', p: 2 }}>
+    <CircularProgress />
+  </Box>
+);
+
 function ClienteAgendamentos() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  
   const { cliente, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
   const [agendamentos, setAgendamentos] = useState([]);
@@ -74,6 +254,8 @@ function ClienteAgendamentos() {
   const [selectedAgendamento, setSelectedAgendamento] = useState(null);
   const [selectedServicos, setSelectedServicos] = useState([]);
   const [servicoExpandido, setServicoExpandido] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [filterStatus, setFilterStatus] = useState('todos');
   const [formData, setFormData] = useState({
     profissionalId: '',
     data: '',
@@ -141,6 +323,7 @@ function ClienteAgendamentos() {
       observacoes: '',
     });
     setServicoExpandido(true);
+    setActiveStep(0);
     setOpenDialog(true);
   };
 
@@ -181,6 +364,18 @@ function ClienteAgendamentos() {
 
   const calcularDuracaoTotal = () => {
     return selectedServicos.reduce((total, servico) => total + (servico.duracao || 0), 0);
+  };
+
+  const handleNext = () => {
+    if (activeStep === 0 && selectedServicos.length === 0) {
+      toast.error('Selecione pelo menos um serviço');
+      return;
+    }
+    setActiveStep(prev => prev + 1);
+  };
+
+  const handleBack = () => {
+    setActiveStep(prev => prev - 1);
   };
 
   const handleSalvarAgendamento = async () => {
@@ -281,6 +476,15 @@ function ClienteAgendamentos() {
   };
 
   const getStatusLabel = (status) => {
+    if (isMobile) {
+      switch(status?.toLowerCase()) {
+        case 'confirmado': return 'Conf.';
+        case 'pendente': return 'Pend.';
+        case 'cancelado': return 'Canc.';
+        case 'finalizado': return 'Real.';
+        default: return status || 'Pend.';
+      }
+    }
     switch(status?.toLowerCase()) {
       case 'confirmado': return 'Confirmado';
       case 'pendente': return 'Pendente';
@@ -303,10 +507,33 @@ function ClienteAgendamentos() {
   const formatarData = (data) => {
     if (!data) return '-';
     try {
-      return new Date(data).toLocaleDateString('pt-BR', {
+      const date = new Date(data);
+      if (isMobile) {
+        return date.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit'
+        });
+      }
+      return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
+      });
+    } catch {
+      return data;
+    }
+  };
+
+  const formatarDataCompleta = (data) => {
+    if (!data) return '-';
+    try {
+      const date = new Date(data);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return data;
@@ -326,12 +553,17 @@ function ClienteAgendamentos() {
     return data >= hoje;
   };
 
-  const agendamentosFuturos = agendamentos.filter(a => {
+  const agendamentosFiltrados = agendamentos.filter(a => {
+    if (filterStatus === 'todos') return true;
+    return a.status?.toLowerCase() === filterStatus;
+  });
+
+  const agendamentosFuturos = agendamentosFiltrados.filter(a => {
     const status = a.status?.toLowerCase() || '';
     return status !== 'cancelado' && status !== 'finalizado';
   }).sort((a, b) => a.data.localeCompare(b.data) || a.horario.localeCompare(b.horario));
 
-  const agendamentosPassados = agendamentos.filter(a => {
+  const agendamentosPassados = agendamentosFiltrados.filter(a => {
     const status = a.status?.toLowerCase() || '';
     return status === 'cancelado' || status === 'finalizado';
   }).sort((b, a) => b.data.localeCompare(a.data));
@@ -344,6 +576,196 @@ function ClienteAgendamentos() {
     );
   }
 
+  // Versão Mobile
+  if (isMobile) {
+    return (
+      <Box sx={{ pb: 7 }}>
+        {/* Cabeçalho Mobile */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          p: 2,
+          bgcolor: 'white',
+          borderBottom: '1px solid #f0f0f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Meus Agendamentos
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton size="small" onClick={carregarDados}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+            <IconButton size="small" onClick={handleNovoAgendamento} sx={{ color: '#9c27b0' }}>
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* Filtros Mobile */}
+        <Box sx={{ p: 2, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+          <Chip
+            label="Todos"
+            onClick={() => setFilterStatus('todos')}
+            color={filterStatus === 'todos' ? 'primary' : 'default'}
+            sx={{ mr: 1 }}
+          />
+          <Chip
+            label="Pendentes"
+            onClick={() => setFilterStatus('pendente')}
+            color={filterStatus === 'pendente' ? 'warning' : 'default'}
+            sx={{ mr: 1 }}
+          />
+          <Chip
+            label="Confirmados"
+            onClick={() => setFilterStatus('confirmado')}
+            color={filterStatus === 'confirmado' ? 'success' : 'default'}
+            sx={{ mr: 1 }}
+          />
+          <Chip
+            label="Cancelados"
+            onClick={() => setFilterStatus('cancelado')}
+            color={filterStatus === 'cancelado' ? 'error' : 'default'}
+            sx={{ mr: 1 }}
+          />
+          <Chip
+            label="Realizados"
+            onClick={() => setFilterStatus('finalizado')}
+            color={filterStatus === 'finalizado' ? 'info' : 'default'}
+          />
+        </Box>
+
+        {/* Cards de Resumo Mobile */}
+        <Grid container spacing={1} sx={{ mb: 2, px: 2 }}>
+          <Grid item xs={4}>
+            <Card sx={{ textAlign: 'center', py: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                {agendamentosFuturos.length}
+              </Typography>
+              <Typography variant="caption">Futuros</Typography>
+            </Card>
+          </Grid>
+          <Grid item xs={4}>
+            <Card sx={{ textAlign: 'center', py: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                {agendamentos.filter(a => a.status?.toLowerCase() === 'pendente').length}
+              </Typography>
+              <Typography variant="caption">Pend.</Typography>
+            </Card>
+          </Grid>
+          <Grid item xs={4}>
+            <Card sx={{ textAlign: 'center', py: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                {agendamentos.filter(a => a.status?.toLowerCase() === 'confirmado').length}
+              </Typography>
+              <Typography variant="caption">Conf.</Typography>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Lista de Agendamentos Mobile */}
+        <Box sx={{ px: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+            Próximos Agendamentos
+          </Typography>
+          
+          <AnimatePresence>
+            {agendamentosFuturos.length > 0 ? (
+              agendamentosFuturos.map((agendamento) => {
+                const profissional = profissionais.find(p => 
+                  p.id === agendamento.profissionalId || 
+                  p.uid === agendamento.profissionalId
+                );
+                return (
+                  <MobileAgendamentoCard
+                    key={agendamento.id}
+                    agendamento={agendamento}
+                    profissional={profissional}
+                    onDetalhes={handleVerDetalhes}
+                    onCancelar={handleCancelarAgendamento}
+                  />
+                );
+              })
+            ) : (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <EventIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+                <Typography variant="body1" color="textSecondary" gutterBottom>
+                  Nenhum agendamento futuro
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleNovoAgendamento}
+                  sx={{ mt: 2, bgcolor: '#9c27b0' }}
+                >
+                  Agendar Agora
+                </Button>
+              </Paper>
+            )}
+          </AnimatePresence>
+
+          {/* Histórico Mobile */}
+          {agendamentosPassados.length > 0 && (
+            <>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, mt: 4 }}>
+                Histórico
+              </Typography>
+              
+              <AnimatePresence>
+                {agendamentosPassados.slice(0, 3).map((agendamento) => {
+                  const profissional = profissionais.find(p => 
+                    p.id === agendamento.profissionalId || 
+                    p.uid === agendamento.profissionalId
+                  );
+                  return (
+                    <MobileAgendamentoCard
+                      key={agendamento.id}
+                      agendamento={agendamento}
+                      profissional={profissional}
+                      onDetalhes={handleVerDetalhes}
+                      onCancelar={handleCancelarAgendamento}
+                    />
+                  );
+                })}
+                {agendamentosPassados.length > 3 && (
+                  <Button
+                    fullWidth
+                    variant="text"
+                    onClick={() => setFilterStatus('finalizado')}
+                    sx={{ color: '#9c27b0' }}
+                  >
+                    Ver todos ({agendamentosPassados.length})
+                  </Button>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </Box>
+
+        {/* FAB para novo agendamento */}
+        <Zoom in={true}>
+          <Fab
+            color="primary"
+            sx={{
+              position: 'fixed',
+              bottom: 80,
+              right: 16,
+              bgcolor: '#9c27b0',
+              '&:hover': { bgcolor: '#7b1fa2' }
+            }}
+            onClick={handleNovoAgendamento}
+          >
+            <AddIcon />
+          </Fab>
+        </Zoom>
+      </Box>
+    );
+  }
+
+  // Versão Desktop (mantida)
   return (
     <Box>
       {/* Cabeçalho */}
@@ -374,6 +796,35 @@ function ClienteAgendamentos() {
             Novo Agendamento
           </Button>
         </Box>
+      </Box>
+
+      {/* Filtros Desktop */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 1 }}>
+        <Chip
+          label="Todos"
+          onClick={() => setFilterStatus('todos')}
+          color={filterStatus === 'todos' ? 'primary' : 'default'}
+        />
+        <Chip
+          label="Pendentes"
+          onClick={() => setFilterStatus('pendente')}
+          color={filterStatus === 'pendente' ? 'warning' : 'default'}
+        />
+        <Chip
+          label="Confirmados"
+          onClick={() => setFilterStatus('confirmado')}
+          color={filterStatus === 'confirmado' ? 'success' : 'default'}
+        />
+        <Chip
+          label="Cancelados"
+          onClick={() => setFilterStatus('cancelado')}
+          color={filterStatus === 'cancelado' ? 'error' : 'default'}
+        />
+        <Chip
+          label="Realizados"
+          onClick={() => setFilterStatus('finalizado')}
+          color={filterStatus === 'finalizado' ? 'info' : 'default'}
+        />
       </Box>
 
       {/* Cards de Resumo */}
@@ -644,7 +1095,7 @@ function ClienteAgendamentos() {
         </CardContent>
       </Card>
 
-      {/* Dialog de Novo Agendamento */}
+      {/* Dialog de Novo Agendamento (com Stepper para mobile) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -653,9 +1104,29 @@ function ClienteAgendamentos() {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            {/* Seção de Serviços */}
-            <Grid item xs={12}>
+          {isMobile && (
+            <MobileStepper
+              variant="progress"
+              steps={2}
+              position="static"
+              activeStep={activeStep}
+              sx={{ mb: 2 }}
+              nextButton={
+                <Button size="small" onClick={handleNext} disabled={activeStep === 1}>
+                  {activeStep === 0 ? 'Próximo' : 'Finalizar'}
+                </Button>
+              }
+              backButton={
+                <Button size="small" onClick={handleBack} disabled={activeStep === 0}>
+                  Voltar
+                </Button>
+              }
+            />
+          )}
+
+          <Box sx={{ mt: 2 }}>
+            {/* Passo 1: Seleção de Serviços */}
+            {(activeStep === 0 || !isMobile) && (
               <Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}>
                 <Box 
                   sx={{ 
@@ -779,92 +1250,119 @@ function ClienteAgendamentos() {
                   </Box>
                 </Collapse>
               </Paper>
-            </Grid>
+            )}
 
-            {/* Profissional */}
-            <Grid item xs={12}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Profissional</InputLabel>
-                <Select
-                  value={formData.profissionalId}
-                  label="Profissional"
-                  onChange={(e) => setFormData({ ...formData, profissionalId: e.target.value })}
-                >
-                  <MenuItem value="">Qualquer profissional disponível</MenuItem>
-                  {profissionais.map(prof => (
-                    <MenuItem key={prof.id} value={prof.id}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar src={prof.foto} sx={{ width: 24, height: 24 }}>
-                          {prof.nome?.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2">{prof.nome}</Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {prof.especialidade}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+            {/* Passo 2: Dados do Agendamento */}
+            {(activeStep === 1 || !isMobile) && (
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {/* Profissional */}
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Profissional</InputLabel>
+                    <Select
+                      value={formData.profissionalId}
+                      label="Profissional"
+                      onChange={(e) => setFormData({ ...formData, profissionalId: e.target.value })}
+                    >
+                      <MenuItem value="">Qualquer profissional disponível</MenuItem>
+                      {profissionais.map(prof => (
+                        <MenuItem key={prof.id} value={prof.id}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar src={prof.foto} sx={{ width: 24, height: 24 }}>
+                              {prof.nome?.charAt(0)}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2">{prof.nome}</Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {prof.especialidade}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
 
-            {/* Data e Horário */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data *"
-                value={formData.data}
-                onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-                inputProps={{ min: new Date().toISOString().split('T')[0] }}
-                error={formData.data && !isDataValida(formData.data)}
-                helperText={formData.data && !isDataValida(formData.data) ? 'Data inválida' : ''}
-              />
-            </Grid>
+                {/* Data e Horário */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Data *"
+                    value={formData.data}
+                    onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                    inputProps={{ min: new Date().toISOString().split('T')[0] }}
+                    error={formData.data && !isDataValida(formData.data)}
+                    helperText={formData.data && !isDataValida(formData.data) ? 'Data inválida' : ''}
+                  />
+                </Grid>
 
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Horário *</InputLabel>
-                <Select
-                  value={formData.horario}
-                  label="Horário *"
-                  onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
-                >
-                  {timeSlots.map(time => (
-                    <MenuItem key={time} value={time}>{time}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth size="small" required>
+                    <InputLabel>Horário *</InputLabel>
+                    <Select
+                      value={formData.horario}
+                      label="Horário *"
+                      onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                    >
+                      {timeSlots.map(time => (
+                        <MenuItem key={time} value={time}>{time}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
 
-            {/* Observações */}
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Observações"
-                multiline
-                rows={3}
-                value={formData.observacoes}
-                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                size="small"
-                placeholder="Alguma observação especial? (ex: alergias, preferências)"
-              />
-            </Grid>
-          </Grid>
+                {/* Observações */}
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Observações"
+                    multiline
+                    rows={3}
+                    value={formData.observacoes}
+                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                    size="small"
+                    placeholder="Alguma observação especial? (ex: alergias, preferências)"
+                  />
+                </Grid>
+              </Grid>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
-          <Button
-            onClick={handleSalvarAgendamento}
-            variant="contained"
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-          >
-            Solicitar Agendamento {selectedServicos.length > 0 && `(${formatarMoeda(calcularTotal())})`}
-          </Button>
+          {isMobile ? (
+            activeStep === 0 ? (
+              <Button
+                onClick={handleNext}
+                variant="contained"
+                disabled={selectedServicos.length === 0}
+                sx={{ bgcolor: '#9c27b0' }}
+              >
+                Próximo
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSalvarAgendamento}
+                variant="contained"
+                disabled={!formData.data || !formData.horario}
+                sx={{ bgcolor: '#9c27b0' }}
+              >
+                Solicitar Agendamento
+              </Button>
+            )
+          ) : (
+            <Button
+              onClick={handleSalvarAgendamento}
+              variant="contained"
+              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            >
+              Solicitar Agendamento {selectedServicos.length > 0 && `(${formatarMoeda(calcularTotal())})`}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
@@ -1004,7 +1502,7 @@ function ClienteAgendamentos() {
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Solicitado em</Typography>
                   <Typography variant="body2">
-                    {formatarData(selectedAgendamento.createdAt)}
+                    {formatarDataCompleta(selectedAgendamento.createdAt)}
                   </Typography>
                 </Grid>
               </Grid>
