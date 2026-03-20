@@ -1,6 +1,4 @@
 // src/pages/ModernFinanceiro.js
-// ATUALIZAÇÃO COMPLETA - CORREÇÃO DA DUPLICIDADE DE COMISSÕES
-
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -125,15 +123,6 @@ const statusColors = {
   cancelada: { color: '#f44336', label: 'Cancelada', icon: <CancelIcon /> },
 };
 
-const tipoColors = {
-  receita: { color: '#4caf50', label: 'Receita', icon: <TrendingUpIcon /> },
-  despesa: { color: '#f44336', label: 'Despesa', icon: <TrendingDownIcon /> },
-  transferencia: { color: '#9c27b0', label: 'Transferência', icon: <SwapHorizIcon /> },
-  investimento: { color: '#ff9800', label: 'Investimento', icon: <ShowChartIcon /> },
-  comissao: { color: '#9c27b0', label: 'Comissão', icon: <PercentIcon /> },
-  compra: { color: '#ff9800', label: 'Compra', icon: <ShoppingCartIcon /> },
-};
-
 const formasPagamento = [
   { value: 'dinheiro', label: 'Dinheiro', icon: '💵' },
   { value: 'cartao_credito', label: 'Cartão de Crédito', icon: '💳' },
@@ -145,7 +134,7 @@ const formasPagamento = [
   { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
 ];
 
-// Função para formatar data no horário de Brasília
+// Função para formatar data
 const formatarDataBrasilia = (date) => {
   if (!date) return '';
   const d = new Date(date);
@@ -158,29 +147,18 @@ const formatarDataExibicao = (date) => {
   return format(d, 'dd/MM/yyyy');
 };
 
-const formatarHoraBrasilia = () => {
-  return format(new Date(), 'HH:mm');
-};
-
-function TabPanel({ children, value, index }) {
-  return (
-    <div hidden={value !== index} role="tabpanel">
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
 function ModernFinanceiro() {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
-  const [periodoSelecionado, setPeriodoSelecionado] = useState('mes'); // 'mes', 'ano', 'personalizado'
+  const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
   
-  // Dados separados por origem
-  const [transacoesManuais, setTransacoesManuais] = useState([]); // Apenas transações manuais
-  const [comissoes, setComissoes] = useState([]); // Comissões puras
-  const [compras, setCompras] = useState([]); // Compras puras
+  // Dados separados
+  const [transacoesManuais, setTransacoesManuais] = useState([]); // Transações manuais
+  const [comissoes, setComissoes] = useState([]); // Comissões (são despesas)
+  const [compras, setCompras] = useState([]); // Compras (são despesas)
   
-  // Dados combinados para visualização geral (sem comissões duplicadas)
+  // Dados COMBINADOS para exibição geral (evita duplicidade)
+  // IMPORTANTE: Cada comissão e compra aparece APENAS UMA VEZ aqui
   const [transacoesCombinadas, setTransacoesCombinadas] = useState([]);
   
   const [categorias, setCategorias] = useState([]);
@@ -193,7 +171,6 @@ function ModernFinanceiro() {
   // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
-  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [dataInicio, setDataInicio] = useState(formatarDataBrasilia(startOfMonth(new Date())));
   const [dataFim, setDataFim] = useState(formatarDataBrasilia(new Date()));
@@ -207,7 +184,6 @@ function ModernFinanceiro() {
   const [openCaixaDialog, setOpenCaixaDialog] = useState(false);
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
-  const [openFiltroDialog, setOpenFiltroDialog] = useState(false);
   const [transacaoEditando, setTransacaoEditando] = useState(null);
   const [transacaoSelecionada, setTransacaoSelecionada] = useState(null);
   
@@ -227,26 +203,11 @@ function ModernFinanceiro() {
     clienteId: '',
     fornecedorId: '',
     profissionalId: '',
-    atendimentoId: '',
-    percentual: '',
     observacoes: '',
     parcelas: 1,
-    recorrente: false,
-    frequencia: 'mensal',
-    anexos: [],
-    tags: [],
-    // Para compras
-    itens: [],
-    numeroPedido: '',
-    prazoEntrega: '',
-    // Origem
-    origem: 'manual', // 'manual', 'comissao', 'compra'
+    origem: 'manual',
     origemId: '',
   });
-
-  // Estado para relatórios
-  const [relatorioTipo, setRelatorioTipo] = useState('fluxo');
-  const [relatorioPeriodo, setRelatorioPeriodo] = useState('mes');
 
   useEffect(() => {
     carregarDados();
@@ -280,26 +241,21 @@ function ModernFinanceiro() {
       const transacoesArray = Array.isArray(transacoesManuaisData) ? transacoesManuaisData : [];
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       const comprasArray = Array.isArray(comprasData) ? comprasData : [];
-      const clientesArray = Array.isArray(clientesData) ? clientesData : [];
-      const fornecedoresArray = Array.isArray(fornecedoresData) ? fornecedoresData : [];
-      const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
-      const servicosArray = Array.isArray(servicosData) ? servicosData : [];
       
-      // Armazenar dados separadamente
       setTransacoesManuais(transacoesArray);
       setComissoes(comissoesArray);
       setCompras(comprasArray);
-      setClientes(clientesArray);
-      setFornecedores(fornecedoresArray);
-      setProfissionais(profissionaisArray);
-      setServicos(servicosArray);
+      setClientes(Array.isArray(clientesData) ? clientesData : []);
+      setFornecedores(Array.isArray(fornecedoresData) ? fornecedoresData : []);
+      setProfissionais(Array.isArray(profissionaisData) ? profissionaisData : []);
+      setServicos(Array.isArray(servicosData) ? servicosData : []);
       
-      // Converter comissões para transações (apenas para exibição na aba de comissões)
-      const comissoesParaTransacao = comissoesArray
+      // Converter comissões para transações (TIPO = DESPESA)
+      const comissoesComoTransacoes = comissoesArray
         .filter(c => c.status !== 'cancelado')
         .map(comissao => ({
           id: `comissao_${comissao.id}`,
-          tipo: 'comissao', // AGORA É 'COMISSAO', não 'despesa'
+          tipo: 'despesa', // Comissão É uma despesa
           origem: 'comissao',
           origemId: comissao.id,
           descricao: `Comissão - ${comissao.servicoNome || 'Serviço'} - ${comissao.profissionalNome || ''}`,
@@ -311,8 +267,6 @@ function ModernFinanceiro() {
           status: comissao.status === 'pago' ? 'pago' : 'pendente',
           profissionalId: comissao.profissionalId,
           profissionalNome: comissao.profissionalNome,
-          atendimentoId: comissao.atendimentoId,
-          servicoId: comissao.servicoId,
           servicoNome: comissao.servicoNome,
           percentual: comissao.percentual,
           valorAtendimento: comissao.valorAtendimento,
@@ -321,12 +275,12 @@ function ModernFinanceiro() {
           updatedAt: comissao.updatedAt,
         }));
 
-      // Converter compras para transações (apenas para exibição na aba de compras)
-      const comprasParaTransacao = comprasArray
+      // Converter compras para transações (TIPO = DESPESA)
+      const comprasComoTransacoes = comprasArray
         .filter(c => c.status !== 'cancelada')
         .map(compra => ({
           id: `compra_${compra.id}`,
-          tipo: 'compra', // AGORA É 'COMPRA', não 'despesa'
+          tipo: 'despesa', // Compra É uma despesa
           origem: 'compra',
           origemId: compra.id,
           descricao: `Compra - ${compra.numeroPedido || 'Pedido'}`,
@@ -338,24 +292,23 @@ function ModernFinanceiro() {
           status: compra.status === 'pago' ? 'pago' : (compra.status === 'cancelada' ? 'cancelado' : 'pendente'),
           fornecedorId: compra.fornecedorId,
           numeroPedido: compra.numeroPedido,
-          prazoEntrega: compra.prazoEntrega,
           itens: compra.itens || [],
           observacoes: compra.observacoes,
           createdAt: compra.createdAt,
           updatedAt: compra.updatedAt,
         }));
 
-      // Combinar transações para visualização geral (SOMENTE transações manuais)
-      // Comissões NÃO entram nas despesas gerais para evitar duplicidade
+      // COMBINAR todas as transações (cada item aparece UMA ÚNICA VEZ)
+      // Não há duplicidade porque cada comissão/compra tem seu próprio ID único
       const todasTransacoes = [
-        ...transacoesArray, // Apenas transações manuais
-        // COMISSÕES E COMPRAS NÃO ENTRAM AQUI - ELAS TÊM ABAS ESPECÍFICAS
+        ...transacoesArray,      // Transações manuais
+        ...comissoesComoTransacoes,  // Comissões (uma vez)
+        ...comprasComoTransacoes      // Compras (uma vez)
       ];
 
       // Ordenar por data (mais recentes primeiro)
       todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
-      
-      // Armazenar combinadas (apenas manuais para geral)
+
       setTransacoesCombinadas(todasTransacoes);
       
       // Extrair categorias únicas
@@ -387,20 +340,13 @@ function ModernFinanceiro() {
   // Função para pagar comissão
   const handlePagarComissao = async (comissaoId) => {
     try {
-      // Atualizar comissão original
       await firebaseService.update('comissoes', comissaoId, {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
-      // Atualizar estado local
-      const comissoesAtualizadas = comissoes.map(c => 
-        c.id === comissaoId ? { ...c, status: 'pago', dataPagamento: new Date().toISOString() } : c
-      );
-      setComissoes(comissoesAtualizadas);
-
-      // Atualizar caixa (COMISSÃO É DESPESA DO SALÃO)
+      // Atualizar caixa
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const comissao = comissoes.find(c => c.id === comissaoId);
         if (comissao) {
@@ -424,14 +370,11 @@ function ModernFinanceiro() {
             updatedAt: new Date().toISOString(),
           });
           
-          setCaixa({ 
-            ...caixa, 
-            saldoAtual: novoSaldo, 
-            movimentacoes: novasMovimentacoes 
-          });
+          setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
         }
       }
 
+      await carregarDados();
       mostrarSnackbar('✅ Comissão paga com sucesso!');
     } catch (error) {
       console.error('Erro ao pagar comissão:', error);
@@ -442,20 +385,12 @@ function ModernFinanceiro() {
   // Função para pagar compra
   const handlePagarCompra = async (compraId) => {
     try {
-      // Atualizar compra original
       await firebaseService.update('compras', compraId, {
         status: 'pago',
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
-      // Atualizar estado local
-      const comprasAtualizadas = compras.map(c => 
-        c.id === compraId ? { ...c, status: 'pago', dataPagamento: new Date().toISOString() } : c
-      );
-      setCompras(comprasAtualizadas);
-
-      // Atualizar caixa
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const compra = compras.find(c => c.id === compraId);
         if (compra) {
@@ -479,18 +414,59 @@ function ModernFinanceiro() {
             updatedAt: new Date().toISOString(),
           });
           
-          setCaixa({ 
-            ...caixa, 
-            saldoAtual: novoSaldo, 
-            movimentacoes: novasMovimentacoes 
-          });
+          setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
         }
       }
 
+      await carregarDados();
       mostrarSnackbar('✅ Compra paga com sucesso!');
     } catch (error) {
       console.error('Erro ao pagar compra:', error);
       mostrarSnackbar('Erro ao pagar compra', 'error');
+    }
+  };
+
+  // Função para marcar transação manual como paga
+  const handleMarcarComoPago = async (transacao) => {
+    try {
+      const dadosTransacao = {
+        status: 'pago',
+        dataPagamento: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      await firebaseService.update('transacoes', transacao.id, dadosTransacao);
+
+      if (caixa && caixa.status === 'aberto' && caixa.id) {
+        const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
+        const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
+        
+        const novaMovimentacao = {
+          id: Date.now().toString(),
+          tipo: transacao.tipo,
+          valor: Number(transacao.valor),
+          descricao: String(transacao.descricao || ''),
+          data: new Date().toISOString(),
+          transacaoId: String(transacao.id),
+        };
+        
+        const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
+        const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
+        
+        await firebaseService.update('caixa', caixa.id, {
+          saldoAtual: Number(novoSaldo),
+          movimentacoes: novasMovimentacoes,
+          updatedAt: new Date().toISOString(),
+        });
+        
+        setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
+      }
+
+      await carregarDados();
+      mostrarSnackbar('✅ Transação marcada como paga!');
+    } catch (error) {
+      console.error('Erro ao marcar como pago:', error);
+      mostrarSnackbar('Erro ao processar pagamento', 'error');
     }
   };
 
@@ -508,9 +484,8 @@ function ModernFinanceiro() {
     setPage(0);
   };
 
-  // Handlers de diálogos
   const handleOpenDialog = (transacao = null) => {
-    if (transacao) {
+    if (transacao && transacao.origem === 'manual') {
       setTransacaoEditando(transacao);
       setFormData({
         tipo: transacao.tipo || 'receita',
@@ -524,19 +499,10 @@ function ModernFinanceiro() {
         clienteId: transacao.clienteId || '',
         fornecedorId: transacao.fornecedorId || '',
         profissionalId: transacao.profissionalId || '',
-        atendimentoId: transacao.atendimentoId || '',
-        percentual: transacao.percentual || '',
         observacoes: transacao.observacoes || '',
         parcelas: transacao.parcelas || 1,
-        recorrente: transacao.recorrente || false,
-        frequencia: transacao.frequencia || 'mensal',
-        anexos: transacao.anexos || [],
-        tags: transacao.tags || [],
-        itens: transacao.itens || [],
-        numeroPedido: transacao.numeroPedido || '',
-        prazoEntrega: transacao.prazoEntrega || '',
-        origem: transacao.origem || 'manual',
-        origemId: transacao.origemId || '',
+        origem: 'manual',
+        origemId: '',
       });
     } else {
       setTransacaoEditando(null);
@@ -552,17 +518,8 @@ function ModernFinanceiro() {
         clienteId: '',
         fornecedorId: '',
         profissionalId: '',
-        atendimentoId: '',
-        percentual: '',
         observacoes: '',
         parcelas: 1,
-        recorrente: false,
-        frequencia: 'mensal',
-        anexos: [],
-        tags: [],
-        itens: [],
-        numeroPedido: '',
-        prazoEntrega: '',
         origem: 'manual',
         origemId: '',
       });
@@ -596,7 +553,6 @@ function ModernFinanceiro() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Função para salvar transação manual
   const handleSalvar = async () => {
     try {
       if (!formData.descricao?.trim()) {
@@ -622,13 +578,8 @@ function ModernFinanceiro() {
         clienteId: formData.clienteId ? String(formData.clienteId) : null,
         fornecedorId: formData.fornecedorId ? String(formData.fornecedorId) : null,
         profissionalId: formData.profissionalId ? String(formData.profissionalId) : null,
-        atendimentoId: formData.atendimentoId ? String(formData.atendimentoId) : null,
-        percentual: formData.percentual ? Number(formData.percentual) : null,
         observacoes: formData.observacoes ? String(formData.observacoes) : null,
         parcelas: Number(formData.parcelas) || 1,
-        recorrente: Boolean(formData.recorrente),
-        frequencia: formData.frequencia || 'mensal',
-        tags: Array.isArray(formData.tags) ? formData.tags : [],
         origem: 'manual',
         origemId: null,
         updatedAt: new Date().toISOString(),
@@ -655,7 +606,6 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para abrir/fechar caixa
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
@@ -666,9 +616,7 @@ function ModernFinanceiro() {
             const usuario = JSON.parse(usuarioStr);
             usuarioId = usuario?.id || 'sistema';
           }
-        } catch (e) {
-          console.warn('Erro ao parsear usuário do localStorage:', e);
-        }
+        } catch (e) {}
 
         const hoje = formatarDataBrasilia(new Date());
         const transacoesHoje = transacoesCombinadas.filter(t => 
@@ -721,7 +669,6 @@ function ModernFinanceiro() {
     }
   };
 
-  // Função para duplicar transação
   const handleDuplicar = (transacao) => {
     const { id, ...dados } = transacao;
     handleOpenDialog({
@@ -733,7 +680,6 @@ function ModernFinanceiro() {
     });
   };
 
-  // Função para arquivar/desarquivar
   const handleArquivar = async (transacao) => {
     try {
       if (transacao.origem !== 'manual') {
@@ -747,10 +693,7 @@ function ModernFinanceiro() {
         updatedAt: new Date().toISOString(),
       });
       
-      setTransacoesManuais(transacoesManuais.map(t => 
-        t.id === transacao.id ? { ...t, arquivado: novoStatus } : t
-      ));
-      
+      await carregarDados();
       mostrarSnackbar(novoStatus ? '📦 Transação arquivada' : '📂 Transação desarquivada');
     } catch (error) {
       console.error('Erro ao arquivar:', error);
@@ -758,7 +701,7 @@ function ModernFinanceiro() {
     }
   };
 
-  // Cálculo das estatísticas (apenas com transações manuais)
+  // Cálculo das estatísticas
   const calcularEstatisticas = () => {
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
@@ -794,15 +737,13 @@ function ModernFinanceiro() {
       return vencimento < new Date();
     }).length;
 
-    // Comissões pendentes - calculadas diretamente da coleção de comissões
-    const comissoesPendentes = comissoes
-      .filter(c => c.status === 'pendente')
-      .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+    const comissoesPendentes = transacoesPeriodo
+      .filter(t => t.origem === 'comissao' && t.status === 'pendente')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
-    // Compras pendentes - calculadas diretamente da coleção de compras
-    const comprasPendentes = compras
-      .filter(c => c.status === 'pendente')
-      .reduce((acc, c) => acc + (Number(c.valorTotal) || 0), 0);
+    const comprasPendentes = transacoesPeriodo
+      .filter(t => t.origem === 'compra' && t.status === 'pendente')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
     const ticketMedio = receitas > 0 
       ? receitas / transacoesPeriodo.filter(t => t.tipo === 'receita' && t.status === 'pago').length 
@@ -823,7 +764,7 @@ function ModernFinanceiro() {
     };
   };
 
-  // Dados para gráficos (apenas transações manuais)
+  // Dados para gráficos
   const gerarDadosGraficoLinha = () => {
     const dias = {};
     const inicio = new Date(dataInicio);
@@ -923,55 +864,21 @@ function ModernFinanceiro() {
     let lista = [];
     
     if (tabValue === 0) {
-      // Todas - apenas transações manuais
+      // Todas - mostra TODAS as transações (manuais + comissões + compras)
       lista = transacoesCombinadas.filter(t => !t.arquivado);
     } else if (tabValue === 1) {
-      // Receitas - apenas transações manuais do tipo receita
+      // Receitas - apenas transações do tipo receita
       lista = transacoesCombinadas.filter(t => t.tipo === 'receita' && !t.arquivado);
     } else if (tabValue === 2) {
-      // Despesas - apenas transações manuais do tipo despesa (SEM COMISSÕES)
+      // Despesas - TODAS as despesas (manuais + comissões + compras)
+      // COMISSÕES APARECEM AQUI porque são despesas
       lista = transacoesCombinadas.filter(t => t.tipo === 'despesa' && !t.arquivado);
     } else if (tabValue === 3) {
-      // Comissões - APENAS comissões, convertidas para formato de exibição
-      lista = comissoes
-        .filter(c => c.status !== 'cancelado')
-        .map(c => ({
-          id: `comissao_${c.id}`,
-          tipo: 'comissao',
-          origem: 'comissao',
-          origemId: c.id,
-          descricao: `Comissão - ${c.servicoNome || 'Serviço'} - ${c.profissionalNome || ''}`,
-          valor: c.valor || 0,
-          data: c.dataRegistro ? c.dataRegistro.split('T')[0] : c.data,
-          dataVencimento: c.data,
-          categoria: 'Comissões',
-          status: c.status === 'pago' ? 'pago' : 'pendente',
-          profissionalNome: c.profissionalNome,
-          servicoNome: c.servicoNome,
-          percentual: c.percentual,
-          valorAtendimento: c.valorAtendimento,
-          observacoes: c.observacoes,
-        }));
+      // Comissões - APENAS comissões (filtro por origem)
+      lista = transacoesCombinadas.filter(t => t.origem === 'comissao' && !t.arquivado);
     } else if (tabValue === 4) {
       // Compras - APENAS compras
-      lista = compras
-        .filter(c => c.status !== 'cancelada')
-        .map(c => ({
-          id: `compra_${c.id}`,
-          tipo: 'compra',
-          origem: 'compra',
-          origemId: c.id,
-          descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
-          valor: c.valorTotal || 0,
-          data: c.dataCompra,
-          dataVencimento: c.dataCompra,
-          categoria: 'Compras',
-          status: c.status === 'pago' ? 'pago' : 'pendente',
-          fornecedorId: c.fornecedorId,
-          numeroPedido: c.numeroPedido,
-          itens: c.itens || [],
-          observacoes: c.observacoes,
-        }));
+      lista = transacoesCombinadas.filter(t => t.origem === 'compra' && !t.arquivado);
     } else if (tabValue === 5) {
       // Arquivados
       lista = transacoesCombinadas.filter(t => t.arquivado);
@@ -998,7 +905,6 @@ function ModernFinanceiro() {
     page * rowsPerPage + rowsPerPage
   );
 
-  // Handlers de período
   const handlePeriodoChange = (periodo) => {
     setPeriodoSelecionado(periodo);
     const hoje = new Date();
@@ -1037,13 +943,11 @@ function ModernFinanceiro() {
   };
 
   const handleChangePage = (event, newPage) => setPage(newPage);
-
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  // Renderização condicional
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
@@ -1056,200 +960,143 @@ function ModernFinanceiro() {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box sx={{ p: 3 }}>
         {/* Cabeçalho */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AccountBalanceIcon sx={{ fontSize: 40 }} />
-                Financeiro
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Gerencie receitas, despesas, comissões e compras
-              </Typography>
-            </Box>
-            
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={carregarDados}
-              >
-                Atualizar
-              </Button>
-              
-              <Button
-                variant="outlined"
-                startIcon={<BarChartIcon />}
-                onClick={handleOpenRelatorioDialog}
-              >
-                Relatórios
-              </Button>
-              
-              <Button
-                variant="contained"
-                startIcon={<AccountBalanceIcon />}
-                onClick={handleOpenCaixaDialog}
-                color={caixa?.status === 'aberto' ? 'success' : 'primary'}
-              >
-                {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
-              </Button>
-              
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpenDialog()}
-                sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-              >
-                Nova Transação
-              </Button>
-            </Box>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AccountBalanceIcon sx={{ fontSize: 40 }} />
+              Financeiro
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Gerencie receitas, despesas, comissões e compras
+            </Typography>
           </Box>
-        </motion.div>
+          
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={carregarDados}>
+              Atualizar
+            </Button>
+            <Button variant="outlined" startIcon={<BarChartIcon />} onClick={handleOpenRelatorioDialog}>
+              Relatórios
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AccountBalanceIcon />}
+              onClick={handleOpenCaixaDialog}
+              color={caixa?.status === 'aberto' ? 'success' : 'primary'}
+            >
+              {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            >
+              Nova Transação
+            </Button>
+          </Box>
+        </Box>
 
         {/* Status do Caixa */}
         {caixa?.status === 'aberto' && (
-          <Zoom in={true}>
-            <Alert 
-              severity="success" 
-              sx={{ mb: 3 }}
-              action={
-                <Button color="inherit" size="small" onClick={handleOpenCaixaDialog}>
-                  Fechar Caixa
-                </Button>
-              }
-            >
-              <strong>Caixa Aberto</strong> - Saldo atual: R$ {caixa.saldoAtual?.toFixed(2)} | 
-              Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
-            </Alert>
-          </Zoom>
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <strong>Caixa Aberto</strong> - Saldo atual: R$ {caixa.saldoAtual?.toFixed(2)} | 
+            Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
+          </Alert>
         )}
 
         {/* Cards de Resumo */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card sx={{ bgcolor: stats.saldo >= 0 ? '#e8f5e9' : '#ffebee', height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography color="textSecondary" gutterBottom variant="body2">
-                        Saldo do Período
-                      </Typography>
-                      <Typography variant="h4" sx={{ 
-                        fontWeight: 700, 
-                        color: stats.saldo >= 0 ? '#4caf50' : '#f44336' 
-                      }}>
-                        R$ {stats.saldo.toFixed(2)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Período: {formatarDataExibicao(dataInicio)} - {formatarDataExibicao(dataFim)}
-                      </Typography>
-                    </Box>
-                    <Avatar sx={{ bgcolor: stats.saldo >= 0 ? '#4caf50' : '#f44336', width: 56, height: 56 }}>
-                      <MoneyIcon />
-                    </Avatar>
+            <Card sx={{ bgcolor: stats.saldo >= 0 ? '#e8f5e9' : '#ffebee', height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Saldo do Período
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: stats.saldo >= 0 ? '#4caf50' : '#f44336' }}>
+                      R$ {stats.saldo.toFixed(2)}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Período: {formatarDataExibicao(dataInicio)} - {formatarDataExibicao(dataFim)}
+                    </Typography>
                   </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  <Avatar sx={{ bgcolor: stats.saldo >= 0 ? '#4caf50' : '#f44336', width: 56, height: 56 }}>
+                    <MoneyIcon />
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography color="textSecondary" gutterBottom variant="body2">
-                        Receitas
-                      </Typography>
-                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                        R$ {stats.receitas.toFixed(2)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        A receber: R$ {stats.aReceber.toFixed(2)}
-                      </Typography>
-                    </Box>
-                    <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                      <TrendingUpIcon />
-                    </Avatar>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Receitas
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                      R$ {stats.receitas.toFixed(2)}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      A receber: R$ {stats.aReceber.toFixed(2)}
+                    </Typography>
                   </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
+                    <TrendingUpIcon />
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography color="textSecondary" gutterBottom variant="body2">
-                        Despesas
-                      </Typography>
-                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                        R$ {stats.despesas.toFixed(2)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        A pagar: R$ {stats.aPagar.toFixed(2)}
-                      </Typography>
-                    </Box>
-                    <Avatar sx={{ bgcolor: '#f44336', width: 56, height: 56 }}>
-                      <TrendingDownIcon />
-                    </Avatar>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Despesas
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                      R$ {stats.despesas.toFixed(2)}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      A pagar: R$ {stats.aPagar.toFixed(2)}
+                    </Typography>
                   </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  <Avatar sx={{ bgcolor: '#f44336', width: 56, height: 56 }}>
+                    <TrendingDownIcon />
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#f3e5f5' : '#f5f5f5', height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography color="textSecondary" gutterBottom variant="body2">
-                        Comissões Pendentes
-                      </Typography>
-                      <Typography variant="h4" sx={{ 
-                        fontWeight: 700, 
-                        color: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e' 
-                      }}>
-                        R$ {stats.comissoesPendentes.toFixed(2)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Compras pendentes: R$ {stats.comprasPendentes.toFixed(2)}
-                      </Typography>
-                    </Box>
-                    <Avatar sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e', width: 56, height: 56 }}>
-                      <PercentIcon />
-                    </Avatar>
+            <Card sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#f3e5f5' : '#f5f5f5', height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography color="textSecondary" gutterBottom variant="body2">
+                      Comissões Pendentes
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e' }}>
+                      R$ {stats.comissoesPendentes.toFixed(2)}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Compras pendentes: R$ {stats.comprasPendentes.toFixed(2)}
+                    </Typography>
                   </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  <Avatar sx={{ bgcolor: stats.comissoesPendentes > 0 ? '#9c27b0' : '#9e9e9e', width: 56, height: 56 }}>
+                    <PercentIcon />
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
 
@@ -1260,11 +1107,7 @@ function ModernFinanceiro() {
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Período</InputLabel>
-                  <Select
-                    value={periodoSelecionado}
-                    label="Período"
-                    onChange={(e) => handlePeriodoChange(e.target.value)}
-                  >
+                  <Select value={periodoSelecionado} label="Período" onChange={(e) => handlePeriodoChange(e.target.value)}>
                     <MenuItem value="hoje">Hoje</MenuItem>
                     <MenuItem value="ontem">Ontem</MenuItem>
                     <MenuItem value="semana">Últimos 7 dias</MenuItem>
@@ -1286,9 +1129,7 @@ function ModernFinanceiro() {
                       setPeriodoSelecionado('personalizado');
                     }
                   }}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth size="small" />
-                  )}
+                  renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                 />
               </Grid>
               
@@ -1302,28 +1143,14 @@ function ModernFinanceiro() {
                       setPeriodoSelecionado('personalizado');
                     }
                   }}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth size="small" />
-                  )}
+                  renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                 />
               </Grid>
               
               <Grid item xs={12} md={4}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={() => {}}
-                  >
-                    Exportar
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<PrintIcon />}
-                    onClick={() => {}}
-                  >
-                    Imprimir
-                  </Button>
+                  <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => {}}>Exportar</Button>
+                  <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => {}}>Imprimir</Button>
                 </Box>
               </Grid>
             </Grid>
@@ -1333,74 +1160,58 @@ function ModernFinanceiro() {
         {/* Gráficos */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={8}>
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <ShowChartIcon /> Fluxo de Caixa Diário
-                  </Typography>
-                  <Box sx={{ height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={dadosGraficoLinha}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="dia" />
-                        <YAxis />
-                        <RechartsTooltip 
-                          formatter={(value) => `R$ ${value.toFixed(2)}`}
-                        />
-                        <Legend />
-                        <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
-                        <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
-                        <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ShowChartIcon /> Fluxo de Caixa Diário
+                </Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={dadosGraficoLinha}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="dia" />
+                      <YAxis />
+                      <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                      <Legend />
+                      <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" />
+                      <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" />
+                      <Line type="monotone" dataKey="saldo" stroke="#2196f3" strokeWidth={2} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
           <Grid item xs={12} md={4}>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PieChartIcon /> Distribuição por Categoria
-                  </Typography>
-                  <Box sx={{ height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={dadosGraficoPizza}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {dadosGraficoPizza.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip 
-                          formatter={(value) => `R$ ${value.toFixed(2)}`}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Box>
-                </CardContent>
-              </Card>
-            </motion.div>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PieChartIcon /> Distribuição por Categoria
+                </Typography>
+                <Box sx={{ height: 300 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dadosGraficoPizza}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {dadosGraficoPizza.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
 
@@ -1416,9 +1227,7 @@ function ModernFinanceiro() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="mes" />
                   <YAxis />
-                  <RechartsTooltip 
-                    formatter={(value) => `R$ ${value.toFixed(2)}`}
-                  />
+                  <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
                   <Legend />
                   <Bar dataKey="receitas" fill="#4caf50" name="Receitas" />
                   <Bar dataKey="despesas" fill="#f44336" name="Despesas" />
@@ -1453,16 +1262,10 @@ function ModernFinanceiro() {
                   value={filtro}
                   onChange={(e) => setFiltro(e.target.value)}
                   InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
+                    startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>),
                     endAdornment: filtro && (
                       <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setFiltro('')}>
-                          <ClearIcon />
-                        </IconButton>
+                        <IconButton size="small" onClick={() => setFiltro('')}><ClearIcon /></IconButton>
                       </InputAdornment>
                     ),
                   }}
@@ -1472,16 +1275,10 @@ function ModernFinanceiro() {
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Status</InputLabel>
-                  <Select
-                    value={filtroStatus}
-                    label="Status"
-                    onChange={(e) => setFiltroStatus(e.target.value)}
-                  >
+                  <Select value={filtroStatus} label="Status" onChange={(e) => setFiltroStatus(e.target.value)}>
                     <MenuItem value="todos">Todos</MenuItem>
                     {Object.keys(statusColors).map(status => (
-                      <MenuItem key={status} value={status}>
-                        {statusColors[status].label}
-                      </MenuItem>
+                      <MenuItem key={status} value={status}>{statusColors[status].label}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1490,11 +1287,7 @@ function ModernFinanceiro() {
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Categoria</InputLabel>
-                  <Select
-                    value={filtroCategoria}
-                    label="Categoria"
-                    onChange={(e) => setFiltroCategoria(e.target.value)}
-                  >
+                  <Select value={filtroCategoria} label="Categoria" onChange={(e) => setFiltroCategoria(e.target.value)}>
                     <MenuItem value="todas">Todas</MenuItem>
                     <MenuItem value="Comissões">Comissões</MenuItem>
                     <MenuItem value="Compras">Compras</MenuItem>
@@ -1506,15 +1299,11 @@ function ModernFinanceiro() {
               </Grid>
 
               <Grid item xs={12} md={2}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => {
-                    setFiltro('');
-                    setFiltroStatus('todos');
-                    setFiltroCategoria('todas');
-                  }}
-                >
+                <Button fullWidth variant="outlined" onClick={() => {
+                  setFiltro('');
+                  setFiltroStatus('todos');
+                  setFiltroCategoria('todas');
+                }}>
                   Limpar Filtros
                 </Button>
               </Grid>
@@ -1535,246 +1324,142 @@ function ModernFinanceiro() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  <AnimatePresence>
-                    {paginatedTransacoes.map((transacao, index) => {
-                      const cliente = clientes.find(c => c.id === transacao.clienteId);
-                      const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
-                      const profissional = profissionais.find(p => p.id === transacao.profissionalId);
-                      
-                      let iconeTipo = <ReceiptIcon />;
-                      let corTipo = '#757575';
-                      let tipoLabel = '';
-                      
-                      if (transacao.origem === 'comissao') {
-                        iconeTipo = <PercentIcon />;
-                        corTipo = '#9c27b0';
-                        tipoLabel = 'Comissão';
-                      } else if (transacao.origem === 'compra') {
-                        iconeTipo = <ShoppingCartIcon />;
-                        corTipo = '#ff9800';
-                        tipoLabel = 'Compra';
-                      } else if (transacao.tipo === 'receita') {
-                        iconeTipo = <TrendingUpIcon />;
-                        corTipo = '#4caf50';
-                        tipoLabel = 'Receita';
-                      } else if (transacao.tipo === 'despesa') {
-                        iconeTipo = <TrendingDownIcon />;
-                        corTipo = '#f44336';
-                        tipoLabel = 'Despesa';
-                      }
-                      
-                      return (
-                        <motion.tr
-                          key={transacao.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          style={{
-                            backgroundColor: transacao.arquivado ? '#f5f5f5' : 'white',
-                            opacity: transacao.arquivado ? 0.7 : 1,
-                          }}
-                        >
-                          <TableCell>
-                            {formatarDataExibicao(transacao.data)}
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>
-                                {iconeTipo}
-                              </Avatar>
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                  {transacao.descricao}
-                                </Typography>
-                                {profissional && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    Profissional: {profissional.nome || transacao.profissionalNome}
-                                  </Typography>
-                                )}
-                                {cliente && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    Cliente: {cliente.nome}
-                                  </Typography>
-                                )}
-                                {fornecedor && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    Fornecedor: {fornecedor.nome}
-                                  </Typography>
-                                )}
-                                {transacao.servicoNome && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    {' '}• {transacao.servicoNome}
-                                  </Typography>
-                                )}
-                                {transacao.numeroPedido && (
-                                  <Typography variant="caption" color="textSecondary">
-                                    {' '}• Pedido: {transacao.numeroPedido}
-                                  </Typography>
-                                )}
-                                {transacao.percentual && (
-                                  <Chip
-                                    label={`${transacao.percentual}%`}
-                                    size="small"
-                                    sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#f3e5f5' }}
-                                  />
-                                )}
-                                {transacao.parcelas > 1 && (
-                                  <Chip
-                                    label={`${transacao.parcelas}x`}
-                                    size="small"
-                                    sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
-                                  />
-                                )}
-                              </Box>
+                  {paginatedTransacoes.map((transacao, index) => {
+                    const cliente = clientes.find(c => c.id === transacao.clienteId);
+                    const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
+                    const profissional = profissionais.find(p => p.id === transacao.profissionalId);
+                    
+                    let iconeTipo = <ReceiptIcon />;
+                    let corTipo = '#757575';
+                    let tipoLabel = '';
+                    
+                    if (transacao.origem === 'comissao') {
+                      iconeTipo = <PercentIcon />;
+                      corTipo = '#9c27b0';
+                      tipoLabel = 'Comissão';
+                    } else if (transacao.origem === 'compra') {
+                      iconeTipo = <ShoppingCartIcon />;
+                      corTipo = '#ff9800';
+                      tipoLabel = 'Compra';
+                    } else if (transacao.tipo === 'receita') {
+                      iconeTipo = <TrendingUpIcon />;
+                      corTipo = '#4caf50';
+                      tipoLabel = 'Receita';
+                    } else if (transacao.tipo === 'despesa') {
+                      iconeTipo = <TrendingDownIcon />;
+                      corTipo = '#f44336';
+                      tipoLabel = 'Despesa';
+                    }
+                    
+                    return (
+                      <TableRow key={transacao.id} hover>
+                        <TableCell>{formatarDataExibicao(transacao.data)}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>{iconeTipo}</Avatar>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{transacao.descricao}</Typography>
+                              {profissional && <Typography variant="caption" color="textSecondary">Profissional: {profissional.nome || transacao.profissionalNome}</Typography>}
+                              {cliente && <Typography variant="caption" color="textSecondary">Cliente: {cliente.nome}</Typography>}
+                              {fornecedor && <Typography variant="caption" color="textSecondary">Fornecedor: {fornecedor.nome}</Typography>}
+                              {transacao.servicoNome && <Typography variant="caption" color="textSecondary"> • {transacao.servicoNome}</Typography>}
+                              {transacao.numeroPedido && <Typography variant="caption" color="textSecondary"> • Pedido: {transacao.numeroPedido}</Typography>}
+                              {transacao.percentual && <Chip label={`${transacao.percentual}%`} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem', bgcolor: '#f3e5f5' }} />}
                             </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={tipoLabel}
-                              size="small"
-                              sx={{
-                                bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' :
-                                        transacao.origem === 'compra' ? '#fff3e0' :
-                                        transacao.tipo === 'receita' ? '#e8f5e9' : '#ffebee',
-                                color: transacao.origem === 'comissao' ? '#9c27b0' :
-                                       transacao.origem === 'compra' ? '#ff9800' :
-                                       transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontWeight: 600,
-                                color: transacao.tipo === 'receita' || transacao.origem === 'comissao' ? '#4caf50' : '#f44336',
-                              }}
-                            >
-                              {transacao.tipo === 'receita' || transacao.origem === 'comissao' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {transacao.dataVencimento ? (
-                              <Box>
-                                <Typography variant="body2">
-                                  {formatarDataExibicao(transacao.dataVencimento)}
-                                </Typography>
-                                {transacao.status === 'pendente' && new Date(transacao.dataVencimento) < new Date() && (
-                                  <Chip
-                                    label="Vencida"
-                                    size="small"
-                                    color="error"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                )}
-                              </Box>
-                            ) : (
-                              '-'
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={tipoLabel}
+                            size="small"
+                            sx={{
+                              bgcolor: transacao.origem === 'comissao' ? '#f3e5f5' : transacao.origem === 'compra' ? '#fff3e0' : transacao.tipo === 'receita' ? '#e8f5e9' : '#ffebee',
+                              color: transacao.origem === 'comissao' ? '#9c27b0' : transacao.origem === 'compra' ? '#ff9800' : transacao.tipo === 'receita' ? '#4caf50' : '#f44336',
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: transacao.tipo === 'receita' ? '#4caf50' : '#f44336' }}>
+                            {transacao.tipo === 'receita' ? '+' : '-'} R$ {Number(transacao.valor).toFixed(2)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {transacao.dataVencimento ? (
+                            <Box>
+                              <Typography variant="body2">{formatarDataExibicao(transacao.dataVencimento)}</Typography>
+                              {transacao.status === 'pendente' && new Date(transacao.dataVencimento) < new Date() && (
+                                <Chip label="Vencida" size="small" color="error" sx={{ height: 20, fontSize: '0.7rem' }} />
+                              )}
+                            </Box>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={statusColors[transacao.status]?.icon}
+                            label={statusColors[transacao.status]?.label || transacao.status}
+                            size="small"
+                            sx={{ bgcolor: `${statusColors[transacao.status]?.color}20`, color: statusColors[transacao.status]?.color }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Tooltip title="Ver Detalhes">
+                              <IconButton size="small" onClick={() => handleOpenDetalhes(transacao)} sx={{ color: '#9c27b0' }}>
+                                <ReceiptIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
+                            {transacao.status === 'pendente' && (
+                              <Tooltip title="Marcar como Pago">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    if (transacao.origem === 'comissao') handlePagarComissao(transacao.origemId);
+                                    else if (transacao.origem === 'compra') handlePagarCompra(transacao.origemId);
+                                    else handleMarcarComoPago(transacao);
+                                  }}
+                                  sx={{ color: '#4caf50' }}
+                                >
+                                  <CheckCircleIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              icon={statusColors[transacao.status]?.icon}
-                              label={statusColors[transacao.status]?.label || transacao.status}
-                              size="small"
-                              sx={{
-                                bgcolor: `${statusColors[transacao.status]?.color}20`,
-                                color: statusColors[transacao.status]?.color,
-                                fontWeight: 500,
-                                '& .MuiChip-icon': { color: statusColors[transacao.status]?.color },
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              <Tooltip title="Ver Detalhes">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenDetalhes(transacao)}
-                                  sx={{ color: '#9c27b0' }}
-                                >
-                                  <ReceiptIcon fontSize="small" />
+
+                            {transacao.origem === 'manual' && !transacao.arquivado && (
+                              <Tooltip title="Editar">
+                                <IconButton size="small" onClick={() => handleOpenDialog(transacao)} sx={{ color: '#ff4081' }}>
+                                  <EditIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
+                            )}
 
-                              {transacao.status === 'pendente' && (
-                                <Tooltip title="Marcar como Pago">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                      if (transacao.origem === 'comissao') {
-                                        handlePagarComissao(transacao.origemId);
-                                      } else if (transacao.origem === 'compra') {
-                                        handlePagarCompra(transacao.origemId);
-                                      } else {
-                                        handleMarcarComoPago(transacao);
-                                      }
-                                    }}
-                                    sx={{ color: '#4caf50' }}
-                                  >
-                                    <CheckCircleIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
+                            <Tooltip title="Duplicar">
+                              <IconButton size="small" onClick={() => handleDuplicar(transacao)} sx={{ color: '#2196f3' }}>
+                                <FileCopyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
 
-                              {transacao.origem === 'manual' && !transacao.arquivado && (
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenDialog(transacao)}
-                                    sx={{ color: '#ff4081' }}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-
-                              <Tooltip title="Duplicar">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDuplicar(transacao)}
-                                  sx={{ color: '#2196f3' }}
-                                >
-                                  <FileCopyIcon fontSize="small" />
+                            {transacao.origem === 'manual' && (
+                              <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
+                                <IconButton size="small" onClick={() => handleArquivar(transacao)} sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}>
+                                  {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
                                 </IconButton>
                               </Tooltip>
-
-                              {transacao.origem === 'manual' && (
-                                <Tooltip title={transacao.arquivado ? 'Desarquivar' : 'Arquivar'}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleArquivar(transacao)}
-                                    sx={{ color: transacao.arquivado ? '#ff9800' : '#757575' }}
-                                  >
-                                    {transacao.arquivado ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </motion.tr>
-                      );
-                    })}
-                  </AnimatePresence>
+                            )}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
 
                   {paginatedTransacoes.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                         <ReceiptIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                        <Typography variant="body1" color="textSecondary">
-                          Nenhuma transação encontrada
-                        </Typography>
-                        {tabValue !== 3 && tabValue !== 4 && (
-                          <Button
-                            variant="outlined"
-                            startIcon={<AddIcon />}
-                            onClick={() => handleOpenDialog()}
-                            sx={{ mt: 2 }}
-                          >
-                            Nova Transação
-                          </Button>
-                        )}
+                        <Typography variant="body1" color="textSecondary">Nenhuma transação encontrada</Typography>
+                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => handleOpenDialog()} sx={{ mt: 2 }}>
+                          Nova Transação
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )}
@@ -1791,7 +1476,6 @@ function ModernFinanceiro() {
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               labelRowsPerPage="Itens por página"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
             />
           </CardContent>
         </Card>
