@@ -1,4 +1,4 @@
-// src/pages/ClienteAnamneseLista.js
+// src/pages/ClienteAnamneseLista.js - VERSÃO OTIMIZADA PARA MOBILE
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -26,6 +26,20 @@ import {
   Avatar,
   Divider,
   LinearProgress,
+  useTheme,
+  useMediaQuery,
+  BottomNavigation,
+  BottomNavigationAction,
+  Fab,
+  Zoom,
+  SwipeableDrawer,
+  Badge,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Collapse,
+  CardActions,
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -37,17 +51,303 @@ import {
   ArrowForward as ArrowIcon,
   Visibility as VisibilityIcon,
   Refresh as RefreshIcon,
+  FilterList as FilterIcon,
+  History as HistoryIcon,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  CalendarToday as CalendarIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// Componente de card para formulário pendente (mobile)
+const PendenteMobileCard = ({ item, onResponder }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const formatarData = (data) => {
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit'
+      });
+    } catch {
+      return data;
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -10 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <Card 
+        variant="outlined" 
+        sx={{ 
+          mb: 1.5,
+          borderLeft: '4px solid',
+          borderLeftColor: '#ff9800',
+          borderRadius: 1.5,
+        }}
+      >
+        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+          {/* Cabeçalho com data */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <CalendarIcon sx={{ color: '#ff9800', fontSize: 16 }} />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formatarData(item.dataAgendamento)}
+              </Typography>
+              <Typography variant="caption" color="textSecondary" sx={{ ml: 0.5 }}>
+                {item.horarioAgendamento}
+              </Typography>
+            </Box>
+            <Chip
+              label="Pendente"
+              size="small"
+              sx={{
+                bgcolor: '#ff9800',
+                color: 'white',
+                height: 20,
+                fontSize: '0.6rem'
+              }}
+            />
+          </Box>
+
+          {/* Título do formulário */}
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {item.formularioTitulo}
+          </Typography>
+
+          {/* Serviço */}
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
+            {item.servicoNome}
+          </Typography>
+
+          {/* Botão Responder */}
+          <Button
+            fullWidth
+            size="small"
+            variant="contained"
+            endIcon={<ArrowIcon />}
+            onClick={() => onResponder(item.agendamentoId, item.formularioId)}
+            sx={{ 
+              bgcolor: '#ff9800',
+              '&:hover': { bgcolor: '#f57c00' },
+              mt: 0.5,
+              fontSize: '0.7rem',
+              py: 0.5
+            }}
+          >
+            Responder Agora
+          </Button>
+
+          {/* Expandir para mais detalhes (opcional) */}
+          <Box sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              onClick={() => setExpanded(!expanded)}
+              endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              sx={{ fontSize: '0.6rem', color: '#666' }}
+            >
+              {expanded ? 'Menos detalhes' : 'Mais detalhes'}
+            </Button>
+          </Box>
+
+          <Collapse in={expanded}>
+            <Box sx={{ mt: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="caption" display="block" color="textSecondary">
+                <strong>ID:</strong> {item.agendamentoId.slice(-6)}
+              </Typography>
+              {item.formularioDescricao && (
+                <Typography variant="caption" display="block" color="textSecondary">
+                  <strong>Descrição:</strong> {item.formularioDescricao}
+                </Typography>
+              )}
+            </Box>
+          </Collapse>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
+// Componente de card para formulário respondido (mobile)
+const RespondidoMobileCard = ({ item, onVisualizar }) => {
+  const formatarData = (data) => {
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit'
+      });
+    } catch {
+      return data;
+    }
+  };
+
+  const formatarDataHora = (data) => {
+    if (!data) return '-';
+    try {
+      const d = new Date(data);
+      return d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return data;
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -10 }}
+    >
+      <Card variant="outlined" sx={{ mb: 1.5, borderRadius: 1.5 }}>
+        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+          {/* Cabeçalho com data */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <EventIcon sx={{ color: '#4caf50', fontSize: 16 }} />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {formatarData(item.dataAgendamento)}
+              </Typography>
+            </Box>
+            <Chip
+              label="Respondido"
+              size="small"
+              sx={{
+                bgcolor: '#4caf50',
+                color: 'white',
+                height: 20,
+                fontSize: '0.6rem'
+              }}
+            />
+          </Box>
+
+          {/* Título do formulário */}
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {item.formularioTitulo}
+          </Typography>
+
+          {/* Serviço */}
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 0.5 }}>
+            {item.servicoNome}
+          </Typography>
+
+          {/* Data da resposta */}
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
+            Respondido: {formatarDataHora(item.respondidoEm)}
+          </Typography>
+
+          {/* Botão Visualizar */}
+          <Button
+            fullWidth
+            size="small"
+            variant="outlined"
+            startIcon={<VisibilityIcon />}
+            onClick={() => onVisualizar(item.respostaId)}
+            sx={{ 
+              borderColor: '#2196f3',
+              color: '#2196f3',
+              fontSize: '0.7rem',
+              py: 0.5
+            }}
+          >
+            Visualizar Respostas
+          </Button>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
+// Componente de filtro mobile
+const MobileFilterDrawer = ({ open, onClose, filterType, setFilterType }) => {
+  return (
+    <SwipeableDrawer
+      anchor="bottom"
+      open={open}
+      onClose={onClose}
+      onOpen={() => {}}
+      disableSwipeToOpen
+      PaperProps={{
+        sx: {
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          maxHeight: '70vh'
+        }
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Filtrar por
+          </Typography>
+          <IconButton size="small" onClick={onClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+        
+        <List>
+          {[
+            { value: 'todos', label: 'Todos os formulários' },
+            { value: 'pendentes', label: 'Apenas pendentes', color: '#ff9800' },
+            { value: 'respondidos', label: 'Apenas respondidos', color: '#4caf50' },
+          ].map((item) => (
+            <ListItem
+              key={item.value}
+              button
+              onClick={() => {
+                setFilterType(item.value);
+                onClose();
+              }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                bgcolor: filterType === item.value ? (item.color ? `${item.color}20` : '#f3e5f5') : 'transparent',
+              }}
+            >
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  sx: {
+                    fontWeight: filterType === item.value ? 600 : 400,
+                    color: item.color || 'inherit'
+                  }
+                }}
+              />
+              {filterType === item.value && (
+                <CheckIcon sx={{ color: item.color || '#9c27b0', fontSize: 20 }} />
+              )}
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </SwipeableDrawer>
+  );
+};
+
 function ClienteAnamneseLista() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const { cliente, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
   const [formulariosPendentes, setFormulariosPendentes] = useState([]);
@@ -55,6 +355,12 @@ function ClienteAnamneseLista() {
   const [formularios, setFormularios] = useState([]);
   const [agendamentos, setAgendamentos] = useState([]);
   const [servicos, setServicos] = useState([]);
+  
+  // Estados para mobile
+  const [filterType, setFilterType] = useState('todos');
+  const [openFilterDrawer, setOpenFilterDrawer] = useState(false);
+  const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     if (cliente) {
@@ -161,16 +467,24 @@ function ClienteAnamneseLista() {
   };
 
   const handleResponder = (agendamentoId, formularioId) => {
-    navigate(`/cliente/atendimento/${agendamentoId}/anamnese`);
+    navigate(`/cliente/agendamento/${agendamentoId}/anamnese`);
   };
 
   const handleVisualizar = (respostaId) => {
     navigate(`/cliente/anamnese/${respostaId}`);
   };
 
+  const handleVerDetalhes = (item) => {
+    setSelectedItem(item);
+    setOpenDetalhesDialog(true);
+  };
+
   const formatarData = (data) => {
     if (!data) return '';
     try {
+      if (isMobile) {
+        return format(new Date(data + 'T12:00:00'), "dd/MM", { locale: ptBR });
+      }
       return format(new Date(data + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     } catch {
       return data;
@@ -181,6 +495,9 @@ function ClienteAnamneseLista() {
     if (!data) return '';
     try {
       const d = new Date(data);
+      if (isMobile) {
+        return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
       return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     } catch {
       return data;
@@ -195,6 +512,194 @@ function ClienteAnamneseLista() {
     );
   }
 
+  // VERSÃO MOBILE
+  if (isMobile) {
+    return (
+      <Box sx={{ pb: 7 }}>
+        {/* Header Mobile */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          p: 2,
+          bgcolor: 'white',
+          borderBottom: '1px solid #f0f0f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+            Anamnese
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton size="small" onClick={() => setOpenFilterDrawer(true)}>
+              <Badge badgeContent={filterType !== 'todos' ? 1 : 0} color="secondary">
+                <FilterIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+            <IconButton size="small" onClick={carregarDados}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* Cards de Resumo Mobile */}
+        <Grid container spacing={1} sx={{ p: 2, pb: 1 }}>
+          <Grid item xs={6}>
+            <Card sx={{ bgcolor: '#fff3e0', textAlign: 'center', py: 1 }}>
+              <Avatar sx={{ bgcolor: '#ff9800', width: 32, height: 32, mx: 'auto', mb: 0.5 }}>
+                <AssignmentIcon sx={{ fontSize: 18 }} />
+              </Avatar>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                {formulariosPendentes.length}
+              </Typography>
+              <Typography variant="caption">Pendentes</Typography>
+            </Card>
+          </Grid>
+          <Grid item xs={6}>
+            <Card sx={{ bgcolor: '#e8f5e9', textAlign: 'center', py: 1 }}>
+              <Avatar sx={{ bgcolor: '#4caf50', width: 32, height: 32, mx: 'auto', mb: 0.5 }}>
+                <CheckIcon sx={{ fontSize: 18 }} />
+              </Avatar>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                {formulariosRespondidos.length}
+              </Typography>
+              <Typography variant="caption">Respondidos</Typography>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Lista de Pendentes */}
+        {filterType !== 'respondidos' && (
+          <Box sx={{ px: 2, mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <AssignmentIcon sx={{ color: '#ff9800', fontSize: 16 }} />
+              Pendentes ({formulariosPendentes.length})
+            </Typography>
+            
+            <AnimatePresence>
+              {formulariosPendentes.length > 0 ? (
+                formulariosPendentes.map((item) => (
+                  <PendenteMobileCard
+                    key={item.id}
+                    item={item}
+                    onResponder={handleResponder}
+                  />
+                ))
+              ) : (
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                  <CheckIcon sx={{ fontSize: 32, color: '#4caf50', mb: 1 }} />
+                  <Typography variant="body2" color="textSecondary">
+                    Nenhum pendente!
+                  </Typography>
+                </Paper>
+              )}
+            </AnimatePresence>
+          </Box>
+        )}
+
+        {/* Lista de Respondidos */}
+        {filterType !== 'pendentes' && (
+          <Box sx={{ px: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <HistoryIcon sx={{ color: '#4caf50', fontSize: 16 }} />
+              Histórico ({formulariosRespondidos.length})
+            </Typography>
+            
+            <AnimatePresence>
+              {formulariosRespondidos.length > 0 ? (
+                formulariosRespondidos.slice(0, 5).map((item) => (
+                  <RespondidoMobileCard
+                    key={item.id}
+                    item={item}
+                    onVisualizar={handleVisualizar}
+                  />
+                ))
+              ) : (
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                  <AssignmentIcon sx={{ fontSize: 32, color: '#ccc', mb: 1 }} />
+                  <Typography variant="body2" color="textSecondary">
+                    Nenhum respondido
+                  </Typography>
+                </Paper>
+              )}
+              
+              {formulariosRespondidos.length > 5 && (
+                <Button
+                  fullWidth
+                  size="small"
+                  onClick={() => setFilterType('respondidos')}
+                  sx={{ color: '#9c27b0', mt: 0.5 }}
+                >
+                  Ver mais {formulariosRespondidos.length - 5}
+                </Button>
+              )}
+            </AnimatePresence>
+          </Box>
+        )}
+
+        {/* Filter Drawer */}
+        <MobileFilterDrawer
+          open={openFilterDrawer}
+          onClose={() => setOpenFilterDrawer(false)}
+          filterType={filterType}
+          setFilterType={setFilterType}
+        />
+
+        {/* Dialog de Detalhes */}
+        <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white', py: 1.5 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Detalhes do Formulário</Typography>
+          </DialogTitle>
+          <DialogContent sx={{ p: 2 }}>
+            {selectedItem && (
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {selectedItem.formularioTitulo}
+                </Typography>
+                <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                  {selectedItem.formularioDescricao}
+                </Typography>
+                <Divider sx={{ my: 1.5 }} />
+                <Grid container spacing={1}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Data</Typography>
+                    <Typography variant="body2">{selectedItem.dataAgendamento}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Horário</Typography>
+                    <Typography variant="body2">{selectedItem.horarioAgendamento}</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="textSecondary">Serviço</Typography>
+                    <Typography variant="body2">{selectedItem.servicoNome}</Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button size="small" onClick={() => setOpenDetalhesDialog(false)}>Fechar</Button>
+            {selectedItem?.status === 'pendente' && (
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => {
+                  setOpenDetalhesDialog(false);
+                  handleResponder(selectedItem.agendamentoId, selectedItem.formularioId);
+                }}
+                sx={{ bgcolor: '#ff9800' }}
+              >
+                Responder
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+      </Box>
+    );
+  }
+
+  // VERSÃO DESKTOP (original mantida)
   return (
     <Box>
       {/* Cabeçalho */}
