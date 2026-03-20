@@ -24,6 +24,18 @@ import {
   Tabs,
   Tab,
   CircularProgress,
+  useTheme,
+  useMediaQuery,
+  SwipeableDrawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  BottomNavigation,
+  BottomNavigationAction,
+  Fab,
+  Zoom,
+  Badge,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -36,26 +48,99 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
+  Menu as MenuIcon,
+  Home as HomeIcon,
+  DateRange as DateRangeIcon,
+  Redeem as RedeemIcon,
+  Assessment as AssessmentIcon,
+  Close as CloseIcon,
+  FilterList as FilterIcon,
+  Sort as SortIcon,
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
-function TabPanel({ children, value, index }) {
+function TabPanel({ children, value, index, isMobile }) {
   return (
-    <div hidden={value !== index}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    <div hidden={value !== index} style={{ width: '100%' }}>
+      {value === index && (
+        <Box sx={{ 
+          p: isMobile ? 1 : 3,
+          width: '100%'
+        }}>
+          {children}
+        </Box>
+      )}
     </div>
   );
 }
 
+// Componente Mobile otimizado para cards
+const MobileCard = ({ children, onClick, active }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    whileTap={{ scale: 0.98 }}
+    style={{ width: '100%' }}
+  >
+    <Card 
+      onClick={onClick}
+      sx={{ 
+        mb: 1.5,
+        cursor: onClick ? 'pointer' : 'default',
+        borderLeft: active ? '4px solid #9c27b0' : 'none',
+        backgroundColor: active ? '#faf5ff' : 'white',
+        '&:active': {
+          backgroundColor: '#f3e5f5',
+        }
+      }}
+    >
+      {children}
+    </Card>
+  </motion.div>
+);
+
+// Componente de carregamento otimizado
+const LoadingSkeleton = () => (
+  <Box sx={{ width: '100%', p: 2 }}>
+    <LinearProgress sx={{ mb: 2 }} />
+    <Grid container spacing={2}>
+      {[1, 2, 3].map((i) => (
+        <Grid item xs={12} sm={6} md={4} key={i}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ width: 56, height: 56, borderRadius: '50%', bgcolor: '#f0f0f0' }} />
+                <Box sx={{ flex: 1 }}>
+                  <Box sx={{ width: '60%', height: 20, bgcolor: '#f0f0f0', mb: 1 }} />
+                  <Box sx={{ width: '40%', height: 16, bgcolor: '#f0f0f0' }} />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  </Box>
+);
+
 function ClienteDashboard() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  
   const { cliente, logout, loading: authLoading, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState(0);
   
   // Dados do cliente
   const [agendamentos, setAgendamentos] = useState([]);
@@ -69,10 +154,10 @@ function ClienteDashboard() {
   const [profissionais, setProfissionais] = useState([]);
 
   const niveis = {
-    bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, proximo: 500 },
-    prata: { cor: '#c0c0c0', nome: 'Prata', minimo: 500, proximo: 2000 },
-    ouro: { cor: '#ffd700', nome: 'Ouro', minimo: 2000, proximo: 5000 },
-    platina: { cor: '#e5e4e2', nome: 'Platina', minimo: 5000, proximo: null },
+    bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, proximo: 500, bg: '#fff3e0' },
+    prata: { cor: '#c0c0c0', nome: 'Prata', minimo: 500, proximo: 2000, bg: '#f5f5f5' },
+    ouro: { cor: '#ffd700', nome: 'Ouro', minimo: 2000, proximo: 5000, bg: '#fff9e6' },
+    platina: { cor: '#e5e4e2', nome: 'Platina', minimo: 5000, proximo: null, bg: '#f0f0f0' },
   };
 
   useEffect(() => {
@@ -83,7 +168,6 @@ function ClienteDashboard() {
     }
   }, [cliente, authLoading]);
 
-  // 🔥 FUNÇÃO PARA CARREGAR DADOS COM FALLBACK
   const carregarDados = async () => {
     try {
       setLoading(true);
@@ -91,10 +175,6 @@ function ClienteDashboard() {
 
       const uid = firebaseUser?.uid;
       const clienteDocId = cliente?.id;
-      
-      console.log('🔍 DEBUG - Firebase Auth UID:', uid);
-      console.log('🔍 DEBUG - ID do documento cliente:', clienteDocId);
-      console.log('🔍 DEBUG - Email do cliente:', cliente?.email);
 
       if (!uid && !clienteDocId) {
         console.error('❌ IDs não encontrados');
@@ -102,116 +182,79 @@ function ClienteDashboard() {
         return;
       }
 
-      // Array de IDs para tentar (UID primeiro, depois ID do documento)
       const idsParaBuscar = [];
       if (uid) idsParaBuscar.push(uid);
       if (clienteDocId && clienteDocId !== uid) idsParaBuscar.push(clienteDocId);
 
-      console.log('📌 IDs para busca:', idsParaBuscar);
-
-      // 🔥 CARREGAR PROFISSIONAIS PRIMEIRO
-      try {
-        const profissionaisData = await firebaseService.getAll('profissionais');
-        setProfissionais(profissionaisData || []);
-        console.log('✅ Profissionais carregados:', profissionaisData?.length || 0);
-      } catch (err) {
-        console.error('Erro ao carregar profissionais:', err);
-      }
-
-      // 🔥 CARREGAR AGENDAMENTOS
-      try {
-        console.log('📌 Buscando agendamentos...');
-        let todosAgendamentos = [];
-        
-        for (const id of idsParaBuscar) {
-          const resultados = await firebaseService.query('agendamentos', [
+      // Carregar dados em paralelo para melhor performance
+      const [
+        profissionaisData,
+        agendamentosData,
+        pontuacoesData,
+        recompensasData,
+        resgatesData,
+        atendimentosData
+      ] = await Promise.allSettled([
+        firebaseService.getAll('profissionais'),
+        Promise.all(idsParaBuscar.map(id => 
+          firebaseService.query('agendamentos', [
             { field: 'clienteId', operator: '==', value: id }
-          ], 'data', 'desc');
-          
-          console.log(`✅ Encontrados ${resultados.length} agendamentos para ID: ${id}`);
-          todosAgendamentos = [...todosAgendamentos, ...resultados];
-        }
-        
-        // Remover duplicatas
-        const agendamentosUnicos = Array.from(new Map(todosAgendamentos.map(item => [item.id, item])).values());
-        
-        console.log('✅ Total agendamentos únicos:', agendamentosUnicos.length);
-        setAgendamentos(agendamentosUnicos);
-      } catch (err) {
-        console.error('❌ Erro ao carregar agendamentos:', err);
-      }
-
-      // 🔥 CARREGAR PONTUAÇÕES
-      try {
-        let todasPontuacoes = [];
-        
-        for (const id of idsParaBuscar) {
-          const resultados = await firebaseService.query('pontuacao', [
+          ], 'data', 'desc')
+        )),
+        Promise.all(idsParaBuscar.map(id => 
+          firebaseService.query('pontuacao', [
             { field: 'clienteId', operator: '==', value: id }
-          ], 'data', 'desc');
-          
-          todasPontuacoes = [...todasPontuacoes, ...resultados];
-        }
-        
-        const pontuacoesUnicas = Array.from(new Map(todasPontuacoes.map(item => [item.id, item])).values());
-        console.log('✅ Pontuações carregadas:', pontuacoesUnicas.length);
-        setPontuacoes(pontuacoesUnicas || []);
-      } catch (err) {
-        console.error('Erro ao carregar pontuações:', err);
-      }
-
-      // 🔥 CARREGAR RECOMPENSAS DISPONÍVEIS
-      try {
-        const recompensasData = await firebaseService.query('recompensas', [
+          ], 'data', 'desc')
+        )),
+        firebaseService.query('recompensas', [
           { field: 'ativo', operator: '==', value: true }
-        ]);
-        
-        const recompensasOrdenadas = (recompensasData || []).sort((a, b) => 
+        ]),
+        Promise.all(idsParaBuscar.map(id => 
+          firebaseService.query('resgates_fidelidade', [
+            { field: 'clienteId', operator: '==', value: id }
+          ], 'data', 'desc')
+        )),
+        Promise.all(idsParaBuscar.map(id => 
+          firebaseService.query('atendimentos', [
+            { field: 'clienteId', operator: '==', value: id }
+          ], 'data', 'desc')
+        ))
+      ]);
+
+      // Processar resultados
+      if (profissionaisData.status === 'fulfilled') {
+        setProfissionais(profissionaisData.value || []);
+      }
+
+      if (agendamentosData.status === 'fulfilled') {
+        const todosAgendamentos = agendamentosData.value.flat();
+        const agendamentosUnicos = Array.from(new Map(todosAgendamentos.map(item => [item.id, item])).values());
+        setAgendamentos(agendamentosUnicos);
+      }
+
+      if (pontuacoesData.status === 'fulfilled') {
+        const todasPontuacoes = pontuacoesData.value.flat();
+        const pontuacoesUnicas = Array.from(new Map(todasPontuacoes.map(item => [item.id, item])).values());
+        setPontuacoes(pontuacoesUnicas);
+      }
+
+      if (recompensasData.status === 'fulfilled') {
+        const recompensasOrdenadas = (recompensasData.value || []).sort((a, b) => 
           (a.pontosNecessarios || 0) - (b.pontosNecessarios || 0)
         );
-        
         setRecompensasDisponiveis(recompensasOrdenadas.slice(0, 3));
-        console.log('✅ Recompensas disponíveis:', recompensasOrdenadas.length);
-      } catch (err) {
-        console.error('Erro ao carregar recompensas:', err);
       }
 
-      // 🔥 CARREGAR RESGATES DO CLIENTE
-      try {
-        let todosResgates = [];
-        
-        for (const id of idsParaBuscar) {
-          const resultados = await firebaseService.query('resgates_fidelidade', [
-            { field: 'clienteId', operator: '==', value: id }
-          ], 'data', 'desc');
-          
-          todosResgates = [...todosResgates, ...resultados];
-        }
-        
+      if (resgatesData.status === 'fulfilled') {
+        const todosResgates = resgatesData.value.flat();
         const resgatesUnicos = Array.from(new Map(todosResgates.map(item => [item.id, item])).values());
         setResgatesRecentes(resgatesUnicos.slice(0, 5));
-        console.log('✅ Resgates carregados:', resgatesUnicos.length);
-      } catch (err) {
-        console.error('Erro ao carregar resgates:', err);
       }
 
-      // 🔥 CARREGAR ATENDIMENTOS
-      try {
-        let todosAtendimentos = [];
-        
-        for (const id of idsParaBuscar) {
-          const resultados = await firebaseService.query('atendimentos', [
-            { field: 'clienteId', operator: '==', value: id }
-          ], 'data', 'desc');
-          
-          todosAtendimentos = [...todosAtendimentos, ...resultados];
-        }
-        
+      if (atendimentosData.status === 'fulfilled') {
+        const todosAtendimentos = atendimentosData.value.flat();
         const atendimentosUnicos = Array.from(new Map(todosAtendimentos.map(item => [item.id, item])).values());
         setHistoricoAtendimentos(atendimentosUnicos?.slice(0, 10) || []);
-        console.log('✅ Atendimentos carregados:', atendimentosUnicos.length);
-      } catch (err) {
-        console.error('Erro ao carregar atendimentos:', err);
       }
 
     } catch (error) {
@@ -222,7 +265,7 @@ function ClienteDashboard() {
     }
   };
 
-  // 🔥 CALCULAR SALDO E NÍVEL QUANDO PONTUAÇÕES MUDAREM
+  // Calcular saldo e nível
   useEffect(() => {
     const creditos = pontuacoes
       .filter(p => p.tipo === 'credito')
@@ -240,7 +283,6 @@ function ClienteDashboard() {
     else if (saldoAtual >= 500) nivelAtual = 'prata';
     setNivel(nivelAtual);
 
-    // Filtrar próximos agendamentos (futuros e não cancelados/finalizados)
     const hoje = new Date().toISOString().split('T')[0];
     const proximos = agendamentos
       .filter(a => a.data >= hoje && a.status !== 'cancelado' && a.status !== 'finalizado')
@@ -279,7 +321,14 @@ function ClienteDashboard() {
   const formatarData = (data) => {
     if (!data) return '-';
     try {
-      return new Date(data).toLocaleDateString('pt-BR', {
+      const date = new Date(data);
+      if (isMobile) {
+        return date.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit'
+        });
+      }
+      return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
@@ -292,13 +341,16 @@ function ClienteDashboard() {
   const formatarDataHora = (data) => {
     if (!data) return '-';
     try {
-      return new Date(data).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const date = new Date(data);
+      if (isMobile) {
+        return date.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      return date.toLocaleString('pt-BR');
     } catch {
       return data;
     }
@@ -315,6 +367,15 @@ function ClienteDashboard() {
   };
 
   const getStatusLabel = (status) => {
+    if (isMobile) {
+      switch(status?.toLowerCase()) {
+        case 'confirmado': return 'Conf.';
+        case 'pendente': return 'Pend.';
+        case 'cancelado': return 'Canc.';
+        case 'finalizado': return 'Real.';
+        default: return status || 'Pend.';
+      }
+    }
     switch(status?.toLowerCase()) {
       case 'confirmado': return 'Confirmado';
       case 'pendente': return 'Pendente';
@@ -336,7 +397,7 @@ function ClienteDashboard() {
   const getProgressoProximoNivel = () => {
     const info = getNivelInfo();
     if (!info.proximo) return 100;
-    return (saldo / info.proximo) * 100;
+    return Math.min((saldo / info.proximo) * 100, 100);
   };
 
   const getProximoNivelNome = () => {
@@ -347,11 +408,7 @@ function ClienteDashboard() {
   };
 
   if (authLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingSkeleton />;
   }
 
   if (!cliente) {
@@ -363,6 +420,414 @@ function ClienteDashboard() {
   const progresso = getProgressoProximoNivel();
   const proximoNivel = getProximoNivelNome();
 
+  // Versão Mobile do Dashboard
+  if (isMobile) {
+    return (
+      <Box sx={{ pb: 7 }}>
+        {/* Header Mobile */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          p: 2,
+          bgcolor: 'white',
+          borderBottom: '1px solid #f0f0f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton onClick={() => setMobileMenuOpen(true)}>
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              BeautyPro
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton size="small" onClick={handleRefresh}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+            <IconButton size="small" onClick={() => navigate('/cliente/perfil')}>
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* Menu Mobile Drawer */}
+        <SwipeableDrawer
+          anchor="left"
+          open={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          onOpen={() => {}}
+          PaperProps={{
+            sx: { width: 280, bgcolor: '#faf5ff' }
+          }}
+        >
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton onClick={() => setMobileMenuOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <Avatar
+                src={cliente.foto}
+                sx={{ 
+                  width: 80, 
+                  height: 80,
+                  mx: 'auto',
+                  mb: 2,
+                  bgcolor: '#9c27b0',
+                }}
+              >
+                {!cliente.foto && getInitials(cliente.nome)}
+              </Avatar>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {cliente.nome}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {cliente.email}
+              </Typography>
+            </Box>
+
+            <List>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/dashboard'); }}>
+                <ListItemIcon><HomeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                <ListItemText primary="Dashboard" />
+              </ListItem>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/agendamentos'); }}>
+                <ListItemIcon><DateRangeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                <ListItemText primary="Agendamentos" />
+                {proximosAgendamentos.length > 0 && (
+                  <Chip label={proximosAgendamentos.length} size="small" color="warning" />
+                )}
+              </ListItem>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/recompensas'); }}>
+                <ListItemIcon><RedeemIcon sx={{ color: '#4caf50' }} /></ListItemIcon>
+                <ListItemText primary="Recompensas" />
+              </ListItem>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/pontos'); }}>
+                <ListItemIcon><StarIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                <ListItemText primary="Meus Pontos" />
+                <Chip label={saldo} size="small" sx={{ bgcolor: '#ff9800', color: 'white' }} />
+              </ListItem>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/historico'); }}>
+                <ListItemIcon><HistoryIcon sx={{ color: '#2196f3' }} /></ListItemIcon>
+                <ListItemText primary="Histórico" />
+              </ListItem>
+              <ListItem button onClick={() => { setMobileMenuOpen(false); navigate('/cliente/perfil'); }}>
+                <ListItemIcon><PersonIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                <ListItemText primary="Perfil" />
+              </ListItem>
+              <ListItem button onClick={handleLogout}>
+                <ListItemIcon><LogoutIcon sx={{ color: '#f44336' }} /></ListItemIcon>
+                <ListItemText primary="Sair" />
+              </ListItem>
+            </List>
+          </Box>
+        </SwipeableDrawer>
+
+        {/* Conteúdo Principal Mobile */}
+        <Box sx={{ p: 2 }}>
+          {/* Card de Boas Vindas Mobile */}
+          <Card sx={{ mb: 2, bgcolor: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Olá, {cliente.nome?.split(' ')[0]}! 👋
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                {proximosAgendamentos.length > 0 
+                  ? `Você tem ${proximosAgendamentos.length} agendamento(s) agendados`
+                  : 'Nenhum agendamento pendente'}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* Cards de Estatísticas Mobile */}
+          <Grid container spacing={1} sx={{ mb: 2 }}>
+            <Grid item xs={4}>
+              <Card sx={{ textAlign: 'center', py: 1 }}>
+                <CalendarIcon sx={{ color: '#9c27b0', fontSize: 24 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {proximosAgendamentos.length}
+                </Typography>
+                <Typography variant="caption">Agend.</Typography>
+              </Card>
+            </Grid>
+            <Grid item xs={4}>
+              <Card sx={{ textAlign: 'center', py: 1 }}>
+                <StarIcon sx={{ color: '#ff9800', fontSize: 24 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {saldo}
+                </Typography>
+                <Typography variant="caption">Pontos</Typography>
+              </Card>
+            </Grid>
+            <Grid item xs={4}>
+              <Card sx={{ textAlign: 'center', py: 1 }}>
+                <GiftIcon sx={{ color: '#4caf50', fontSize: 24 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {recompensasDisponiveis.length}
+                </Typography>
+                <Typography variant="caption">Recomp.</Typography>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Card de Fidelidade Mobile */}
+          <Card sx={{ mb: 2, bgcolor: nivelInfo.bg }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <TrophyIcon sx={{ fontSize: 40, color: nivelInfo.cor }} />
+                <Box>
+                  <Typography variant="subtitle2">Nível {nivelInfo.nome}</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                    {saldo} pts
+                  </Typography>
+                </Box>
+              </Box>
+              {proximoNivel && (
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption">Progresso</Typography>
+                    <Typography variant="caption">{pontosFaltantes} pts faltam</Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={progresso}
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      bgcolor: '#e0e0e0',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: nivelInfo.cor,
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tabs Mobile */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={(e, v) => setTabValue(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+            >
+              <Tab label="Agendamentos" icon={<EventIcon />} iconPosition="start" />
+              <Tab label="Histórico" icon={<HistoryIcon />} iconPosition="start" />
+              <Tab label="Resgates" icon={<GiftIcon />} iconPosition="start" />
+            </Tabs>
+          </Box>
+
+          <TabPanel value={tabValue} index={0} isMobile>
+            {loading ? (
+              <CircularProgress />
+            ) : proximosAgendamentos.length > 0 ? (
+              <AnimatePresence>
+                {proximosAgendamentos.map((agendamento, index) => (
+                  <MobileCard key={agendamento.id || index}>
+                    <CardContent sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {formatarData(agendamento.data)} • {agendamento.horario}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            {agendamento.servicos?.[0]?.nome || agendamento.servicoNome}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          label={getStatusLabel(agendamento.status)}
+                          color={getStatusColor(agendamento.status)}
+                          size="small"
+                        />
+                      </Box>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        size="small"
+                        onClick={() => navigate('/cliente/agendamentos')}
+                        sx={{ mt: 1, borderColor: '#9c27b0', color: '#9c27b0' }}
+                      >
+                        Ver detalhes
+                      </Button>
+                    </CardContent>
+                  </MobileCard>
+                ))}
+              </AnimatePresence>
+            ) : (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <EventIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  Nenhum agendamento futuro
+                </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleAgendar}
+                  sx={{ mt: 1, bgcolor: '#9c27b0' }}
+                >
+                  Agendar agora
+                </Button>
+              </Paper>
+            )}
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={1} isMobile>
+            {loading ? (
+              <CircularProgress />
+            ) : historicoAtendimentos.length > 0 ? (
+              <AnimatePresence>
+                {historicoAtendimentos.slice(0, 5).map((atend, index) => {
+                  const profissional = profissionais.find(p => p.id === atend.profissionalId);
+                  return (
+                    <MobileCard key={atend.id || index}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {formatarData(atend.data)}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label="Realizado"
+                            color="success"
+                          />
+                        </Box>
+                        <Typography variant="body2">{atend.servicoNome}</Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                          <Typography variant="caption" color="textSecondary">
+                            {profissional?.nome || 'Profissional'}
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 600, color: '#4caf50' }}>
+                            R$ {atend.valorTotal?.toFixed(2)}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </MobileCard>
+                  );
+                })}
+              </AnimatePresence>
+            ) : (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <HistoryIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+                <Typography variant="body2" color="textSecondary">
+                  Nenhum histórico encontrado
+                </Typography>
+              </Paper>
+            )}
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={2} isMobile>
+            {loading ? (
+              <CircularProgress />
+            ) : resgatesRecentes.length > 0 ? (
+              <AnimatePresence>
+                {resgatesRecentes.map((resgate, index) => (
+                  <MobileCard key={resgate.id || index}>
+                    <CardContent sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {resgate.recompensaNome}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {formatarDataHora(resgate.data)}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          size="small"
+                          label={`-${resgate.pontosGastos}`}
+                          sx={{ bgcolor: '#ffebee', color: '#f44336' }}
+                        />
+                      </Box>
+                    </CardContent>
+                  </MobileCard>
+                ))}
+              </AnimatePresence>
+            ) : (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <GiftIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  Nenhum resgate realizado
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleVerRecompensas}
+                  sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                >
+                  Ver recompensas
+                </Button>
+              </Paper>
+            )}
+          </TabPanel>
+        </Box>
+
+        {/* Bottom Navigation Mobile */}
+        <Paper 
+          sx={{ 
+            position: 'fixed', 
+            bottom: 0, 
+            left: 0, 
+            right: 0,
+            zIndex: 10,
+            borderTop: '1px solid #f0f0f0'
+          }} 
+          elevation={3}
+        >
+          <BottomNavigation
+            value={mobileTab}
+            onChange={(event, newValue) => {
+              setMobileTab(newValue);
+              if (newValue === 0) navigate('/cliente/dashboard');
+              if (newValue === 1) navigate('/cliente/agendamentos');
+              if (newValue === 2) navigate('/cliente/recompensas');
+              if (newValue === 3) navigate('/cliente/pontos');
+            }}
+            showLabels
+          >
+            <BottomNavigationAction label="Início" icon={<HomeIcon />} />
+            <BottomNavigationAction 
+              label="Agenda" 
+              icon={
+                <Badge badgeContent={proximosAgendamentos.length} color="secondary">
+                  <DateRangeIcon />
+                </Badge>
+              } 
+            />
+            <BottomNavigationAction label="Recompensas" icon={<GiftIcon />} />
+            <BottomNavigationAction label="Pontos" icon={<StarIcon />} />
+          </BottomNavigation>
+        </Paper>
+
+        {/* FAB para ações rápidas */}
+        <Zoom in={true}>
+          <Fab
+            color="primary"
+            sx={{
+              position: 'fixed',
+              bottom: 80,
+              right: 16,
+              bgcolor: '#9c27b0',
+              '&:hover': { bgcolor: '#7b1fa2' }
+            }}
+            onClick={handleAgendar}
+          >
+            <CalendarIcon />
+          </Fab>
+        </Zoom>
+      </Box>
+    );
+  }
+
+  // Versão Desktop (original, mantida)
   return (
     <Box>
       {/* Header com botão de atualizar */}
@@ -589,7 +1054,7 @@ function ClienteDashboard() {
         </Tabs>
       </Box>
 
-      <TabPanel value={tabValue} index={0}>
+      <TabPanel value={tabValue} index={0} isMobile={false}>
         <Grid container spacing={3}>
           {/* Próximos Agendamentos */}
           <Grid item xs={12} md={8}>
@@ -729,7 +1194,7 @@ function ClienteDashboard() {
         </Grid>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel value={tabValue} index={1} isMobile={false}>
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
@@ -759,7 +1224,6 @@ function ClienteDashboard() {
                                          atendimento.servicoNome || 
                                          'Serviço';
                       
-                      // 🔥 NOME DO PROFISSIONAL - Buscar na lista de profissionais
                       let profissionalNome = 'Profissional não informado';
                       let profissionalFoto = null;
                       
@@ -831,7 +1295,7 @@ function ClienteDashboard() {
         </Card>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={tabValue} index={2} isMobile={false}>
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
