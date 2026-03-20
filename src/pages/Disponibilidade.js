@@ -31,7 +31,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   Avatar,
   Switch,
   FormControlLabel,
@@ -51,6 +50,12 @@ import {
   ToggleButtonGroup,
   Stack,
   alpha,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Fade,
+  Grow,
+  Zoom,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -82,8 +87,11 @@ import {
   ContentCopy as CopyIcon,
   Save as SaveIcon,
   Warning as WarningIcon,
+  AccessTime as AccessTimeIcon,
+  CopyAll as CopyAllIcon,
+  DeleteSweep as DeleteSweepIcon,
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
@@ -107,26 +115,30 @@ import {
   addMonths,
   getWeek,
   getYear,
+  setHours,
+  setMinutes,
+  isAfter,
+  isBefore,
 } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
 const diasSemana = [
-  { value: 0, label: 'Domingo', abreviado: 'DOM' },
-  { value: 1, label: 'Segunda', abreviado: 'SEG' },
-  { value: 2, label: 'Terça', abreviado: 'TER' },
-  { value: 3, label: 'Quarta', abreviado: 'QUA' },
-  { value: 4, label: 'Quinta', abreviado: 'QUI' },
-  { value: 5, label: 'Sexta', abreviado: 'SEX' },
-  { value: 6, label: 'Sábado', abreviado: 'SAB' },
+  { value: 0, label: 'Domingo', abreviado: 'DOM', cor: '#f44336' },
+  { value: 1, label: 'Segunda', abreviado: 'SEG', cor: '#4caf50' },
+  { value: 2, label: 'Terça', abreviado: 'TER', cor: '#4caf50' },
+  { value: 3, label: 'Quarta', abreviado: 'QUA', cor: '#4caf50' },
+  { value: 4, label: 'Quinta', abreviado: 'QUI', cor: '#4caf50' },
+  { value: 5, label: 'Sexta', abreviado: 'SEX', cor: '#4caf50' },
+  { value: 6, label: 'Sábado', abreviado: 'SAB', cor: '#ff9800' },
 ];
 
 const tiposAusencia = [
-  { value: 'folga', label: 'Folga', color: '#4caf50' },
-  { value: 'ferias', label: 'Férias', color: '#2196f3' },
-  { value: 'licenca', label: 'Licença', color: '#ff9800' },
-  { value: 'falta', label: 'Falta', color: '#f44336' },
-  { value: 'treinamento', label: 'Treinamento', color: '#9c27b0' },
-  { value: 'evento', label: 'Evento', color: '#00bcd4' },
+  { value: 'folga', label: 'Folga', color: '#4caf50', icon: <EventBusyIcon /> },
+  { value: 'ferias', label: 'Férias', color: '#2196f3', icon: <BeachAccessIcon /> },
+  { value: 'licenca', label: 'Licença', color: '#ff9800', icon: <MedicalServicesIcon /> },
+  { value: 'falta', label: 'Falta', color: '#f44336', icon: <WarningIcon /> },
+  { value: 'treinamento', label: 'Treinamento', color: '#9c27b0', icon: <SchoolIcon /> },
+  { value: 'evento', label: 'Evento', color: '#00bcd4', icon: <EmojiEventsIcon /> },
 ];
 
 const periodosRepeticao = [
@@ -137,6 +149,15 @@ const periodosRepeticao = [
   { value: 'mensal', label: 'Mensalmente' },
 ];
 
+const horariosSugeridos = [
+  { label: 'Manhã (08:00 - 12:00)', inicio: '08:00', fim: '12:00', intervalo: false },
+  { label: 'Tarde (13:00 - 18:00)', inicio: '13:00', fim: '18:00', intervalo: false },
+  { label: 'Integral (08:00 - 18:00)', inicio: '08:00', fim: '18:00', intervalo: true, intervaloInicio: '12:00', intervaloFim: '13:00' },
+  { label: 'Meio Período Manhã', inicio: '08:00', fim: '12:00', intervalo: false },
+  { label: 'Meio Período Tarde', inicio: '13:00', fim: '18:00', intervalo: false },
+  { label: 'Plantão (08:00 - 20:00)', inicio: '08:00', fim: '20:00', intervalo: true, intervaloInicio: '12:00', intervaloFim: '13:00' },
+];
+
 function Disponibilidade() {
   const [loading, setLoading] = useState(true);
   const [profissionais, setProfissionais] = useState([]);
@@ -145,7 +166,7 @@ function Disponibilidade() {
   const [agendamentos, setAgendamentos] = useState([]);
   const [dataReferencia, setDataReferencia] = useState(new Date());
   const [profissionalSelecionado, setProfissionalSelecionado] = useState('todos');
-  const [visao, setVisao] = useState('semana'); // 'dia', 'semana', 'mes'
+  const [visao, setVisao] = useState('semana');
   const [openDialog, setOpenDialog] = useState(false);
   const [openAusenciaDialog, setOpenAusenciaDialog] = useState(false);
   const [openConfigDialog, setOpenConfigDialog] = useState(false);
@@ -153,18 +174,22 @@ function Disponibilidade() {
   const [ausenciaEditando, setAusenciaEditando] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [horarios, setHorarios] = useState([]);
-  
-  // 🔥 Estado para usuário atual
+  const [modoSelecao, setModoSelecao] = useState('simples'); // 'simples', 'multi', 'copiar'
+  const [diasSelecionados, setDiasSelecionados] = useState([]);
+  const [openSpeedDial, setOpenSpeedDial] = useState(false);
   const [usuario, setUsuario] = useState(null);
+  const [expandedProfissional, setExpandedProfissional] = useState(null);
+  const [modoEdicaoRapida, setModoEdicaoRapida] = useState(false);
 
   // Estado do formulário de disponibilidade
   const [formData, setFormData] = useState({
     profissionalId: '',
-    diaSemana: 1,
+    diasSemana: [1], // Agora suporta múltiplos dias
     horarioInicio: '09:00',
     horarioFim: '18:00',
     intervaloInicio: '12:00',
     intervaloFim: '13:00',
+    usarIntervalo: true,
     ativo: true,
     observacoes: '',
   });
@@ -181,7 +206,6 @@ function Disponibilidade() {
     observacoes: '',
   });
 
-  // 🔥 Carregar usuário atual
   useEffect(() => {
     try {
       const usuarioStr = localStorage.getItem('usuario');
@@ -193,7 +217,6 @@ function Disponibilidade() {
     }
   }, []);
 
-  // 🔥 Função para registrar na auditoria
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
       await auditoriaService.registrar(acao, {
@@ -220,7 +243,6 @@ function Disponibilidade() {
     try {
       setLoading(true);
       
-      // 🔥 LOG TÉCNICO
       await firebaseService.log('info', 'Carregando dados de disponibilidade');
       
       const [profissionaisData, disponibilidadesData, ausenciasData, agendamentosData] = await Promise.all([
@@ -237,7 +259,6 @@ function Disponibilidade() {
       setAusencias(ausenciasData || []);
       setAgendamentos(agendamentosData || []);
       
-      // 🔥 AUDITORIA
       await registrarAuditoria(
         'carregar_disponibilidade',
         'listagem',
@@ -249,20 +270,11 @@ function Disponibilidade() {
         }
       );
       
-      // 🔥 LOG TÉCNICO
-      await firebaseService.log('success', 'Dados de disponibilidade carregados', {
-        profissionais: profissionaisData?.length,
-        disponibilidades: disponibilidadesData?.length
-      });
-      
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      
-      // 🔥 LOG DE ERRO
       await firebaseService.log('error', 'Erro ao carregar dados de disponibilidade', {
         error: error.message
       });
-      
       toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
@@ -278,7 +290,6 @@ function Disponibilidade() {
   };
 
   const handleRefresh = async () => {
-    // 🔥 LOG TÉCNICO
     await firebaseService.log('info', 'Atualização manual da página de disponibilidade');
     await carregarDados();
   };
@@ -288,11 +299,12 @@ function Disponibilidade() {
       setDisponibilidadeEditando(disponibilidade);
       setFormData({
         profissionalId: disponibilidade.profissionalId,
-        diaSemana: disponibilidade.diaSemana || 1,
+        diasSemana: disponibilidade.diasSemana || [disponibilidade.diaSemana || 1],
         horarioInicio: disponibilidade.horarioInicio || '09:00',
         horarioFim: disponibilidade.horarioFim || '18:00',
         intervaloInicio: disponibilidade.intervaloInicio || '12:00',
         intervaloFim: disponibilidade.intervaloFim || '13:00',
+        usarIntervalo: !!disponibilidade.intervaloInicio,
         ativo: disponibilidade.ativo !== false,
         observacoes: disponibilidade.observacoes || '',
       });
@@ -300,15 +312,17 @@ function Disponibilidade() {
       setDisponibilidadeEditando(null);
       setFormData({
         profissionalId: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
-        diaSemana: 1,
+        diasSemana: [1],
         horarioInicio: '09:00',
         horarioFim: '18:00',
         intervaloInicio: '12:00',
         intervaloFim: '13:00',
+        usarIntervalo: true,
         ativo: true,
         observacoes: '',
       });
     }
+    setDiasSelecionados([]);
     setOpenDialog(true);
   };
 
@@ -344,6 +358,7 @@ function Disponibilidade() {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setDisponibilidadeEditando(null);
+    setDiasSelecionados([]);
   };
 
   const handleCloseAusenciaDialog = () => {
@@ -359,11 +374,29 @@ function Disponibilidade() {
     }));
   };
 
+  const handleDiasSemanaChange = (dias) => {
+    setFormData(prev => ({
+      ...prev,
+      diasSemana: dias
+    }));
+  };
+
   const handleAusenciaInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setAusenciaForm(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const aplicarModeloHorario = (modelo) => {
+    setFormData(prev => ({
+      ...prev,
+      horarioInicio: modelo.inicio,
+      horarioFim: modelo.fim,
+      usarIntervalo: modelo.intervalo || false,
+      intervaloInicio: modelo.intervaloInicio || '12:00',
+      intervaloFim: modelo.intervaloFim || '13:00',
     }));
   };
 
@@ -374,55 +407,113 @@ function Disponibilidade() {
         return;
       }
 
-      // 🔥 LOG TÉCNICO
-      await firebaseService.log('info', 'Salvando configuração de disponibilidade');
-
-      const dadosParaSalvar = {
-        ...formData,
-        criadoEm: disponibilidadeEditando ? disponibilidadeEditando.criadoEm : new Date().toISOString(),
-        atualizadoEm: new Date().toISOString(),
-      };
-
-      if (disponibilidadeEditando) {
-        await firebaseService.update('disponibilidades', disponibilidadeEditando.id, dadosParaSalvar);
-        
-        // 🔥 AUDITORIA
-        await registrarAuditoria(
-          'atualizar_disponibilidade',
-          disponibilidadeEditando.id,
-          `Disponibilidade atualizada para ${formData.diaSemana}`,
-          { profissionalId: formData.profissionalId, diaSemana: formData.diaSemana }
-        );
-        
-        mostrarSnackbar('Disponibilidade atualizada com sucesso!');
-      } else {
-        const novaDisponibilidade = await firebaseService.add('disponibilidades', dadosParaSalvar);
-        
-        // 🔥 AUDITORIA
-        await registrarAuditoria(
-          'criar_disponibilidade',
-          novaDisponibilidade.id,
-          `Nova disponibilidade criada para dia ${formData.diaSemana}`,
-          { profissionalId: formData.profissionalId, diaSemana: formData.diaSemana }
-        );
-        
-        mostrarSnackbar('Disponibilidade cadastrada com sucesso!');
+      if (formData.diasSemana.length === 0) {
+        mostrarSnackbar('Selecione pelo menos um dia da semana', 'error');
+        return;
       }
 
-      // 🔥 LOG TÉCNICO
+      await firebaseService.log('info', 'Salvando configuração de disponibilidade');
+
+      // Para cada dia selecionado, criar/atualizar uma disponibilidade
+      const promises = formData.diasSemana.map(async (diaSemana) => {
+        const disponibilidadeExistente = disponibilidades.find(
+          d => d.profissionalId === formData.profissionalId && 
+               d.diaSemana === diaSemana &&
+               (!disponibilidadeEditando || d.id === disponibilidadeEditando.id)
+        );
+
+        const dadosParaSalvar = {
+          profissionalId: formData.profissionalId,
+          diaSemana: diaSemana,
+          horarioInicio: formData.horarioInicio,
+          horarioFim: formData.horarioFim,
+          intervaloInicio: formData.usarIntervalo ? formData.intervaloInicio : null,
+          intervaloFim: formData.usarIntervalo ? formData.intervaloFim : null,
+          ativo: formData.ativo,
+          observacoes: formData.observacoes,
+          atualizadoEm: new Date().toISOString(),
+        };
+
+        if (disponibilidadeExistente && !disponibilidadeEditando) {
+          // Atualizar existente
+          await firebaseService.update('disponibilidades', disponibilidadeExistente.id, dadosParaSalvar);
+          await registrarAuditoria(
+            'atualizar_disponibilidade',
+            disponibilidadeExistente.id,
+            `Disponibilidade atualizada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
+            { profissionalId: formData.profissionalId, diaSemana }
+          );
+          return disponibilidadeExistente.id;
+        } else if (disponibilidadeEditando && disponibilidadeEditando.diaSemana === diaSemana) {
+          // Editando existente
+          await firebaseService.update('disponibilidades', disponibilidadeEditando.id, dadosParaSalvar);
+          await registrarAuditoria(
+            'atualizar_disponibilidade',
+            disponibilidadeEditando.id,
+            `Disponibilidade atualizada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
+            { profissionalId: formData.profissionalId, diaSemana }
+          );
+          return disponibilidadeEditando.id;
+        } else {
+          // Criar nova
+          const nova = await firebaseService.add('disponibilidades', {
+            ...dadosParaSalvar,
+            criadoEm: new Date().toISOString(),
+          });
+          await registrarAuditoria(
+            'criar_disponibilidade',
+            nova.id,
+            `Nova disponibilidade criada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
+            { profissionalId: formData.profissionalId, diaSemana }
+          );
+          return nova.id;
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Se estava editando e removeu algum dia, deletar os que não estão mais selecionados
+      if (disponibilidadeEditando && !formData.diasSemana.includes(disponibilidadeEditando.diaSemana)) {
+        await firebaseService.delete('disponibilidades', disponibilidadeEditando.id);
+        await registrarAuditoria(
+          'remover_disponibilidade',
+          disponibilidadeEditando.id,
+          `Disponibilidade removida`,
+          { profissionalId: formData.profissionalId }
+        );
+      }
+
       await firebaseService.log('success', 'Disponibilidade salva com sucesso');
 
+      mostrarSnackbar('Disponibilidade(s) salva(s) com sucesso!');
       handleCloseDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar disponibilidade:', error);
-      
-      // 🔥 LOG DE ERRO
       await firebaseService.log('error', 'Erro ao salvar disponibilidade', {
         error: error.message
       });
-      
       mostrarSnackbar(error.message || 'Erro ao salvar disponibilidade', 'error');
+    }
+  };
+
+  const handleRemoverDisponibilidade = async (id, disponibilidade) => {
+    if (window.confirm(`Deseja remover a disponibilidade de ${diasSemana.find(d => d.value === disponibilidade.diaSemana)?.label}?`)) {
+      try {
+        await firebaseService.log('warning', 'Removendo disponibilidade', { disponibilidadeId: id });
+        await firebaseService.delete('disponibilidades', id);
+        await registrarAuditoria(
+          'remover_disponibilidade',
+          id,
+          `Disponibilidade removida`,
+          { profissionalId: disponibilidade.profissionalId, diaSemana: disponibilidade.diaSemana }
+        );
+        mostrarSnackbar('Disponibilidade removida com sucesso!');
+        carregarDados();
+      } catch (error) {
+        console.error('Erro ao remover disponibilidade:', error);
+        mostrarSnackbar('Erro ao remover disponibilidade', 'error');
+      }
     }
   };
 
@@ -433,7 +524,6 @@ function Disponibilidade() {
         return;
       }
 
-      // 🔥 LOG TÉCNICO
       await firebaseService.log('info', 'Salvando ausência de profissional');
 
       const dadosParaSalvar = {
@@ -444,43 +534,33 @@ function Disponibilidade() {
 
       if (ausenciaEditando) {
         await firebaseService.update('ausencias', ausenciaEditando.id, dadosParaSalvar);
-        
-        // 🔥 AUDITORIA
         await registrarAuditoria(
           'atualizar_ausencia',
           ausenciaEditando.id,
           `Ausência atualizada para ${ausenciaForm.tipo}`,
           { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
         );
-        
         mostrarSnackbar('Ausência atualizada com sucesso!');
       } else {
         const novaAusencia = await firebaseService.add('ausencias', dadosParaSalvar);
-        
-        // 🔥 AUDITORIA
         await registrarAuditoria(
           'criar_ausencia',
           novaAusencia.id,
           `Nova ausência criada: ${ausenciaForm.tipo}`,
           { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
         );
-        
         mostrarSnackbar('Ausência cadastrada com sucesso!');
       }
 
-      // 🔥 LOG TÉCNICO
       await firebaseService.log('success', 'Ausência salva com sucesso');
 
       handleCloseAusenciaDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar ausência:', error);
-      
-      // 🔥 LOG DE ERRO
       await firebaseService.log('error', 'Erro ao salvar ausência', {
         error: error.message
       });
-      
       mostrarSnackbar(error.message || 'Erro ao salvar ausência', 'error');
     }
   };
@@ -488,19 +568,14 @@ function Disponibilidade() {
   const handleRemoverAusencia = async (id, ausencia) => {
     if (window.confirm('Deseja realmente remover esta ausência?')) {
       try {
-        // 🔥 LOG TÉCNICO
         await firebaseService.log('warning', 'Removendo ausência', { ausenciaId: id });
-        
         await firebaseService.delete('ausencias', id);
-        
-        // 🔥 AUDITORIA
         await registrarAuditoria(
           'remover_ausencia',
           id,
           `Ausência removida`,
           { profissionalId: ausencia.profissionalId, tipo: ausencia.tipo }
         );
-        
         mostrarSnackbar('Ausência removida com sucesso!');
         carregarDados();
       } catch (error) {
@@ -510,11 +585,50 @@ function Disponibilidade() {
     }
   };
 
+  const handleCopiarDisponibilidade = async (profissionalOrigemId, profissionalDestinoId) => {
+    if (!profissionalDestinoId) {
+      mostrarSnackbar('Selecione um profissional destino', 'error');
+      return;
+    }
+
+    try {
+      const disponibilidadesOrigem = disponibilidades.filter(d => d.profissionalId === profissionalOrigemId);
+      
+      for (const disp of disponibilidadesOrigem) {
+        const novaDisponibilidade = {
+          profissionalId: profissionalDestinoId,
+          diaSemana: disp.diaSemana,
+          horarioInicio: disp.horarioInicio,
+          horarioFim: disp.horarioFim,
+          intervaloInicio: disp.intervaloInicio,
+          intervaloFim: disp.intervaloFim,
+          ativo: disp.ativo,
+          observacoes: `Copiado de ${profissionais.find(p => p.id === profissionalOrigemId)?.nome}`,
+          criadoEm: new Date().toISOString(),
+          atualizadoEm: new Date().toISOString(),
+        };
+        
+        await firebaseService.add('disponibilidades', novaDisponibilidade);
+      }
+      
+      await registrarAuditoria(
+        'copiar_disponibilidade',
+        profissionalDestinoId,
+        `Disponibilidade copiada de ${profissionais.find(p => p.id === profissionalOrigemId)?.nome}`,
+        { profissionalOrigemId, profissionalDestinoId }
+      );
+      
+      mostrarSnackbar('Disponibilidade copiada com sucesso!');
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao copiar disponibilidade:', error);
+      mostrarSnackbar('Erro ao copiar disponibilidade', 'error');
+    }
+  };
+
   const handleMudarVisao = (event, novaVisao) => {
     if (novaVisao !== null) {
       setVisao(novaVisao);
-      
-      // 🔥 LOG TÉCNICO (opcional, pode ser removido se gerar muitos logs)
       firebaseService.log('debug', 'Mudança de visualização', { novaVisao });
     }
   };
@@ -536,7 +650,6 @@ function Disponibilidade() {
   };
 
   const verificarDisponivel = (profissionalId, data, hora) => {
-    // Verificar se é dia da semana disponível
     const diaSemana = data.getDay();
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo
@@ -544,7 +657,6 @@ function Disponibilidade() {
 
     if (!disponibilidade) return false;
 
-    // Verificar se está dentro do horário de trabalho
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
     const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
     const [horaAtual, minAtual] = hora.split(':').map(Number);
@@ -555,7 +667,6 @@ function Disponibilidade() {
 
     if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
 
-    // Verificar intervalo de almoço
     if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
       const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
       const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
@@ -566,7 +677,6 @@ function Disponibilidade() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
     }
 
-    // Verificar ausências
     const dataStr = format(data, 'yyyy-MM-dd');
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
@@ -580,7 +690,6 @@ function Disponibilidade() {
 
     if (ausencia) return false;
 
-    // Verificar agendamentos existentes
     const agendamento = agendamentos.find(a =>
       a.profissionalId === profissionalId &&
       a.data === dataStr &&
@@ -633,6 +742,15 @@ function Disponibilidade() {
 
   const diasVisao = getDiasSemana();
   const horariosDia = gerarHorarios(dataReferencia);
+
+  const getDisponibilidadesPorProfissional = (profissionalId) => {
+    return disponibilidades.filter(d => d.profissionalId === profissionalId && d.ativo);
+  };
+
+  const formatarHorario = (hora) => {
+    if (!hora) return '—';
+    return hora.substring(0, 5);
+  };
 
   if (loading) {
     return (
@@ -759,15 +877,15 @@ function Disponibilidade() {
           </CardContent>
         </Card>
 
-        {/* Tabela de Disponibilidade */}
-        <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+        {/* Tabela de Disponibilidade Melhorada */}
+        <Paper sx={{ width: '100%', overflow: 'hidden', mb: 4 }}>
           <Box sx={{ overflowX: 'auto' }}>
             <Box sx={{ minWidth: 1200 }}>
               {/* Cabeçalho com dias */}
               <Grid container sx={{ bgcolor: '#f5f5f5', borderBottom: '2px solid #9c27b0' }}>
                 <Grid item xs={2} sx={{ p: 2, borderRight: '1px solid #ddd' }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Profissional / Horário
+                    Profissional
                   </Typography>
                 </Grid>
                 {diasVisao.map((dia, index) => (
@@ -792,127 +910,197 @@ function Disponibilidade() {
                 ))}
               </Grid>
 
-              {/* Linhas de profissionais e horários */}
-              {profissionaisFiltrados.map((profissional) => (
-                <Box key={profissional.id}>
-                  {/* Nome do profissional */}
-                  <Grid container sx={{ bgcolor: '#faf5ff', borderBottom: '1px solid #e0e0e0' }}>
-                    <Grid item xs={2} sx={{ p: 1.5, borderRight: '1px solid #ddd' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Avatar 
-                          src={profissional.foto} 
-                          sx={{ width: 32, height: 32, bgcolor: '#9c27b0' }}
-                        >
-                          {profissional.nome?.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {profissional.nome}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {profissional.especialidade || 'Profissional'}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Grid>
-                    
-                    {/* Células de horários por dia */}
-                    {diasVisao.map((dia, index) => {
-                      const disponivel = verificarDisponivel(profissional.id, dia, '09:00');
-                      const temAusencia = ausencias.some(a => 
-                        a.profissionalId === profissional.id &&
-                        format(dia, 'yyyy-MM-dd') >= a.dataInicio &&
-                        format(dia, 'yyyy-MM-dd') <= a.dataFim
-                      );
-
-                      let bgcolor = '#fff';
-                      let texto = 'Disponível';
-                      
-                      if (temAusencia) {
-                        bgcolor = alpha('#f44336', 0.1);
-                        texto = 'Ausente';
-                      } else if (!disponivel) {
-                        bgcolor = alpha('#999', 0.1);
-                        texto = 'Indisponível';
-                      }
-
-                      return (
-                        <Grid 
-                          key={index} 
-                          item 
-                          xs={visao === 'mes' ? 0.7 : 1.2} 
-                          sx={{ 
-                            p: 1, 
-                            textAlign: 'center',
-                            borderRight: index < diasVisao.length - 1 ? '1px solid #e0e0e0' : 'none',
-                            bgcolor,
-                            cursor: 'pointer',
-                            '&:hover': {
-                              bgcolor: alpha('#9c27b0', 0.05),
-                            },
-                          }}
-                          onClick={() => {
-                            if (temAusencia) {
-                              const aus = ausencias.find(a => 
+              {/* Linhas de profissionais */}
+              <AnimatePresence>
+                {profissionaisFiltrados.map((profissional) => {
+                  const disponibilidadesProf = getDisponibilidadesPorProfissional(profissional.id);
+                  
+                  return (
+                    <motion.div
+                      key={profissional.id}
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Accordion
+                        expanded={expandedProfissional === profissional.id}
+                        onChange={() => setExpandedProfissional(
+                          expandedProfissional === profissional.id ? null : profissional.id
+                        )}
+                        sx={{ 
+                          '&:before': { display: 'none' },
+                          boxShadow: 'none',
+                          borderBottom: '1px solid #e0e0e0'
+                        }}
+                      >
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Grid container alignItems="center">
+                            <Grid item xs={2}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Avatar 
+                                  src={profissional.foto} 
+                                  sx={{ width: 40, height: 40, bgcolor: '#9c27b0' }}
+                                >
+                                  {profissional.nome?.charAt(0)}
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                                    {profissional.nome}
+                                  </Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {profissional.especialidade || 'Profissional'}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </Grid>
+                            
+                            {/* Resumo rápido dos horários */}
+                            <Grid item xs={10}>
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                {disponibilidadesProf.map(disp => {
+                                  const diaInfo = diasSemana.find(d => d.value === disp.diaSemana);
+                                  return (
+                                    <Chip
+                                      key={disp.id}
+                                      label={`${diaInfo?.abreviado}: ${formatarHorario(disp.horarioInicio)} - ${formatarHorario(disp.horarioFim)}`}
+                                      size="small"
+                                      sx={{ 
+                                        bgcolor: diaInfo?.cor || '#9c27b0',
+                                        color: 'white',
+                                        fontSize: '0.7rem'
+                                      }}
+                                    />
+                                  );
+                                })}
+                                {disponibilidadesProf.length === 0 && (
+                                  <Typography variant="caption" color="textSecondary">
+                                    Nenhum horário configurado
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </AccordionSummary>
+                        
+                        <AccordionDetails sx={{ p: 0 }}>
+                          {/* Detalhes dos horários por dia */}
+                          <Grid container>
+                            <Grid item xs={2} sx={{ p: 1, borderRight: '1px solid #ddd', bgcolor: '#faf5ff' }}>
+                              <Typography variant="caption" color="textSecondary">
+                                Horários
+                              </Typography>
+                            </Grid>
+                            
+                            {diasVisao.map((dia, index) => {
+                              const diaSemana = dia.getDay();
+                              const disponibilidade = disponibilidadesProf.find(d => d.diaSemana === diaSemana);
+                              const temAusencia = ausencias.some(a => 
                                 a.profissionalId === profissional.id &&
                                 format(dia, 'yyyy-MM-dd') >= a.dataInicio &&
                                 format(dia, 'yyyy-MM-dd') <= a.dataFim
                               );
-                              if (aus) handleOpenAusenciaDialog(aus);
-                            }
-                          }}
-                        >
-                          <Tooltip title={texto}>
-                            <Box>
-                              {temAusencia ? (
-                                <EventBusyIcon sx={{ fontSize: 20, color: '#f44336' }} />
-                              ) : disponivel ? (
-                                <EventAvailableIcon sx={{ fontSize: 20, color: '#4caf50' }} />
-                              ) : (
-                                <BlockIcon sx={{ fontSize: 20, color: '#999' }} />
-                              )}
-                              <Typography variant="caption" display="block" sx={{ fontSize: '0.6rem' }}>
-                                {texto}
-                              </Typography>
-                            </Box>
-                          </Tooltip>
-                        </Grid>
-                      );
-                    })}
-                  </Grid>
-
-                  {/* Horários detalhados (opcional, para visão de dia) */}
-                  {visao === 'dia' && (
-                    <Grid container>
-                      <Grid item xs={2} sx={{ p: 1, borderRight: '1px solid #ddd', bgcolor: '#f5f5f5' }}>
-                        <Typography variant="caption" color="textSecondary">
-                          Horários
-                        </Typography>
-                      </Grid>
-                      {horariosDia.map((hora, idx) => {
-                        const disponivel = verificarDisponivel(profissional.id, dataReferencia, hora);
-                        return (
-                          <Grid 
-                            key={idx} 
-                            item 
-                            xs={1.2} 
-                            sx={{ 
-                              p: 0.5, 
-                              textAlign: 'center',
-                              borderRight: idx < horariosDia.length - 1 ? '1px solid #e0e0e0' : 'none',
-                              bgcolor: disponivel ? alpha('#4caf50', 0.1) : alpha('#f44336', 0.1),
-                            }}
-                          >
-                            <Typography variant="caption">
-                              {hora}
-                            </Typography>
+                              
+                              let status = 'indisponivel';
+                              let tooltipText = 'Indisponível';
+                              let bgcolor = alpha('#999', 0.1);
+                              
+                              if (temAusencia) {
+                                status = 'ausente';
+                                tooltipText = 'Ausente/Folga';
+                                bgcolor = alpha('#f44336', 0.1);
+                              } else if (disponibilidade) {
+                                status = 'disponivel';
+                                tooltipText = `Disponível: ${formatarHorario(disponibilidade.horarioInicio)} - ${formatarHorario(disponibilidade.horarioFim)}`;
+                                bgcolor = alpha('#4caf50', 0.1);
+                              }
+                              
+                              return (
+                                <Grid 
+                                  key={index} 
+                                  item 
+                                  xs={visao === 'mes' ? 0.7 : 1.2} 
+                                  sx={{ 
+                                    p: 1, 
+                                    textAlign: 'center',
+                                    borderRight: index < diasVisao.length - 1 ? '1px solid #e0e0e0' : 'none',
+                                    bgcolor,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    '&:hover': {
+                                      bgcolor: alpha('#9c27b0', 0.1),
+                                      transform: 'scale(1.02)',
+                                    },
+                                  }}
+                                  onClick={() => {
+                                    if (status === 'ausente') {
+                                      const aus = ausencias.find(a => 
+                                        a.profissionalId === profissional.id &&
+                                        format(dia, 'yyyy-MM-dd') >= a.dataInicio &&
+                                        format(dia, 'yyyy-MM-dd') <= a.dataFim
+                                      );
+                                      if (aus) handleOpenAusenciaDialog(aus);
+                                    } else if (status === 'disponivel' && disponibilidade) {
+                                      handleOpenDialog(disponibilidade);
+                                    }
+                                  }}
+                                >
+                                  <Tooltip title={tooltipText} arrow>
+                                    <Box>
+                                      {status === 'ausente' && (
+                                        <EventBusyIcon sx={{ fontSize: 24, color: '#f44336' }} />
+                                      )}
+                                      {status === 'disponivel' && (
+                                        <EventAvailableIcon sx={{ fontSize: 24, color: '#4caf50' }} />
+                                      )}
+                                      {status === 'indisponivel' && (
+                                        <BlockIcon sx={{ fontSize: 24, color: '#999' }} />
+                                      )}
+                                      
+                                      {disponibilidade && (
+                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.65rem', mt: 0.5 }}>
+                                          {formatarHorario(disponibilidade.horarioInicio)} - {formatarHorario(disponibilidade.horarioFim)}
+                                        </Typography>
+                                      )}
+                                      
+                                      {temAusencia && (
+                                        <Typography variant="caption" display="block" sx={{ fontSize: '0.65rem', color: '#f44336' }}>
+                                          Ausente
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  </Tooltip>
+                                </Grid>
+                              );
+                            })}
                           </Grid>
-                        );
-                      })}
-                    </Grid>
-                  )}
-                </Box>
-              ))}
+                          
+                          {/* Botões de ação rápida */}
+                          <Box sx={{ p: 1, borderTop: '1px solid #e0e0e0', bgcolor: '#faf5ff', display: 'flex', gap: 1 }}>
+                            <Button
+                              size="small"
+                              startIcon={<AddIcon />}
+                              onClick={() => handleOpenDialog()}
+                            >
+                              Adicionar Horário
+                            </Button>
+                            <Button
+                              size="small"
+                              startIcon={<CopyAllIcon />}
+                              onClick={() => {
+                                const destino = window.prompt('ID do profissional destino para copiar horários:');
+                                if (destino) handleCopiarDisponibilidade(profissional.id, destino);
+                              }}
+                            >
+                              Copiar Horários
+                            </Button>
+                          </Box>
+                        </AccordionDetails>
+                      </Accordion>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
 
               {profissionaisFiltrados.length === 0 && (
                 <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -927,7 +1115,7 @@ function Disponibilidade() {
         </Paper>
 
         {/* Lista de Ausências */}
-        <Card sx={{ mt: 4 }}>
+        <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3 }}>Próximas Ausências e Folgas</Typography>
             
@@ -964,6 +1152,7 @@ function Disponibilidade() {
                           </TableCell>
                           <TableCell>
                             <Chip
+                              icon={tipo?.icon}
                               label={tipo?.label || ausencia.tipo}
                               size="small"
                               sx={{ bgcolor: tipo?.color, color: 'white' }}
@@ -1019,8 +1208,8 @@ function Disponibilidade() {
           </CardContent>
         </Card>
 
-        {/* Dialog de Configuração de Horário */}
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        {/* Dialog de Configuração de Horário Melhorado */}
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
             {disponibilidadeEditando ? 'Editar Horário' : 'Configurar Horário'}
           </DialogTitle>
@@ -1043,20 +1232,57 @@ function Disponibilidade() {
                 </FormControl>
               </Grid>
 
+              {/* Seleção de Múltiplos Dias */}
               <Grid item xs={12}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Dia da Semana</InputLabel>
-                  <Select
-                    name="diaSemana"
-                    value={formData.diaSemana}
-                    label="Dia da Semana"
-                    onChange={handleInputChange}
-                  >
-                    {diasSemana.map(dia => (
-                      <MenuItem key={dia.value} value={dia.value}>{dia.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Typography variant="subtitle2" gutterBottom>
+                  Dias da Semana
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {diasSemana.map(dia => (
+                    <Chip
+                      key={dia.value}
+                      label={dia.abreviado}
+                      onClick={() => {
+                        const novosDias = formData.diasSemana.includes(dia.value)
+                          ? formData.diasSemana.filter(d => d !== dia.value)
+                          : [...formData.diasSemana, dia.value];
+                        handleDiasSemanaChange(novosDias);
+                      }}
+                      color={formData.diasSemana.includes(dia.value) ? 'primary' : 'default'}
+                      sx={{
+                        bgcolor: formData.diasSemana.includes(dia.value) ? dia.cor : undefined,
+                        color: formData.diasSemana.includes(dia.value) ? 'white' : undefined,
+                        '&:hover': {
+                          bgcolor: formData.diasSemana.includes(dia.value) ? dia.cor : undefined,
+                          opacity: 0.9,
+                        }
+                      }}
+                    />
+                  ))}
+                </Box>
+                {formData.diasSemana.length === 0 && (
+                  <Typography variant="caption" color="error">
+                    Selecione pelo menos um dia
+                  </Typography>
+                )}
+              </Grid>
+
+              {/* Modelos de Horário */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Modelos de Horário
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {horariosSugeridos.map((modelo, idx) => (
+                    <Chip
+                      key={idx}
+                      label={modelo.label}
+                      onClick={() => aplicarModeloHorario(modelo)}
+                      variant="outlined"
+                      size="small"
+                    />
+                  ))}
+                </Box>
               </Grid>
 
               <Grid item xs={12} md={6}>
@@ -1085,31 +1311,48 @@ function Disponibilidade() {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Início do Intervalo"
-                  name="intervaloInicio"
-                  type="time"
-                  value={formData.intervaloInicio}
-                  onChange={handleInputChange}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.usarIntervalo}
+                      onChange={(e) => setFormData({ ...formData, usarIntervalo: e.target.checked })}
+                      name="usarIntervalo"
+                    />
+                  }
+                  label="Usar intervalo de almoço/descanso"
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Fim do Intervalo"
-                  name="intervaloFim"
-                  type="time"
-                  value={formData.intervaloFim}
-                  onChange={handleInputChange}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
-                />
-              </Grid>
+              {formData.usarIntervalo && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Início do Intervalo"
+                      name="intervaloInicio"
+                      type="time"
+                      value={formData.intervaloInicio}
+                      onChange={handleInputChange}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Fim do Intervalo"
+                      name="intervaloFim"
+                      type="time"
+                      value={formData.intervaloFim}
+                      onChange={handleInputChange}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  </Grid>
+                </>
+              )}
 
               <Grid item xs={12}>
                 <FormControlLabel
@@ -1185,7 +1428,12 @@ function Disponibilidade() {
                     onChange={handleAusenciaInputChange}
                   >
                     {tiposAusencia.map(tipo => (
-                      <MenuItem key={tipo.value} value={tipo.value}>{tipo.label}</MenuItem>
+                      <MenuItem key={tipo.value} value={tipo.value}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {tipo.icon}
+                          {tipo.label}
+                        </Box>
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1300,6 +1548,32 @@ function Disponibilidade() {
           </DialogActions>
         </Dialog>
 
+        {/* Speed Dial para ações rápidas */}
+        <SpeedDial
+          ariaLabel="Ações rápidas"
+          sx={{ position: 'fixed', bottom: 16, right: 16 }}
+          icon={<SpeedDialIcon />}
+          onClose={() => setOpenSpeedDial(false)}
+          onOpen={() => setOpenSpeedDial(true)}
+          open={openSpeedDial}
+        >
+          <SpeedDialAction
+            icon={<AddIcon />}
+            tooltipTitle="Novo Horário"
+            onClick={() => handleOpenDialog()}
+          />
+          <SpeedDialAction
+            icon={<EventBusyIcon />}
+            tooltipTitle="Nova Ausência"
+            onClick={() => handleOpenAusenciaDialog()}
+          />
+          <SpeedDialAction
+            icon={<RefreshIcon />}
+            tooltipTitle="Atualizar"
+            onClick={handleRefresh}
+          />
+        </SpeedDial>
+
         {/* Snackbar */}
         <Snackbar
           open={snackbar.open}
@@ -1315,5 +1589,11 @@ function Disponibilidade() {
     </LocalizationProvider>
   );
 }
+
+// Importar ícones adicionais
+import BeachAccessIcon from '@mui/icons-material/BeachAccess';
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import SchoolIcon from '@mui/icons-material/School';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 export default Disponibilidade;
