@@ -56,7 +56,7 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText, // <- APENAS UMA VEZ
+  ListItemText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -90,7 +90,8 @@ import {
   FilterList as FilterIcon,
   Cake as CakeIcon,
   Star as StarIcon,
-  Trophy as TrophyIcon,
+  EmojiEvents as TrophyIcon, // <- Substituído por EmojiEvents
+  Error as ErrorIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
