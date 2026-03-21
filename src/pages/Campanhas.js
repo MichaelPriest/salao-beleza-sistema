@@ -1,4 +1,5 @@
 // src/pages/Campanhas.js
+// CORREÇÃO FINAL - SUBSTITUIR LocalOfferIcon por TagIcon
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -72,7 +73,7 @@ import {
   History as HistoryIcon,
   Percent as PercentIcon,
   AttachMoney as MoneyIcon,
-  LocalOffer as TagIcon,
+  LocalOffer as TagIcon, // ← Renomeado para TagIcon
   Campaign as CampaignIcon,
   BarChart as BarChartIcon,
   TrendingUp as TrendingUpIcon,
@@ -90,7 +91,7 @@ import {
   FilterList as FilterIcon,
   Cake as CakeIcon,
   Star as StarIcon,
-  EmojiEvents as TrophyIcon, // <- Substituído por EmojiEvents
+  EmojiEvents as TrophyIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1002,7 +1003,7 @@ function Campanhas() {
                 <Grid item xs={12} md={6}><Typography variant="subtitle2" color="textSecondary">Tipo</Typography><Typography variant="body1">{tiposCampanha.find(t => t.value === campanhaSelecionada.tipo)?.label}</Typography></Grid>
                 <Grid item xs={12}><Divider /><Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Métricas</Typography></Grid>
                 <Grid item xs={12} md={4}><Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}><PeopleIcon sx={{ fontSize: 40, color: '#9c27b0', mb: 1 }} /><Typography variant="h4">{getAlcanceEstimado(campanhaSelecionada)}</Typography><Typography variant="body2" color="textSecondary">Clientes Elegíveis</Typography></Card></Grid>
-                <Grid item xs={12} md={4}><Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}><LocalOfferIcon sx={{ fontSize: 40, color: '#ff9800', mb: 1 }} /><Typography variant="h4">{campanhaSelecionada.cuponsAssociados?.length || 0}</Typography><Typography variant="body2" color="textSecondary">Cupons</Typography></Card></Grid>
+                <Grid item xs={12} md={4}><Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}><TagIcon sx={{ fontSize: 40, color: '#ff9800', mb: 1 }} /><Typography variant="h4">{campanhaSelecionada.cuponsAssociados?.length || 0}</Typography><Typography variant="body2" color="textSecondary">Cupons</Typography></Card></Grid>
                 <Grid item xs={12} md={4}><Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}><SendIcon sx={{ fontSize: 40, color: '#2196f3', mb: 1 }} /><Typography variant="h4">{campanhaSelecionada.estatisticasEnvio?.enviados || 0}</Typography><Typography variant="body2" color="textSecondary">E-mails Enviados</Typography></Card></Grid>
                 {campanhaSelecionada.estatisticasEnvio && (<Grid item xs={12}><Alert severity="info"><strong>Estatísticas de Envio:</strong><br />Enviado em: {new Date(campanhaSelecionada.estatisticasEnvio.dataEnvio).toLocaleString('pt-BR')}<br />Total: {campanhaSelecionada.estatisticasEnvio.total} | Sucesso: {campanhaSelecionada.estatisticasEnvio.enviados} | Falhas: {campanhaSelecionada.estatisticasEnvio.falhas}</Alert></Grid>)}
               </Grid>
