@@ -135,6 +135,7 @@ import MinhasComissoes from './pages/MinhasComissoes';
 import GerenciarCupons from './pages/GerenciarCupons';
 import Campanhas from './pages/Campanhas';
 import AnaliseCupons from './pages/AnaliseCupons';
+import PromocaoVisualizar from './pages/PromocaoVisualizar';
 
 // Pages de Disponibilidade
 import Disponibilidade from './pages/Disponibilidade';
@@ -335,6 +336,7 @@ firebaseService.update = async function(collectionName, id, data) {
                 {/* ROTA PRINCIPAL - SITE PÚBLICO */}
                 {/* =========================================== */}
                 <Route path="/" element={<SiteSalao />} />
+                <Route path="/promocoes/:id" element={<PromocaoVisualizar />} />
                 
                 {/* =========================================== */}
                 {/* ROTAS PÚBLICAS */}
