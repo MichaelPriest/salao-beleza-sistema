@@ -36,6 +36,7 @@ import {
   Close as CloseIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
+  Email as EmailIcon, // <- ADICIONADO  
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
