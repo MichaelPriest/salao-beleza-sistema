@@ -152,6 +152,8 @@ import {
   LinkedIn as LinkedInIcon,
   Pinterest as PinterestIcon,
   TikTok as TikTokIcon,
+  Notifications as NotificationsIcon, // <- ADICIONADO
+  NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
