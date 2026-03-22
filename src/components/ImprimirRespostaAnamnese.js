@@ -1,4 +1,6 @@
 // src/components/ImprimirRespostaAnamnese.js
+// VERSÃO CORRIGIDA - EXIBE ASSINATURA COMO IMAGEM
+
 import React, { forwardRef, useState, useEffect } from 'react';
 import {
   Box,
@@ -16,9 +18,98 @@ import {
   Schedule as ScheduleIcon,
   Badge as BadgeIcon,
   Work as WorkIcon,
+  Signature as SignatureIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
 
+// ============================================
+// FUNÇÃO PARA PROCESSAR ASSINATURA
+// ============================================
+const processarAssinatura = (valor) => {
+  if (!valor) return null;
+  
+  // Se já for uma data URL completa
+  if (typeof valor === 'string' && valor.startsWith('data:image')) {
+    return valor;
+  }
+  
+  // Se for base64 puro (apenas caracteres alfanuméricos e +/=)
+  if (typeof valor === 'string' && /^[A-Za-z0-9+/=]+$/.test(valor.substring(0, 100))) {
+    return `data:image/png;base64,${valor}`;
+  }
+  
+  // Se contiver base64 no meio (ex: "data:image/png;base64,iVBOR...")
+  if (typeof valor === 'string' && valor.includes('base64,')) {
+    const parts = valor.split('base64,');
+    if (parts[1]) {
+      return `data:image/png;base64,${parts[1]}`;
+    }
+  }
+  
+  return null;
+};
+
+// ============================================
+// VERIFICAR SE É UMA ASSINATURA
+// ============================================
+const isRespostaAssinatura = (respostaItem) => {
+  const tipo = respostaItem.tipo;
+  const valor = respostaItem.resposta;
+  
+  return tipo === 'assinatura' || 
+         (typeof valor === 'string' && valor.startsWith('data:image')) ||
+         (typeof valor === 'string' && valor.includes('base64')) ||
+         (typeof valor === 'string' && /^[A-Za-z0-9+/=]+$/.test(valor.substring(0, 50)));
+};
+
+// ============================================
+// COMPONENTE DE ASSINATURA PARA IMPRESSÃO
+// ============================================
+const AssinaturaImpressao = ({ dataUrl, label = "Assinatura Digital" }) => {
+  if (!dataUrl) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 1 }}>
+        <SignatureIcon sx={{ fontSize: 40, color: '#999', mb: 1 }} />
+        <Typography variant="caption" color="textSecondary">
+          Assinatura não disponível
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ textAlign: 'center' }}>
+      <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 1 }}>
+        {label}
+      </Typography>
+      <img
+        src={dataUrl}
+        alt="Assinatura digital"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '100px',
+          width: 'auto',
+          height: 'auto',
+          objectFit: 'contain',
+          border: '1px solid #e0e0e0',
+          borderRadius: '4px',
+          padding: '8px',
+          backgroundColor: '#faf5ff',
+        }}
+        onError={(e) => {
+          console.error('Erro ao carregar assinatura');
+          e.target.style.display = 'none';
+          e.target.parentNode.innerHTML += '<div style="color: #999; font-size: 12px;">⚠️ Assinatura não carregada</div>';
+        }}
+      />
+    </Box>
+  );
+};
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, profissional }, ref) => {
   const [dadosCompletos, setDadosCompletos] = useState({
     resposta: resposta,
@@ -154,6 +245,20 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
     if (dadosCompletos.resposta?.horaAgendamento) return dadosCompletos.resposta.horaAgendamento;
     return 'Horário não informado';
   };
+
+  // Processar respostas antes de exibir
+  const respostasProcessadas = dadosCompletos.resposta?.respostas?.map(item => {
+    const isAssinatura = isRespostaAssinatura(item);
+    const assinaturaSrc = isAssinatura ? processarAssinatura(item.resposta) : null;
+    
+    return {
+      ...item,
+      isAssinatura,
+      assinaturaSrc,
+      // Para assinaturas, não mostrar o texto bruto
+      displayValue: isAssinatura ? null : item.resposta
+    };
+  }) || [];
 
   if (dadosCompletos.loading) {
     return (
@@ -300,17 +405,25 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
         </Grid>
       </Paper>
 
-      {/* Respostas do formulário */}
+      {/* Respostas do formulário - COM SUPORTE PARA ASSINATURA */}
       <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, color: '#9c27b0', mb: 3, borderBottom: '1px solid #9c27b0', pb: 1 }}>
           <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
           Respostas do Formulário
         </Typography>
 
-        {dadosCompletos.resposta?.respostas?.map((item, index) => (
+        {respostasProcessadas.map((item, index) => (
           <Box key={index} sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#333', mb: 1 }}>
               {index + 1}. {item.pergunta}
+              {item.isAssinatura && (
+                <Chip
+                  icon={<SignatureIcon />}
+                  label="Assinatura Digital"
+                  size="small"
+                  sx={{ ml: 1, height: 20, fontSize: '0.65rem', bgcolor: '#f3e5f5', color: '#9c27b0' }}
+                />
+              )}
             </Typography>
             <Paper
               variant="outlined"
@@ -321,10 +434,12 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
                 borderRadius: '4px'
               }}
             >
-              {item.tipo === 'checkbox' && Array.isArray(item.resposta) ? (
+              {item.isAssinatura && item.assinaturaSrc ? (
+                <AssinaturaImpressao dataUrl={item.assinaturaSrc} />
+              ) : item.tipo === 'checkbox' && Array.isArray(item.displayValue) ? (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {item.resposta.length > 0 ? (
-                    item.resposta.map((opt, i) => (
+                  {item.displayValue.length > 0 ? (
+                    item.displayValue.map((opt, i) => (
                       <Chip
                         key={i}
                         label={opt}
@@ -344,14 +459,14 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
                 </Box>
               ) : (
                 <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-                  {item.resposta || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>}
+                  {item.displayValue || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>}
                 </Typography>
               )}
             </Paper>
           </Box>
         ))}
 
-        {(!dadosCompletos.resposta?.respostas || dadosCompletos.resposta.respostas.length === 0) && (
+        {respostasProcessadas.length === 0 && (
           <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 4 }}>
             Nenhuma resposta encontrada
           </Typography>
@@ -408,6 +523,10 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
           }
           tfoot {
             display: table-footer-group;
+          }
+          img {
+            max-width: 100% !important;
+            page-break-inside: avoid;
           }
           @page {
             size: A4;
