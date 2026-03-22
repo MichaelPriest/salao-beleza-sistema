@@ -1,5 +1,4 @@
 // src/pages/Anamnese/RespostasAnamnese.js
-// VERSÃO CORRIGIDA - COM VISUALIZAÇÃO DA ASSINATURA
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -98,7 +97,8 @@ import {
   ExpandLess as ExpandLessIcon,
   Archive as ArchiveIcon,
   Close as CloseIcon,
-  Signature as SignatureIcon,
+  // SignatureIcon não existe - substituído por:
+  EditNote as SignatureIcon, // <-- SUBSTITUÍDO
   Image as ImageIcon,
   FileCopy as FileCopyIcon,
 } from '@mui/icons-material';
@@ -319,7 +319,7 @@ function RespostasAnamnese() {
         resposta: resposta,
         formulario,
         cliente,
-        profissional
+        profesional: profissional
       };
       
       if (!dadosCompletos.formulario && resposta.formularioId) {
@@ -788,7 +788,7 @@ function RespostasAnamnese() {
           />
         </Card>
 
-        {/* Dialog de Detalhes - CORRIGIDO COM VISUALIZAÇÃO DE ASSINATURA */}
+        {/* Dialog de Detalhes - COM VISUALIZAÇÃO DE ASSINATURA */}
         <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="md" fullWidth>
           {respostaSelecionada && (
             <>
