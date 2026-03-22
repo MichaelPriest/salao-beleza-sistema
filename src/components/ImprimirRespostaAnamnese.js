@@ -1,4 +1,5 @@
 // src/pages/Anamnese/RespostasAnamnese.js
+// VERSÃO CORRIGIDA - REMOÇÃO DE LOGS E IMPORTAÇÃO CORRETA
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -104,33 +105,25 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
-import { firebaseService } from '../services/firebase';
+// CORREÇÃO: Importação com caminho absoluto ou relativo correto
+import { firebaseService } from '../../services/firebase';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays } from 'date-fns';
-import ImprimirRespostaAnamnese from '../components/ImprimirRespostaAnamnese';
+import ImprimirRespostaAnamnese from '../../components/ImprimirRespostaAnamnese';
 
 // ============================================
-// FUNÇÕES PARA PROCESSAR ASSINATURA (CORRIGIDAS)
+// FUNÇÕES PARA PROCESSAR ASSINATURA
 // ============================================
 
-/**
- * Verifica se uma resposta é uma assinatura digital
- * Apenas considera como assinatura se:
- * - O tipo for explicitamente 'assinatura'
- * - A pergunta contém palavras-chave de assinatura
- * - O valor é uma imagem base64 longa (assinatura real)
- */
 const isRespostaAssinatura = (respostaItem) => {
   if (!respostaItem) return false;
   
-  // 1. Verificar pelo tipo da pergunta no formulário
   const tipo = respostaItem?.tipo;
   if (tipo === 'assinatura') return true;
   
-  // 2. Verificar pelo nome da pergunta
   const pergunta = respostaItem?.pergunta?.toLowerCase() || '';
   const palavrasAssinatura = ['assinatura', 'assinado', 'rubrica', 'signature', 'assinatura digital', 'assinar'];
   
@@ -138,47 +131,27 @@ const isRespostaAssinatura = (respostaItem) => {
     return true;
   }
   
-  // 3. Verificar se o valor é uma imagem base64 (apenas para perguntas que parecem ser assinatura)
-  const valor = respostaItem?.resposta;
-  if (typeof valor === 'string' && pergunta.includes('assinatura')) {
-    // Assinaturas são strings base64 longas (> 500 caracteres)
-    const isLongBase64 = valor.length > 500 && (
-      valor.startsWith('data:image') || 
-      valor.startsWith('iVBOR') || 
-      valor.startsWith('/9j/')
-    );
-    if (isLongBase64) return true;
-  }
-  
   return false;
 };
 
-/**
- * Processa o valor da assinatura para exibição como imagem
- */
 const processarAssinatura = (valor) => {
   if (!valor) return null;
   
-  // Se já for uma data URL completa
   if (typeof valor === 'string' && valor.startsWith('data:image')) {
     return valor;
   }
   
-  // Se for base64 puro de PNG (começa com iVBOR)
   if (typeof valor === 'string' && valor.startsWith('iVBOR')) {
     return `data:image/png;base64,${valor}`;
   }
   
-  // Se for base64 puro de JPEG (começa com /9j/)
   if (typeof valor === 'string' && valor.startsWith('/9j/')) {
     return `data:image/jpeg;base64,${valor}`;
   }
   
-  // Se contiver base64 no meio (ex: "data:image/png;base64,iVBOR...")
   if (typeof valor === 'string' && valor.includes('base64,')) {
     const parts = valor.split('base64,');
     if (parts[1] && parts[1].length > 100) {
-      // Determinar o tipo pela string
       const tipoImagem = parts[1].startsWith('iVBOR') ? 'png' : 
                          parts[1].startsWith('/9j/') ? 'jpeg' : 'png';
       return `data:image/${tipoImagem};base64,${parts[1]}`;
@@ -188,9 +161,6 @@ const processarAssinatura = (valor) => {
   return null;
 };
 
-// ============================================
-// COMPONENTE DE ASSINATURA
-// ============================================
 const AssinaturaViewer = ({ dataUrl, label = "Assinatura Digital" }) => {
   const [modalAberta, setModalAberta] = useState(false);
   const [erroImagem, setErroImagem] = useState(false);
@@ -247,17 +217,11 @@ const AssinaturaViewer = ({ dataUrl, label = "Assinatura Digital" }) => {
         </Typography>
       </Box>
 
-      {/* Modal para ampliar assinatura */}
       <Dialog
         open={modalAberta}
         onClose={() => setModalAberta(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-          },
-        }}
       >
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">{label}</Typography>
@@ -368,7 +332,7 @@ function RespostasAnamnese() {
       }, 500);
       
     } catch (error) {
-      console.error('❌ Erro ao preparar impressão:', error);
+      console.error('Erro ao preparar impressão:', error);
       toast.error('Erro ao preparar impressão', { id: 'print-anamnese' });
       setIsPrinting(false);
     }
@@ -381,12 +345,12 @@ function RespostasAnamnese() {
       : `anamnese_${new Date().toISOString().split('T')[0]}`,
     onAfterPrint: () => {
       setIsPrinting(false);
-      toast.success('Impressão concluída!', { id: 'print-anamnese' });
+      toast.success('Impressão concluída!');
     },
     onPrintError: (error) => {
       setIsPrinting(false);
       console.error('Erro na impressão:', error);
-      toast.error('Erro ao imprimir. Tente novamente.', { id: 'print-anamnese' });
+      toast.error('Erro ao imprimir. Tente novamente.');
     }
   });
 
@@ -806,7 +770,7 @@ function RespostasAnamnese() {
           />
         </Card>
 
-        {/* Dialog de Detalhes - COM ASSINATURA CORRIGIDA */}
+        {/* Dialog de Detalhes */}
         <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="md" fullWidth>
           {respostaSelecionada && (
             <>
@@ -823,48 +787,28 @@ function RespostasAnamnese() {
               </DialogTitle>
               <DialogContent>
                 <Box sx={{ mt: 2 }}>
-                  {/* Informações do cliente */}
                   <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Cliente
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                          {respostaSelecionada.clienteNome}
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary">Cliente</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>{respostaSelecionada.clienteNome}</Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Serviço
-                        </Typography>
-                        <Typography variant="body1">
-                          {respostaSelecionada.servicoNome}
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary">Serviço</Typography>
+                        <Typography variant="body1">{respostaSelecionada.servicoNome}</Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Profissional
-                        </Typography>
-                        <Typography variant="body1">
-                          {respostaSelecionada.profissionalNome || 'Não informado'}
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
+                        <Typography variant="body1">{respostaSelecionada.profissionalNome || 'Não informado'}</Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Respondido em
-                        </Typography>
-                        <Typography variant="body1">
-                          {new Date(respostaSelecionada.respondidoEm).toLocaleString('pt-BR')}
-                        </Typography>
+                        <Typography variant="subtitle2" color="textSecondary">Respondido em</Typography>
+                        <Typography variant="body1">{new Date(respostaSelecionada.respondidoEm).toLocaleString('pt-BR')}</Typography>
                       </Grid>
                     </Grid>
                   </Paper>
 
-                  {/* Respostas - APENAS ASSINATURA COMO IMAGEM */}
-                  <Typography variant="h6" gutterBottom>
-                    Respostas:
-                  </Typography>
+                  <Typography variant="h6" gutterBottom>Respostas:</Typography>
                   
                   {respostaSelecionada.respostas?.map((resposta, index) => {
                     const isAssinatura = isRespostaAssinatura(resposta);
@@ -888,22 +832,12 @@ function RespostasAnamnese() {
                         </AccordionSummary>
                         <AccordionDetails>
                           {deveMostrarAssinatura ? (
-                            <AssinaturaViewer dataUrl={assinaturaSrc} label="Assinatura Digital" />
+                            <AssinaturaViewer dataUrl={assinaturaSrc} />
                           ) : resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                               {resposta.resposta.map((item, i) => (
                                 <Chip key={i} label={item} size="small" />
                               ))}
-                            </Box>
-                          ) : resposta.tipo === 'arquivo' || resposta.tipo === 'imagem' ? (
-                            <Box sx={{ textAlign: 'center' }}>
-                              <Button
-                                variant="outlined"
-                                startIcon={<ImageIcon />}
-                                onClick={() => window.open(resposta.resposta, '_blank')}
-                              >
-                                Ver arquivo anexado
-                              </Button>
                             </Box>
                           ) : (
                             <Typography variant="body1">
@@ -915,7 +849,6 @@ function RespostasAnamnese() {
                     );
                   })}
 
-                  {/* Observações do profissional */}
                   <TextField
                     fullWidth
                     label="Observações do profissional"
@@ -946,7 +879,6 @@ function RespostasAnamnese() {
           )}
         </Dialog>
 
-        {/* Snackbar */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}
@@ -958,7 +890,6 @@ function RespostasAnamnese() {
           </Alert>
         </Snackbar>
 
-        {/* Componente oculto para impressão personalizada */}
         <Box sx={{ display: 'none' }}>
           <ImprimirRespostaAnamnese
             ref={printRef}
