@@ -1,4 +1,6 @@
 // src/pages/Anamnese/RespostasAnamnese.js
+// VERSÃO CORRIGIDA - COM VISUALIZAÇÃO DA ASSINATURA
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -70,7 +72,7 @@ import {
   StepLabel,
   StepContent,
   StepButton,
-  CircularProgress, // 🔥 ADICIONADO
+  CircularProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -95,6 +97,10 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Archive as ArchiveIcon,
+  Close as CloseIcon,
+  Signature as SignatureIcon,
+  Image as ImageIcon,
+  FileCopy as FileCopyIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -107,12 +113,107 @@ import { ptBR } from 'date-fns/locale';
 import { format, subDays } from 'date-fns';
 import ImprimirRespostaAnamnese from '../../components/ImprimirRespostaAnamnese';
 
+// ============================================
+// COMPONENTE PARA EXIBIR ASSINATURA
+// ============================================
+const AssinaturaViewer = ({ dataUrl, label = "Assinatura Digital" }) => {
+  const [modalAberta, setModalAberta] = useState(false);
+  const [erroImagem, setErroImagem] = useState(false);
+
+  if (!dataUrl || erroImagem) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 2 }}>
+        <SignatureIcon sx={{ fontSize: 40, color: '#999', mb: 1 }} />
+        <Typography variant="caption" color="textSecondary">
+          Assinatura não disponível
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <>
+      <Box
+        sx={{
+          mt: 1,
+          p: 2,
+          bgcolor: '#faf5ff',
+          borderRadius: 2,
+          border: '1px dashed #9c27b0',
+          cursor: 'pointer',
+          textAlign: 'center',
+          transition: 'all 0.2s',
+          '&:hover': {
+            bgcolor: '#f3e5f5',
+            transform: 'scale(1.02)',
+          },
+        }}
+        onClick={() => setModalAberta(true)}
+      >
+        <Typography variant="caption" color="textSecondary" gutterBottom>
+          {label}
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+          <img
+            src={dataUrl}
+            alt="Assinatura"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '80px',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+            }}
+            onError={() => setErroImagem(true)}
+          />
+        </Box>
+        <Typography variant="caption" color="#9c27b0" sx={{ mt: 1, display: 'block' }}>
+          Clique para ampliar
+        </Typography>
+      </Box>
+
+      {/* Modal para ampliar assinatura */}
+      <Dialog
+        open={modalAberta}
+        onClose={() => setModalAberta(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            m: 1,
+          },
+        }}
+      >
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">{label}</Typography>
+          <IconButton onClick={() => setModalAberta(false)} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', py: 3 }}>
+          <img
+            src={dataUrl}
+            alt="Assinatura ampliada"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '70vh',
+              width: 'auto',
+              borderRadius: '8px',
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
+
 function RespostasAnamnese() {
   const [loading, setLoading] = useState(true);
   const [respostas, setRespostas] = useState([]);
   const [formularios, setFormularios] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [profissionais, setProfissionais] = useState([]); // 🔥 ADICIONADO
+  const [profissionais, setProfissionais] = useState([]);
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroFormulario, setFiltroFormulario] = useState('todos');
@@ -124,7 +225,7 @@ function RespostasAnamnese() {
   const [respostaSelecionada, setRespostaSelecionada] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
-  // 🔥 ESTADOS PARA IMPRESSÃO
+  // Estados para impressão
   const [isPrinting, setIsPrinting] = useState(false);
   const printRef = useRef(null);
   const [dadosImpressao, setDadosImpressao] = useState({
@@ -145,7 +246,7 @@ function RespostasAnamnese() {
         firebaseService.getAll('respostas_anamnese'),
         firebaseService.getAll('formularios_anamnese'),
         firebaseService.getAll('clientes'),
-        firebaseService.getAll('profissionais') // 🔥 ADICIONADO
+        firebaseService.getAll('profissionais')
       ]);
       setRespostas(respostasData || []);
       setFormularios(formulariosData || []);
@@ -159,7 +260,39 @@ function RespostasAnamnese() {
     }
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA PARA IMPRIMIR - CARREGA DADOS ANTES DE IMPRIMIR
+  /**
+   * 🔥 FUNÇÃO PARA PROCESSAR ASSINATURA A PARTIR DA RESPOSTA
+   */
+  const processarAssinatura = (respostaItem) => {
+    if (!respostaItem?.resposta) return null;
+    
+    const valor = respostaItem.resposta;
+    
+    // Verificar se é uma assinatura (começa com data:image)
+    if (typeof valor === 'string' && valor.startsWith('data:image')) {
+      return valor;
+    }
+    
+    // Verificar se é base64 puro
+    if (typeof valor === 'string' && /^[A-Za-z0-9+/=]+$/.test(valor.substring(0, 100))) {
+      return `data:image/png;base64,${valor}`;
+    }
+    
+    return null;
+  };
+
+  /**
+   * 🔥 VERIFICAR SE A RESPOSTA É UMA ASSINATURA
+   */
+  const isRespostaAssinatura = (respostaItem) => {
+    const tipo = respostaItem.tipo;
+    const valor = respostaItem.resposta;
+    
+    return tipo === 'assinatura' || 
+           (typeof valor === 'string' && valor.startsWith('data:image')) ||
+           (typeof valor === 'string' && valor.includes('base64'));
+  };
+
   const handlePrintResposta = async (resposta) => {
     try {
       setIsPrinting(true);
@@ -167,7 +300,6 @@ function RespostasAnamnese() {
       
       console.log('🔍 Iniciando carregamento para impressão:', resposta.id);
       
-      // 🔥 CARREGAR DADOS COMPLETOS ANTES DE IMPRIMIR
       const formulario = formularios.find(f => f.id === resposta.formularioId);
       const cliente = clientes.find(c => c.id === resposta.clienteId);
       
@@ -183,7 +315,6 @@ function RespostasAnamnese() {
         }
       }
       
-      // Buscar dados adicionais se necessário
       let dadosCompletos = {
         resposta: resposta,
         formulario,
@@ -191,39 +322,28 @@ function RespostasAnamnese() {
         profissional
       };
       
-      // Se não encontrou o formulário na lista, buscar diretamente
       if (!dadosCompletos.formulario && resposta.formularioId) {
         try {
-          console.log('🔍 Buscando formulário diretamente:', resposta.formularioId);
           const formData = await firebaseService.getById('formularios_anamnese', resposta.formularioId);
           dadosCompletos.formulario = formData;
-          console.log('✅ Formulário carregado:', formData);
         } catch (error) {
           console.error('Erro ao buscar formulário:', error);
         }
       }
       
-      // Se não encontrou o cliente na lista, buscar diretamente
       if (!dadosCompletos.cliente && resposta.clienteId) {
         try {
-          console.log('🔍 Buscando cliente diretamente:', resposta.clienteId);
           const clienteData = await firebaseService.getById('clientes', resposta.clienteId);
           dadosCompletos.cliente = clienteData;
-          console.log('✅ Cliente carregado:', clienteData);
         } catch (error) {
           console.error('Erro ao buscar cliente:', error);
         }
       }
       
-      console.log('📦 Dados carregados para impressão:', dadosCompletos);
-      
-      // 🔥 ATUALIZAR ESTADO
       setDadosImpressao(dadosCompletos);
       
-      // Pequeno delay para garantir que o estado foi atualizado
       setTimeout(() => {
         toast.dismiss('print-anamnese');
-        // 🔥 CHAMAR A IMPRESSÃO
         setTimeout(() => {
           handlePrint();
         }, 100);
@@ -236,7 +356,6 @@ function RespostasAnamnese() {
     }
   };
 
-  // 🔥 FUNÇÃO DE IMPRESSÃO
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: dadosImpressao.resposta 
@@ -258,7 +377,7 @@ function RespostasAnamnese() {
       await firebaseService.update('respostas_anamnese', resposta.id, {
         status: 'visto',
         vistoEm: new Date().toISOString(),
-        vistoPor: 'usuarioId' // Pegar do usuário logado
+        vistoPor: 'usuarioId'
       });
       toast.success('Marcado como visto');
       carregarDados();
@@ -669,14 +788,19 @@ function RespostasAnamnese() {
           />
         </Card>
 
-        {/* Dialog de Detalhes */}
+        {/* Dialog de Detalhes - CORRIGIDO COM VISUALIZAÇÃO DE ASSINATURA */}
         <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="md" fullWidth>
           {respostaSelecionada && (
             <>
               <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AssignmentIcon />
-                  <Typography variant="h6">Respostas do Formulário</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AssignmentIcon />
+                    <Typography variant="h6">Respostas do Formulário</Typography>
+                  </Box>
+                  <IconButton onClick={() => setOpenDetalhesDialog(false)} sx={{ color: 'white' }}>
+                    <CloseIcon />
+                  </IconButton>
                 </Box>
               </DialogTitle>
               <DialogContent>
@@ -719,33 +843,58 @@ function RespostasAnamnese() {
                     </Grid>
                   </Paper>
 
-                  {/* Respostas */}
+                  {/* Respostas - COM VISUALIZAÇÃO DE ASSINATURA */}
                   <Typography variant="h6" gutterBottom>
                     Respostas:
                   </Typography>
                   
-                  {respostaSelecionada.respostas?.map((resposta, index) => (
-                    <Accordion key={index} defaultExpanded={index === 0}>
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                          {resposta.pergunta}
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        {resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {resposta.resposta.map((item, i) => (
-                              <Chip key={i} label={item} size="small" />
-                            ))}
-                          </Box>
-                        ) : (
-                          <Typography variant="body1">
-                            {resposta.resposta || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>}
+                  {respostaSelecionada.respostas?.map((resposta, index) => {
+                    const isAssinatura = isRespostaAssinatura(resposta);
+                    const assinaturaSrc = isAssinatura ? processarAssinatura(resposta) : null;
+                    
+                    return (
+                      <Accordion key={index} defaultExpanded={index === 0}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {resposta.pergunta}
+                            {isAssinatura && (
+                              <Chip 
+                                icon={<SignatureIcon />} 
+                                label="Assinatura" 
+                                size="small" 
+                                sx={{ ml: 1, height: 20, fontSize: '0.65rem' }} 
+                              />
+                            )}
                           </Typography>
-                        )}
-                      </AccordionDetails>
-                    </Accordion>
-                  ))}
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          {isAssinatura && assinaturaSrc ? (
+                            <AssinaturaViewer dataUrl={assinaturaSrc} label="Assinatura Digital" />
+                          ) : resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                              {resposta.resposta.map((item, i) => (
+                                <Chip key={i} label={item} size="small" />
+                              ))}
+                            </Box>
+                          ) : resposta.tipo === 'arquivo' || resposta.tipo === 'imagem' ? (
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Button
+                                variant="outlined"
+                                startIcon={<ImageIcon />}
+                                onClick={() => window.open(resposta.resposta, '_blank')}
+                              >
+                                Ver arquivo anexado
+                              </Button>
+                            </Box>
+                          ) : (
+                            <Typography variant="body1">
+                              {resposta.resposta || <span style={{ color: '#999', fontStyle: 'italic' }}>Não respondido</span>}
+                            </Typography>
+                          )}
+                        </AccordionDetails>
+                      </Accordion>
+                    );
+                  })}
 
                   {/* Observações do profissional */}
                   <TextField
