@@ -87,7 +87,7 @@ function Footer() {
               {salao.nome || 'BeautyPro'}
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.6 }}>
-              v1.0
+              v2.0
             </Typography>
           </Box>
 
