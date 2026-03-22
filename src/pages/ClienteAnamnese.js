@@ -1,5 +1,5 @@
 // src/pages/ClienteAnamnese.js
-// VERSÃO OTIMIZADA PARA MOBILE E COM CORREÇÃO DO PROFISSIONAL
+// VERSÃO COMPLETA - COM TODOS OS COMPONENTES E FUNCIONALIDADES
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -13,6 +13,15 @@ import {
   Paper,
   IconButton,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tooltip,
   Alert,
   Snackbar,
   InputAdornment,
@@ -25,11 +34,55 @@ import {
   FormControlLabel,
   Checkbox,
   FormGroup,
+  MobileStepper,
   FormHelperText,
+  Slider,
+  Rating,
+  Switch,
   Stepper,
   Step,
   StepLabel,
+  StepContent,
+  List,
+  ListItem,
   ListItemText,
+  ListItemIcon,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Badge,
+  Autocomplete,
+  Collapse,
+  ImageList,
+  ImageListItem,
+  ImageListItemBar,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Fab,
+  Zoom,
+  Fade,
+  Grow,
+  Slide,
+  Modal,
+  Backdrop,
+  Popper,
+  Popover,
+  ToggleButton,
+  ToggleButtonGroup,
+  ButtonGroup,
+  Stack,
+  AlertTitle,
+  CardHeader,
+  CardMedia,
+  CardActions,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -39,17 +92,37 @@ import {
   Schedule as ScheduleIcon,
   Event as EventIcon,
   Person as PersonIcon,
+  CloudUpload as CloudUploadIcon,
   KeyboardArrowLeft,
   KeyboardArrowRight,
+  AttachMoney as MoneyIcon,
   Numbers as NumbersIcon,
+  Tag as TagIcon,
   CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Warning as WarningIcon,
   Info as InfoIcon,
-  Delete as DeleteIcon,
-  Image as ImageIcon,
+  Help as HelpIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  AddPhotoAlternate as AddPhotoIcon,
   Description as DescriptionIcon,
   PictureAsPdf as PdfIcon,
+  Image as ImageIcon,
+  VideoLibrary as VideoIcon,
+  Brush as BrushIcon,
+  Signature as SignatureIcon,
   Clear as ClearIcon,
-  CloudUpload as CloudUploadIcon,
+  Save as SaveIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  ContentCopy as CopyIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  FileUpload as FileUploadIcon,
+  AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
@@ -117,7 +190,7 @@ const MaskedInputCustom = ({ mask, value, onChange, disabled, error, helperText,
 // COMPONENTE DE ASSINATURA
 // ============================================
 
-const SignaturePad = ({ value, onChange, disabled }) => {
+const SignaturePad = ({ value, onChange, disabled, perguntaId }) => {
   const [sigPad, setSigPad] = useState(null);
   const [hasSignature, setHasSignature] = useState(false);
   const [preview, setPreview] = useState(value);
@@ -183,7 +256,7 @@ const SignaturePad = ({ value, onChange, disabled }) => {
           </Paper>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
             <Button size="small" onClick={clear} startIcon={<DeleteIcon />}>
-              Limpar
+              Limpar assinatura
             </Button>
             {hasSignature && (
               <Chip
@@ -212,6 +285,112 @@ const SignaturePad = ({ value, onChange, disabled }) => {
             />
           </Box>
         )
+      )}
+    </Box>
+  );
+};
+
+// ============================================
+// COMPONENTE DE UPLOAD DE ARQUIVO
+// ============================================
+
+const FileUploadField = ({ perguntaId, value, onChange, disabled, accept = "*/*", multiple = false }) => {
+  const [files, setFiles] = useState([]);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (value && typeof value === 'string') {
+      setFiles([{ name: 'Arquivo carregado', url: value }]);
+    } else if (Array.isArray(value)) {
+      setFiles(value);
+    }
+  }, [value]);
+
+  const handleFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files);
+    const fileInfos = selectedFiles.map(file => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    }));
+
+    if (multiple) {
+      onChange([...files, ...fileInfos]);
+    } else {
+      onChange(fileInfos[0]);
+      setFiles([fileInfos[0]]);
+    }
+  };
+
+  const removeFile = (index) => {
+    const newFiles = files.filter((_, i) => i !== index);
+    setFiles(newFiles);
+    if (newFiles.length === 0) {
+      onChange(null);
+    } else if (multiple) {
+      onChange(newFiles);
+    } else {
+      onChange(newFiles[0]);
+    }
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <Box>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        style={{ display: 'none' }}
+        id={`upload-${perguntaId}`}
+        onChange={handleFileChange}
+        disabled={disabled}
+      />
+      <label htmlFor={`upload-${perguntaId}`}>
+        <Button
+          variant="outlined"
+          component="span"
+          startIcon={<CloudUploadIcon />}
+          disabled={disabled}
+          sx={{ mb: 2 }}
+        >
+          Selecionar arquivo{multiple && 's'}
+        </Button>
+      </label>
+
+      {files.length > 0 && (
+        <List dense>
+          {files.map((file, index) => (
+            <ListItem
+              key={index}
+              secondaryAction={
+                !disabled && (
+                  <IconButton edge="end" onClick={() => removeFile(index)}>
+                    <DeleteIcon />
+                  </IconButton>
+                )
+              }
+            >
+              <ListItemIcon>
+                {file.type?.startsWith('image/') ? (
+                  <ImageIcon />
+                ) : file.type === 'application/pdf' ? (
+                  <PdfIcon />
+                ) : (
+                  <DescriptionIcon />
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={file.name}
+                secondary={file.size ? `${(file.size / 1024).toFixed(2)} KB` : ''}
+              />
+            </ListItem>
+          ))}
+        </List>
       )}
     </Box>
   );
@@ -294,7 +473,6 @@ function ClienteAnamnese() {
           return;
         }
 
-        // Verificar se já existe atendimento para este agendamento
         const atendimentosExistentes = await firebaseService
           .query('atendimentos', [{ field: 'agendamentoId', operator: '==', value: entityId }])
           .catch(() => []);
@@ -304,7 +482,6 @@ function ClienteAnamnese() {
           return;
         }
 
-        // Buscar nome do profissional CORRETAMENTE
         const profissionalNome = agendamento.profissionalNome || 
           (agendamento.profissionalId ? await buscarProfissionalNome(agendamento.profissionalId) : 'Não informado');
         
@@ -332,7 +509,6 @@ function ClienteAnamnese() {
 
       setAtendimento(atendimentoData);
 
-      // Verificar se já existe resposta
       let respostasExistentes = [];
 
       if (atendimentoData.agendamentoId) {
@@ -350,7 +526,6 @@ function ClienteAnamnese() {
         return;
       }
 
-      // Buscar formulários associados ao serviço
       const formularios = await firebaseService
         .query('formularios_anamnese', [
           { field: 'servicoIds', operator: 'array-contains', value: atendimentoData.servicoId },
@@ -409,6 +584,18 @@ function ClienteAnamnese() {
               case '!=':
                 condicaoAtendida = valorBase != valor;
                 break;
+              case '>':
+                condicaoAtendida = parseFloat(valorBase) > parseFloat(valor);
+                break;
+              case '<':
+                condicaoAtendida = parseFloat(valorBase) < parseFloat(valor);
+                break;
+              case '>=':
+                condicaoAtendida = parseFloat(valorBase) >= parseFloat(valor);
+                break;
+              case '<=':
+                condicaoAtendida = parseFloat(valorBase) <= parseFloat(valor);
+                break;
               case 'contains':
                 condicaoAtendida = Array.isArray(valorBase) && valorBase.includes(valor);
                 break;
@@ -444,6 +631,12 @@ function ClienteAnamnese() {
         [perguntaId]: !!value && (Array.isArray(value) ? value.length > 0 : true),
       }));
     }
+  };
+
+  const handleFileUpload = async (perguntaId, file) => {
+    console.log('Upload de arquivo:', file);
+    const fakeUrl = URL.createObjectURL(file);
+    handleRespostaChange(perguntaId, fakeUrl, 'arquivo');
   };
 
   const validarFormulario = () => {
@@ -541,7 +734,6 @@ function ClienteAnamnese() {
       helperText: erro && 'Campo obrigatório',
     };
 
-    // Campos de texto
     if (tipo === 'texto') {
       return (
         <TextField
@@ -594,6 +786,18 @@ function ClienteAnamnese() {
       );
     }
 
+    if (tipo === 'hora') {
+      return (
+        <TextField
+          {...campoBase}
+          type="time"
+          value={valor}
+          onChange={(e) => handleRespostaChange(id, e.target.value, tipo)}
+          InputLabelProps={{ shrink: true }}
+        />
+      );
+    }
+
     if (tipo === 'select') {
       return (
         <FormControl fullWidth size="small" error={erro}>
@@ -608,6 +812,35 @@ function ClienteAnamnese() {
             {opcoes?.map((op, i) => (
               <MenuItem key={i} value={op}>
                 {op}
+              </MenuItem>
+            ))}
+          </Select>
+          {erro && <FormHelperText>Campo obrigatório</FormHelperText>}
+        </FormControl>
+      );
+    }
+
+    if (tipo === 'multiselect') {
+      return (
+        <FormControl fullWidth size="small" error={erro}>
+          <InputLabel shrink>Selecione opções</InputLabel>
+          <Select
+            multiple
+            value={valor || []}
+            label="Selecione opções"
+            onChange={(e) => handleRespostaChange(id, e.target.value, tipo)}
+            renderValue={(selected) => (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selected.map((value) => (
+                  <Chip key={value} label={value} size="small" />
+                ))}
+              </Box>
+            )}
+          >
+            {opcoes?.map((op, i) => (
+              <MenuItem key={i} value={op}>
+                <Checkbox checked={valor?.includes(op) || false} />
+                <ListItemText primary={op} />
               </MenuItem>
             ))}
           </Select>
@@ -657,12 +890,24 @@ function ClienteAnamnese() {
       );
     }
 
-    // Campos com máscara
     if (tipo === 'cpf') {
       return (
         <MaskedInputCustom
           mask="999.999.999-99"
           label="CPF"
+          value={valor}
+          onChange={(val) => handleRespostaChange(id, val, tipo)}
+          error={erro}
+          helperText={erro && 'Campo obrigatório'}
+        />
+      );
+    }
+
+    if (tipo === 'cnpj') {
+      return (
+        <MaskedInputCustom
+          mask="99.999.999/9999-99"
+          label="CNPJ"
           value={valor}
           onChange={(val) => handleRespostaChange(id, val, tipo)}
           error={erro}
@@ -684,13 +929,62 @@ function ClienteAnamnese() {
       );
     }
 
-    if (tipo === 'assinatura') {
+    if (tipo === 'cep') {
       return (
-        <SignaturePad value={valor} onChange={(val) => handleRespostaChange(id, val, tipo)} disabled={false} />
+        <MaskedInputCustom
+          mask="99999-999"
+          label="CEP"
+          value={valor}
+          onChange={(val) => handleRespostaChange(id, val, tipo)}
+          error={erro}
+          helperText={erro && 'Campo obrigatório'}
+        />
       );
     }
 
-    // Fallback
+    if (tipo === 'dinheiro') {
+      return (
+        <TextField
+          {...campoBase}
+          value={valor}
+          onChange={(e) => handleRespostaChange(id, e.target.value, tipo)}
+          InputProps={{
+            inputComponent: NumericFormatCustom,
+          }}
+        />
+      );
+    }
+
+    if (tipo === 'assinatura') {
+      return (
+        <SignaturePad
+          perguntaId={id}
+          value={valor}
+          onChange={(val) => handleRespostaChange(id, val, tipo)}
+          disabled={false}
+        />
+      );
+    }
+
+    if (tipo === 'arquivo' || tipo === 'imagem' || tipo === 'pdf' || tipo === 'video') {
+      const acceptMap = {
+        'imagem': 'image/*',
+        'pdf': 'application/pdf',
+        'video': 'video/*',
+        'arquivo': '*/*'
+      };
+      
+      return (
+        <FileUploadField
+          perguntaId={id}
+          value={valor}
+          onChange={(val) => handleRespostaChange(id, val, tipo)}
+          disabled={false}
+          accept={acceptMap[tipo] || '*/*'}
+        />
+      );
+    }
+
     return (
       <TextField
         {...campoBase}
@@ -713,10 +1007,6 @@ function ClienteAnamnese() {
   const questoesVisiveis = formulario?.questoes?.filter((q) => camposCondicionais[q.id] !== false) || [];
   const questaoAtual = questoesVisiveis[activeStep];
 
-  // ==========================================
-  // RENDER
-  // ==========================================
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
@@ -728,7 +1018,14 @@ function ClienteAnamnese() {
   if (!formulario) {
     return (
       <Box sx={{ p: isMobile ? 2 : 3, maxWidth: 600, mx: 'auto', mt: 4 }}>
-        <Alert severity="info" action={<Button color="inherit" size="small" onClick={() => navigate('/cliente/anamnese')}>Voltar</Button>}>
+        <Alert
+          severity="info"
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/cliente/anamnese')}>
+              Voltar
+            </Button>
+          }
+        >
           Não há formulário para preencher neste atendimento.
         </Alert>
       </Box>
@@ -751,33 +1048,41 @@ function ClienteAnamnese() {
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flex: 1 }}>
-          <Typography variant={isMobile ? 'h5' : 'h4'} sx={{ fontWeight: 700, color: '#9c27b0', fontSize: isMobile ? '1.25rem' : undefined }}>
+          <Typography
+            variant={isMobile ? 'h5' : 'h4'}
+            sx={{ fontWeight: 700, color: '#9c27b0', fontSize: isMobile ? '1.25rem' : undefined }}
+          >
             {formulario.titulo}
           </Typography>
           <Typography variant="body2" color="textSecondary">
             {atendimento?.servicoNome} • {formatarData(atendimento?.data)} às {atendimento?.horaInicio}
           </Typography>
+          {formulario.tempoEstimado && (
+            <Typography variant="caption" color="textSecondary">
+              Tempo estimado: {formulario.tempoEstimado} minutos
+            </Typography>
+          )}
         </Box>
       </Box>
 
       {/* Barra de progresso */}
-      <Box sx={{ mb: isMobile ? 2 : 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography variant="caption" color="textSecondary">
-            Progresso
-          </Typography>
-          <Typography variant="caption" color="textSecondary">
-            {activeStep + 1} de {questoesVisiveis.length}
-          </Typography>
+      {formulario.configuracoes?.mostrarBarraProgresso !== false && (
+        <Box sx={{ mb: isMobile ? 2 : 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+            <Typography variant="caption" color="textSecondary">Progresso</Typography>
+            <Typography variant="caption" color="textSecondary">
+              {activeStep + 1} de {questoesVisiveis.length}
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={((activeStep + 1) / questoesVisiveis.length) * 100}
+            sx={{ height: isMobile ? 4 : 8, borderRadius: 4 }}
+          />
         </Box>
-        <LinearProgress
-          variant="determinate"
-          value={((activeStep + 1) / questoesVisiveis.length) * 100}
-          sx={{ height: isMobile ? 4 : 8, borderRadius: 4 }}
-        />
-      </Box>
+      )}
 
-      {/* Informações do atendimento - CORRIGIDO (profissional agora aparece) */}
+      {/* Informações do atendimento */}
       <Card sx={{ mb: isMobile ? 2 : 4, bgcolor: '#faf5ff', borderRadius: isMobile ? 2 : 3 }}>
         <CardContent sx={{ p: isMobile ? 1.5 : 2 }}>
           <Grid container spacing={isMobile ? 1 : 2}>
@@ -834,17 +1139,34 @@ function ClienteAnamnese() {
       {/* Formulário */}
       <Card sx={{ borderRadius: isMobile ? 2 : 3 }}>
         <CardContent sx={{ p: isMobile ? 2 : 3 }}>
-          {/* Navegação mobile simplificada */}
+          {/* Stepper Desktop */}
+          {!isMobile && (
+            <Box sx={{ mb: 3 }}>
+              <Stepper activeStep={activeStep} alternativeLabel>
+                {questoesVisiveis.map((q, index) => (
+                  <Step key={q.id}>
+                    <StepLabel
+                      optional={
+                        <Typography variant="caption" color="textSecondary">
+                          {index + 1}/{questoesVisiveis.length}
+                        </Typography>
+                      }
+                    >
+                      {q.pergunta.length > 20 ? `${q.pergunta.substring(0, 20)}...` : q.pergunta}
+                    </StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
+          )}
+
+          {/* Navegação Mobile */}
           {isMobile && (
             <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Button size="small" onClick={() => setActiveStep(Math.max(0, activeStep - 1))} disabled={activeStep === 0}>
                 <KeyboardArrowLeft /> Anterior
               </Button>
-              <Chip
-                label={`${activeStep + 1}/${questoesVisiveis.length}`}
-                size="small"
-                variant="outlined"
-              />
+              <Chip label={`${activeStep + 1}/${questoesVisiveis.length}`} size="small" variant="outlined" />
               <Button
                 size="small"
                 onClick={() => setActiveStep(Math.min(questoesVisiveis.length - 1, activeStep + 1))}
@@ -871,7 +1193,7 @@ function ClienteAnamnese() {
             {renderizarCampo(questaoAtual)}
           </Paper>
 
-          {/* Botões desktop */}
+          {/* Botões Desktop */}
           {!isMobile && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
               <Button onClick={() => setActiveStep(Math.max(0, activeStep - 1))} disabled={activeStep === 0} startIcon={<KeyboardArrowLeft />}>
@@ -902,7 +1224,7 @@ function ClienteAnamnese() {
             </Box>
           )}
 
-          {/* Botão enviar mobile */}
+          {/* Botão Enviar Mobile */}
           {isMobile && activeStep === questoesVisiveis.length - 1 && (
             <Button
               fullWidth
@@ -939,7 +1261,9 @@ function ClienteAnamnese() {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
       </Snackbar>
     </Box>
   );
