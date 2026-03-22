@@ -226,7 +226,6 @@ import {
   WarningAmber as WarningAmberIcon,
   CheckCircleOutline as CheckCircleOutlineIcon,
   FormatListBulleted as FormatListIcon,
-  TableRows as TableRowsIcon,
   Schema as SchemaIcon,
   Example as ExampleIcon,
 } from '@mui/icons-material';
