@@ -123,6 +123,8 @@ import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
 import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
+import TermosUso from './pages/TermosUso';
+import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -699,7 +701,17 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                
+                {/* Rotas de Termos e Privacidade */}
+                <Route path="/termos-uso" element={
+                  <SimpleLayout>
+                    <TermosUso />
+                  </SimpleLayout>
+                } />
+                <Route path="/politica-privacidade" element={
+                  <SimpleLayout>
+                    <PoliticaPrivacidade />
+                  </SimpleLayout>
+                } />                
                 {/* Rota 404 com Footer */}
                 <Route path="*" element={
                   <SimpleLayout>
