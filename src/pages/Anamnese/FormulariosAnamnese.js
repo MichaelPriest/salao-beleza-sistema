@@ -1,4 +1,6 @@
 // src/pages/Anamnese/FormulariosAnamnese.js
+// VERSÃO COMPLETA - COM IMPORTAÇÃO, EXPORTAÇÃO E MANUAL
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -76,7 +78,7 @@ import {
   ToggleButtonGroup,
   Rating,
   FormHelperText,
-  Input,
+  Input as MuiInput,
   InputBase,
   TextareaAutosize,
   NativeSelect,
@@ -160,7 +162,6 @@ import {
   CloudUpload as CloudUploadIcon,
   AttachMoney as MoneyIcon,
   Numbers as NumbersIcon,
-  Signature as SignatureIcon,
   Brush as BrushIcon,
   PhotoCamera as PhotoCameraIcon,
   VideoLibrary as VideoIcon,
@@ -218,6 +219,16 @@ import {
   ViewCompactOutlined as ViewCompactOutlinedIcon,
   ViewAgendaOutlined as ViewAgendaOutlinedIcon,
   ViewArrayOutlined as ViewArrayOutlinedIcon,
+  UploadFile as UploadFileIcon,
+  Download as DownloadIcon,
+  MenuBook as BookIcon,
+  TipsAndUpdates as TipsIcon,
+  WarningAmber as WarningAmberIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  FormatListBulleted as FormatListIcon,
+  TableRows as TableRowsIcon,
+  Schema as SchemaIcon,
+  Example as ExampleIcon,
 } from '@mui/icons-material';
 import { motion, Reorder, useDragControls } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -228,6 +239,8 @@ import { v4 as uuidv4 } from 'uuid';
 import SignatureCanvas from 'react-signature-canvas';
 import { NumericFormat } from 'react-number-format';
 import InputMask from 'react-input-mask';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 // ============================================
 // TIPOS DE QUESTÕES AVANÇADOS
@@ -401,6 +414,259 @@ const limparObjeto = (obj) => {
 };
 
 // ============================================
+// COMPONENTE DE MANUAL
+// ============================================
+const ManualFormularios = ({ open, onClose }) => {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <BookIcon />
+          <Typography variant="h6">Manual - Como Criar Formulários de Anamnese</Typography>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          {/* Seção 1: Introdução */}
+          <Paper sx={{ p: 3, mb: 3, bgcolor: '#faf5ff' }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TipsIcon /> Introdução
+            </Typography>
+            <Typography variant="body2" paragraph>
+              Os formulários de anamnese permitem coletar informações importantes dos clientes antes dos atendimentos.
+              Este manual irá guiá-lo através de todas as funcionalidades disponíveis.
+            </Typography>
+          </Paper>
+
+          {/* Seção 2: Tipos de Questões */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FormatListIcon /> Tipos de Questões Disponíveis
+            </Typography>
+            <Grid container spacing={2}>
+              {tiposQuestao.map(tipo => (
+                <Grid item xs={12} sm={6} md={4} key={tipo.value}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      {tipo.icon}
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{tipo.label}</Typography>
+                    </Box>
+                    <Typography variant="caption" color="textSecondary">
+                      Categoria: {tipo.categoria}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+
+          {/* Seção 3: Como Criar um Formulário */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AddIcon /> Como Criar um Formulário
+            </Typography>
+            
+            <Stepper orientation="vertical" sx={{ mt: 2 }}>
+              <Step active>
+                <StepLabel>1. Clique em "Novo Formulário"</StepLabel>
+                <StepContent>
+                  <Typography variant="body2">
+                    No topo da página, clique no botão "Novo Formulário" para iniciar a criação.
+                  </Typography>
+                </StepContent>
+              </Step>
+              
+              <Step active>
+                <StepLabel>2. Configure as informações gerais</StepLabel>
+                <StepContent>
+                  <Typography variant="body2">
+                    Preencha:
+                  </Typography>
+                  <List dense>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Título do formulário (obrigatório)" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Descrição explicativa" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Serviços associados (deixe em branco para todos)" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Tempo estimado para preenchimento" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Instruções para o cliente" /></ListItem>
+                  </List>
+                </StepContent>
+              </Step>
+              
+              <Step active>
+                <StepLabel>3. Adicione as questões</StepLabel>
+                <StepContent>
+                  <Typography variant="body2" paragraph>
+                    Vá para a aba "Questões" e clique em "Adicionar Questão". Para cada questão, você pode:
+                  </Typography>
+                  <List dense>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Escolher o tipo (texto, número, seleção, etc.)" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Definir a pergunta" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Adicionar descrição/instrução" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Definir se é obrigatória" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Adicionar opções (para campos de seleção)" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Configurar condições de exibição" /></ListItem>
+                  </List>
+                </StepContent>
+              </Step>
+              
+              <Step active>
+                <StepLabel>4. Configure campos condicionais</StepLabel>
+                <StepContent>
+                  <Typography variant="body2">
+                    Campos condicionais aparecem apenas quando uma condição é atendida. Para configurar:
+                  </Typography>
+                  <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                    <li>Selecione uma questão que terá condicional</li>
+                    <li>Clique em "Adicionar condicional"</li>
+                    <li>Escolha a pergunta base (que controla a exibição)</li>
+                    <li>Defina o operador (igual, maior que, contém, etc.)</li>
+                    <li>Informe o valor para comparação</li>
+                  </ol>
+                </StepContent>
+              </Step>
+              
+              <Step active>
+                <StepLabel>5. Configure opções avançadas</StepLabel>
+                <StepContent>
+                  <Typography variant="body2">
+                    Na aba "Avançado" você pode:
+                  </Typography>
+                  <List dense>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Mostrar barra de progresso" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Permitir salvar rascunho" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Notificar profissional quando respondido" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Definir data de expiração" /></ListItem>
+                    <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Importar questões de modelos existentes" /></ListItem>
+                  </List>
+                </StepContent>
+              </Step>
+            </Stepper>
+          </Paper>
+
+          {/* Seção 4: Importação/Exportação */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <UploadFileIcon /> Importação e Exportação
+            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>📤 Exportar</Typography>
+                <Typography variant="body2" paragraph>
+                  Você pode exportar formulários nos seguintes formatos:
+                </Typography>
+                <List dense>
+                  <ListItem><ListItemIcon><CodeIcon fontSize="small" /></ListItemIcon><ListItemText primary="JSON - Para backup ou transferência entre sistemas" /></ListItem>
+                  <ListItem><ListItemIcon><TableRowsIcon fontSize="small" /></ListItemIcon><ListItemText primary="Excel/CSV - Para análise ou edição em planilhas" /></ListItem>
+                  <ListItem><ListItemIcon><SchemaIcon fontSize="small" /></ListItemIcon><ListItemText primary="ZIP com todos os formulários - Backup completo" /></ListItem>
+                </List>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>📥 Importar</Typography>
+                <Typography variant="body2" paragraph>
+                  Formatos suportados para importação:
+                </Typography>
+                <List dense>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="JSON - Arquivo exportado pelo sistema" /></ListItem>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" /></ListItemIcon><ListItemText primary="Excel/CSV - Planilha com as questões" /></ListItem>
+                </List>
+                
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <strong>Modelo de Excel:</strong> Colunas: Pergunta, Tipo, Descrição, Obrigatória, Opções
+                </Alert>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Seção 5: Dicas e Boas Práticas */}
+          <Paper sx={{ p: 3, mb: 3, bgcolor: '#fff9e6' }}>
+            <Typography variant="h6" sx={{ color: '#ff9800', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TipsIcon /> Dicas e Boas Práticas
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>✅ Recomendações</Typography>
+                <List dense>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" color="success" /></ListItemIcon><ListItemText primary="Mantenha perguntas claras e objetivas" /></ListItem>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" color="success" /></ListItemIcon><ListItemText primary="Limite a 10-15 questões para não cansar o cliente" /></ListItem>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" color="success" /></ListItemIcon><ListItemText primary="Use campos condicionais para perguntas específicas" /></ListItem>
+                  <ListItem><ListItemIcon><CheckCircleOutlineIcon fontSize="small" color="success" /></ListItemIcon><ListItemText primary="Teste o formulário antes de ativar" /></ListItem>
+                </List>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>⚠️ O que evitar</Typography>
+                <List dense>
+                  <ListItem><ListItemIcon><WarningAmberIcon fontSize="small" color="warning" /></ListItemIcon><ListItemText primary="Perguntas muito longas ou confusas" /></ListItem>
+                  <ListItem><ListItemIcon><WarningAmberIcon fontSize="small" color="warning" /></ListItemIcon><ListItemText primary="Excesso de campos obrigatórios" /></ListItem>
+                  <ListItem><ListItemIcon><WarningAmberIcon fontSize="small" color="warning" /></ListItemIcon><ListItemText primary="Condicionais muito complexas" /></ListItem>
+                  <ListItem><ListItemIcon><WarningAmberIcon fontSize="small" color="warning" /></ListItemIcon><ListItemText primary="Esquecer de testar após criar" /></ListItem>
+                </List>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Seção 6: FAQ */}
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HelpIcon /> Perguntas Frequentes
+            </Typography>
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Como associar um formulário a um serviço?</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2">
+                  Na aba "Configurações Gerais", use o campo "Serviços associados" para selecionar quais serviços utilizarão este formulário. Deixe em branco para todos os serviços.
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+            
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Como criar um campo condicional?</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2">
+                  Selecione a questão desejada, clique em "Adicionar condicional", escolha a pergunta base, o operador e o valor. A questão só aparecerá quando a condição for atendida.
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+            
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Posso editar um formulário após criado?</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2">
+                  Sim, você pode editar a qualquer momento. O sistema mantém o histórico de versões. Recomenda-se testar após alterações importantes.
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+            
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Como importar um formulário de um arquivo Excel?</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2">
+                  Clique em "Importar" e selecione o arquivo Excel. Certifique-se de que o arquivo tenha as colunas: Pergunta, Tipo, Descrição, Obrigatória, Opções. O sistema processará automaticamente.
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          </Paper>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} variant="contained" sx={{ bgcolor: '#9c27b0' }}>
+          Entendi
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
@@ -422,7 +688,14 @@ function FormulariosAnamnese() {
   const [tabValue, setTabValue] = useState(0);
   const [secaoAtual, setSecaoAtual] = useState('geral');
   
-  // Estado do formulário com campos avançados (todos com null em vez de undefined)
+  // Estados para importação/exportação e manual
+  const [openManualDialog, setOpenManualDialog] = useState(false);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importFormat, setImportFormat] = useState('json');
+  
+  // Estado do formulário
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -476,7 +749,234 @@ function FormulariosAnamnese() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Abrir diálogo para novo/editar
+  // ============================================
+  // FUNÇÕES DE EXPORTAÇÃO
+  // ============================================
+
+  const exportarParaJSON = (formulario) => {
+    try {
+      const dados = {
+        versao: '1.0',
+        tipo: 'formulario_anamnese',
+        dataExportacao: new Date().toISOString(),
+        formulario: {
+          ...formulario,
+          id: undefined,
+          criadoEm: undefined,
+          atualizadoEm: undefined
+        }
+      };
+      
+      const jsonString = JSON.stringify(dados, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${formulario.titulo.replace(/[^a-z0-9]/gi, '_')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      mostrarSnackbar('Formulário exportado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      mostrarSnackbar('Erro ao exportar formulário', 'error');
+    }
+  };
+
+  const exportarParaCSV = (formulario) => {
+    try {
+      const questoesFormatadas = formulario.questoes.map((q, idx) => ({
+        'Ordem': idx + 1,
+        'Pergunta': q.pergunta,
+        'Descrição': q.descricao || '',
+        'Tipo': tiposQuestao.find(t => t.value === q.tipo)?.label || q.tipo,
+        'Obrigatória': q.obrigatoria ? 'Sim' : 'Não',
+        'Opções': Array.isArray(q.opcoes) ? q.opcoes.join('; ') : '',
+        'Tem Condicional': q.condicional ? 'Sim' : 'Não'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(questoesFormatadas);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Questões');
+      
+      const infoFormulario = [{
+        'Campo': 'Título',
+        'Valor': formulario.titulo
+      }, {
+        'Campo': 'Descrição',
+        'Valor': formulario.descricao || ''
+      }, {
+        'Campo': 'Serviços',
+        'Valor': formulario.servicoIds?.join(', ') || 'Todos'
+      }, {
+        'Campo': 'Tempo Estimado',
+        'Valor': `${formulario.tempoEstimado || 5} minutos`
+      }, {
+        'Campo': 'Status',
+        'Valor': formulario.ativo ? 'Ativo' : 'Inativo'
+      }, {
+        'Campo': 'Obrigatório',
+        'Valor': formulario.obrigatorio ? 'Sim' : 'Não'
+      }, {
+        'Campo': 'Total de Questões',
+        'Valor': formulario.questoes?.length || 0
+      }];
+      
+      const wsInfo = XLSX.utils.json_to_sheet(infoFormulario);
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
+      
+      XLSX.writeFile(wb, `${formulario.titulo.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
+      mostrarSnackbar('Formulário exportado para Excel!');
+    } catch (error) {
+      console.error('Erro ao exportar CSV:', error);
+      mostrarSnackbar('Erro ao exportar para Excel', 'error');
+    }
+  };
+
+  const exportarTodos = async () => {
+    try {
+      const zip = new JSZip();
+      
+      for (const formulario of formularios) {
+        const dados = {
+          versao: '1.0',
+          tipo: 'formulario_anamnese',
+          dataExportacao: new Date().toISOString(),
+          formulario: {
+            ...formulario,
+            id: undefined,
+            criadoEm: undefined,
+            atualizadoEm: undefined
+          }
+        };
+        
+        const jsonString = JSON.stringify(dados, null, 2);
+        zip.file(`${formulario.titulo.replace(/[^a-z0-9]/gi, '_')}.json`, jsonString);
+      }
+      
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `formularios_anamnese_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      mostrarSnackbar(`${formularios.length} formulários exportados com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao exportar todos:', error);
+      mostrarSnackbar('Erro ao exportar formulários', 'error');
+    }
+  };
+
+  // ============================================
+  // FUNÇÕES DE IMPORTAÇÃO
+  // ============================================
+
+  const mapearTipoQuestao = (tipo) => {
+    const mapa = {
+      'Texto curto': 'texto',
+      'Texto longo': 'textarea',
+      'Número': 'numero',
+      'Data': 'data',
+      'Hora': 'hora',
+      'Lista suspensa': 'select',
+      'Opção única': 'radio',
+      'Múltipla escolha': 'checkbox',
+      'CPF': 'cpf',
+      'Telefone': 'telefone',
+      'CEP': 'cep',
+      'Valor monetário': 'dinheiro',
+      'Assinatura': 'assinatura'
+    };
+    return mapa[tipo] || 'texto';
+  };
+
+  const processarImportacao = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        let dados;
+        if (file.name.endsWith('.json')) {
+          dados = JSON.parse(e.target.result);
+        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          const workbook = XLSX.read(e.target.result, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const questoes = XLSX.utils.sheet_to_json(sheet);
+          
+          dados = {
+            versao: '1.0',
+            tipo: 'formulario_anamnese',
+            formulario: {
+              titulo: file.name.replace(/\.(xlsx|xls|json)$/, ''),
+              questoes: questoes.map((q, idx) => ({
+                id: `q${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 6)}`,
+                tipo: mapearTipoQuestao(q.Tipo || q.tipo || 'texto'),
+                pergunta: q.Pergunta || q.pergunta || '',
+                descricao: q.Descrição || q.descricao || '',
+                obrigatoria: (q.Obrigatória || q.obrigatoria) === 'Sim',
+                opcoes: (q.Opções || q.opcoes || '').split(';').map(o => o.trim()).filter(o => o),
+                ordem: idx
+              }))
+            }
+          };
+        }
+        
+        if (dados && dados.formulario) {
+          setImportPreview(dados.formulario);
+          mostrarSnackbar('Arquivo carregado com sucesso! Clique em "Confirmar Importação" para finalizar.');
+        } else {
+          mostrarSnackbar('Formato de arquivo inválido', 'error');
+        }
+      } catch (error) {
+        console.error('Erro ao processar arquivo:', error);
+        mostrarSnackbar('Erro ao processar arquivo: ' + error.message, 'error');
+      }
+    };
+    
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      reader.readAsBinaryString(file);
+    } else {
+      reader.readAsText(file);
+    }
+  };
+
+  const confirmarImportacao = async () => {
+    if (!importPreview) return;
+    
+    try {
+      const novoFormulario = {
+        ...importPreview,
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+        versao: 1,
+        questoes: importPreview.questoes.map(q => ({
+          ...q,
+          id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        }))
+      };
+      
+      await firebaseService.add('formularios_anamnese', novoFormulario);
+      mostrarSnackbar('Formulário importado com sucesso!');
+      setOpenImportDialog(false);
+      setImportPreview(null);
+      setImportFile(null);
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao importar:', error);
+      mostrarSnackbar('Erro ao importar formulário', 'error');
+    }
+  };
+
+  // ============================================
+  // FUNÇÕES CRUD
+  // ============================================
+
   const handleOpenDialog = (formulario = null) => {
     if (formulario) {
       setFormularioEditando(formulario);
@@ -527,21 +1027,6 @@ function FormulariosAnamnese() {
     setOpenDialog(true);
   };
 
-  // Adicionar nova seção
-  const adicionarSecao = () => {
-    const novaSecao = {
-      id: `secao_${Date.now()}`,
-      titulo: 'Nova Seção',
-      descricao: '',
-      ordem: formData.secoes.length
-    };
-    setFormData({
-      ...formData,
-      secoes: [...formData.secoes, novaSecao]
-    });
-  };
-
-  // 🔥 FUNÇÃO adicionarQuestao CORRIGIDA (sem undefined)
   const adicionarQuestao = (secaoId = null) => {
     const novaQuestao = {
       id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -580,22 +1065,18 @@ function FormulariosAnamnese() {
     });
   };
 
-  // Remover questão
   const removerQuestao = (index) => {
     const novasQuestoes = formData.questoes.filter((_, i) => i !== index);
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // 🔥 FUNÇÃO atualizarQuestao CORRIGIDA (sem undefined)
   const atualizarQuestao = (index, campo, valor) => {
     const novasQuestoes = [...formData.questoes];
     
-    // Se for alterar o tipo, resetar campos específicos
     if (campo === 'tipo') {
       const novoTipo = valor;
       const questao = novasQuestoes[index];
       
-      // Resetar campos baseado no novo tipo (usando null em vez de undefined)
       if (['select', 'multiselect', 'radio', 'checkbox'].includes(novoTipo)) {
         questao.opcoes = questao.opcoes || [];
       } else {
@@ -624,18 +1105,15 @@ function FormulariosAnamnese() {
         questao.formato = null;
       }
       
-      // Resetar condicional e calculado
       questao.condicional = null;
       questao.calculado = null;
     }
     
-    // Garantir que não estamos passando undefined
     novasQuestoes[index][campo] = valor === undefined ? null : valor;
     
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Adicionar opção a uma questão
   const adicionarOpcao = (index) => {
     const novasQuestoes = [...formData.questoes];
     if (!novasQuestoes[index].opcoes) {
@@ -645,35 +1123,22 @@ function FormulariosAnamnese() {
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Mover questão para cima
   const moverQuestaoCima = (index) => {
     if (index === 0) return;
     const novasQuestoes = [...formData.questoes];
     [novasQuestoes[index - 1], novasQuestoes[index]] = [novasQuestoes[index], novasQuestoes[index - 1]];
-    
-    // Recalcular ordens
-    novasQuestoes.forEach((q, i) => {
-      q.ordem = i;
-    });
-    
+    novasQuestoes.forEach((q, i) => { q.ordem = i; });
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Mover questão para baixo
   const moverQuestaoBaixo = (index) => {
     if (index === formData.questoes.length - 1) return;
     const novasQuestoes = [...formData.questoes];
     [novasQuestoes[index + 1], novasQuestoes[index]] = [novasQuestoes[index], novasQuestoes[index + 1]];
-    
-    // Recalcular ordens
-    novasQuestoes.forEach((q, i) => {
-      q.ordem = i;
-    });
-    
+    novasQuestoes.forEach((q, i) => { q.ordem = i; });
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Duplicar questão
   const duplicarQuestao = (index) => {
     const questao = { 
       ...formData.questoes[index], 
@@ -682,22 +1147,15 @@ function FormulariosAnamnese() {
     };
     const novasQuestoes = [...formData.questoes];
     novasQuestoes.splice(index + 1, 0, questao);
-    
-    // Recalcular ordens
-    novasQuestoes.forEach((q, i) => {
-      q.ordem = i;
-    });
-    
+    novasQuestoes.forEach((q, i) => { q.ordem = i; });
     setFormData({ ...formData, questoes: novasQuestoes });
   };
 
-  // Abrir diálogo de condicional
   const handleOpenCondicional = (index) => {
     setQuestaoCondicional({ index, ...formData.questoes[index] });
     setOpenCondicionalDialog(true);
   };
 
-  // Salvar condicional
   const handleSalvarCondicional = () => {
     if (questaoCondicional && questaoCondicional.index !== undefined) {
       const novasQuestoes = [...formData.questoes];
@@ -711,7 +1169,6 @@ function FormulariosAnamnese() {
     }
   };
 
-  // 🔥 FUNÇÃO handleSalvar CORRIGIDA (com limpeza de undefined)
   const handleSalvar = async () => {
     try {
       if (!formData.titulo) {
@@ -724,15 +1181,12 @@ function FormulariosAnamnese() {
         return;
       }
 
-      // 🔥 LIMPAR DADOS ANTES DE ENVIAR
       const dadosParaSalvar = limparObjeto({
         ...formData,
         criadoEm: formularioEditando ? formularioEditando.criadoEm : new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
         versao: formularioEditando ? (formularioEditando.versao || 1) + 1 : 1
       });
-
-      console.log('📦 Dados limpos para salvar:', dadosParaSalvar);
 
       if (formularioEditando) {
         await firebaseService.update('formularios_anamnese', formularioEditando.id, dadosParaSalvar);
@@ -745,13 +1199,11 @@ function FormulariosAnamnese() {
       setOpenDialog(false);
       carregarDados();
     } catch (error) {
-      console.error('❌ Erro ao salvar formulário:', error);
-      console.error('Detalhes do erro:', JSON.stringify(error, null, 2));
+      console.error('Erro ao salvar formulário:', error);
       mostrarSnackbar('Erro ao salvar formulário: ' + error.message, 'error');
     }
   };
 
-  // Excluir formulário
   const handleExcluir = async (formulario) => {
     if (window.confirm(`Deseja realmente excluir o formulário "${formulario.titulo}"?`)) {
       try {
@@ -765,7 +1217,6 @@ function FormulariosAnamnese() {
     }
   };
 
-  // Duplicar formulário
   const handleDuplicar = async (formulario) => {
     try {
       const novoFormulario = limparObjeto({
@@ -786,13 +1237,11 @@ function FormulariosAnamnese() {
     }
   };
 
-  // Preview do formulário
   const handlePreview = (formulario) => {
     setFormularioPreview(formulario);
     setOpenPreviewDialog(true);
   };
 
-  // Renderizar campo de acordo com o tipo
   const renderizarCampoPreview = (questao) => {
     const { tipo, pergunta, obrigatoria, placeholder, opcoes } = questao;
     
@@ -808,7 +1257,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'textarea':
         return (
           <TextField
@@ -821,7 +1269,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'numero':
         return (
           <TextField
@@ -837,7 +1284,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'data':
         return (
           <TextField
@@ -850,7 +1296,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'hora':
         return (
           <TextField
@@ -863,7 +1308,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'select':
       case 'radio':
         return (
@@ -883,7 +1327,6 @@ function FormulariosAnamnese() {
             </RadioGroup>
           </FormControl>
         );
-      
       case 'multiselect':
       case 'checkbox':
         return (
@@ -902,7 +1345,6 @@ function FormulariosAnamnese() {
             </FormGroup>
           </FormControl>
         );
-      
       case 'cpf':
       case 'cnpj':
       case 'telefone':
@@ -920,7 +1362,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'dinheiro':
         return (
           <TextField
@@ -934,7 +1375,6 @@ function FormulariosAnamnese() {
             disabled
           />
         );
-      
       case 'assinatura':
         return (
           <Box>
@@ -948,26 +1388,6 @@ function FormulariosAnamnese() {
             </Paper>
           </Box>
         );
-      
-      case 'arquivo':
-      case 'imagem':
-      case 'pdf':
-      case 'video':
-        return (
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              {pergunta} {obrigatoria && '*'}
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<CloudUploadIcon />}
-              disabled
-            >
-              Upload de arquivo
-            </Button>
-          </Box>
-        );
-      
       default:
         return (
           <TextField
@@ -996,8 +1416,8 @@ function FormulariosAnamnese() {
 
   return (
     <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      {/* Cabeçalho com novos botões */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
             Formulários de Anamnese
@@ -1006,16 +1426,41 @@ function FormulariosAnamnese() {
             Crie formulários avançados com campos condicionais, calculados e muito mais
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{
-            background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-          }}
-        >
-          Novo Formulário
-        </Button>
+        
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<BookIcon />}
+            onClick={() => setOpenManualDialog(true)}
+          >
+            Manual
+          </Button>
+          
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => setOpenImportDialog(true)}
+          >
+            Importar
+          </Button>
+          
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportarTodos}
+          >
+            Exportar Todos
+          </Button>
+          
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            sx={{ background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)' }}
+          >
+            Novo Formulário
+          </Button>
+        </Box>
       </Box>
 
       {/* Cards de estatísticas */}
@@ -1249,6 +1694,21 @@ function FormulariosAnamnese() {
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title="Exportar">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const menu = document.createElement('div');
+                                const handleExportJSON = () => exportarParaJSON(form);
+                                const handleExportCSV = () => exportarParaCSV(form);
+                                // Implementar menu de exportação
+                                exportarParaJSON(form);
+                              }}
+                              sx={{ color: '#4caf50' }}
+                            >
+                              <DownloadIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Duplicar">
                             <IconButton
                               size="small"
@@ -1345,7 +1805,6 @@ function FormulariosAnamnese() {
                   size="small"
                 />
               </Grid>
-
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1358,7 +1817,6 @@ function FormulariosAnamnese() {
                   placeholder="Descreva o objetivo deste formulário"
                 />
               </Grid>
-
               <Grid item xs={12}>
                 <Autocomplete
                   multiple
@@ -1381,7 +1839,6 @@ function FormulariosAnamnese() {
                   )}
                 />
               </Grid>
-
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1394,7 +1851,6 @@ function FormulariosAnamnese() {
                   placeholder="Instruções que aparecerão antes do formulário"
                 />
               </Grid>
-
               <Grid item xs={12}>
                 <Autocomplete
                   multiple
@@ -1423,7 +1879,6 @@ function FormulariosAnamnese() {
                   )}
                 />
               </Grid>
-
               <Grid item xs={6}>
                 <FormControlLabel
                   control={
@@ -1435,7 +1890,6 @@ function FormulariosAnamnese() {
                   label="Formulário ativo"
                 />
               </Grid>
-
               <Grid item xs={6}>
                 <FormControlLabel
                   control={
@@ -1635,7 +2089,6 @@ function FormulariosAnamnese() {
                                 </Grid>
                               )}
 
-                              {/* Campos condicionais */}
                               {questao.condicional && (
                                 <Grid item xs={12}>
                                   <Alert severity="info" sx={{ mt: 1 }}>
@@ -1982,7 +2435,6 @@ function FormulariosAnamnese() {
               </Alert>
             )}
 
-            {/* Barra de progresso simulada */}
             {formularioPreview?.configuracoes?.mostrarBarraProgresso && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="caption" color="textSecondary">
@@ -2006,7 +2458,6 @@ function FormulariosAnamnese() {
                 
                 {renderizarCampoPreview(questao)}
 
-                {/* Indicador de condicional */}
                 {questao.condicional && (
                   <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
                     <ConditionalIcon fontSize="inherit" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
@@ -2027,6 +2478,94 @@ function FormulariosAnamnese() {
           <Button onClick={() => setOpenPreviewDialog(false)}>Fechar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog de Importação */}
+      <Dialog open={openImportDialog} onClose={() => setOpenImportDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+          <UploadFileIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Importar Formulário
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <strong>Formatos suportados:</strong> JSON (.json) e Excel (.xlsx, .xls)
+              <br />
+              Para Excel, utilize as colunas: <strong>Pergunta, Tipo, Descrição, Obrigatória, Opções</strong>
+            </Alert>
+
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<UploadFileIcon />}
+              fullWidth
+              sx={{ py: 2, mb: 3 }}
+            >
+              Selecionar arquivo
+              <input
+                type="file"
+                hidden
+                accept=".json,.xlsx,.xls"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setImportFile(file);
+                    processarImportacao(file);
+                  }
+                }}
+              />
+            </Button>
+
+            {importFile && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Arquivo selecionado: {importFile.name}
+              </Alert>
+            )}
+
+            {importPreview && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                  Pré-visualização do formulário a ser importado:
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Título: {importPreview.titulo}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary" display="block">
+                    {importPreview.questoes?.length || 0} questões
+                  </Typography>
+                  <Divider sx={{ my: 1 }} />
+                  <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                    {importPreview.questoes?.slice(0, 5).map((q, i) => (
+                      <Typography key={i} variant="body2" sx={{ py: 0.5 }}>
+                        {i + 1}. {q.pergunta}
+                      </Typography>
+                    ))}
+                    {importPreview.questoes?.length > 5 && (
+                      <Typography variant="caption" color="textSecondary">
+                        ... e mais {importPreview.questoes.length - 5} questões
+                      </Typography>
+                    )}
+                  </Box>
+                </Paper>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenImportDialog(false)}>Cancelar</Button>
+          <Button
+            onClick={confirmarImportacao}
+            variant="contained"
+            disabled={!importPreview}
+            sx={{ bgcolor: '#4caf50' }}
+          >
+            Confirmar Importação
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Componente do Manual */}
+      <ManualFormularios open={openManualDialog} onClose={() => setOpenManualDialog(false)} />
 
       {/* Snackbar */}
       <Snackbar
