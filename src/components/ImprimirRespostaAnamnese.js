@@ -1,5 +1,4 @@
 // src/components/ImprimirRespostaAnamnese.js
-// VERSÃO CORRIGIDA - EXIBE ASSINATURA COMO IMAGEM
 
 import React, { forwardRef, useState, useEffect } from 'react';
 import {
@@ -18,8 +17,9 @@ import {
   Schedule as ScheduleIcon,
   Badge as BadgeIcon,
   Work as WorkIcon,
-  Signature as SignatureIcon,
+  EditNote as EditNoteIcon,
   Image as ImageIcon,
+  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
 
@@ -34,12 +34,12 @@ const processarAssinatura = (valor) => {
     return valor;
   }
   
-  // Se for base64 puro (apenas caracteres alfanuméricos e +/=)
+  // Se for base64 puro
   if (typeof valor === 'string' && /^[A-Za-z0-9+/=]+$/.test(valor.substring(0, 100))) {
     return `data:image/png;base64,${valor}`;
   }
   
-  // Se contiver base64 no meio (ex: "data:image/png;base64,iVBOR...")
+  // Se contiver base64 no meio
   if (typeof valor === 'string' && valor.includes('base64,')) {
     const parts = valor.split('base64,');
     if (parts[1]) {
@@ -70,7 +70,7 @@ const AssinaturaImpressao = ({ dataUrl, label = "Assinatura Digital" }) => {
   if (!dataUrl) {
     return (
       <Box sx={{ p: 2, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 1 }}>
-        <SignatureIcon sx={{ fontSize: 40, color: '#999', mb: 1 }} />
+        <EditNoteIcon sx={{ fontSize: 40, color: '#999', mb: 1 }} />
         <Typography variant="caption" color="textSecondary">
           Assinatura não disponível
         </Typography>
@@ -100,7 +100,15 @@ const AssinaturaImpressao = ({ dataUrl, label = "Assinatura Digital" }) => {
         onError={(e) => {
           console.error('Erro ao carregar assinatura');
           e.target.style.display = 'none';
-          e.target.parentNode.innerHTML += '<div style="color: #999; font-size: 12px;">⚠️ Assinatura não carregada</div>';
+          const parent = e.target.parentNode;
+          if (parent) {
+            const fallback = document.createElement('div');
+            fallback.style.color = '#999';
+            fallback.style.fontSize = '12px';
+            fallback.style.padding = '8px';
+            fallback.innerHTML = '⚠️ Assinatura não carregada';
+            parent.appendChild(fallback);
+          }
         }}
       />
     </Box>
@@ -135,41 +143,33 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
       let servicoData = null;
       let profissionalData = profissional;
       
-      // 1. Buscar atendimento se tiver ID
       if (resposta?.atendimentoId) {
         try {
           atendimentoData = await firebaseService.getById('atendimentos', resposta.atendimentoId);
-          console.log('✅ Atendimento carregado:', atendimentoData);
         } catch (error) {
           console.error('Erro ao buscar atendimento:', error);
         }
       }
       
-      // 2. Buscar agendamento se tiver ID
       if (resposta?.agendamentoId) {
         try {
           agendamentoData = await firebaseService.getById('agendamentos', resposta.agendamentoId);
-          console.log('✅ Agendamento carregado:', agendamentoData);
         } catch (error) {
           console.error('Erro ao buscar agendamento:', error);
         }
       }
       
-      // 3. Buscar serviço
       if (resposta?.servicoId) {
         try {
           servicoData = await firebaseService.getById('servicos', resposta.servicoId);
-          console.log('✅ Serviço carregado:', servicoData);
         } catch (error) {
           console.error('Erro ao buscar serviço:', error);
         }
       }
       
-      // 4. Buscar profissional se não veio
       if (!profissionalData && resposta?.profissionalId) {
         try {
           profissionalData = await firebaseService.getById('profissionais', resposta.profissionalId);
-          console.log('✅ Profissional carregado:', profissionalData);
         } catch (error) {
           console.error('Erro ao buscar profissional:', error);
         }
@@ -255,7 +255,6 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
       ...item,
       isAssinatura,
       assinaturaSrc,
-      // Para assinaturas, não mostrar o texto bruto
       displayValue: isAssinatura ? null : item.resposta
     };
   }) || [];
@@ -271,7 +270,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
 
   return (
     <Box ref={ref} sx={{ p: 4, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      {/* Cabeçalho com logo e título */}
+      {/* Cabeçalho */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 1, fontSize: '1.8rem' }}>
           Ficha de Anamnese
@@ -405,7 +404,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
         </Grid>
       </Paper>
 
-      {/* Respostas do formulário - COM SUPORTE PARA ASSINATURA */}
+      {/* Respostas do formulário */}
       <Paper variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, color: '#9c27b0', mb: 3, borderBottom: '1px solid #9c27b0', pb: 1 }}>
           <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -418,7 +417,7 @@ const ImprimirRespostaAnamnese = forwardRef(({ resposta, formulario, cliente, pr
               {index + 1}. {item.pergunta}
               {item.isAssinatura && (
                 <Chip
-                  icon={<SignatureIcon />}
+                  icon={<EditNoteIcon />}
                   label="Assinatura Digital"
                   size="small"
                   sx={{ ml: 1, height: 20, fontSize: '0.65rem', bgcolor: '#f3e5f5', color: '#9c27b0' }}
