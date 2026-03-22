@@ -1,5 +1,4 @@
 // src/pages/ClienteAnamneseVisualizar.js
-// VERSÃO OTIMIZADA PARA MOBILE
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -31,8 +30,6 @@ import {
   Schedule as ScheduleIcon,
   Assignment as AssignmentIcon,
   Close as CloseIcon,
-  Visibility as VisibilityIcon,
-  CheckCircle as CheckCircleIcon,
   FileCopy as FileCopyIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -48,7 +45,6 @@ function ClienteAnamneseVisualizar() {
   const { cliente } = useAuthCliente();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   const [loading, setLoading] = useState(true);
   const [resposta, setResposta] = useState(null);
@@ -66,13 +62,55 @@ function ClienteAnamneseVisualizar() {
 
   useEffect(() => {
     if (resposta) {
-      processarAssinatura();
+      processarAssinaturaDasRespostas();
     }
   }, [resposta]);
 
-  const processarAssinatura = () => {
-    let assinatura = null;
+  /**
+   * 🔥 FUNÇÃO CORRIGIDA: Busca a assinatura dentro das respostas
+   */
+  const processarAssinaturaDasRespostas = () => {
+    if (!resposta?.respostas || resposta.respostas.length === 0) {
+      console.log('❌ Nenhuma resposta encontrada');
+      return;
+    }
+
+    console.log('🔍 Procurando assinatura nas respostas...');
     
+    // Percorrer todas as respostas para encontrar uma do tipo assinatura
+    for (const item of resposta.respostas) {
+      // Verificar se é uma pergunta de assinatura pelo tipo ou pelo nome
+      const ehAssinatura = item.tipo === 'assinatura' || 
+                           item.pergunta?.toLowerCase().includes('assinatura') ||
+                           item.pergunta?.toLowerCase().includes('assinado') ||
+                           (typeof item.resposta === 'string' && item.resposta.startsWith('data:image'));
+      
+      if (ehAssinatura && item.resposta) {
+        console.log('✅ Assinatura encontrada na resposta:', item.pergunta);
+        console.log('📸 Primeiros 100 caracteres:', item.resposta.substring(0, 100));
+        
+        let imagemSrc = item.resposta;
+        
+        // Se não começar com data:image, adiciona o prefixo
+        if (!imagemSrc.startsWith('data:image')) {
+          // Extrair apenas o base64 se necessário
+          const base64Pattern = /(?:base64,)?([A-Za-z0-9+/=]+)$/;
+          const match = imagemSrc.match(base64Pattern);
+          
+          if (match && match[1]) {
+            imagemSrc = `data:image/png;base64,${match[1]}`;
+          } else {
+            imagemSrc = `data:image/png;base64,${imagemSrc}`;
+          }
+        }
+        
+        setAssinaturaSrc(imagemSrc);
+        console.log('✅ Assinatura processada com sucesso!');
+        return;
+      }
+    }
+    
+    // Também verificar no campo raiz como fallback
     const camposPossiveis = [
       'assinaturaUrl', 'assinatura', 'assinaturaDigital', 
       'assinaturaBase64', 'dataUrl', 'signature', 'signatureUrl'
@@ -80,26 +118,26 @@ function ClienteAnamneseVisualizar() {
     
     for (const campo of camposPossiveis) {
       if (resposta[campo]) {
-        assinatura = resposta[campo];
-        console.log(`✅ Assinatura encontrada no campo: ${campo}`);
-        break;
+        console.log(`✅ Assinatura encontrada no campo raiz: ${campo}`);
+        let imagemSrc = resposta[campo];
+        
+        if (!imagemSrc.startsWith('data:image')) {
+          const base64Pattern = /(?:base64,)?([A-Za-z0-9+/=]+)$/;
+          const match = imagemSrc.match(base64Pattern);
+          
+          if (match && match[1]) {
+            imagemSrc = `data:image/png;base64,${match[1]}`;
+          } else {
+            imagemSrc = `data:image/png;base64,${imagemSrc}`;
+          }
+        }
+        
+        setAssinaturaSrc(imagemSrc);
+        return;
       }
     }
     
-    if (assinatura) {
-      if (assinatura.startsWith('data:image')) {
-        setAssinaturaSrc(assinatura);
-      } else {
-        const base64Pattern = /(?:base64,)?([A-Za-z0-9+/=]+)$/;
-        const match = assinatura.match(base64Pattern);
-        
-        if (match && match[1]) {
-          setAssinaturaSrc(`data:image/png;base64,${match[1]}`);
-        } else {
-          setAssinaturaSrc(`data:image/png;base64,${assinatura}`);
-        }
-      }
-    }
+    console.log('❌ Nenhuma assinatura encontrada nas respostas');
   };
 
   const carregarResposta = async () => {
@@ -162,16 +200,6 @@ function ClienteAnamneseVisualizar() {
     }
   };
 
-  const renderSkeleton = () => (
-    <Box sx={{ p: isMobile ? 2 : 3 }}>
-      <Skeleton variant="text" width="60%" height={40} sx={{ mb: 2 }} />
-      <Skeleton variant="rectangular" height={120} sx={{ mb: 2, borderRadius: 2 }} />
-      <Skeleton variant="text" width="90%" height={30} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="80%" height={30} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="70%" height={30} />
-    </Box>
-  );
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
@@ -229,7 +257,6 @@ function ClienteAnamneseVisualizar() {
           </Typography>
         </Box>
         
-        {/* Botão copiar link (apenas desktop) */}
         {!isMobile && (
           <IconButton onClick={copiarLink} disabled={copiando} sx={{ color: '#9c27b0' }}>
             <FileCopyIcon />
@@ -299,7 +326,6 @@ function ClienteAnamneseVisualizar() {
                   </Typography>
                 </Box>
                 
-                {/* Botão copiar link mobile */}
                 {isMobile && (
                   <IconButton size="small" onClick={copiarLink} disabled={copiando} sx={{ color: '#9c27b0' }}>
                     <FileCopyIcon fontSize="small" />
@@ -307,7 +333,7 @@ function ClienteAnamneseVisualizar() {
                 )}
               </Box>
 
-              {/* ASSINATURA DIGITAL */}
+              {/* ASSINATURA DIGITAL - CORRIGIDA */}
               {assinaturaSrc && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -349,9 +375,19 @@ function ClienteAnamneseVisualizar() {
                           width: 'auto',
                           display: 'block'
                         }}
+                        onLoad={() => console.log('✅ Imagem da assinatura carregada com sucesso')}
                         onError={(e) => {
-                          console.error('Erro ao carregar imagem');
+                          console.error('❌ Erro ao carregar imagem da assinatura');
                           e.target.style.display = 'none';
+                          const parent = e.target.parentNode;
+                          if (parent) {
+                            const fallback = document.createElement('div');
+                            fallback.style.padding = '20px';
+                            fallback.style.textAlign = 'center';
+                            fallback.style.color = '#999';
+                            fallback.innerHTML = '⚠️ Assinatura não disponível';
+                            parent.appendChild(fallback);
+                          }
                         }}
                       />
                     </Paper>
@@ -390,76 +426,87 @@ function ClienteAnamneseVisualizar() {
             </Typography>
 
             <AnimatePresence>
-              {resposta.respostas?.map((item, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Paper
-                    variant="outlined"
-                    sx={{ 
-                      p: isMobile ? 1.5 : 2, 
-                      mb: 1.5,
-                      bgcolor: index % 2 === 0 ? '#faf5ff' : 'white',
-                      borderRadius: 2,
-                      transition: 'all 0.2s',
-                      '&:hover': {
-                        transform: isMobile ? 'none' : 'translateX(4px)',
-                        boxShadow: isMobile ? 'none' : '0 2px 8px rgba(0,0,0,0.05)'
-                      }
-                    }}
+              {resposta.respostas?.map((item, index) => {
+                // Verificar se esta resposta é uma assinatura para não mostrar como texto
+                const isSignature = item.tipo === 'assinatura' || 
+                                    (typeof item.resposta === 'string' && item.resposta.startsWith('data:image'));
+                
+                return (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
                   >
-                    <Typography 
-                      variant="subtitle2" 
-                      color="textSecondary" 
-                      gutterBottom
+                    <Paper
+                      variant="outlined"
                       sx={{ 
-                        fontSize: isMobile ? '0.7rem' : '0.8rem',
-                        fontWeight: 600
+                        p: isMobile ? 1.5 : 2, 
+                        mb: 1.5,
+                        bgcolor: index % 2 === 0 ? '#faf5ff' : 'white',
+                        borderRadius: 2,
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: isMobile ? 'none' : 'translateX(4px)',
+                          boxShadow: isMobile ? 'none' : '0 2px 8px rgba(0,0,0,0.05)'
+                        }
                       }}
                     >
-                      {item.pergunta}
-                    </Typography>
-                    <Typography 
-                      variant="body1" 
-                      sx={{ 
-                        fontWeight: 500,
-                        fontSize: isMobile ? '0.85rem' : '0.95rem',
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {Array.isArray(item.resposta) ? (
-                        <Box sx={{ 
-                          display: 'flex', 
-                          gap: 0.5, 
-                          flexWrap: 'wrap',
-                          mt: 0.5
-                        }}>
-                          {item.resposta.map((opt, i) => (
+                      <Typography 
+                        variant="subtitle2" 
+                        color="textSecondary" 
+                        gutterBottom
+                        sx={{ 
+                          fontSize: isMobile ? '0.7rem' : '0.8rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        {item.pergunta}
+                      </Typography>
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          fontWeight: 500,
+                          fontSize: isMobile ? '0.85rem' : '0.95rem',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {isSignature ? (
+                          <Box sx={{ mt: 1 }}>
                             <Chip 
-                              key={i} 
-                              label={opt} 
-                              size="small"
-                              sx={{ 
-                                fontSize: isMobile ? '0.65rem' : '0.75rem',
-                                height: isMobile ? 24 : 28
-                              }}
+                              icon={<FileCopyIcon />} 
+                              label="Assinatura digital capturada" 
+                              size="small" 
+                              color="success" 
+                              variant="outlined"
                             />
-                          ))}
-                        </Box>
-                      ) : (
-                        item.resposta || (
-                          <span style={{ color: '#999', fontStyle: 'italic' }}>
-                            Não respondido
-                          </span>
-                        )
-                      )}
-                    </Typography>
-                  </Paper>
-                </motion.div>
-              ))}
+                          </Box>
+                        ) : Array.isArray(item.resposta) ? (
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                            {item.resposta.map((opt, i) => (
+                              <Chip 
+                                key={i} 
+                                label={opt} 
+                                size="small"
+                                sx={{ 
+                                  fontSize: isMobile ? '0.65rem' : '0.75rem',
+                                  height: isMobile ? 24 : 28
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        ) : (
+                          item.resposta || (
+                            <span style={{ color: '#999', fontStyle: 'italic' }}>
+                              Não respondido
+                            </span>
+                          )
+                        )}
+                      </Typography>
+                    </Paper>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
 
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: isMobile ? 2 : 3, px: 2 }}>
@@ -523,16 +570,18 @@ function ClienteAnamneseVisualizar() {
           alignItems: 'center',
           minHeight: isMobile ? '200px' : '300px'
         }}>
-          <img 
-            src={assinaturaSrc}
-            alt="Assinatura digital ampliada"
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: isMobile ? '50vh' : '70vh',
-              width: 'auto',
-              borderRadius: '8px'
-            }}
-          />
+          {assinaturaSrc && (
+            <img 
+              src={assinaturaSrc}
+              alt="Assinatura digital ampliada"
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: isMobile ? '50vh' : '70vh',
+                width: 'auto',
+                borderRadius: '8px'
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </Box>
