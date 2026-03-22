@@ -1,4 +1,6 @@
 // src/components/ClienteLayout.js
+// VERSÃO ATUALIZADA COM FOOTER E FIREBASE SERVICE
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
@@ -56,6 +58,7 @@ import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
 import { firebaseService } from '../services/firebase';
+import Footer from './Footer'; // <-- ADICIONADO
 
 // ============================================
 // CONSTANTES
@@ -253,9 +256,6 @@ function ClienteLayout() {
   // FUNÇÕES DE ANAMNESE - CORRIGIDAS
   // ==========================================
 
-  /**
-   * 🔥 FUNÇÃO CORRIGIDA: Verifica formulários pendentes em TODOS os agendamentos
-   */
   const verificarFormulariosPendentes = async () => {
     if (!cliente?.id) return 0;
     
@@ -327,10 +327,6 @@ function ClienteLayout() {
     }
   };
 
-  /**
-   * 🔥 FUNÇÃO CORRIGIDA: Vai para o primeiro formulário pendente
-   * Agora usa a rota CORRETA de agendamento
-   */
   const irParaPrimeiroFormularioPendente = async () => {
     try {
       const uid = firebaseUser?.uid || cliente?.id;
@@ -378,8 +374,6 @@ function ClienteLayout() {
             
             if (respostas.length === 0) {
               console.log(`✅ Redirecionando para formulário do agendamento ${agendamento.id}`);
-              
-              // 🔥 ROTA CORRIGIDA: Agora usa agendamento em vez de atendimento
               navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
               return;
             }
@@ -566,255 +560,166 @@ function ClienteLayout() {
   // ==========================================
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* AppBar Mobile */}
-      {isMobile && (
-        <AppBar
-          position="fixed"
-          color="inherit"
-          elevation={0}
-          sx={{
-            borderBottom: '1px solid rgba(0,0,0,0.08)',
-            backdropFilter: 'blur(20px)',
-            backgroundColor: 'rgba(255,255,255,0.9)',
-          }}
-        >
-          <Toolbar>
-            <IconButton
-              color="inherit"
-              edge="start"
-              onClick={handleDrawerToggle}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0' }}>
-              BeautyPro
-            </Typography>
-            
-            <IconButton color="inherit" onClick={handleNotificacoesClick}>
-              <Badge badgeContent={notificacoesNaoLidas} color="secondary">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-            
-            <Avatar
-              src={cliente?.foto}
-              sx={{ width: 32, height: 32, bgcolor: '#9c27b0', ml: 1 }}
-            >
-              {!cliente?.foto && getInitials(cliente?.nome)}
-            </Avatar>
-          </Toolbar>
-        </AppBar>
-      )}
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box sx={{ display: 'flex', flex: 1 }}>
+        {/* AppBar Mobile */}
+        {isMobile && (
+          <AppBar
+            position="fixed"
+            color="inherit"
+            elevation={0}
+            sx={{
+              borderBottom: '1px solid rgba(0,0,0,0.08)',
+              backdropFilter: 'blur(20px)',
+              backgroundColor: 'rgba(255,255,255,0.9)',
+              zIndex: 1200,
+            }}
+          >
+            <Toolbar>
+              <IconButton
+                color="inherit"
+                edge="start"
+                onClick={handleDrawerToggle}
+              >
+                <MenuIcon />
+              </IconButton>
+              <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0' }}>
+                BeautyPro
+              </Typography>
+              
+              <IconButton color="inherit" onClick={handleNotificacoesClick}>
+                <Badge badgeContent={notificacoesNaoLidas} color="secondary">
+                  <NotificationsIcon />
+                </Badge>
+              </IconButton>
+              
+              <Avatar
+                src={cliente?.foto}
+                sx={{ width: 32, height: 32, bgcolor: '#9c27b0', ml: 1 }}
+              >
+                {!cliente?.foto && getInitials(cliente?.nome)}
+              </Avatar>
+            </Toolbar>
+          </AppBar>
+        )}
 
-      {/* Drawer Desktop */}
-      {!isMobile && (
-        <Drawer
-          variant="permanent"
+        {/* Drawer Desktop */}
+        {!isMobile && (
+          <Drawer
+            variant="permanent"
+            sx={{
+              width: 280,
+              flexShrink: 0,
+              '& .MuiDrawer-paper': {
+                width: 280,
+                boxSizing: 'border-box',
+                borderRight: 'none',
+                boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+              },
+            }}
+          >
+            {drawer}
+          </Drawer>
+        )}
+
+        {/* Drawer Mobile */}
+        <SwipeableDrawer
+          anchor="left"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          onOpen={() => {}}
+          disableBackdropTransition
+          ModalProps={{ keepMounted: true }}
           sx={{
-            width: 280,
-            flexShrink: 0,
             '& .MuiDrawer-paper': {
               width: 280,
-              boxSizing: 'border-box',
-              borderRight: 'none',
-              boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+              backgroundColor: '#ffffff',
             },
           }}
         >
           {drawer}
-        </Drawer>
-      )}
+        </SwipeableDrawer>
 
-      {/* Drawer Mobile */}
-      <SwipeableDrawer
-        anchor="left"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        onOpen={() => {}}
-        disableBackdropTransition
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          '& .MuiDrawer-paper': {
-            width: 280,
-            backgroundColor: '#ffffff',
-          },
-        }}
-      >
-        {drawer}
-      </SwipeableDrawer>
-
-      {/* Conteúdo Principal */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: isMobile ? 2 : 3,
-          pt: isMobile ? '80px' : 3,
-          backgroundColor: '#faf5ff',
-          minHeight: '100vh',
-          position: 'relative',
-        }}
-      >
-        {/* Notificações Desktop */}
-        {!isMobile && (
-          <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
-            <IconButton
-              onClick={handleNotificacoesClick}
-              sx={{
-                bgcolor: 'white',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-                '&:hover': { bgcolor: '#f5f5f5' }
-              }}
-            >
-              <Badge badgeContent={notificacoesNaoLidas} color="secondary">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-          </Box>
-        )}
-
-        {/* Badge de Formulários Pendentes - Agora integrado ao sistema de notificações */}
-        {formulariosPendentes > 0 && (
-          <Box
-            sx={{
-              position: 'fixed',
-              top: isMobile ? 70 : 80,
-              right: 20,
-              zIndex: 999,
-              cursor: 'pointer',
-            }}
-            onClick={irParaPrimeiroFormularioPendente}
-          >
-            <Paper
-              elevation={3}
-              sx={{
-                p: 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                bgcolor: '#fff3e0',
-                borderRadius: 2,
-                border: '1px solid #ff9800',
-                '&:hover': {
-                  bgcolor: '#ffe0b2',
-                },
-              }}
-            >
-              <Badge badgeContent={formulariosPendentes} color="warning">
-                <AssignmentIcon sx={{ color: '#ff9800' }} />
-              </Badge>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                Formulário{formulariosPendentes > 1 ? 's' : ''} pendente{formulariosPendentes > 1 ? 's' : ''}
-              </Typography>
-            </Paper>
-          </Box>
-        )}
-
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+        {/* Conteúdo Principal */}
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            p: isMobile ? 2 : 3,
+            pt: isMobile ? '80px' : 3,
+            backgroundColor: '#faf5ff',
+            minHeight: '100vh',
+            position: 'relative',
+          }}
         >
-          <Outlet />
-        </motion.div>
-      </Box>
-
-      {/* Popover de Notificações */}
-      <Popover
-        open={Boolean(notificacoesAnchor)}
-        anchorEl={notificacoesAnchor}
-        onClose={handleNotificacoesClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        PaperProps={{
-          sx: {
-            width: 360,
-            maxHeight: 480,
-            borderRadius: 2,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-          }
-        }}
-      >
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Notificações
-          </Typography>
-          {notificacoesNaoLidas > 0 && (
-            <Button size="small" onClick={handleMarcarTodasComoLidas}>
-              Marcar todas como lidas
-            </Button>
+          {/* Notificações Desktop */}
+          {!isMobile && (
+            <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
+              <IconButton
+                onClick={handleNotificacoesClick}
+                sx={{
+                  bgcolor: 'white',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                  '&:hover': { bgcolor: '#f5f5f5' }
+                }}
+              >
+                <Badge badgeContent={notificacoesNaoLidas} color="secondary">
+                  <NotificationsIcon />
+                </Badge>
+              </IconButton>
+            </Box>
           )}
+
+          {/* Badge de Formulários Pendentes */}
+          {formulariosPendentes > 0 && (
+            <Box
+              sx={{
+                position: 'fixed',
+                top: isMobile ? 70 : 80,
+                right: 20,
+                zIndex: 999,
+                cursor: 'pointer',
+              }}
+              onClick={irParaPrimeiroFormularioPendente}
+            >
+              <Paper
+                elevation={3}
+                sx={{
+                  p: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  bgcolor: '#fff3e0',
+                  borderRadius: 2,
+                  border: '1px solid #ff9800',
+                  '&:hover': {
+                    bgcolor: '#ffe0b2',
+                  },
+                }}
+              >
+                <Badge badgeContent={formulariosPendentes} color="warning">
+                  <AssignmentIcon sx={{ color: '#ff9800' }} />
+                </Badge>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
+                  Formulário{formulariosPendentes > 1 ? 's' : ''} pendente{formulariosPendentes > 1 ? 's' : ''}
+                </Typography>
+              </Paper>
+            </Box>
+          )}
+
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Outlet />
+          </motion.div>
         </Box>
-        <Divider />
-        
-        {loadingNotificacoes ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body2" color="textSecondary">Carregando...</Typography>
-          </Box>
-        ) : notificacoes.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
-            <Typography variant="body2" color="textSecondary">
-              Nenhuma notificação
-            </Typography>
-          </Box>
-        ) : (
-          <List sx={{ p: 0 }}>
-            {notificacoes.slice(0, 5).map((notificacao) => (
-              <React.Fragment key={notificacao.id}>
-                <ListItem
-                  button
-                  onClick={() => handleNotificacaoClick(notificacao)}
-                  sx={{
-                    bgcolor: notificacao.lida ? 'transparent' : '#f3e5f5',
-                    py: 1.5,
-                  }}
-                >
-                  <ListItemIcon>
-                    {getIconeNotificacao(notificacao.tipo)}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        {notificacao.titulo}
-                      </Typography>
-                    }
-                    secondary={
-                      <>
-                        <Typography variant="body2" color="textSecondary" noWrap>
-                          {notificacao.mensagem}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {formatarData(notificacao.data)}
-                        </Typography>
-                      </>
-                    }
-                  />
-                  {!notificacao.lida && (
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#9c27b0', ml: 1 }} />
-                  )}
-                </ListItem>
-                <Divider />
-              </React.Fragment>
-            ))}
-            {notificacoes.length > 5 && (
-              <Box sx={{ p: 1, textAlign: 'center' }}>
-                <Button size="small" onClick={() => navigate('/cliente/notificacoes')}>
-                  Ver todas ({notificacoes.length})
-                </Button>
-              </Box>
-            )}
-          </List>
-        )}
-      </Popover>
+      </Box>
+      
+      {/* Footer */}
+      <Footer />
     </Box>
   );
 }
