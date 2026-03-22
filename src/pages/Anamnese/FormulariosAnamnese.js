@@ -892,7 +892,7 @@ const InstrucoesImportacao = ({ open, onClose }) => {
               </AccordionSummary>
               <AccordionDetails>
                 <Typography variant="body2">
-                  Os operadores suportados são: == (igual), != (diferente), > (maior), < (menor), >= (maior ou igual), <= (menor ou igual) e contains (contém).
+                  Os operadores suportados são: == (igual), != (diferente), {'>'} (maior), {'<'} (menor), {'>='} (maior ou igual), {'<='} (menor ou igual) e contains (contém).
                 </Typography>
               </AccordionDetails>
             </Accordion>
