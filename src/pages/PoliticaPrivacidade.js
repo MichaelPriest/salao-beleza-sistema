@@ -1,4 +1,6 @@
 // src/pages/PoliticaPrivacidade.js
+// VERSÃO COMPLETA CORRIGIDA
+
 import React from 'react';
 import {
   Box,
@@ -44,6 +46,7 @@ import {
   Phone as PhoneIcon,
   LocationOn as LocationIcon,
   CreditCard as CreditCardIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
