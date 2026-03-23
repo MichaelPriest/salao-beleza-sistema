@@ -1,4 +1,4 @@
-// src/App.js - VERSÃO COMPLETA COM FOOTER
+// src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA
 
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -7,6 +7,75 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
 import { lightTheme, darkTheme } from './theme';
 import { CircularProgress, Box } from '@mui/material';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import 'dayjs/locale/pt-br';
+
+// Configurar dayjs globalmente para horário de Brasília
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.locale('pt-br');
+
+// Configuração fixa do fuso horário de Brasília
+export const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
+
+// Função global para formatar datas no horário de Brasília
+export const formatBrasiliaTime = (date, format = 'DD/MM/YYYY HH:mm:ss') => {
+  if (!date) return '';
+  return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
+};
+
+// Função para formatar apenas a data
+export const formatBrasiliaDate = (date, format = 'DD/MM/YYYY') => {
+  if (!date) return '';
+  return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
+};
+
+// Função para formatar apenas a hora
+export const formatBrasiliaTimeOnly = (date, format = 'HH:mm:ss') => {
+  if (!date) return '';
+  return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
+};
+
+// Função para obter data/hora atual de Brasília
+export const getCurrentBrasiliaTime = () => {
+  return dayjs().tz(BRASILIA_TIMEZONE);
+};
+
+// Função para converter qualquer data para Brasília
+export const toBrasiliaTime = (date) => {
+  return dayjs(date).tz(BRASILIA_TIMEZONE);
+};
+
+// Função para comparar se duas datas são no mesmo dia (horário Brasília)
+export const isSameDayBrasilia = (date1, date2) => {
+  const d1 = dayjs(date1).tz(BRASILIA_TIMEZONE);
+  const d2 = dayjs(date2).tz(BRASILIA_TIMEZONE);
+  return d1.isSame(d2, 'day');
+};
+
+// Hook customizado para usar horário de Brasília
+export const useBrasiliaTime = () => {
+  const [currentTime, setCurrentTime] = useState(dayjs().tz(BRASILIA_TIMEZONE));
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(dayjs().tz(BRASILIA_TIMEZONE));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  return {
+    currentTime,
+    format: (date, formatStr = 'DD/MM/YYYY HH:mm:ss') => formatBrasiliaTime(date, formatStr),
+    formatDate: (date, formatStr = 'DD/MM/YYYY') => formatBrasiliaDate(date, formatStr),
+    formatTime: (date, formatStr = 'HH:mm:ss') => formatBrasiliaTimeOnly(date, formatStr),
+    now: () => dayjs().tz(BRASILIA_TIMEZONE),
+    isSameDay: (date1, date2) => isSameDayBrasilia(date1, date2)
+  };
+};
 
 // Contextos
 import { FeedbackProvider } from './contexts/FeedbackContext';
@@ -25,7 +94,7 @@ import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
-import Footer from './components/Footer'; // <-- ADICIONADO
+import Footer from './components/Footer';
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
