@@ -174,9 +174,6 @@ const getWeekDays = (date) => {
 // COMPONENTE RELATORIO AGENDA
 // ============================================
 
-// src/pages/ModernAgendamentos.js
-// Substitua o componente RelatorioAgenda por esta versão melhorada
-
 const RelatorioAgenda = React.forwardRef(({ 
   eventos, 
   profissional, 
@@ -189,6 +186,22 @@ const RelatorioAgenda = React.forwardRef(({
   usuarioCargo,
   configuracoes
 }, ref) => {
+  
+  // 🔥 FUNÇÃO DE FORMATAÇÃO DE TELEFONE (adicionada dentro do componente)
+  const formatarTelefone = (telefone) => {
+    if (!telefone || telefone === 'Não informado') return telefone;
+    
+    const numeros = telefone.replace(/\D/g, '');
+    
+    if (numeros.length === 11) {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    } else if (numeros.length === 10) {
+      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+    
+    return telefone;
+  };
+
   const formatarData = (data) => {
     if (!data) return '';
     return formatBrasiliaDate(data, 'DD/MM/YYYY');
