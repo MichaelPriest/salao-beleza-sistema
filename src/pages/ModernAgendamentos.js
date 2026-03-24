@@ -84,13 +84,13 @@ import {
   LockOpen as LockOpenIcon,
   EventBusy as EventBusyIcon,
   EventAvailable as EventAvailableIcon,
+  // 🔥 ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format as dateFnsFormat, parseISO, isSameDay as dateFnsIsSameDay, addDays as dateFnsAddDays, addWeeks as dateFnsAddWeeks, addMonths as dateFnsAddMonths, getDay, getDaysInMonth as dateFnsGetDaysInMonth } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -100,18 +100,6 @@ import { notificacoesService } from '../services/notificacoesService';
 import { usuariosService } from '../services/usuariosService';
 import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from 'firebase/firestore';
-
-// ✅ IMPORTAÇÕES CORRETAS DO HORÁRIO DE BRASÍLIA
-import { 
-  formatBrasiliaTime, 
-  formatBrasiliaDate, 
-  formatBrasiliaTimeOnly,
-  getCurrentBrasiliaTime,
-  toBrasiliaTime,
-  isSameDayBrasilia,
-  useBrasiliaTime,
-  BRASILIA_TIMEZONE
-} from '../App';
 
 // Importações para PDF e Excel
 import jsPDF from 'jspdf';
@@ -130,44 +118,40 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Funções auxiliares de data com horário de Brasília
+// Funções auxiliares de data
 const getDaysInMonth = (date) => {
-  return dateFnsGetDaysInMonth(date);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 };
 
 const getFirstDayOfMonth = (date) => {
-  const day = getDay(date);
-  return day === 0 ? 7 : day;
+  return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
 
-// Função formatDate
 const formatDate = (date) => {
-  if (!date) return '';
-  // Se for string, converte para Date
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return date.toISOString().split('T')[0];
 };
 
 const addDays = (date, days) => {
-  return dateFnsAddDays(date, days);
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
 };
 
 const addWeeks = (date, weeks) => {
-  return dateFnsAddWeeks(date, weeks);
+  const result = new Date(date);
+  result.setDate(result.getDate() + weeks * 7);
+  return result;
 };
 
 const addMonths = (date, months) => {
-  return dateFnsAddMonths(date, months);
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
 };
 
 const getWeekDays = (date) => {
   const start = new Date(date);
-  const dayOfWeek = getDay(start);
-  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  start.setDate(start.getDate() + diffToMonday);
+  start.setDate(start.getDate() - start.getDay() + 1);
   const days = [];
   for (let i = 0; i < 7; i++) {
     days.push(addDays(start, i));
@@ -191,27 +175,9 @@ const RelatorioAgenda = React.forwardRef(({
   usuarioCargo,
   configuracoes
 }, ref) => {
-  
-  // Função de formatação de telefone
-  const formatarTelefone = (telefone) => {
-    if (!telefone || telefone === 'Não informado') return telefone;
-    
-    const numeros = telefone.replace(/\D/g, '');
-    
-    if (numeros.length === 11) {
-      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    } else if (numeros.length === 10) {
-      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-    }
-    
-    return telefone;
-  };
-
   const formatarData = (data) => {
     if (!data) return '';
-    // Converte string de data para objeto Date
-    const dateObj = typeof data === 'string' ? parseISO(data + 'T12:00:00') : data;
-    return formatBrasiliaDate(dateObj, 'DD/MM/YYYY');
+    return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
   };
 
   const calcularDuracaoTotal = (servicos) => {
@@ -239,262 +205,69 @@ const RelatorioAgenda = React.forwardRef(({
   const totalCancelados = eventos.filter(e => e.status === 'cancelado').length;
   const totalFinalizados = eventos.filter(e => e.status === 'finalizado').length;
 
-  // Calcular valor total
-  const valorTotal = eventos.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-
   return (
-    <Box ref={ref} sx={{ 
-      p: 4, 
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', 
-      maxWidth: '1200px', 
-      margin: '0 auto',
-      backgroundColor: '#ffffff',
-      borderRadius: '12px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-    }}>
-      {/* Cabeçalho com Logo e Gradiente */}
-      <Box sx={{ 
-        textAlign: 'center', 
-        mb: 4, 
-        pb: 3,
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-        borderRadius: '12px',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <Box sx={{
-          position: 'absolute',
-          top: -50,
-          right: -50,
-          width: 200,
-          height: 200,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
-          pointerEvents: 'none'
-        }} />
-        <Box sx={{
-          position: 'absolute',
-          bottom: -30,
-          left: -30,
-          width: 150,
-          height: 150,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
-          pointerEvents: 'none'
-        }} />
-        
-        <Box sx={{ position: 'relative', zIndex: 1, p: 3 }}>
-          <Typography variant="h3" sx={{ 
-            fontWeight: 800, 
-            mb: 1,
-            fontSize: '2rem',
-            letterSpacing: '-0.5px',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.2)'
-          }}>
-            📋 RELATÓRIO DE AGENDA
-          </Typography>
-          <Typography variant="h5" sx={{ 
-            fontWeight: 500, 
-            mb: 2,
-            fontSize: '1.2rem',
-            opacity: 0.95
-          }}>
-            {profissionalNome}
-          </Typography>
-          <Box sx={{ 
-            display: 'inline-flex', 
-            gap: 3, 
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            mt: 2,
-            pt: 2,
-            borderTop: '1px solid rgba(255,255,255,0.2)'
-          }}>
-            <Box>
-              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
-                Período
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                {formatarData(dataInicio)} - {formatarData(dataFim)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
-                Data de Emissão
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                {formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
+    <Box ref={ref} sx={{ p: 3, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Cabeçalho com Logo */}
+      <Box sx={{ textAlign: 'center', mb: 3, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 0.5, fontSize: '1.8rem' }}>
+          Relatório de Agenda
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 500, color: '#555', fontSize: '1rem' }}>
+          {profissionalNome}
+        </Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5, fontSize: '0.8rem' }}>
+          Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
+        </Typography>
+        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}>
+          Emitido em: {new Date().toLocaleString('pt-BR')}
+        </Typography>
       </Box>
 
-      {/* Cards de Estatísticas */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 700, 
-          mb: 2, 
-          color: '#333',
-          fontSize: '1.1rem',
-          borderLeft: '4px solid #9c27b0',
-          pl: 2
-        }}>
-          📊 Resumo do Período
+      {/* Estatísticas */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
+          Resumo do Período
         </Typography>
-        
-        <Grid container spacing={2}>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalEventos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Total de Eventos
-              </Typography>
+        <Grid container spacing={0.5}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Total</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>{totalEventos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalAgendamentos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Agendamentos
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Agend.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0', fontSize: '0.8rem' }}>{totalAgendamentos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #ff9800 0%, #ff5722 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalAtendimentos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Atendimentos
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Atend.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800', fontSize: '0.8rem' }}>{totalAtendimentos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalConfirmados}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Confirmados
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalPendentes}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Pendentes
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalCancelados}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Cancelados
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Andam.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f44336', fontSize: '0.8rem' }}>{totalAndamento}</Typography>
             </Paper>
           </Grid>
         </Grid>
 
-        {/* Resumo Financeiro */}
-        <Paper sx={{ 
-          mt: 3, 
-          p: 2, 
-          bgcolor: '#f5f5f5',
-          borderRadius: '12px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2
-        }}>
-          <Box>
-            <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-              Valor Total dos Serviços
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '1.3rem' }}>
-              R$ {valorTotal.toFixed(2)}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 3 }}>
-            <Box>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-                Média por Atendimento
-              </Typography>
-              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                R$ {totalAtendimentos > 0 ? (valorTotal / totalAtendimentos).toFixed(2) : '0,00'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-                Média por Agendamento
-              </Typography>
-              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                R$ {totalAgendamentos > 0 ? (valorTotal / totalAgendamentos).toFixed(2) : '0,00'}
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
+        {/* Estatísticas detalhadas */}
+        <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Chip label={`✅ ${totalConfirmados} confirmados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e8f5e9' }} />
+          <Chip label={`⏳ ${totalPendentes} pendentes`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#fff3e0' }} />
+          <Chip label={`❌ ${totalCancelados} cancelados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#ffebee' }} />
+          <Chip label={`✅ ${totalFinalizados} finalizados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e3f2fd' }} />
+        </Box>
       </Box>
 
-      {/* Agenda Detalhada */}
+      {/* Eventos por Dia */}
       <Box>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 700, 
-          mb: 2, 
-          color: '#333',
-          fontSize: '1.1rem',
-          borderLeft: '4px solid #9c27b0',
-          pl: 2
-        }}>
-          📅 Agenda Detalhada
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
+          Agenda Detalhada
         </Typography>
         
         {/* Agrupar eventos por data */}
@@ -510,189 +283,52 @@ const RelatorioAgenda = React.forwardRef(({
             (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '')
           );
 
-          // Converte string de data para objeto Date
-          const dateObj = parseISO(data + 'T12:00:00');
-          const dataObj = toBrasiliaTime(dateObj);
-          const diaSemana = dataObj.format('dddd');
-          const diaNumero = dataObj.format('DD');
-          const mesAno = dataObj.format('MMMM [de] YYYY');
-
           return (
-            <Card key={data} variant="outlined" sx={{ 
-              mb: 3, 
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-              border: '1px solid #e0e0e0'
-            }}>
-              {/* Cabeçalho do Dia */}
-              <Box sx={{ 
-                bgcolor: '#faf5ff', 
-                p: 2, 
-                borderBottom: '2px solid #9c27b0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                flexWrap: 'wrap'
-              }}>
-                <Box sx={{ 
-                  bgcolor: '#9c27b0', 
-                  color: 'white', 
-                  borderRadius: '8px',
-                  width: 50,
-                  height: 50,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Typography variant="h5" sx={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
-                    {diaNumero}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0', textTransform: 'capitalize' }}>
-                    {diaSemana}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {mesAno}
-                  </Typography>
-                </Box>
-                <Box sx={{ ml: 'auto' }}>
-                  <Chip 
-                    label={`${eventosOrdenados.length} evento(s)`}
-                    size="small"
-                    sx={{ bgcolor: '#9c27b0', color: 'white', fontWeight: 500 }}
-                  />
-                </Box>
-              </Box>
-
-              <CardContent sx={{ p: 0 }}>
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 0 }}>
+            <Card key={data} variant="outlined" sx={{ mb: 1.5 }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0', fontSize: '0.8rem' }}>
+                  {formatarData(data)}
+                </Typography>
+                
+                <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Horário</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Cliente</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Serviços</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Profissional</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Status</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
-                          <strong>Valor</strong>
-                        </TableCell>
+                      <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Hor.</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Cliente</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Serviços</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Prof.</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Tipo</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Status</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {eventosOrdenados.map((evento, idx) => {
+                      {eventosOrdenados.map(evento => {
                         const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
-                        const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
+                        const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
                             id: evento.servicoId, 
-                            nome: evento.servicoNome || 'Serviço',
-                            preco: evento.preco || 0
+                            nome: evento.servicoNome || 'Serviço'
                           }] : []);
                         
-                        const valorEvento = evento.valorTotal || servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
-                        
-                        const getStatusBadge = (status) => {
-                          const statusConfig = {
-                            confirmado: { color: '#4caf50', label: '✓ Confirmado', bg: '#e8f5e9' },
-                            pendente: { color: '#ff9800', label: '⏳ Pendente', bg: '#fff3e0' },
-                            cancelado: { color: '#f44336', label: '✗ Cancelado', bg: '#ffebee' },
-                            finalizado: { color: '#2196f3', label: '✓ Finalizado', bg: '#e3f2fd' },
-                            em_andamento: { color: '#9c27b0', label: '▶ Em Andamento', bg: '#f3e5f5' }
-                          };
-                          const config = statusConfig[status] || { color: '#9e9e9e', label: status, bg: '#f5f5f5' };
-                          return (
-                            <Box sx={{ 
-                              display: 'inline-block',
-                              px: 1.5,
-                              py: 0.5,
-                              borderRadius: '20px',
-                              bgcolor: config.bg,
-                              color: config.color,
-                              fontSize: '0.7rem',
-                              fontWeight: 600
-                            }}>
-                              {config.label}
-                            </Box>
-                          );
-                        };
-                        
                         return (
-                          <TableRow 
-                            key={evento.id}
-                            sx={{ 
-                              '&:hover': { bgcolor: '#faf5ff' },
-                              borderBottom: idx === eventosOrdenados.length - 1 ? 'none' : '1px solid #f0f0f0'
-                            }}
-                          >
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <strong>{evento.horario || evento.horaInicio}</strong>
+                          <TableRow key={evento.id}>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{evento.horario || evento.horaInicio}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{cliente?.nome || '—'}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {servicos.map(s => s.nome).join(', ')}
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-                                  {cliente?.nome || '—'}
-                                </Typography>
-                                {cliente?.telefone && (
-                                  <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.65rem' }}>
-                                    {formatarTelefone(cliente.telefone)}
-                                  </Typography>
-                                )}
-                              </Box>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{profissional?.nome || '—'}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {evento.tipo === 'agendamento' ? 'Agend.' : 'Atend.'}
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <Box>
-                                {servicos.map((s, i) => (
-                                  <Typography key={i} variant="caption" sx={{ display: 'block', fontSize: '0.7rem' }}>
-                                    • {s.nome}
-                                  </Typography>
-                                ))}
-                              </Box>
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              {profissionalItem?.nome || '—'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              {getStatusBadge(evento.status)}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: '0.75rem' }}>
-                                R$ {valorEvento.toFixed(2)}
-                              </Typography>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {evento.status}
                             </TableCell>
                           </TableRow>
                         );
                       })}
-                      
-                      {/* Total do Dia */}
-                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                        <TableCell colSpan={5} sx={{ py: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.75rem' }}>
-                            Total do Dia
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'right', py: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '0.8rem' }}>
-                            R$ {eventosOrdenados.reduce((acc, e) => {
-                              const servicosValor = (e.servicos || []).reduce((s, serv) => s + (serv.preco || 0), 0);
-                              return acc + (e.valorTotal || servicosValor);
-                            }, 0).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -700,32 +336,12 @@ const RelatorioAgenda = React.forwardRef(({
             </Card>
           );
         })}
-        
-        {eventos.length === 0 && (
-          <Paper sx={{ p: 4, textAlign: 'center', borderRadius: '12px', bgcolor: '#faf5ff' }}>
-            <Typography variant="body1" color="textSecondary">
-              Nenhum evento encontrado para o período selecionado.
-            </Typography>
-          </Paper>
-        )}
       </Box>
 
       {/* Rodapé */}
-      <Box sx={{ 
-        mt: 4, 
-        pt: 3, 
-        textAlign: 'center', 
-        borderTop: '2px solid #e0e0e0',
-        color: 'text.secondary'
-      }}>
-        <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block' }}>
-          Relatório gerado automaticamente pelo Sistema Salão Beleza
-        </Typography>
-        <Typography variant="caption" sx={{ fontSize: '0.6rem', display: 'block', mt: 0.5 }}>
-          Documento não fiscal • Este relatório contém informações confidenciais
-        </Typography>
-        <Typography variant="caption" sx={{ fontSize: '0.55rem', display: 'block', mt: 1, color: '#9c27b0' }}>
-          © {new Date().getFullYear()} Salão Beleza - Todos os direitos reservados
+      <Box sx={{ mt: 2, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 1 }}>
+        <Typography variant="caption" sx={{ fontSize: '0.5rem' }}>
+          Relatório gerado automaticamente • Documento não fiscal
         </Typography>
       </Box>
     </Box>
@@ -739,17 +355,14 @@ const RelatorioAgenda = React.forwardRef(({
 function ModernAgendamentos() {
   const navigate = useNavigate();
   
-  // Hook do horário de Brasília
-  const { currentTime, format: formatBrasilia } = useBrasiliaTime();
-  
   // Estados de usuário e permissões
   const [usuario, setUsuario] = useState(null);
   const [cargo, setCargo] = useState('');
   
   // Estados de visualização
   const [viewMode, setViewMode] = useState('day');
-  const [currentDate, setCurrentDate] = useState(getCurrentBrasiliaTime().toDate());
-  const [selectedDate, setSelectedDate] = useState(formatDate(getCurrentBrasiliaTime().toDate()));
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [selectedProfessional, setSelectedProfessional] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   
@@ -767,7 +380,7 @@ function ModernAgendamentos() {
   const [ausencias, setAusencias] = useState([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   
-  // Estados para anamnese
+  // 🔥 ESTADOS PARA ANAMNESE
   const [formulariosPendentes, setFormulariosPendentes] = useState({});
   const [verificandoFormularios, setVerificandoFormularios] = useState(false);
   
@@ -778,8 +391,8 @@ function ModernAgendamentos() {
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
   const [periodoRelatorio, setPeriodoRelatorio] = useState({
     tipo: 'dia',
-    dataInicio: formatDate(getCurrentBrasiliaTime().toDate()),
-    dataFim: formatDate(getCurrentBrasiliaTime().toDate())
+    dataInicio: formatDate(new Date()),
+    dataFim: formatDate(new Date())
   });
   const relatorioRef = useRef(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -916,7 +529,8 @@ function ModernAgendamentos() {
 
   const formatarDataBrasil = (data) => {
     if (!data) return '';
-    return formatBrasiliaDate(data, 'DD/MM/YYYY');
+    const d = new Date(data);
+    return d.toLocaleDateString('pt-BR');
   };
 
   const getStatusColor = (status) => {
@@ -962,14 +576,18 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      const dateObj = parseISO(selectedDate + 'T12:00:00');
-      return formatBrasiliaDate(dateObj, 'dddd, D [de] MMMM [de] YYYY');
+      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     } else if (viewMode === 'week') {
       const start = getWeekDays(currentDate)[0];
       const end = getWeekDays(currentDate)[6];
-      return `${formatBrasiliaDate(start, 'DD/MM')} - ${formatBrasiliaDate(end, 'DD/MM/YYYY')}`;
+      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
     } else {
-      return formatBrasiliaDate(currentDate, 'MMMM [de] YYYY');
+      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
 
@@ -980,9 +598,8 @@ function ModernAgendamentos() {
   const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return false;
 
-    const dateObj = parseISO(data + 'T12:00:00');
-    const dataObj = toBrasiliaTime(dateObj);
-    const diaSemana = dataObj.day(); // day() retorna 0-6 (domingo a sábado)
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
 
     // Verificar disponibilidade do profissional para este dia da semana
     const disponibilidade = disponibilidades.find(
@@ -1041,9 +658,8 @@ function ModernAgendamentos() {
   const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
 
-    const dateObj = parseISO(data + 'T12:00:00');
-    const dataObj = toBrasiliaTime(dateObj);
-    const diaSemana = dataObj.day();
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
 
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
@@ -1123,13 +739,14 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES PARA ANAMNESE
+  // 🔥 FUNÇÕES PARA ANAMNESE
   // ============================================
 
   const verificarFormulariosPendentes = async (agendamento) => {
     if (!agendamento || !agendamento.servicoId) return false;
     
     try {
+      // Buscar formulários ativos associados ao serviço
       const formularios = await firebaseService.query('formularios_anamnese', [
         { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
         { field: 'ativo', operator: '==', value: true }
@@ -1137,6 +754,7 @@ function ModernAgendamentos() {
 
       if (formularios.length === 0) return false;
 
+      // Verificar se já existe resposta para este agendamento
       const respostas = await firebaseService.query('respostas_anamnese', [
         { field: 'agendamentoId', operator: '==', value: agendamento.id }
       ]);
@@ -1380,52 +998,41 @@ function ModernAgendamentos() {
   // ============================================
   // FUNÇÕES DE NAVEGAÇÃO
   // ============================================
-  
+
   const handlePrevious = () => {
     if (viewMode === 'day') {
-      // Converte a string selecionada para objeto Date
-      const currentDateObj = new Date(selectedDate);
-      const newDate = addDays(currentDateObj, -1);
-      const newDateStr = formatDate(newDate);
-      setSelectedDate(newDateStr);
+      const newDate = addDays(new Date(selectedDate), -1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, -1);
       setCurrentDate(newDate);
-      // Atualiza selectedDate para o primeiro dia da semana
-      const firstDayOfWeek = getWeekDays(newDate)[0];
-      setSelectedDate(formatDate(firstDayOfWeek));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, -1);
       setCurrentDate(newDate);
     }
   };
-  
+
   const handleNext = () => {
     if (viewMode === 'day') {
-      // Converte a string selecionada para objeto Date
-      const currentDateObj = new Date(selectedDate);
-      const newDate = addDays(currentDateObj, 1);
-      const newDateStr = formatDate(newDate);
-      setSelectedDate(newDateStr);
+      const newDate = addDays(new Date(selectedDate), 1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, 1);
       setCurrentDate(newDate);
-      // Atualiza selectedDate para o primeiro dia da semana
-      const firstDayOfWeek = getWeekDays(newDate)[0];
-      setSelectedDate(formatDate(firstDayOfWeek));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, 1);
       setCurrentDate(newDate);
     }
   };
-  
+
   const handleToday = () => {
-    const today = getCurrentBrasiliaTime().toDate();
+    const today = new Date();
     setCurrentDate(today);
-    const todayStr = formatDate(today);
-    setSelectedDate(todayStr);
+    setSelectedDate(formatDate(today));
   };
 
   const handleDayClick = (date) => {
@@ -1594,7 +1201,7 @@ function ModernAgendamentos() {
         servicoId: primeiroServico.id,
         servicos: servicosLista,
         data: agendamento.data,
-        horaInicio: formatBrasiliaTimeOnly(new Date(), 'HH:mm'),
+        horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
         observacoes: agendamento.observacoes || '',
@@ -1733,9 +1340,7 @@ function ModernAgendamentos() {
         origem: 'sistema',
         createdBy: usuario?.id || usuario?.uid || 'sistema',
         createdByName: usuario?.nome || 'Sistema',
-        createdByCargo: usuario?.cargo || 'sistema',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        createdByCargo: usuario?.cargo || 'sistema'
       };
 
       let agendamentoCriado;
@@ -1824,621 +1429,113 @@ function ModernAgendamentos() {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
       
-      // Abre uma nova janela para impressão
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
         return;
       }
       
-      // Prepara os dados para impressão
-      let eventosFiltrados = filteredEvents;
-      if (periodoRelatorio.tipo === 'dia') {
-        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
-      } else {
-        eventosFiltrados = eventosFiltrados.filter(e => 
-          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
-        );
+      const content = relatorioRef.current;
+      if (!content) {
+        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
+        return;
       }
-  
-      eventosFiltrados.sort((a, b) => {
-        if (a.data !== b.data) return a.data.localeCompare(b.data);
-        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
-      });
-  
-      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
-        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       
-      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
-      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
-  
-      // Calcular estatísticas
-      const totalEventos = eventosFiltrados.length;
-      const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
-      const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
-      const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
-      const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
-      const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
-      const totalFinalizados = eventosFiltrados.filter(e => e.status === 'finalizado').length;
-      const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-  
-      // Agrupar eventos por data
-      const eventosPorData = {};
-      eventosFiltrados.forEach(evento => {
-        if (!eventosPorData[evento.data]) {
-          eventosPorData[evento.data] = [];
+      const contentClone = content.cloneNode(true);
+      
+      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+      let stylesHTML = '';
+      styles.forEach(style => {
+        if (style.tagName === 'STYLE') {
+          stylesHTML += style.outerHTML;
+        } else if (style.tagName === 'LINK') {
+          stylesHTML += style.outerHTML;
         }
-        eventosPorData[evento.data].push(evento);
       });
-  
-      // Gerar HTML da tabela de eventos
-      const gerarTabelaEventos = () => {
-        let html = '';
-        
-        Object.keys(eventosPorData).sort().forEach(data => {
-          const eventosDoDia = eventosPorData[data];
-          const dateObj = parseISO(data + 'T12:00:00');
-          const dataObj = toBrasiliaTime(dateObj);
-          const diaSemana = dataObj.format('dddd');
-          const diaNumero = dataObj.format('DD');
-          const mesAno = dataObj.format('MMMM [de] YYYY');
-          
-          html += `
-            <div class="day-card">
-              <div class="day-header">
-                <div class="day-number">${diaNumero}</div>
-                <div class="day-info">
-                  <div class="day-name">${diaSemana}</div>
-                  <div class="day-date">${mesAno}</div>
-                </div>
-                <div class="day-count">${eventosDoDia.length} evento(s)</div>
-              </div>
-              <table class="events-table">
-                <thead>
-                  <tr>
-                    <th>Horário</th>
-                    <th>Cliente</th>
-                    <th>Telefone</th>
-                    <th>Serviços</th>
-                    <th>Profissional</th>
-                    <th>Status</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-          `;
-          
-          eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
-          
-          eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
-            const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
-            const servicos = evento.servicos || 
-              (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
-            const valorEvento = evento.valorTotal || 0;
-            
-            let statusClass = '';
-            let statusLabel = '';
-            switch(evento.status) {
-              case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
-              case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
-              case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
-              case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
-              case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
-              default: statusClass = 'status-default'; statusLabel = evento.status;
-            }
-            
-            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
-            
-            html += `
-              <tr>
-                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
-                <td><strong>${cliente?.nome || '—'}</strong></td>
-                <td class="phone-cell">${telefone}</td>
-                <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
-                <td>${profissionalItem?.nome || '—'}</td>
-                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
-              </tr>
-            `;
-          });
-          
-          // Total do dia
-          const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-          html += `
-                </tbody>
-                <tfoot>
-                  <tr class="total-row">
-                    <td colspan="6"><strong>Total do Dia</strong></td>
-                    <td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          `;
-        });
-        
-        return html;
-      };
-  
-      // Criar HTML completo para impressão
+      
       const printHTML = `
         <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Relatório de Agenda - ${profissionalNome}</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
-            body {
-              font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-              background: #f5f5f5;
-              padding: 30px;
-              font-size: 12px;
-              line-height: 1.5;
-              color: #333;
-            }
-            
-            /* Container principal */
-            .report-container {
-              max-width: 1200px;
-              margin: 0 auto;
-              background: white;
-              border-radius: 16px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-              overflow: hidden;
-            }
-            
-            /* Cabeçalho */
-            .header {
-              background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%);
-              color: white;
-              padding: 30px;
-              text-align: center;
-              position: relative;
-              overflow: hidden;
-            }
-            
-            .header::before {
-              content: '';
-              position: absolute;
-              top: -50px;
-              right: -50px;
-              width: 150px;
-              height: 150px;
-              background: rgba(255,255,255,0.1);
-              border-radius: 50%;
-            }
-            
-            .header::after {
-              content: '';
-              position: absolute;
-              bottom: -30px;
-              left: -30px;
-              width: 120px;
-              height: 120px;
-              background: rgba(255,255,255,0.1);
-              border-radius: 50%;
-            }
-            
-            .header h1 {
-              font-size: 28px;
-              font-weight: 800;
-              margin-bottom: 8px;
-              letter-spacing: -0.5px;
-              position: relative;
-              z-index: 1;
-            }
-            
-            .header h2 {
-              font-size: 18px;
-              font-weight: 500;
-              margin-bottom: 20px;
-              opacity: 0.95;
-              position: relative;
-              z-index: 1;
-            }
-            
-            .header-info {
-              display: flex;
-              justify-content: center;
-              gap: 30px;
-              flex-wrap: wrap;
-              margin-top: 20px;
-              padding-top: 20px;
-              border-top: 1px solid rgba(255,255,255,0.2);
-              position: relative;
-              z-index: 1;
-            }
-            
-            .header-info-item {
-              text-align: center;
-            }
-            
-            .header-info-label {
-              font-size: 10px;
-              opacity: 0.8;
-              display: block;
-              margin-bottom: 4px;
-            }
-            
-            .header-info-value {
-              font-size: 13px;
-              font-weight: 600;
-            }
-            
-            /* Cards de estatísticas */
-            .stats-section {
-              padding: 25px 30px;
-              border-bottom: 1px solid #e0e0e0;
-            }
-            
-            .stats-title {
-              font-size: 16px;
-              font-weight: 700;
-              color: #333;
-              margin-bottom: 15px;
-              padding-left: 12px;
-              border-left: 4px solid #9c27b0;
-            }
-            
-            .stats-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-              gap: 15px;
-              margin-bottom: 20px;
-            }
-            
-            .stat-card {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              padding: 15px;
-              border-radius: 12px;
-              text-align: center;
-              color: white;
-            }
-            
-            .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
-            .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
-            .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
-            .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
-            .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
-            
-            .stat-number {
-              font-size: 28px;
-              font-weight: 800;
-              margin-bottom: 5px;
-            }
-            
-            .stat-label {
-              font-size: 11px;
-              opacity: 0.9;
-            }
-            
-            .financial-summary {
-              background: #f5f5f5;
-              padding: 15px 20px;
-              border-radius: 12px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              flex-wrap: wrap;
-              gap: 15px;
-            }
-            
-            .total-value {
-              font-size: 24px;
-              font-weight: 800;
-              color: #9c27b0;
-            }
-            
-            .average-value {
-              font-size: 14px;
-              font-weight: 600;
-              color: #666;
-            }
-            
-            /* Cards de dias */
-            .day-card {
-              margin-bottom: 25px;
-              border: 1px solid #e0e0e0;
-              border-radius: 12px;
-              overflow: hidden;
-            }
-            
-            .day-header {
-              background: #faf5ff;
-              padding: 15px 20px;
-              display: flex;
-              align-items: center;
-              gap: 15px;
-              border-bottom: 2px solid #9c27b0;
-              flex-wrap: wrap;
-            }
-            
-            .day-number {
-              background: #9c27b0;
-              color: white;
-              width: 50px;
-              height: 50px;
-              border-radius: 10px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 24px;
-              font-weight: 800;
-            }
-            
-            .day-info {
-              flex: 1;
-            }
-            
-            .day-name {
-              font-size: 16px;
-              font-weight: 700;
-              color: #9c27b0;
-              text-transform: capitalize;
-            }
-            
-            .day-date {
-              font-size: 11px;
-              color: #666;
-            }
-            
-            .day-count {
-              background: #9c27b0;
-              color: white;
-              padding: 5px 12px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: 500;
-            }
-            
-            /* Tabelas */
-            .events-table {
-              width: 100%;
-              border-collapse: collapse;
-              font-size: 11px;
-            }
-            
-            .events-table th {
-              background: #f8f9fa;
-              padding: 12px 10px;
-              text-align: left;
-              font-weight: 700;
-              color: #555;
-              border-bottom: 1px solid #e0e0e0;
-            }
-            
-            .events-table td {
-              padding: 10px;
-              border-bottom: 1px solid #f0f0f0;
-            }
-            
-            .events-table tr:hover {
-              background: #faf5ff;
-            }
-            
-            .time-cell {
-              font-weight: 600;
-              color: #9c27b0;
-              width: 70px;
-            }
-            
-            .phone-cell {
-              width: 100px;
-            }
-            
-            .services-cell {
-              min-width: 150px;
-            }
-            
-            .value-cell {
-              text-align: right;
-              font-weight: 600;
-              color: #9c27b0;
-              width: 80px;
-            }
-            
-            .status-badge {
-              display: inline-block;
-              padding: 4px 10px;
-              border-radius: 20px;
-              font-size: 10px;
-              font-weight: 600;
-            }
-            
-            .status-confirmed { background: #e8f5e9; color: #4caf50; }
-            .status-pending { background: #fff3e0; color: #ff9800; }
-            .status-cancelled { background: #ffebee; color: #f44336; }
-            .status-finished { background: #e3f2fd; color: #2196f3; }
-            .status-progress { background: #f3e5f5; color: #9c27b0; }
-            .status-default { background: #f5f5f5; color: #9e9e9e; }
-            
-            .total-row {
-              background: #f5f5f5;
-              font-weight: 700;
-            }
-            
-            .total-row td {
-              border-top: 2px solid #e0e0e0;
-              padding: 12px 10px;
-            }
-            
-            /* Rodapé */
-            .footer {
-              background: #faf5ff;
-              padding: 20px;
-              text-align: center;
-              border-top: 1px solid #e0e0e0;
-              margin-top: 20px;
-            }
-            
-            .footer p {
-              font-size: 10px;
-              color: #666;
-              margin: 5px 0;
-            }
-            
-            .footer-copyright {
-              color: #9c27b0;
-              font-weight: 500;
-            }
-            
-            /* Configurações de impressão */
-            @media print {
-              body {
-                background: white;
-                padding: 0;
+        <html>
+          <head>
+            <title>Relatório de Agenda</title>
+            ${stylesHTML}
+            <style>
+              @page {
+                size: A4;
+                margin: 1.5cm;
+              }
+              body { 
+                font-family: 'Arial', sans-serif; 
                 margin: 0;
+                padding: 15px;
+                background: white;
+                font-size: 11px;
               }
-              
-              .report-container {
-                box-shadow: none;
-                border-radius: 0;
+              @media print {
+                body { 
+                  margin: 0; 
+                  padding: 0;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                .MuiPaper-root {
+                  box-shadow: none !important;
+                  border: 1px solid #ddd !important;
+                }
+                table {
+                  page-break-inside: avoid;
+                  border-collapse: collapse;
+                  width: 100%;
+                }
+                tr {
+                  page-break-inside: avoid;
+                  page-break-after: auto;
+                }
+                thead {
+                  display: table-header-group;
+                }
+                tfoot {
+                  display: table-footer-group;
+                }
+                .MuiChip-root {
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
               }
-              
-              .day-card {
-                break-inside: avoid;
-                page-break-inside: avoid;
+              .stats-grid {
+                display: flex;
+                gap: 5px;
+                flex-wrap: wrap;
+                justify-content: center;
+                margin-bottom: 15px;
               }
-              
-              .events-table {
-                break-inside: avoid;
+              .stat-item {
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 10px;
+                font-weight: 600;
               }
-              
-              .events-table tr {
-                break-inside: avoid;
-                page-break-inside: avoid;
-              }
-              
-              .events-table thead {
-                display: table-header-group;
-              }
-              
-              .events-table tfoot {
-                display: table-footer-group;
-              }
-              
-              .status-badge {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-              
-              .stat-card {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="report-container">
-            <!-- Cabeçalho -->
-            <div class="header">
-              <h1>📋 RELATÓRIO DE AGENDA</h1>
-              <h2>${profissionalNome}</h2>
-              <div class="header-info">
-                <div class="header-info-item">
-                  <span class="header-info-label">Período</span>
-                  <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
-                </div>
-                <div class="header-info-item">
-                  <span class="header-info-label">Data de Emissão</span>
-                  <span class="header-info-value">${formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}</span>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Estatísticas -->
-            <div class="stats-section">
-              <div class="stats-title">📊 Resumo do Período</div>
-              <div class="stats-grid">
-                <div class="stat-card">
-                  <div class="stat-number">${totalEventos}</div>
-                  <div class="stat-label">Total de Eventos</div>
-                </div>
-                <div class="stat-card agendamentos">
-                  <div class="stat-number">${totalAgendamentos}</div>
-                  <div class="stat-label">Agendamentos</div>
-                </div>
-                <div class="stat-card atendimentos">
-                  <div class="stat-number">${totalAtendimentos}</div>
-                  <div class="stat-label">Atendimentos</div>
-                </div>
-                <div class="stat-card confirmados">
-                  <div class="stat-number">${totalConfirmados}</div>
-                  <div class="stat-label">Confirmados</div>
-                </div>
-                <div class="stat-card pendentes">
-                  <div class="stat-number">${totalPendentes}</div>
-                  <div class="stat-label">Pendentes</div>
-                </div>
-                <div class="stat-card cancelados">
-                  <div class="stat-number">${totalCancelados}</div>
-                  <div class="stat-label">Cancelados</div>
-                </div>
-              </div>
-              
-              <div class="financial-summary">
-                <div>
-                  <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
-                  <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
-                </div>
-                <div style="display: flex; gap: 30px;">
-                  <div>
-                    <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
-                    <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
-                    <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Agenda Detalhada -->
-            <div style="padding: 0 30px 30px 30px;">
-              <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
-              ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
-            </div>
-            
-            <!-- Rodapé -->
-            <div class="footer">
-              <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
-              <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
-              <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
-            </div>
-          </div>
-        </body>
+            </style>
+          </head>
+          <body>
+            ${contentClone.outerHTML}
+          </body>
         </html>
       `;
       
-      // Escreve o conteúdo na nova janela
       printWindow.document.write(printHTML);
       printWindow.document.close();
       
-      // Aguarda o carregamento e chama o diálogo de impressão
       setTimeout(() => {
         printWindow.print();
         mostrarSnackbar('Impressão concluída!', 'success');
         
-        // Registra no log de auditoria
         auditoriaService.registrar('imprimir_relatorio_agenda', {
           entidade: 'agendamentos',
           detalhes: 'Impressão de relatório de agenda',
           dados: {
             periodo: periodoRelatorio.tipo,
-            profissional: selectedProfessional,
-            totalEventos: eventosFiltrados.length
+            profissional: selectedProfessional
           }
         });
       }, 500);
@@ -2487,13 +1584,12 @@ function ModernAgendamentos() {
       
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
-      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
-      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
       doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 28, { align: 'center' });
       
-      doc.text(`Emitido em: ${formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}`, pageWidth / 2, 34, { align: 'center' });
+      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 34, { align: 'center' });
 
       let yPos = 40;
 
@@ -2549,8 +1645,7 @@ function ModernAgendamentos() {
 
         doc.setFontSize(10);
         doc.setTextColor(156, 39, 176);
-        const dateObj = parseISO(data + 'T12:00:00');
-        doc.text(formatBrasiliaDate(dateObj, 'DD/MM/YYYY'), 14, yPos);
+        doc.text(new Date(data + 'T12:00:00').toLocaleDateString('pt-BR'), 14, yPos);
         yPos += 4;
 
         const eventosDoDia = eventosPorData[data];
@@ -2638,10 +1733,9 @@ function ModernAgendamentos() {
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
-      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
 
       const infoData = [
         ['RELATÓRIO DE AGENDA'],
@@ -2649,7 +1743,7 @@ function ModernAgendamentos() {
         ['Informações do Relatório'],
         ['Profissional', profissionalNome],
         ['Período', `${dataInicioFormat} - ${dataFimFormat}`],
-        ['Data de Emissão', formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')],
+        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
         ['Total de Eventos', eventosFiltrados.length],
       ];
 
@@ -2681,10 +1775,9 @@ function ModernAgendamentos() {
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
-          const dateObj = parseISO(evento.data + 'T12:00:00');
           
           return [
-            formatBrasiliaDate(dateObj, 'DD/MM/YYYY'),
+            new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR'),
             evento.horario || evento.horaInicio || '--:--',
             cliente?.nome || '—',
             cliente?.telefone || '—',
@@ -2766,6 +1859,7 @@ function ModernAgendamentos() {
     carregarDisponibilidade();
   }, [updateTrigger]);
 
+  // 🔥 Verificar formulários pendentes quando agendamentos mudar
   useEffect(() => {
     if (agendamentos && agendamentos.length > 0) {
       verificarTodosFormularios();
@@ -3182,6 +2276,7 @@ function ModernAgendamentos() {
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
                                 
+                                // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                                 const temFormularioPendente = formulariosPendentes[event.id];
 
                                 if (!cliente) return null;
@@ -3195,7 +2290,7 @@ function ModernAgendamentos() {
                                     >
                                       <Card variant="outlined" sx={{ 
                                         p: 2,
-                                        position: 'relative',
+                                        position: 'relative', // Para o badge
                                         borderLeft: '4px solid',
                                         borderLeftColor: 
                                           event.tipo === 'atendimento' ? '#ff9800' :
@@ -3203,6 +2298,7 @@ function ModernAgendamentos() {
                                           event.status === 'pendente' ? '#ff9800' :
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
+                                        {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                                         {temFormularioPendente && (
                                           <Tooltip title="Formulário de anamnese pendente">
                                             <Badge
@@ -3285,6 +2381,7 @@ function ModernAgendamentos() {
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                              {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                                               {temFormularioPendente && (
                                                 <Tooltip title="Preencher formulário">
                                                   <IconButton
@@ -3435,7 +2532,7 @@ function ModernAgendamentos() {
                         {day.dayName}
                       </Typography>
                       <Typography variant="h6" sx={{ mb: 2 }}>
-                        {formatBrasiliaDate(parseISO(day.date + 'T12:00:00'), 'DD')}
+                        {new Date(day.date + 'T12:00:00').getDate()}
                       </Typography>
                       
                       {day.events.length > 0 ? (
@@ -3443,6 +2540,7 @@ function ModernAgendamentos() {
                           {day.events.slice(0, 3).map(event => {
                             const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
+                            // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                             const temFormularioPendente = formulariosPendentes[event.id];
                             
                             return (
@@ -3504,7 +2602,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {formatBrasiliaDate(currentDate, 'MMMM [de] YYYY')}
+              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </Typography>
 
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -3575,6 +2673,7 @@ function ModernAgendamentos() {
                             {day.events.slice(0, 2).map(event => {
                               const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
+                              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                               const temFormularioPendente = formulariosPendentes[event.id];
                               
                               return (
@@ -3622,7 +2721,12 @@ function ModernAgendamentos() {
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedDayDetails?.date && 
-            formatBrasiliaDate(parseISO(selectedDayDetails.date + 'T12:00:00'), 'dddd, D [de] MMMM [de] YYYY')
+            new Date(selectedDayDetails.date + 'T12:00:00').toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
           }
         </DialogTitle>
         <DialogContent>
@@ -3631,12 +2735,14 @@ function ModernAgendamentos() {
               const cliente = getClienteData(event.clienteId);
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
+              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
               const temFormularioPendente = formulariosPendentes[event.id];
 
               if (!cliente) return null;
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
+                  {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                   {temFormularioPendente && (
                     <Tooltip title="Formulário de anamnese pendente">
                       <Badge
@@ -3723,6 +2829,7 @@ function ModernAgendamentos() {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                    {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                     {temFormularioPendente && (
                       <Button
                         size="small"
