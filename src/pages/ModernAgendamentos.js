@@ -119,12 +119,18 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+// Funções auxiliares de data
 const getFirstDayOfMonth = (date) => {
   return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
 
 const formatDate = (date) => {
   return date.toISOString().split('T')[0];
+};
+
+// ✅ ADICIONE ESTA FUNÇÃO AQUI
+const formatDateTime = (date) => {
+  return format(date, 'dd/MM/yyyy HH:mm:ss');
 };
 
 const getWeekDays = (date) => {
@@ -1760,11 +1766,6 @@ const handleExportPDF = async () => {
       });
       
       return html;
-    };
-
-    // Função para formatar data/hora
-    const formatDateTime = (date) => {
-      return format(date, 'dd/MM/yyyy HH:mm:ss');
     };
 
     // 3. HTML completo com estilos
