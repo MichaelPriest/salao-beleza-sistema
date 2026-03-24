@@ -90,6 +90,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
+import { format as dateFnsFormat, parseISO, isSameDay as dateFnsIsSameDay, addDays as dateFnsAddDays, addWeeks as dateFnsAddWeeks, addMonths as dateFnsAddMonths, getDay, getDaysInMonth as dateFnsGetDaysInMonth } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -100,7 +101,7 @@ import { usuariosService } from '../services/usuariosService';
 import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from 'firebase/firestore';
 
-// 🔥 IMPORTAÇÕES DO HORÁRIO DE BRASÍLIA
+// ✅ IMPORTAÇÕES CORRETAS DO HORÁRIO DE BRASÍLIA
 import { 
   formatBrasiliaTime, 
   formatBrasiliaDate, 
@@ -131,38 +132,38 @@ const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', '
 
 // Funções auxiliares de data com horário de Brasília
 const getDaysInMonth = (date) => {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return dateFnsGetDaysInMonth(date);
 };
 
 const getFirstDayOfMonth = (date) => {
-  return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const day = getDay(date);
+  return day === 0 ? 7 : day;
 };
 
 const formatDate = (date) => {
-  return toBrasiliaTime(date).format('YYYY-MM-DD');
+  if (!date) return '';
+  // Se for string, converte para Date
+  const dateObj = typeof date === 'string' ? parseISO(date) : date;
+  return dateFnsFormat(dateObj, 'yyyy-MM-dd');
 };
 
 const addDays = (date, days) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
+  return dateFnsAddDays(date, days);
 };
 
 const addWeeks = (date, weeks) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + weeks * 7);
-  return result;
+  return dateFnsAddWeeks(date, weeks);
 };
 
 const addMonths = (date, months) => {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
+  return dateFnsAddMonths(date, months);
 };
 
 const getWeekDays = (date) => {
   const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay() + 1);
+  const dayOfWeek = getDay(start);
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  start.setDate(start.getDate() + diffToMonday);
   const days = [];
   for (let i = 0; i < 7; i++) {
     days.push(addDays(start, i));
@@ -187,7 +188,7 @@ const RelatorioAgenda = React.forwardRef(({
   configuracoes
 }, ref) => {
   
-  // 🔥 FUNÇÃO DE FORMATAÇÃO DE TELEFONE (adicionada dentro do componente)
+  // Função de formatação de telefone
   const formatarTelefone = (telefone) => {
     if (!telefone || telefone === 'Não informado') return telefone;
     
@@ -204,7 +205,9 @@ const RelatorioAgenda = React.forwardRef(({
 
   const formatarData = (data) => {
     if (!data) return '';
-    return formatBrasiliaDate(data, 'DD/MM/YYYY');
+    // Converte string de data para objeto Date
+    const dateObj = typeof data === 'string' ? parseISO(data + 'T12:00:00') : data;
+    return formatBrasiliaDate(dateObj, 'DD/MM/YYYY');
   };
 
   const calcularDuracaoTotal = (servicos) => {
@@ -256,7 +259,6 @@ const RelatorioAgenda = React.forwardRef(({
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* Efeito decorativo */}
         <Box sx={{
           position: 'absolute',
           top: -50,
@@ -504,7 +506,9 @@ const RelatorioAgenda = React.forwardRef(({
             (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '')
           );
 
-          const dataObj = toBrasiliaTime(data + 'T12:00:00');
+          // Converte string de data para objeto Date
+          const dateObj = parseISO(data + 'T12:00:00');
+          const dataObj = toBrasiliaTime(dateObj);
           const diaSemana = dataObj.format('dddd');
           const diaNumero = dataObj.format('DD');
           const mesAno = dataObj.format('MMMM [de] YYYY');
@@ -954,7 +958,8 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      return formatBrasiliaDate(selectedDate + 'T12:00:00', 'dddd, D [de] MMMM [de] YYYY');
+      const dateObj = parseISO(selectedDate + 'T12:00:00');
+      return formatBrasiliaDate(dateObj, 'dddd, D [de] MMMM [de] YYYY');
     } else if (viewMode === 'week') {
       const start = getWeekDays(currentDate)[0];
       const end = getWeekDays(currentDate)[6];
@@ -971,8 +976,9 @@ function ModernAgendamentos() {
   const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return false;
 
-    const dataObj = toBrasiliaTime(data + 'T12:00:00').toDate();
-    const diaSemana = dataObj.getDay();
+    const dateObj = parseISO(data + 'T12:00:00');
+    const dataObj = toBrasiliaTime(dateObj);
+    const diaSemana = dataObj.day(); // day() retorna 0-6 (domingo a sábado)
 
     // Verificar disponibilidade do profissional para este dia da semana
     const disponibilidade = disponibilidades.find(
@@ -1031,8 +1037,9 @@ function ModernAgendamentos() {
   const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
 
-    const dataObj = toBrasiliaTime(data + 'T12:00:00').toDate();
-    const diaSemana = dataObj.getDay();
+    const dateObj = parseISO(data + 'T12:00:00');
+    const dataObj = toBrasiliaTime(dateObj);
+    const diaSemana = dataObj.day();
 
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
@@ -1827,9 +1834,10 @@ function ModernAgendamentos() {
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       
-      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
-      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
+      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
+      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
+      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
   
       // Calcular estatísticas
       const totalEventos = eventosFiltrados.length;
@@ -1856,7 +1864,8 @@ function ModernAgendamentos() {
         
         Object.keys(eventosPorData).sort().forEach(data => {
           const eventosDoDia = eventosPorData[data];
-          const dataObj = toBrasiliaTime(data + 'T12:00:00');
+          const dateObj = parseISO(data + 'T12:00:00');
+          const dataObj = toBrasiliaTime(dateObj);
           const diaSemana = dataObj.format('dddd');
           const diaNumero = dataObj.format('DD');
           const mesAno = dataObj.format('MMMM [de] YYYY');
@@ -2463,9 +2472,10 @@ function ModernAgendamentos() {
       
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
-      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
-      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
+      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
+      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
+      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
       doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 28, { align: 'center' });
       
       doc.text(`Emitido em: ${formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}`, pageWidth / 2, 34, { align: 'center' });
@@ -2524,7 +2534,8 @@ function ModernAgendamentos() {
 
         doc.setFontSize(10);
         doc.setTextColor(156, 39, 176);
-        doc.text(formatBrasiliaDate(data + 'T12:00:00', 'DD/MM/YYYY'), 14, yPos);
+        const dateObj = parseISO(data + 'T12:00:00');
+        doc.text(formatBrasiliaDate(dateObj, 'DD/MM/YYYY'), 14, yPos);
         yPos += 4;
 
         const eventosDoDia = eventosPorData[data];
@@ -2612,9 +2623,10 @@ function ModernAgendamentos() {
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
-      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
+      const dataInicioDate = parseISO(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : parseISO(periodoRelatorio.dataFim + 'T12:00:00');
+      const dataInicioFormat = formatBrasiliaDate(dataInicioDate, 'DD/MM/YYYY');
+      const dataFimFormat = formatBrasiliaDate(dataFimDate, 'DD/MM/YYYY');
 
       const infoData = [
         ['RELATÓRIO DE AGENDA'],
@@ -2654,9 +2666,10 @@ function ModernAgendamentos() {
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
+          const dateObj = parseISO(evento.data + 'T12:00:00');
           
           return [
-            formatBrasiliaDate(evento.data + 'T12:00:00', 'DD/MM/YYYY'),
+            formatBrasiliaDate(dateObj, 'DD/MM/YYYY'),
             evento.horario || evento.horaInicio || '--:--',
             cliente?.nome || '—',
             cliente?.telefone || '—',
@@ -3407,7 +3420,7 @@ function ModernAgendamentos() {
                         {day.dayName}
                       </Typography>
                       <Typography variant="h6" sx={{ mb: 2 }}>
-                        {toBrasiliaTime(day.date + 'T12:00:00').format('DD')}
+                        {formatBrasiliaDate(parseISO(day.date + 'T12:00:00'), 'DD')}
                       </Typography>
                       
                       {day.events.length > 0 ? (
@@ -3476,7 +3489,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {toBrasiliaTime(currentDate).format('MMMM [de] YYYY')}
+              {formatBrasiliaDate(currentDate, 'MMMM [de] YYYY')}
             </Typography>
 
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -3594,7 +3607,7 @@ function ModernAgendamentos() {
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedDayDetails?.date && 
-            formatBrasiliaDate(selectedDayDetails.date + 'T12:00:00', 'dddd, D [de] MMMM [de] YYYY')
+            formatBrasiliaDate(parseISO(selectedDayDetails.date + 'T12:00:00'), 'dddd, D [de] MMMM [de] YYYY')
           }
         </DialogTitle>
         <DialogContent>
