@@ -174,6 +174,9 @@ const getWeekDays = (date) => {
 // COMPONENTE RELATORIO AGENDA
 // ============================================
 
+// src/pages/ModernAgendamentos.js
+// Substitua o componente RelatorioAgenda por esta versão melhorada
+
 const RelatorioAgenda = React.forwardRef(({ 
   eventos, 
   profissional, 
@@ -216,69 +219,263 @@ const RelatorioAgenda = React.forwardRef(({
   const totalCancelados = eventos.filter(e => e.status === 'cancelado').length;
   const totalFinalizados = eventos.filter(e => e.status === 'finalizado').length;
 
+  // Calcular valor total
+  const valorTotal = eventos.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+
   return (
-    <Box ref={ref} sx={{ p: 3, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* Cabeçalho com Logo */}
-      <Box sx={{ textAlign: 'center', mb: 3, borderBottom: '2px solid #9c27b0', pb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 0.5, fontSize: '1.8rem' }}>
-          Relatório de Agenda
-        </Typography>
-        <Typography variant="subtitle1" sx={{ fontWeight: 500, color: '#555', fontSize: '1rem' }}>
-          {profissionalNome}
-        </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5, fontSize: '0.8rem' }}>
-          Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
-        </Typography>
-        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}>
-          Emitido em: {formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}
-        </Typography>
+    <Box ref={ref} sx={{ 
+      p: 4, 
+      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', 
+      maxWidth: '1200px', 
+      margin: '0 auto',
+      backgroundColor: '#ffffff',
+      borderRadius: '12px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+    }}>
+      {/* Cabeçalho com Logo e Gradiente */}
+      <Box sx={{ 
+        textAlign: 'center', 
+        mb: 4, 
+        pb: 3,
+        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+        borderRadius: '12px',
+        color: 'white',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Efeito decorativo */}
+        <Box sx={{
+          position: 'absolute',
+          top: -50,
+          right: -50,
+          width: 200,
+          height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.1)',
+          pointerEvents: 'none'
+        }} />
+        <Box sx={{
+          position: 'absolute',
+          bottom: -30,
+          left: -30,
+          width: 150,
+          height: 150,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.1)',
+          pointerEvents: 'none'
+        }} />
+        
+        <Box sx={{ position: 'relative', zIndex: 1, p: 3 }}>
+          <Typography variant="h3" sx={{ 
+            fontWeight: 800, 
+            mb: 1,
+            fontSize: '2rem',
+            letterSpacing: '-0.5px',
+            textShadow: '2px 2px 4px rgba(0,0,0,0.2)'
+          }}>
+            📋 RELATÓRIO DE AGENDA
+          </Typography>
+          <Typography variant="h5" sx={{ 
+            fontWeight: 500, 
+            mb: 2,
+            fontSize: '1.2rem',
+            opacity: 0.95
+          }}>
+            {profissionalNome}
+          </Typography>
+          <Box sx={{ 
+            display: 'inline-flex', 
+            gap: 3, 
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            mt: 2,
+            pt: 2,
+            borderTop: '1px solid rgba(255,255,255,0.2)'
+          }}>
+            <Box>
+              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
+                Período
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                {formatarData(dataInicio)} - {formatarData(dataFim)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
+                Data de Emissão
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                {formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       </Box>
 
-      {/* Estatísticas */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
-          Resumo do Período
+      {/* Cards de Estatísticas */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ 
+          fontWeight: 700, 
+          mb: 2, 
+          color: '#333',
+          fontSize: '1.1rem',
+          borderLeft: '4px solid #9c27b0',
+          pl: 2
+        }}>
+          📊 Resumo do Período
         </Typography>
-        <Grid container spacing={0.5}>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Total</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>{totalEventos}</Typography>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalEventos}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Total de Eventos
+              </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Agend.</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0', fontSize: '0.8rem' }}>{totalAgendamentos}</Typography>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalAgendamentos}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Agendamentos
+              </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Atend.</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800', fontSize: '0.8rem' }}>{totalAtendimentos}</Typography>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #ff9800 0%, #ff5722 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalAtendimentos}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Atendimentos
+              </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Andam.</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f44336', fontSize: '0.8rem' }}>{totalAndamento}</Typography>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalConfirmados}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Confirmados
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalPendentes}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Pendentes
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Paper sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+              color: 'white',
+              borderRadius: '12px'
+            }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
+                {totalCancelados}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
+                Cancelados
+              </Typography>
             </Paper>
           </Grid>
         </Grid>
 
-        {/* Estatísticas detalhadas */}
-        <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Chip label={`✅ ${totalConfirmados} confirmados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e8f5e9' }} />
-          <Chip label={`⏳ ${totalPendentes} pendentes`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#fff3e0' }} />
-          <Chip label={`❌ ${totalCancelados} cancelados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#ffebee' }} />
-          <Chip label={`✅ ${totalFinalizados} finalizados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e3f2fd' }} />
-        </Box>
+        {/* Resumo Financeiro */}
+        <Paper sx={{ 
+          mt: 3, 
+          p: 2, 
+          bgcolor: '#f5f5f5',
+          borderRadius: '12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2
+        }}>
+          <Box>
+            <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
+              Valor Total dos Serviços
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '1.3rem' }}>
+              R$ {valorTotal.toFixed(2)}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 3 }}>
+            <Box>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
+                Média por Atendimento
+              </Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                R$ {totalAtendimentos > 0 ? (valorTotal / totalAtendimentos).toFixed(2) : '0,00'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
+                Média por Agendamento
+              </Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                R$ {totalAgendamentos > 0 ? (valorTotal / totalAgendamentos).toFixed(2) : '0,00'}
+              </Typography>
+            </Box>
+          </Box>
+        </Paper>
       </Box>
 
-      {/* Eventos por Dia */}
+      {/* Agenda Detalhada */}
       <Box>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
-          Agenda Detalhada
+        <Typography variant="h6" sx={{ 
+          fontWeight: 700, 
+          mb: 2, 
+          color: '#333',
+          fontSize: '1.1rem',
+          borderLeft: '4px solid #9c27b0',
+          pl: 2
+        }}>
+          📅 Agenda Detalhada
         </Typography>
         
         {/* Agrupar eventos por data */}
@@ -294,52 +491,187 @@ const RelatorioAgenda = React.forwardRef(({
             (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '')
           );
 
+          const dataObj = toBrasiliaTime(data + 'T12:00:00');
+          const diaSemana = dataObj.format('dddd');
+          const diaNumero = dataObj.format('DD');
+          const mesAno = dataObj.format('MMMM [de] YYYY');
+
           return (
-            <Card key={data} variant="outlined" sx={{ mb: 1.5 }}>
-              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0', fontSize: '0.8rem' }}>
-                  {formatarData(data)}
-                </Typography>
-                
-                <TableContainer component={Paper} variant="outlined">
+            <Card key={data} variant="outlined" sx={{ 
+              mb: 3, 
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              border: '1px solid #e0e0e0'
+            }}>
+              {/* Cabeçalho do Dia */}
+              <Box sx={{ 
+                bgcolor: '#faf5ff', 
+                p: 2, 
+                borderBottom: '2px solid #9c27b0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                flexWrap: 'wrap'
+              }}>
+                <Box sx={{ 
+                  bgcolor: '#9c27b0', 
+                  color: 'white', 
+                  borderRadius: '8px',
+                  width: 50,
+                  height: 50,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
+                    {diaNumero}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0', textTransform: 'capitalize' }}>
+                    {diaSemana}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    {mesAno}
+                  </Typography>
+                </Box>
+                <Box sx={{ ml: 'auto' }}>
+                  <Chip 
+                    label={`${eventosOrdenados.length} evento(s)`}
+                    size="small"
+                    sx={{ bgcolor: '#9c27b0', color: 'white', fontWeight: 500 }}
+                  />
+                </Box>
+              </Box>
+
+              <CardContent sx={{ p: 0 }}>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 0 }}>
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Hor.</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Cliente</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Serviços</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Prof.</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Tipo</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Status</strong></TableCell>
+                      <TableRow sx={{ bgcolor: '#f8f9fa' }}>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
+                          <strong>Horário</strong>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
+                          <strong>Cliente</strong>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
+                          <strong>Serviços</strong>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
+                          <strong>Profissional</strong>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
+                          <strong>Status</strong>
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
+                          <strong>Valor</strong>
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {eventosOrdenados.map(evento => {
+                      {eventosOrdenados.map((evento, idx) => {
                         const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
-                        const profissional = profissionais?.find(p => p.id === evento.profissionalId);
+                        const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
                             id: evento.servicoId, 
-                            nome: evento.servicoNome || 'Serviço'
+                            nome: evento.servicoNome || 'Serviço',
+                            preco: evento.preco || 0
                           }] : []);
                         
+                        const valorEvento = evento.valorTotal || servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
+                        
+                        const getStatusBadge = (status) => {
+                          const statusConfig = {
+                            confirmado: { color: '#4caf50', label: '✓ Confirmado', bg: '#e8f5e9' },
+                            pendente: { color: '#ff9800', label: '⏳ Pendente', bg: '#fff3e0' },
+                            cancelado: { color: '#f44336', label: '✗ Cancelado', bg: '#ffebee' },
+                            finalizado: { color: '#2196f3', label: '✓ Finalizado', bg: '#e3f2fd' },
+                            em_andamento: { color: '#9c27b0', label: '▶ Em Andamento', bg: '#f3e5f5' }
+                          };
+                          const config = statusConfig[status] || { color: '#9e9e9e', label: status, bg: '#f5f5f5' };
+                          return (
+                            <Box sx={{ 
+                              display: 'inline-block',
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: '20px',
+                              bgcolor: config.bg,
+                              color: config.color,
+                              fontSize: '0.7rem',
+                              fontWeight: 600
+                            }}>
+                              {config.label}
+                            </Box>
+                          );
+                        };
+                        
                         return (
-                          <TableRow key={evento.id}>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{evento.horario || evento.horaInicio}</TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{cliente?.nome || '—'}</TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
-                              {servicos.map(s => s.nome).join(', ')}
+                          <TableRow 
+                            key={evento.id}
+                            sx={{ 
+                              '&:hover': { bgcolor: '#faf5ff' },
+                              borderBottom: idx === eventosOrdenados.length - 1 ? 'none' : '1px solid #f0f0f0'
+                            }}
+                          >
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
+                              <strong>{evento.horario || evento.horaInicio}</strong>
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{profissional?.nome || '—'}</TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
-                              {evento.tipo === 'agendamento' ? 'Agend.' : 'Atend.'}
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
+                                  {cliente?.nome || '—'}
+                                </Typography>
+                                {cliente?.telefone && (
+                                  <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.65rem' }}>
+                                    {formatarTelefone(cliente.telefone)}
+                                  </Typography>
+                                )}
+                              </Box>
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
-                              {evento.status}
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
+                              <Box>
+                                {servicos.map((s, i) => (
+                                  <Typography key={i} variant="caption" sx={{ display: 'block', fontSize: '0.7rem' }}>
+                                    • {s.nome}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
+                              {profissionalItem?.nome || '—'}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
+                              {getStatusBadge(evento.status)}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: '0.75rem' }}>
+                                R$ {valorEvento.toFixed(2)}
+                              </Typography>
                             </TableCell>
                           </TableRow>
                         );
                       })}
+                      
+                      {/* Total do Dia */}
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                        <TableCell colSpan={5} sx={{ py: 1.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.75rem' }}>
+                            Total do Dia
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ textAlign: 'right', py: 1.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '0.8rem' }}>
+                            R$ {eventosOrdenados.reduce((acc, e) => {
+                              const servicosValor = (e.servicos || []).reduce((s, serv) => s + (serv.preco || 0), 0);
+                              return acc + (e.valorTotal || servicosValor);
+                            }, 0).toFixed(2)}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -347,12 +679,32 @@ const RelatorioAgenda = React.forwardRef(({
             </Card>
           );
         })}
+        
+        {eventos.length === 0 && (
+          <Paper sx={{ p: 4, textAlign: 'center', borderRadius: '12px', bgcolor: '#faf5ff' }}>
+            <Typography variant="body1" color="textSecondary">
+              Nenhum evento encontrado para o período selecionado.
+            </Typography>
+          </Paper>
+        )}
       </Box>
 
       {/* Rodapé */}
-      <Box sx={{ mt: 2, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 1 }}>
-        <Typography variant="caption" sx={{ fontSize: '0.5rem' }}>
-          Relatório gerado automaticamente • Documento não fiscal
+      <Box sx={{ 
+        mt: 4, 
+        pt: 3, 
+        textAlign: 'center', 
+        borderTop: '2px solid #e0e0e0',
+        color: 'text.secondary'
+      }}>
+        <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block' }}>
+          Relatório gerado automaticamente pelo Sistema Salão Beleza
+        </Typography>
+        <Typography variant="caption" sx={{ fontSize: '0.6rem', display: 'block', mt: 0.5 }}>
+          Documento não fiscal • Este relatório contém informações confidenciais
+        </Typography>
+        <Typography variant="caption" sx={{ fontSize: '0.55rem', display: 'block', mt: 1, color: '#9c27b0' }}>
+          © {new Date().getFullYear()} Salão Beleza - Todos os direitos reservados
         </Typography>
       </Box>
     </Box>
