@@ -140,11 +140,15 @@ const getFirstDayOfMonth = (date) => {
   return day === 0 ? 7 : day;
 };
 
+// Função formatDate
 const formatDate = (date) => {
   if (!date) return '';
   // Se for string, converte para Date
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
-  return dateFnsFormat(dateObj, 'yyyy-MM-dd');
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const addDays = (date, days) => {
@@ -1376,41 +1380,52 @@ function ModernAgendamentos() {
   // ============================================
   // FUNÇÕES DE NAVEGAÇÃO
   // ============================================
-
+  
   const handlePrevious = () => {
     if (viewMode === 'day') {
-      const newDate = addDays(new Date(selectedDate), -1);
-      setSelectedDate(formatDate(newDate));
+      // Converte a string selecionada para objeto Date
+      const currentDateObj = new Date(selectedDate);
+      const newDate = addDays(currentDateObj, -1);
+      const newDateStr = formatDate(newDate);
+      setSelectedDate(newDateStr);
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, -1);
       setCurrentDate(newDate);
-      setSelectedDate(formatDate(newDate));
+      // Atualiza selectedDate para o primeiro dia da semana
+      const firstDayOfWeek = getWeekDays(newDate)[0];
+      setSelectedDate(formatDate(firstDayOfWeek));
     } else {
       const newDate = addMonths(currentDate, -1);
       setCurrentDate(newDate);
     }
   };
-
+  
   const handleNext = () => {
     if (viewMode === 'day') {
-      const newDate = addDays(new Date(selectedDate), 1);
-      setSelectedDate(formatDate(newDate));
+      // Converte a string selecionada para objeto Date
+      const currentDateObj = new Date(selectedDate);
+      const newDate = addDays(currentDateObj, 1);
+      const newDateStr = formatDate(newDate);
+      setSelectedDate(newDateStr);
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, 1);
       setCurrentDate(newDate);
-      setSelectedDate(formatDate(newDate));
+      // Atualiza selectedDate para o primeiro dia da semana
+      const firstDayOfWeek = getWeekDays(newDate)[0];
+      setSelectedDate(formatDate(firstDayOfWeek));
     } else {
       const newDate = addMonths(currentDate, 1);
       setCurrentDate(newDate);
     }
   };
-
+  
   const handleToday = () => {
     const today = getCurrentBrasiliaTime().toDate();
     setCurrentDate(today);
-    setSelectedDate(formatDate(today));
+    const todayStr = formatDate(today);
+    setSelectedDate(todayStr);
   };
 
   const handleDayClick = (date) => {
