@@ -84,7 +84,6 @@ import {
   LockOpen as LockOpenIcon,
   EventBusy as EventBusyIcon,
   EventAvailable as EventAvailableIcon,
-  // 🔥 ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -100,6 +99,18 @@ import { notificacoesService } from '../services/notificacoesService';
 import { usuariosService } from '../services/usuariosService';
 import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from 'firebase/firestore';
+
+// 🔥 IMPORTAÇÕES DO HORÁRIO DE BRASÍLIA
+import { 
+  formatBrasiliaTime, 
+  formatBrasiliaDate, 
+  formatBrasiliaTimeOnly,
+  getCurrentBrasiliaTime,
+  toBrasiliaTime,
+  isSameDayBrasilia,
+  useBrasiliaTime,
+  BRASILIA_TIMEZONE
+} from '../App';
 
 // Importações para PDF e Excel
 import jsPDF from 'jspdf';
@@ -118,7 +129,7 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Funções auxiliares de data
+// Funções auxiliares de data com horário de Brasília
 const getDaysInMonth = (date) => {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 };
@@ -128,7 +139,7 @@ const getFirstDayOfMonth = (date) => {
 };
 
 const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
+  return toBrasiliaTime(date).format('YYYY-MM-DD');
 };
 
 const addDays = (date, days) => {
@@ -177,7 +188,7 @@ const RelatorioAgenda = React.forwardRef(({
 }, ref) => {
   const formatarData = (data) => {
     if (!data) return '';
-    return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+    return formatBrasiliaDate(data, 'DD/MM/YYYY');
   };
 
   const calcularDuracaoTotal = (servicos) => {
@@ -219,7 +230,7 @@ const RelatorioAgenda = React.forwardRef(({
           Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
         </Typography>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}>
-          Emitido em: {new Date().toLocaleString('pt-BR')}
+          Emitido em: {formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}
         </Typography>
       </Box>
 
@@ -355,14 +366,17 @@ const RelatorioAgenda = React.forwardRef(({
 function ModernAgendamentos() {
   const navigate = useNavigate();
   
+  // Hook do horário de Brasília
+  const { currentTime, format: formatBrasilia } = useBrasiliaTime();
+  
   // Estados de usuário e permissões
   const [usuario, setUsuario] = useState(null);
   const [cargo, setCargo] = useState('');
   
   // Estados de visualização
   const [viewMode, setViewMode] = useState('day');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [currentDate, setCurrentDate] = useState(getCurrentBrasiliaTime().toDate());
+  const [selectedDate, setSelectedDate] = useState(formatDate(getCurrentBrasiliaTime().toDate()));
   const [selectedProfessional, setSelectedProfessional] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   
@@ -380,7 +394,7 @@ function ModernAgendamentos() {
   const [ausencias, setAusencias] = useState([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   
-  // 🔥 ESTADOS PARA ANAMNESE
+  // Estados para anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState({});
   const [verificandoFormularios, setVerificandoFormularios] = useState(false);
   
@@ -391,8 +405,8 @@ function ModernAgendamentos() {
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
   const [periodoRelatorio, setPeriodoRelatorio] = useState({
     tipo: 'dia',
-    dataInicio: formatDate(new Date()),
-    dataFim: formatDate(new Date())
+    dataInicio: formatDate(getCurrentBrasiliaTime().toDate()),
+    dataFim: formatDate(getCurrentBrasiliaTime().toDate())
   });
   const relatorioRef = useRef(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -529,8 +543,7 @@ function ModernAgendamentos() {
 
   const formatarDataBrasil = (data) => {
     if (!data) return '';
-    const d = new Date(data);
-    return d.toLocaleDateString('pt-BR');
+    return formatBrasiliaDate(data, 'DD/MM/YYYY');
   };
 
   const getStatusColor = (status) => {
@@ -576,18 +589,13 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      return formatBrasiliaDate(selectedDate + 'T12:00:00', 'dddd, D [de] MMMM [de] YYYY');
     } else if (viewMode === 'week') {
       const start = getWeekDays(currentDate)[0];
       const end = getWeekDays(currentDate)[6];
-      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+      return `${formatBrasiliaDate(start, 'DD/MM')} - ${formatBrasiliaDate(end, 'DD/MM/YYYY')}`;
     } else {
-      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      return formatBrasiliaDate(currentDate, 'MMMM [de] YYYY');
     }
   };
 
@@ -598,7 +606,7 @@ function ModernAgendamentos() {
   const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return false;
 
-    const dataObj = new Date(data + 'T12:00:00');
+    const dataObj = toBrasiliaTime(data + 'T12:00:00').toDate();
     const diaSemana = dataObj.getDay();
 
     // Verificar disponibilidade do profissional para este dia da semana
@@ -658,7 +666,7 @@ function ModernAgendamentos() {
   const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
 
-    const dataObj = new Date(data + 'T12:00:00');
+    const dataObj = toBrasiliaTime(data + 'T12:00:00').toDate();
     const diaSemana = dataObj.getDay();
 
     const disponibilidade = disponibilidades.find(
@@ -739,14 +747,13 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // 🔥 FUNÇÕES PARA ANAMNESE
+  // FUNÇÕES PARA ANAMNESE
   // ============================================
 
   const verificarFormulariosPendentes = async (agendamento) => {
     if (!agendamento || !agendamento.servicoId) return false;
     
     try {
-      // Buscar formulários ativos associados ao serviço
       const formularios = await firebaseService.query('formularios_anamnese', [
         { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
         { field: 'ativo', operator: '==', value: true }
@@ -754,7 +761,6 @@ function ModernAgendamentos() {
 
       if (formularios.length === 0) return false;
 
-      // Verificar se já existe resposta para este agendamento
       const respostas = await firebaseService.query('respostas_anamnese', [
         { field: 'agendamentoId', operator: '==', value: agendamento.id }
       ]);
@@ -1030,7 +1036,7 @@ function ModernAgendamentos() {
   };
 
   const handleToday = () => {
-    const today = new Date();
+    const today = getCurrentBrasiliaTime().toDate();
     setCurrentDate(today);
     setSelectedDate(formatDate(today));
   };
@@ -1201,7 +1207,7 @@ function ModernAgendamentos() {
         servicoId: primeiroServico.id,
         servicos: servicosLista,
         data: agendamento.data,
-        horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        horaInicio: formatBrasiliaTimeOnly(new Date(), 'HH:mm'),
         horaFim: null,
         status: 'em_andamento',
         observacoes: agendamento.observacoes || '',
@@ -1340,7 +1346,9 @@ function ModernAgendamentos() {
         origem: 'sistema',
         createdBy: usuario?.id || usuario?.uid || 'sistema',
         createdByName: usuario?.nome || 'Sistema',
-        createdByCargo: usuario?.cargo || 'sistema'
+        createdByCargo: usuario?.cargo || 'sistema',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       };
 
       let agendamentoCriado;
@@ -1584,12 +1592,12 @@ function ModernAgendamentos() {
       
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
-      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
       const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
+        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
       doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 28, { align: 'center' });
       
-      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 34, { align: 'center' });
+      doc.text(`Emitido em: ${formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}`, pageWidth / 2, 34, { align: 'center' });
 
       let yPos = 40;
 
@@ -1645,7 +1653,7 @@ function ModernAgendamentos() {
 
         doc.setFontSize(10);
         doc.setTextColor(156, 39, 176);
-        doc.text(new Date(data + 'T12:00:00').toLocaleDateString('pt-BR'), 14, yPos);
+        doc.text(formatBrasiliaDate(data + 'T12:00:00', 'DD/MM/YYYY'), 14, yPos);
         yPos += 4;
 
         const eventosDoDia = eventosPorData[data];
@@ -1733,9 +1741,9 @@ function ModernAgendamentos() {
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
       const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
+        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
 
       const infoData = [
         ['RELATÓRIO DE AGENDA'],
@@ -1743,7 +1751,7 @@ function ModernAgendamentos() {
         ['Informações do Relatório'],
         ['Profissional', profissionalNome],
         ['Período', `${dataInicioFormat} - ${dataFimFormat}`],
-        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
+        ['Data de Emissão', formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')],
         ['Total de Eventos', eventosFiltrados.length],
       ];
 
@@ -1777,7 +1785,7 @@ function ModernAgendamentos() {
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
           
           return [
-            new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR'),
+            formatBrasiliaDate(evento.data + 'T12:00:00', 'DD/MM/YYYY'),
             evento.horario || evento.horaInicio || '--:--',
             cliente?.nome || '—',
             cliente?.telefone || '—',
@@ -1859,7 +1867,6 @@ function ModernAgendamentos() {
     carregarDisponibilidade();
   }, [updateTrigger]);
 
-  // 🔥 Verificar formulários pendentes quando agendamentos mudar
   useEffect(() => {
     if (agendamentos && agendamentos.length > 0) {
       verificarTodosFormularios();
@@ -2276,7 +2283,6 @@ function ModernAgendamentos() {
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
                                 
-                                // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                                 const temFormularioPendente = formulariosPendentes[event.id];
 
                                 if (!cliente) return null;
@@ -2290,7 +2296,7 @@ function ModernAgendamentos() {
                                     >
                                       <Card variant="outlined" sx={{ 
                                         p: 2,
-                                        position: 'relative', // Para o badge
+                                        position: 'relative',
                                         borderLeft: '4px solid',
                                         borderLeftColor: 
                                           event.tipo === 'atendimento' ? '#ff9800' :
@@ -2298,7 +2304,6 @@ function ModernAgendamentos() {
                                           event.status === 'pendente' ? '#ff9800' :
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
-                                        {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                                         {temFormularioPendente && (
                                           <Tooltip title="Formulário de anamnese pendente">
                                             <Badge
@@ -2381,7 +2386,6 @@ function ModernAgendamentos() {
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                                              {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                                               {temFormularioPendente && (
                                                 <Tooltip title="Preencher formulário">
                                                   <IconButton
@@ -2532,7 +2536,7 @@ function ModernAgendamentos() {
                         {day.dayName}
                       </Typography>
                       <Typography variant="h6" sx={{ mb: 2 }}>
-                        {new Date(day.date + 'T12:00:00').getDate()}
+                        {toBrasiliaTime(day.date + 'T12:00:00').format('DD')}
                       </Typography>
                       
                       {day.events.length > 0 ? (
@@ -2540,7 +2544,6 @@ function ModernAgendamentos() {
                           {day.events.slice(0, 3).map(event => {
                             const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
-                            // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                             const temFormularioPendente = formulariosPendentes[event.id];
                             
                             return (
@@ -2602,7 +2605,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              {toBrasiliaTime(currentDate).format('MMMM [de] YYYY')}
             </Typography>
 
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -2673,7 +2676,6 @@ function ModernAgendamentos() {
                             {day.events.slice(0, 2).map(event => {
                               const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
-                              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                               const temFormularioPendente = formulariosPendentes[event.id];
                               
                               return (
@@ -2721,12 +2723,7 @@ function ModernAgendamentos() {
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedDayDetails?.date && 
-            new Date(selectedDayDetails.date + 'T12:00:00').toLocaleDateString('pt-BR', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })
+            formatBrasiliaDate(selectedDayDetails.date + 'T12:00:00', 'dddd, D [de] MMMM [de] YYYY')
           }
         </DialogTitle>
         <DialogContent>
@@ -2735,14 +2732,12 @@ function ModernAgendamentos() {
               const cliente = getClienteData(event.clienteId);
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
-              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
               const temFormularioPendente = formulariosPendentes[event.id];
 
               if (!cliente) return null;
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
-                  {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                   {temFormularioPendente && (
                     <Tooltip title="Formulário de anamnese pendente">
                       <Badge
@@ -2829,7 +2824,6 @@ function ModernAgendamentos() {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                    {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                     {temFormularioPendente && (
                       <Button
                         size="small"
