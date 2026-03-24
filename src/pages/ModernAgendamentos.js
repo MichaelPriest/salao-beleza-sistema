@@ -1802,113 +1802,619 @@ function ModernAgendamentos() {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
       
+      // Abre uma nova janela para impressão
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
         return;
       }
       
-      const content = relatorioRef.current;
-      if (!content) {
-        mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
-        return;
+      // Prepara os dados para impressão
+      let eventosFiltrados = filteredEvents;
+      if (periodoRelatorio.tipo === 'dia') {
+        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
+      } else {
+        eventosFiltrados = eventosFiltrados.filter(e => 
+          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
+        );
       }
-      
-      const contentClone = content.cloneNode(true);
-      
-      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-      let stylesHTML = '';
-      styles.forEach(style => {
-        if (style.tagName === 'STYLE') {
-          stylesHTML += style.outerHTML;
-        } else if (style.tagName === 'LINK') {
-          stylesHTML += style.outerHTML;
-        }
+  
+      eventosFiltrados.sort((a, b) => {
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
+        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
+  
+      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
+        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       
+      const dataInicioFormat = formatBrasiliaDate(periodoRelatorio.dataInicio + 'T12:00:00', 'DD/MM/YYYY');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        formatBrasiliaDate(periodoRelatorio.dataFim + 'T12:00:00', 'DD/MM/YYYY');
+  
+      // Calcular estatísticas
+      const totalEventos = eventosFiltrados.length;
+      const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
+      const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
+      const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
+      const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
+      const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
+      const totalFinalizados = eventosFiltrados.filter(e => e.status === 'finalizado').length;
+      const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+  
+      // Agrupar eventos por data
+      const eventosPorData = {};
+      eventosFiltrados.forEach(evento => {
+        if (!eventosPorData[evento.data]) {
+          eventosPorData[evento.data] = [];
+        }
+        eventosPorData[evento.data].push(evento);
+      });
+  
+      // Gerar HTML da tabela de eventos
+      const gerarTabelaEventos = () => {
+        let html = '';
+        
+        Object.keys(eventosPorData).sort().forEach(data => {
+          const eventosDoDia = eventosPorData[data];
+          const dataObj = toBrasiliaTime(data + 'T12:00:00');
+          const diaSemana = dataObj.format('dddd');
+          const diaNumero = dataObj.format('DD');
+          const mesAno = dataObj.format('MMMM [de] YYYY');
+          
+          html += `
+            <div class="day-card">
+              <div class="day-header">
+                <div class="day-number">${diaNumero}</div>
+                <div class="day-info">
+                  <div class="day-name">${diaSemana}</div>
+                  <div class="day-date">${mesAno}</div>
+                </div>
+                <div class="day-count">${eventosDoDia.length} evento(s)</div>
+              </div>
+              <table class="events-table">
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Cliente</th>
+                    <th>Telefone</th>
+                    <th>Serviços</th>
+                    <th>Profissional</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+          
+          eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
+          
+          eventosDoDia.forEach(evento => {
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
+            const servicos = evento.servicos || 
+              (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+            const valorEvento = evento.valorTotal || 0;
+            
+            let statusClass = '';
+            let statusLabel = '';
+            switch(evento.status) {
+              case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
+              case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
+              case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
+              case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
+              case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
+              default: statusClass = 'status-default'; statusLabel = evento.status;
+            }
+            
+            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+            
+            html += `
+              <tr>
+                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
+                <td><strong>${cliente?.nome || '—'}</strong></td>
+                <td class="phone-cell">${telefone}</td>
+                <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
+                <td>${profissionalItem?.nome || '—'}</td>
+                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
+              </tr>
+            `;
+          });
+          
+          // Total do dia
+          const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+          html += `
+                </tbody>
+                <tfoot>
+                  <tr class="total-row">
+                    <td colspan="6"><strong>Total do Dia</strong></td>
+                    <td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          `;
+        });
+        
+        return html;
+      };
+  
+      // Criar HTML completo para impressão
       const printHTML = `
         <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Relatório de Agenda</title>
-            ${stylesHTML}
-            <style>
-              @page {
-                size: A4;
-                margin: 1.5cm;
-              }
-              body { 
-                font-family: 'Arial', sans-serif; 
-                margin: 0;
-                padding: 15px;
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Relatório de Agenda - ${profissionalNome}</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+              background: #f5f5f5;
+              padding: 30px;
+              font-size: 12px;
+              line-height: 1.5;
+              color: #333;
+            }
+            
+            /* Container principal */
+            .report-container {
+              max-width: 1200px;
+              margin: 0 auto;
+              background: white;
+              border-radius: 16px;
+              box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+              overflow: hidden;
+            }
+            
+            /* Cabeçalho */
+            .header {
+              background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%);
+              color: white;
+              padding: 30px;
+              text-align: center;
+              position: relative;
+              overflow: hidden;
+            }
+            
+            .header::before {
+              content: '';
+              position: absolute;
+              top: -50px;
+              right: -50px;
+              width: 150px;
+              height: 150px;
+              background: rgba(255,255,255,0.1);
+              border-radius: 50%;
+            }
+            
+            .header::after {
+              content: '';
+              position: absolute;
+              bottom: -30px;
+              left: -30px;
+              width: 120px;
+              height: 120px;
+              background: rgba(255,255,255,0.1);
+              border-radius: 50%;
+            }
+            
+            .header h1 {
+              font-size: 28px;
+              font-weight: 800;
+              margin-bottom: 8px;
+              letter-spacing: -0.5px;
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header h2 {
+              font-size: 18px;
+              font-weight: 500;
+              margin-bottom: 20px;
+              opacity: 0.95;
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header-info {
+              display: flex;
+              justify-content: center;
+              gap: 30px;
+              flex-wrap: wrap;
+              margin-top: 20px;
+              padding-top: 20px;
+              border-top: 1px solid rgba(255,255,255,0.2);
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header-info-item {
+              text-align: center;
+            }
+            
+            .header-info-label {
+              font-size: 10px;
+              opacity: 0.8;
+              display: block;
+              margin-bottom: 4px;
+            }
+            
+            .header-info-value {
+              font-size: 13px;
+              font-weight: 600;
+            }
+            
+            /* Cards de estatísticas */
+            .stats-section {
+              padding: 25px 30px;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .stats-title {
+              font-size: 16px;
+              font-weight: 700;
+              color: #333;
+              margin-bottom: 15px;
+              padding-left: 12px;
+              border-left: 4px solid #9c27b0;
+            }
+            
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+              gap: 15px;
+              margin-bottom: 20px;
+            }
+            
+            .stat-card {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              padding: 15px;
+              border-radius: 12px;
+              text-align: center;
+              color: white;
+            }
+            
+            .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
+            .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
+            .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
+            .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
+            .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
+            
+            .stat-number {
+              font-size: 28px;
+              font-weight: 800;
+              margin-bottom: 5px;
+            }
+            
+            .stat-label {
+              font-size: 11px;
+              opacity: 0.9;
+            }
+            
+            .financial-summary {
+              background: #f5f5f5;
+              padding: 15px 20px;
+              border-radius: 12px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 15px;
+            }
+            
+            .total-value {
+              font-size: 24px;
+              font-weight: 800;
+              color: #9c27b0;
+            }
+            
+            .average-value {
+              font-size: 14px;
+              font-weight: 600;
+              color: #666;
+            }
+            
+            /* Cards de dias */
+            .day-card {
+              margin-bottom: 25px;
+              border: 1px solid #e0e0e0;
+              border-radius: 12px;
+              overflow: hidden;
+            }
+            
+            .day-header {
+              background: #faf5ff;
+              padding: 15px 20px;
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              border-bottom: 2px solid #9c27b0;
+              flex-wrap: wrap;
+            }
+            
+            .day-number {
+              background: #9c27b0;
+              color: white;
+              width: 50px;
+              height: 50px;
+              border-radius: 10px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 24px;
+              font-weight: 800;
+            }
+            
+            .day-info {
+              flex: 1;
+            }
+            
+            .day-name {
+              font-size: 16px;
+              font-weight: 700;
+              color: #9c27b0;
+              text-transform: capitalize;
+            }
+            
+            .day-date {
+              font-size: 11px;
+              color: #666;
+            }
+            
+            .day-count {
+              background: #9c27b0;
+              color: white;
+              padding: 5px 12px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 500;
+            }
+            
+            /* Tabelas */
+            .events-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+            }
+            
+            .events-table th {
+              background: #f8f9fa;
+              padding: 12px 10px;
+              text-align: left;
+              font-weight: 700;
+              color: #555;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .events-table td {
+              padding: 10px;
+              border-bottom: 1px solid #f0f0f0;
+            }
+            
+            .events-table tr:hover {
+              background: #faf5ff;
+            }
+            
+            .time-cell {
+              font-weight: 600;
+              color: #9c27b0;
+              width: 70px;
+            }
+            
+            .phone-cell {
+              width: 100px;
+            }
+            
+            .services-cell {
+              min-width: 150px;
+            }
+            
+            .value-cell {
+              text-align: right;
+              font-weight: 600;
+              color: #9c27b0;
+              width: 80px;
+            }
+            
+            .status-badge {
+              display: inline-block;
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 10px;
+              font-weight: 600;
+            }
+            
+            .status-confirmed { background: #e8f5e9; color: #4caf50; }
+            .status-pending { background: #fff3e0; color: #ff9800; }
+            .status-cancelled { background: #ffebee; color: #f44336; }
+            .status-finished { background: #e3f2fd; color: #2196f3; }
+            .status-progress { background: #f3e5f5; color: #9c27b0; }
+            .status-default { background: #f5f5f5; color: #9e9e9e; }
+            
+            .total-row {
+              background: #f5f5f5;
+              font-weight: 700;
+            }
+            
+            .total-row td {
+              border-top: 2px solid #e0e0e0;
+              padding: 12px 10px;
+            }
+            
+            /* Rodapé */
+            .footer {
+              background: #faf5ff;
+              padding: 20px;
+              text-align: center;
+              border-top: 1px solid #e0e0e0;
+              margin-top: 20px;
+            }
+            
+            .footer p {
+              font-size: 10px;
+              color: #666;
+              margin: 5px 0;
+            }
+            
+            .footer-copyright {
+              color: #9c27b0;
+              font-weight: 500;
+            }
+            
+            /* Configurações de impressão */
+            @media print {
+              body {
                 background: white;
-                font-size: 11px;
+                padding: 0;
+                margin: 0;
               }
-              @media print {
-                body { 
-                  margin: 0; 
-                  padding: 0;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                .MuiPaper-root {
-                  box-shadow: none !important;
-                  border: 1px solid #ddd !important;
-                }
-                table {
-                  page-break-inside: avoid;
-                  border-collapse: collapse;
-                  width: 100%;
-                }
-                tr {
-                  page-break-inside: avoid;
-                  page-break-after: auto;
-                }
-                thead {
-                  display: table-header-group;
-                }
-                tfoot {
-                  display: table-footer-group;
-                }
-                .MuiChip-root {
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
+              
+              .report-container {
+                box-shadow: none;
+                border-radius: 0;
               }
-              .stats-grid {
-                display: flex;
-                gap: 5px;
-                flex-wrap: wrap;
-                justify-content: center;
-                margin-bottom: 15px;
+              
+              .day-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
               }
-              .stat-item {
-                padding: 5px 10px;
-                border-radius: 15px;
-                font-size: 10px;
-                font-weight: 600;
+              
+              .events-table {
+                break-inside: avoid;
               }
-            </style>
-          </head>
-          <body>
-            ${contentClone.outerHTML}
-          </body>
+              
+              .events-table tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+              
+              .events-table thead {
+                display: table-header-group;
+              }
+              
+              .events-table tfoot {
+                display: table-footer-group;
+              }
+              
+              .status-badge {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              
+              .stat-card {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <!-- Cabeçalho -->
+            <div class="header">
+              <h1>📋 RELATÓRIO DE AGENDA</h1>
+              <h2>${profissionalNome}</h2>
+              <div class="header-info">
+                <div class="header-info-item">
+                  <span class="header-info-label">Período</span>
+                  <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
+                </div>
+                <div class="header-info-item">
+                  <span class="header-info-label">Data de Emissão</span>
+                  <span class="header-info-value">${formatBrasiliaTime(new Date(), 'DD/MM/YYYY HH:mm:ss')}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Estatísticas -->
+            <div class="stats-section">
+              <div class="stats-title">📊 Resumo do Período</div>
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-number">${totalEventos}</div>
+                  <div class="stat-label">Total de Eventos</div>
+                </div>
+                <div class="stat-card agendamentos">
+                  <div class="stat-number">${totalAgendamentos}</div>
+                  <div class="stat-label">Agendamentos</div>
+                </div>
+                <div class="stat-card atendimentos">
+                  <div class="stat-number">${totalAtendimentos}</div>
+                  <div class="stat-label">Atendimentos</div>
+                </div>
+                <div class="stat-card confirmados">
+                  <div class="stat-number">${totalConfirmados}</div>
+                  <div class="stat-label">Confirmados</div>
+                </div>
+                <div class="stat-card pendentes">
+                  <div class="stat-number">${totalPendentes}</div>
+                  <div class="stat-label">Pendentes</div>
+                </div>
+                <div class="stat-card cancelados">
+                  <div class="stat-number">${totalCancelados}</div>
+                  <div class="stat-label">Cancelados</div>
+                </div>
+              </div>
+              
+              <div class="financial-summary">
+                <div>
+                  <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
+                  <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
+                </div>
+                <div style="display: flex; gap: 30px;">
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
+                    <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
+                    <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Agenda Detalhada -->
+            <div style="padding: 0 30px 30px 30px;">
+              <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
+              ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
+            </div>
+            
+            <!-- Rodapé -->
+            <div class="footer">
+              <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
+              <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
+              <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
+            </div>
+          </div>
+        </body>
         </html>
       `;
       
+      // Escreve o conteúdo na nova janela
       printWindow.document.write(printHTML);
       printWindow.document.close();
       
+      // Aguarda o carregamento e chama o diálogo de impressão
       setTimeout(() => {
         printWindow.print();
         mostrarSnackbar('Impressão concluída!', 'success');
         
+        // Registra no log de auditoria
         auditoriaService.registrar('imprimir_relatorio_agenda', {
           entidade: 'agendamentos',
           detalhes: 'Impressão de relatório de agenda',
           dados: {
             periodo: periodoRelatorio.tipo,
-            profissional: selectedProfessional
+            profissional: selectedProfessional,
+            totalEventos: eventosFiltrados.length
           }
         });
       }, 500);
