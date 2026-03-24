@@ -1,5 +1,5 @@
 // src/components/Footer.js
-// VERSÃO SIMPLES - APENAS PARA O SISTEMA
+// VERSÃO COM ADAPTAÇÃO AO SIDEBAR
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -28,12 +28,53 @@ function Footer() {
   const [config, setConfig] = useState(null);
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear());
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(300);
 
   useEffect(() => {
     carregarConfiguracoes();
     
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    // Escutar mudanças no estado do sidebar
+    const handleSidebarToggle = (event) => {
+      if (event.detail) {
+        setSidebarOpen(event.detail.open);
+        setSidebarWidth(event.detail.width);
+      }
+    };
+    
+    window.addEventListener('sidebarToggle', handleSidebarToggle);
+    
+    // Verificar estado inicial do sidebar
+    const checkSidebarState = () => {
+      const sidebar = document.querySelector('.MuiDrawer-paper');
+      if (sidebar) {
+        const width = sidebar.offsetWidth;
+        const isOpen = width > 60;
+        setSidebarOpen(isOpen);
+        setSidebarWidth(isOpen ? width : 70);
+      }
+    };
+    
+    setTimeout(checkSidebarState, 100);
+    
+    // Observar mudanças no DOM
+    const observer = new MutationObserver(() => {
+      checkSidebarState();
+    });
+    
+    observer.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('sidebarToggle', handleSidebarToggle);
+      observer.disconnect();
+    };
   }, []);
 
   const handleScroll = () => {
@@ -65,9 +106,12 @@ function Footer() {
         color: '#fff',
         mt: 'auto',
         borderTop: '1px solid rgba(255,255,255,0.1)',
+        transition: 'margin-left 0.3s ease-in-out, width 0.3s ease-in-out',
+        width: `calc(100% - ${sidebarOpen ? sidebarWidth : 0}px)`,
+        ml: sidebarOpen ? `${sidebarWidth}px` : 0,
       }}
     >
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           justifyContent="space-between"
@@ -142,7 +186,7 @@ function Footer() {
         </Stack>
       </Container>
 
-      {/* Botão Voltar ao Topo */}
+      {/* Botão Voltar ao Topo - Ajustado para não sobrepor o sidebar */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.div
@@ -157,7 +201,7 @@ function Footer() {
                 sx={{
                   position: 'fixed',
                   bottom: 20,
-                  right: 20,
+                  right: sidebarOpen ? `${sidebarWidth + 20}px` : '20px',
                   bgcolor: '#9c27b0',
                   color: '#fff',
                   width: 40,
@@ -166,7 +210,7 @@ function Footer() {
                     bgcolor: '#7b1fa2',
                     transform: 'scale(1.1)',
                   },
-                  transition: 'all 0.2s',
+                  transition: 'all 0.3s ease-in-out',
                   zIndex: 1000,
                 }}
               >
