@@ -84,13 +84,13 @@ import {
   LockOpen as LockOpenIcon,
   EventBusy as EventBusyIcon,
   EventAvailable as EventAvailableIcon,
+  // 🔥 ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, parseISO, addDays, addWeeks, addMonths, getDay, getDaysInMonth, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -118,72 +118,40 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Funções auxiliares de data usando date-fns
-const formatDate = (date) => {
-  if (!date) return '';
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return format(dateObj, 'yyyy-MM-dd');
-};
-
-const formatDateBR = (date) => {
-  if (!date) return '';
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return format(dateObj, 'dd/MM/yyyy');
-};
-
-const formatDateTime = (date) => {
-  if (!date) return '';
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return format(dateObj, 'dd/MM/yyyy HH:mm:ss');
-};
-
-const formatTime = (date) => {
-  if (!date) return '';
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return format(dateObj, 'HH:mm');
-};
-
-const getCurrentDate = () => {
-  return new Date();
-};
-
-const getCurrentDateStr = () => {
-  return formatDate(new Date());
-};
-
-// Funções de navegação
-const addDaysToDate = (date, days) => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return addDays(dateObj, days);
-};
-
-const addWeeksToDate = (date, weeks) => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return addWeeks(dateObj, weeks);
-};
-
-const addMonthsToDate = (date, months) => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return addMonths(dateObj, months);
-};
-
-const getDaysInMonthDate = (date) => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return getDaysInMonth(dateObj);
+// Funções auxiliares de data
+const getDaysInMonth = (date) => {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 };
 
 const getFirstDayOfMonth = (date) => {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const firstDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
-  const dayOfWeek = getDay(firstDay);
-  return dayOfWeek === 0 ? 7 : dayOfWeek;
+  return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
 
-const getWeekDaysList = (date) => {
+const formatDate = (date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const addWeeks = (date, weeks) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + weeks * 7);
+  return result;
+};
+
+const addMonths = (date, months) => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+};
+
+const getWeekDays = (date) => {
   const start = new Date(date);
-  const dayOfWeek = getDay(start);
-  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  start.setDate(start.getDate() + diffToMonday);
+  start.setDate(start.getDate() - start.getDay() + 1);
   const days = [];
   for (let i = 0; i < 7; i++) {
     days.push(addDays(start, i));
@@ -207,30 +175,27 @@ const RelatorioAgenda = React.forwardRef(({
   usuarioCargo,
   configuracoes
 }, ref) => {
-  
-  const formatarTelefone = (telefone) => {
-    if (!telefone || telefone === 'Não informado') return telefone;
-    
-    const numeros = telefone.replace(/\D/g, '');
-    
-    if (numeros.length === 11) {
-      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    } else if (numeros.length === 10) {
-      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-    }
-    
-    return telefone;
-  };
-
   const formatarData = (data) => {
     if (!data) return '';
-    const dateObj = typeof data === 'string' ? new Date(data + 'T12:00:00') : data;
-    return format(dateObj, 'dd/MM/yyyy');
+    return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+  };
+
+  const calcularDuracaoTotal = (servicos) => {
+    if (!servicos || servicos.length === 0) return 0;
+    return servicos.reduce((acc, s) => acc + (s.duracao || 60), 0);
+  };
+
+  const formatarDuracao = (minutos) => {
+    if (minutos < 60) return `${minutos}min`;
+    const horas = Math.floor(minutos / 60);
+    const mins = minutos % 60;
+    return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
   };
 
   const profissionalNome = profissional === 'all' ? 'Todos os Profissionais' : 
     profissionais?.find(p => p.id === profissional)?.nome || 'Profissional';
 
+  // Calcular estatísticas
   const totalEventos = eventos.length;
   const totalAgendamentos = eventos.filter(e => e.tipo === 'agendamento').length;
   const totalAtendimentos = eventos.filter(e => e.tipo === 'atendimento').length;
@@ -238,259 +203,74 @@ const RelatorioAgenda = React.forwardRef(({
   const totalConfirmados = eventos.filter(e => e.status === 'confirmado').length;
   const totalPendentes = eventos.filter(e => e.status === 'pendente').length;
   const totalCancelados = eventos.filter(e => e.status === 'cancelado').length;
-  const valorTotal = eventos.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+  const totalFinalizados = eventos.filter(e => e.status === 'finalizado').length;
 
   return (
-    <Box ref={ref} sx={{ 
-      p: 4, 
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', 
-      maxWidth: '1200px', 
-      margin: '0 auto',
-      backgroundColor: '#ffffff',
-      borderRadius: '12px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-    }}>
-      <Box sx={{ 
-        textAlign: 'center', 
-        mb: 4, 
-        pb: 3,
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-        borderRadius: '12px',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <Box sx={{
-          position: 'absolute',
-          top: -50,
-          right: -50,
-          width: 200,
-          height: 200,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
-          pointerEvents: 'none'
-        }} />
-        <Box sx={{
-          position: 'absolute',
-          bottom: -30,
-          left: -30,
-          width: 150,
-          height: 150,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.1)',
-          pointerEvents: 'none'
-        }} />
-        
-        <Box sx={{ position: 'relative', zIndex: 1, p: 3 }}>
-          <Typography variant="h3" sx={{ 
-            fontWeight: 800, 
-            mb: 1,
-            fontSize: '2rem',
-            letterSpacing: '-0.5px',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.2)'
-          }}>
-            📋 RELATÓRIO DE AGENDA
-          </Typography>
-          <Typography variant="h5" sx={{ 
-            fontWeight: 500, 
-            mb: 2,
-            fontSize: '1.2rem',
-            opacity: 0.95
-          }}>
-            {profissionalNome}
-          </Typography>
-          <Box sx={{ 
-            display: 'inline-flex', 
-            gap: 3, 
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            mt: 2,
-            pt: 2,
-            borderTop: '1px solid rgba(255,255,255,0.2)'
-          }}>
-            <Box>
-              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
-                Período
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                {formatarData(dataInicio)} - {formatarData(dataFim)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ display: 'block', opacity: 0.8, fontSize: '0.7rem' }}>
-                Data de Emissão
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                {formatDateTime(new Date())}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
+    <Box ref={ref} sx={{ p: 3, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Cabeçalho com Logo */}
+      <Box sx={{ textAlign: 'center', mb: 3, borderBottom: '2px solid #9c27b0', pb: 2 }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 0.5, fontSize: '1.8rem' }}>
+          Relatório de Agenda
+        </Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 500, color: '#555', fontSize: '1rem' }}>
+          {profissionalNome}
+        </Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5, fontSize: '0.8rem' }}>
+          Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
+        </Typography>
+        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5, fontSize: '0.7rem' }}>
+          Emitido em: {new Date().toLocaleString('pt-BR')}
+        </Typography>
       </Box>
 
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 700, 
-          mb: 2, 
-          color: '#333',
-          fontSize: '1.1rem',
-          borderLeft: '4px solid #9c27b0',
-          pl: 2
-        }}>
-          📊 Resumo do Período
+      {/* Estatísticas */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
+          Resumo do Período
         </Typography>
-        
-        <Grid container spacing={2}>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalEventos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Total de Eventos
-              </Typography>
+        <Grid container spacing={0.5}>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Total</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>{totalEventos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalAgendamentos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Agendamentos
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Agend.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0', fontSize: '0.8rem' }}>{totalAgendamentos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #ff9800 0%, #ff5722 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalAtendimentos}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Atendimentos
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Atend.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800', fontSize: '0.8rem' }}>{totalAtendimentos}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalConfirmados}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Confirmados
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalPendentes}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Pendentes
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6} sm={4} md={2}>
-            <Paper sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
-              color: 'white',
-              borderRadius: '12px'
-            }}>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: '1.5rem' }}>
-                {totalCancelados}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.7rem' }}>
-                Cancelados
-              </Typography>
+          <Grid item xs={3}>
+            <Paper sx={{ p: 1, bgcolor: '#f5f5f5', textAlign: 'center' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>Andam.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f44336', fontSize: '0.8rem' }}>{totalAndamento}</Typography>
             </Paper>
           </Grid>
         </Grid>
 
-        <Paper sx={{ 
-          mt: 3, 
-          p: 2, 
-          bgcolor: '#f5f5f5',
-          borderRadius: '12px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2
-        }}>
-          <Box>
-            <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-              Valor Total dos Serviços
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '1.3rem' }}>
-              R$ {valorTotal.toFixed(2)}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 3 }}>
-            <Box>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-                Média por Atendimento
-              </Typography>
-              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                R$ {totalAtendimentos > 0 ? (valorTotal / totalAtendimentos).toFixed(2) : '0,00'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.7rem' }}>
-                Média por Agendamento
-              </Typography>
-              <Typography variant="body1" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                R$ {totalAgendamentos > 0 ? (valorTotal / totalAgendamentos).toFixed(2) : '0,00'}
-              </Typography>
-            </Box>
-          </Box>
-        </Paper>
+        {/* Estatísticas detalhadas */}
+        <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Chip label={`✅ ${totalConfirmados} confirmados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e8f5e9' }} />
+          <Chip label={`⏳ ${totalPendentes} pendentes`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#fff3e0' }} />
+          <Chip label={`❌ ${totalCancelados} cancelados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#ffebee' }} />
+          <Chip label={`✅ ${totalFinalizados} finalizados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e3f2fd' }} />
+        </Box>
       </Box>
 
+      {/* Eventos por Dia */}
       <Box>
-        <Typography variant="h6" sx={{ 
-          fontWeight: 700, 
-          mb: 2, 
-          color: '#333',
-          fontSize: '1.1rem',
-          borderLeft: '4px solid #9c27b0',
-          pl: 2
-        }}>
-          📅 Agenda Detalhada
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
+          Agenda Detalhada
         </Typography>
         
+        {/* Agrupar eventos por data */}
         {Object.entries(
           eventos.reduce((acc, evento) => {
             const data = evento.data;
@@ -503,185 +283,52 @@ const RelatorioAgenda = React.forwardRef(({
             (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '')
           );
 
-          const dateObj = new Date(data + 'T12:00:00');
-          const diaSemana = format(dateObj, 'EEEE', { locale: ptBR });
-          const diaNumero = format(dateObj, 'dd');
-          const mesAno = format(dateObj, 'MMMM [de] yyyy', { locale: ptBR });
-
           return (
-            <Card key={data} variant="outlined" sx={{ 
-              mb: 3, 
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-              border: '1px solid #e0e0e0'
-            }}>
-              <Box sx={{ 
-                bgcolor: '#faf5ff', 
-                p: 2, 
-                borderBottom: '2px solid #9c27b0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                flexWrap: 'wrap'
-              }}>
-                <Box sx={{ 
-                  bgcolor: '#9c27b0', 
-                  color: 'white', 
-                  borderRadius: '8px',
-                  width: 50,
-                  height: 50,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Typography variant="h5" sx={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1 }}>
-                    {diaNumero}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0', textTransform: 'capitalize' }}>
-                    {diaSemana}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {mesAno}
-                  </Typography>
-                </Box>
-                <Box sx={{ ml: 'auto' }}>
-                  <Chip 
-                    label={`${eventosOrdenados.length} evento(s)`}
-                    size="small"
-                    sx={{ bgcolor: '#9c27b0', color: 'white', fontWeight: 500 }}
-                  />
-                </Box>
-              </Box>
-
-              <CardContent sx={{ p: 0 }}>
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 0 }}>
+            <Card key={data} variant="outlined" sx={{ mb: 1.5 }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#9c27b0', fontSize: '0.8rem' }}>
+                  {formatarData(data)}
+                </Typography>
+                
+                <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Horário</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Cliente</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Serviços</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Profissional</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5 }}>
-                          <strong>Status</strong>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
-                          <strong>Valor</strong>
-                        </TableCell>
+                      <TableRow sx={{ bgcolor: '#f0f0f0' }}>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Hor.</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Cliente</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Serviços</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Prof.</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Tipo</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Status</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {eventosOrdenados.map((evento, idx) => {
+                      {eventosOrdenados.map(evento => {
                         const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
-                        const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
+                        const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
                             id: evento.servicoId, 
-                            nome: evento.servicoNome || 'Serviço',
-                            preco: evento.preco || 0
+                            nome: evento.servicoNome || 'Serviço'
                           }] : []);
                         
-                        const valorEvento = evento.valorTotal || servicos.reduce((acc, s) => acc + (s.preco || 0), 0);
-                        
-                        const getStatusBadge = (status) => {
-                          const statusConfig = {
-                            confirmado: { color: '#4caf50', label: '✓ Confirmado', bg: '#e8f5e9' },
-                            pendente: { color: '#ff9800', label: '⏳ Pendente', bg: '#fff3e0' },
-                            cancelado: { color: '#f44336', label: '✗ Cancelado', bg: '#ffebee' },
-                            finalizado: { color: '#2196f3', label: '✓ Finalizado', bg: '#e3f2fd' },
-                            em_andamento: { color: '#9c27b0', label: '▶ Em Andamento', bg: '#f3e5f5' }
-                          };
-                          const config = statusConfig[status] || { color: '#9e9e9e', label: status, bg: '#f5f5f5' };
-                          return (
-                            <Box sx={{ 
-                              display: 'inline-block',
-                              px: 1.5,
-                              py: 0.5,
-                              borderRadius: '20px',
-                              bgcolor: config.bg,
-                              color: config.color,
-                              fontSize: '0.7rem',
-                              fontWeight: 600
-                            }}>
-                              {config.label}
-                            </Box>
-                          );
-                        };
-                        
                         return (
-                          <TableRow 
-                            key={evento.id}
-                            sx={{ 
-                              '&:hover': { bgcolor: '#faf5ff' },
-                              borderBottom: idx === eventosOrdenados.length - 1 ? 'none' : '1px solid #f0f0f0'
-                            }}
-                          >
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <strong>{evento.horario || evento.horaInicio}</strong>
+                          <TableRow key={evento.id}>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{evento.horario || evento.horaInicio}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{cliente?.nome || '—'}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {servicos.map(s => s.nome).join(', ')}
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.75rem' }}>
-                                  {cliente?.nome || '—'}
-                                </Typography>
-                                {cliente?.telefone && (
-                                  <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.65rem' }}>
-                                    {formatarTelefone(cliente.telefone)}
-                                  </Typography>
-                                )}
-                              </Box>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{profissional?.nome || '—'}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {evento.tipo === 'agendamento' ? 'Agend.' : 'Atend.'}
                             </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              <Box>
-                                {servicos.map((s, i) => (
-                                  <Typography key={i} variant="caption" sx={{ display: 'block', fontSize: '0.7rem' }}>
-                                    • {s.nome}
-                                  </Typography>
-                                ))}
-                              </Box>
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              {profissionalItem?.nome || '—'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5 }}>
-                              {getStatusBadge(evento.status)}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', py: 1.5, textAlign: 'right' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: '0.75rem' }}>
-                                R$ {valorEvento.toFixed(2)}
-                              </Typography>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
+                              {evento.status}
                             </TableCell>
                           </TableRow>
                         );
                       })}
-                      
-                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                        <TableCell colSpan={5} sx={{ py: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.75rem' }}>
-                            Total do Dia
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ textAlign: 'right', py: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#9c27b0', fontSize: '0.8rem' }}>
-                            R$ {eventosOrdenados.reduce((acc, e) => {
-                              const servicosValor = (e.servicos || []).reduce((s, serv) => s + (serv.preco || 0), 0);
-                              return acc + (e.valorTotal || servicosValor);
-                            }, 0).toFixed(2)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -689,31 +336,12 @@ const RelatorioAgenda = React.forwardRef(({
             </Card>
           );
         })}
-        
-        {eventos.length === 0 && (
-          <Paper sx={{ p: 4, textAlign: 'center', borderRadius: '12px', bgcolor: '#faf5ff' }}>
-            <Typography variant="body1" color="textSecondary">
-              Nenhum evento encontrado para o período selecionado.
-            </Typography>
-          </Paper>
-        )}
       </Box>
 
-      <Box sx={{ 
-        mt: 4, 
-        pt: 3, 
-        textAlign: 'center', 
-        borderTop: '2px solid #e0e0e0',
-        color: 'text.secondary'
-      }}>
-        <Typography variant="caption" sx={{ fontSize: '0.65rem', display: 'block' }}>
-          Relatório gerado automaticamente pelo Sistema Salão Beleza
-        </Typography>
-        <Typography variant="caption" sx={{ fontSize: '0.6rem', display: 'block', mt: 0.5 }}>
-          Documento não fiscal • Este relatório contém informações confidenciais
-        </Typography>
-        <Typography variant="caption" sx={{ fontSize: '0.55rem', display: 'block', mt: 1, color: '#9c27b0' }}>
-          © {new Date().getFullYear()} Salão Beleza - Todos os direitos reservados
+      {/* Rodapé */}
+      <Box sx={{ mt: 2, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 1 }}>
+        <Typography variant="caption" sx={{ fontSize: '0.5rem' }}>
+          Relatório gerado automaticamente • Documento não fiscal
         </Typography>
       </Box>
     </Box>
@@ -733,8 +361,8 @@ function ModernAgendamentos() {
   
   // Estados de visualização
   const [viewMode, setViewMode] = useState('day');
-  const [currentDate, setCurrentDate] = useState(getCurrentDate());
-  const [selectedDate, setSelectedDate] = useState(getCurrentDateStr());
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [selectedProfessional, setSelectedProfessional] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   
@@ -752,7 +380,7 @@ function ModernAgendamentos() {
   const [ausencias, setAusencias] = useState([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   
-  // Estados para anamnese
+  // 🔥 ESTADOS PARA ANAMNESE
   const [formulariosPendentes, setFormulariosPendentes] = useState({});
   const [verificandoFormularios, setVerificandoFormularios] = useState(false);
   
@@ -763,8 +391,8 @@ function ModernAgendamentos() {
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
   const [periodoRelatorio, setPeriodoRelatorio] = useState({
     tipo: 'dia',
-    dataInicio: getCurrentDateStr(),
-    dataFim: getCurrentDateStr()
+    dataInicio: formatDate(new Date()),
+    dataFim: formatDate(new Date())
   });
   const relatorioRef = useRef(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -864,6 +492,17 @@ function ModernAgendamentos() {
     };
   };
 
+  const getUsuarioSistemaData = (usuarioId) => {
+    if (!usuarioId || !usuarios) return null;
+    
+    const usuario = usuarios.find(u => 
+      u.id === usuarioId || 
+      u.uid === usuarioId
+    );
+    
+    return usuario || null;
+  };
+
   const formatarTelefone = (telefone) => {
     if (!telefone || telefone === 'Não informado') return telefone;
     
@@ -886,6 +525,12 @@ function ModernAgendamentos() {
 
   const removerMascaraCPF = (cpf) => {
     return cpf ? cpf.replace(/\D/g, '') : '';
+  };
+
+  const formatarDataBrasil = (data) => {
+    if (!data) return '';
+    const d = new Date(data);
+    return d.toLocaleDateString('pt-BR');
   };
 
   const getStatusColor = (status) => {
@@ -931,14 +576,18 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      const dateObj = new Date(selectedDate + 'T12:00:00');
-      return format(dateObj, 'EEEE, d [de] MMMM [de] yyyy', { locale: ptBR });
+      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
     } else if (viewMode === 'week') {
-      const start = getWeekDaysList(currentDate)[0];
-      const end = getWeekDaysList(currentDate)[6];
-      return `${format(start, 'dd/MM')} - ${format(end, 'dd/MM/yyyy')}`;
+      const start = getWeekDays(currentDate)[0];
+      const end = getWeekDays(currentDate)[6];
+      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
     } else {
-      return format(currentDate, 'MMMM [de] yyyy', { locale: ptBR });
+      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
 
@@ -949,15 +598,17 @@ function ModernAgendamentos() {
   const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return false;
 
-    const dateObj = new Date(data + 'T12:00:00');
-    const diaSemana = getDay(dateObj);
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
 
+    // Verificar disponibilidade do profissional para este dia da semana
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
     );
 
     if (!disponibilidade) return false;
 
+    // Verificar se horário está dentro do expediente
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
     const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
     const [horaAtual, minAtual] = horario.split(':').map(Number);
@@ -968,6 +619,7 @@ function ModernAgendamentos() {
 
     if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
 
+    // Verificar intervalo de almoço
     if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
       const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
       const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
@@ -978,6 +630,7 @@ function ModernAgendamentos() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
     }
 
+    // Verificar ausências
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
       data >= a.dataInicio &&
@@ -990,6 +643,7 @@ function ModernAgendamentos() {
 
     if (ausencia) return false;
 
+    // Verificar se já existe agendamento neste horário
     const agendamentoExistente = (agendamentos || []).some(apt => 
       apt.profissionalId === profissionalId &&
       apt.data === data &&
@@ -1004,8 +658,8 @@ function ModernAgendamentos() {
   const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
     if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
 
-    const dateObj = new Date(data + 'T12:00:00');
-    const diaSemana = getDay(dateObj);
+    const dataObj = new Date(data + 'T12:00:00');
+    const diaSemana = dataObj.getDay();
 
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
@@ -1016,6 +670,7 @@ function ModernAgendamentos() {
     const [horaAtual, minAtual] = horario.split(':').map(Number);
     const minutosAtual = horaAtual * 60 + minAtual;
 
+    // Verificar horário de expediente
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
     const minutosInicio = horaInicio * 60 + minInicio;
     
@@ -1025,6 +680,7 @@ function ModernAgendamentos() {
     if (minutosAtual < minutosInicio) return 'Antes do horário de início';
     if (minutosAtual >= minutosFim) return 'Após o horário de término';
 
+    // Verificar intervalo
     if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
       const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
       const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
@@ -1035,6 +691,7 @@ function ModernAgendamentos() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
     }
 
+    // Verificar ausência
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
       data >= a.dataInicio &&
@@ -1057,6 +714,7 @@ function ModernAgendamentos() {
       return tipos[ausencia.tipo] || 'Profissional ausente';
     }
 
+    // Verificar agendamento existente
     const agendamentoExistente = (agendamentos || []).some(apt => 
       apt.profissionalId === profissionalId &&
       apt.data === data &&
@@ -1081,13 +739,14 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES PARA ANAMNESE
+  // 🔥 FUNÇÕES PARA ANAMNESE
   // ============================================
 
   const verificarFormulariosPendentes = async (agendamento) => {
     if (!agendamento || !agendamento.servicoId) return false;
     
     try {
+      // Buscar formulários ativos associados ao serviço
       const formularios = await firebaseService.query('formularios_anamnese', [
         { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
         { field: 'ativo', operator: '==', value: true }
@@ -1095,6 +754,7 @@ function ModernAgendamentos() {
 
       if (formularios.length === 0) return false;
 
+      // Verificar se já existe resposta para este agendamento
       const respostas = await firebaseService.query('respostas_anamnese', [
         { field: 'agendamentoId', operator: '==', value: agendamento.id }
       ]);
@@ -1188,17 +848,22 @@ function ModernAgendamentos() {
     return eventos;
   };
 
+  // Combinar agendamentos e atendimentos
   const todosEventos = filtrarEventosPorUsuario([
     ...(agendamentos || []).map(apt => ({
       ...apt,
       tipo: 'agendamento',
       icone: <ScheduleIcon />,
+      dataObj: apt.data,
+      horarioObj: apt.horario
     })),
     ...(atendimentos || []).map(att => ({
       ...att,
       tipo: 'atendimento',
       icone: <TimerIcon />,
       status: att.status || 'em_andamento',
+      dataObj: att.data,
+      horarioObj: att.horaInicio
     }))
   ]);
 
@@ -1221,14 +886,14 @@ function ModernAgendamentos() {
   const dayEvents = filteredEvents.filter(event => event.data === selectedDate);
   const atendimentosEmAndamento = (atendimentos || []).filter(att => att.status === 'em_andamento');
 
-  const weekDaysList = getWeekDaysList(currentDate);
-  const weekEvents = weekDaysList.map(day => ({
+  const weekDays_list = getWeekDays(currentDate);
+  const weekEvents = weekDays_list.map(day => ({
     date: formatDate(day),
-    dayName: weekDays[getDay(day) === 0 ? 6 : getDay(day) - 1],
+    dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
     events: filteredEvents.filter(event => event.data === formatDate(day))
   }));
 
-  const monthDays = getDaysInMonthDate(currentDate);
+  const monthDays = getDaysInMonth(currentDate);
   const firstDay = getFirstDayOfMonth(currentDate);
   const monthMatrix = [];
   let dayCounter = 1;
@@ -1241,14 +906,14 @@ function ModernAgendamentos() {
       } else if (dayCounter <= monthDays) {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
         const dateStr = formatDate(date);
-        const dayEventsFiltered = filteredEvents.filter(event => event.data === dateStr);
+        const dayEvents = filteredEvents.filter(event => event.data === dateStr);
         week.push({
           day: dayCounter,
           date: dateStr,
-          events: dayEventsFiltered,
-          count: dayEventsFiltered.length,
-          atendimentos: dayEventsFiltered.filter(e => e.tipo === 'atendimento').length,
-          agendamentos: dayEventsFiltered.filter(e => e.tipo === 'agendamento').length,
+          events: dayEvents,
+          count: dayEvents.length,
+          atendimentos: dayEvents.filter(e => e.tipo === 'atendimento').length,
+          agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
         });
         dayCounter++;
       } else {
@@ -1331,21 +996,18 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES DE NAVEGAÇÃO CORRIGIDAS
+  // FUNÇÕES DE NAVEGAÇÃO
   // ============================================
 
   const handlePrevious = () => {
     if (viewMode === 'day') {
-      const currentDateObj = new Date(selectedDate);
-      const newDate = addDays(currentDateObj, -1);
-      const newDateStr = formatDate(newDate);
-      setSelectedDate(newDateStr);
+      const newDate = addDays(new Date(selectedDate), -1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, -1);
       setCurrentDate(newDate);
-      const firstDayOfWeek = getWeekDaysList(newDate)[0];
-      setSelectedDate(formatDate(firstDayOfWeek));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, -1);
       setCurrentDate(newDate);
@@ -1354,16 +1016,13 @@ function ModernAgendamentos() {
 
   const handleNext = () => {
     if (viewMode === 'day') {
-      const currentDateObj = new Date(selectedDate);
-      const newDate = addDays(currentDateObj, 1);
-      const newDateStr = formatDate(newDate);
-      setSelectedDate(newDateStr);
+      const newDate = addDays(new Date(selectedDate), 1);
+      setSelectedDate(formatDate(newDate));
       setCurrentDate(newDate);
     } else if (viewMode === 'week') {
       const newDate = addWeeks(currentDate, 1);
       setCurrentDate(newDate);
-      const firstDayOfWeek = getWeekDaysList(newDate)[0];
-      setSelectedDate(formatDate(firstDayOfWeek));
+      setSelectedDate(formatDate(newDate));
     } else {
       const newDate = addMonths(currentDate, 1);
       setCurrentDate(newDate);
@@ -1373,8 +1032,7 @@ function ModernAgendamentos() {
   const handleToday = () => {
     const today = new Date();
     setCurrentDate(today);
-    const todayStr = formatDate(today);
-    setSelectedDate(todayStr);
+    setSelectedDate(formatDate(today));
   };
 
   const handleDayClick = (date) => {
@@ -1543,7 +1201,7 @@ function ModernAgendamentos() {
         servicoId: primeiroServico.id,
         servicos: servicosLista,
         data: agendamento.data,
-        horaInicio: format(new Date(), 'HH:mm'),
+        horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         horaFim: null,
         status: 'em_andamento',
         observacoes: agendamento.observacoes || '',
@@ -1652,6 +1310,7 @@ function ModernAgendamentos() {
         return;
       }
 
+      // Validar disponibilidade do profissional
       const disponivel = verificarDisponibilidadeProfissional(
         formData.profissionalId, 
         formData.data, 
@@ -1681,9 +1340,7 @@ function ModernAgendamentos() {
         origem: 'sistema',
         createdBy: usuario?.id || usuario?.uid || 'sistema',
         createdByName: usuario?.nome || 'Sistema',
-        createdByCargo: usuario?.cargo || 'sistema',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        createdByCargo: usuario?.cargo || 'sistema'
       };
 
       let agendamentoCriado;
@@ -1718,6 +1375,7 @@ function ModernAgendamentos() {
 
       setUpdateTrigger(prev => prev + 1);
 
+      // Notificar profissional
       if (usuario && formData.profissionalId) {
         try {
           const usuarios = await firebaseService.getAll('usuarios');
@@ -1744,7 +1402,7 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES DE EXPORTAÇÃO E IMPRESSÃO (SIMPLIFICADAS)
+  // FUNÇÕES DE EXPORTAÇÃO E IMPRESSÃO
   // ============================================
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -2017,6 +1675,7 @@ function ModernAgendamentos() {
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
 
+      // Cabeçalho
       doc.setFontSize(18);
       doc.setTextColor(156, 39, 176);
       doc.text('Relatório de Agenda', pageWidth / 2, 15, { align: 'center' });
@@ -2029,15 +1688,16 @@ function ModernAgendamentos() {
       
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
-      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
-      const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
       doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 28, { align: 'center' });
-      doc.text(`Emitido em: ${formatDateTime(new Date())}`, pageWidth / 2, 34, { align: 'center' });
+      
+      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 34, { align: 'center' });
 
       let yPos = 40;
 
+      // Estatísticas
       const totalEventos = eventosFiltrados.length;
       const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
       const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
@@ -2048,15 +1708,17 @@ function ModernAgendamentos() {
       doc.text('Resumo do Período', 14, yPos);
       yPos += 6;
 
+      const statsData = [
+        ['Total de Eventos', totalEventos.toString()],
+        ['Agendamentos', totalAgendamentos.toString()],
+        ['Atendimentos', totalAtendimentos.toString()],
+        ['Em Andamento', totalAndamento.toString()],
+      ];
+
       autoTable(doc, {
         startY: yPos,
         head: [['Descrição', 'Quantidade']],
-        body: [
-          ['Total de Eventos', totalEventos.toString()],
-          ['Agendamentos', totalAgendamentos.toString()],
-          ['Atendimentos', totalAtendimentos.toString()],
-          ['Em Andamento', totalAndamento.toString()],
-        ],
+        body: statsData,
         theme: 'striped',
         headStyles: { fillColor: [156, 39, 176], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
@@ -2065,13 +1727,17 @@ function ModernAgendamentos() {
 
       yPos = doc.lastAutoTable.finalY + 8;
 
+      // Eventos por dia
       doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
       doc.text('Agenda Detalhada', 14, yPos);
       yPos += 6;
 
       const eventosPorData = {};
       eventosFiltrados.forEach(evento => {
-        if (!eventosPorData[evento.data]) eventosPorData[evento.data] = [];
+        if (!eventosPorData[evento.data]) {
+          eventosPorData[evento.data] = [];
+        }
         eventosPorData[evento.data].push(evento);
       });
 
@@ -2083,15 +1749,15 @@ function ModernAgendamentos() {
 
         doc.setFontSize(10);
         doc.setTextColor(156, 39, 176);
-        const dateObj = new Date(data + 'T12:00:00');
-        doc.text(format(dateObj, 'dd/MM/yyyy'), 14, yPos);
+        doc.text(new Date(data + 'T12:00:00').toLocaleDateString('pt-BR'), 14, yPos);
         yPos += 4;
 
         const eventosDoDia = eventosPorData[data];
         const tableData = eventosDoDia.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
-          const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+          const servicos = evento.servicos || 
+            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
           
           return [
             evento.horario || evento.horaInicio || '--:--',
@@ -2111,7 +1777,14 @@ function ModernAgendamentos() {
           headStyles: { fillColor: [156, 39, 176], fontSize: 7 },
           bodyStyles: { fontSize: 6 },
           margin: { left: 14, right: 14 },
-          columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 35 }, 2: { cellWidth: 40 }, 3: { cellWidth: 25 }, 4: { cellWidth: 15 }, 5: { cellWidth: 20 } },
+          columnStyles: {
+            0: { cellWidth: 18 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 25 },
+            4: { cellWidth: 15 },
+            5: { cellWidth: 20 },
+          },
         });
 
         yPos = doc.lastAutoTable.finalY + 6;
@@ -2121,8 +1794,13 @@ function ModernAgendamentos() {
       doc.save(fileName);
       
       await auditoriaService.registrar('exportar_pdf_agenda', {
+        entidade: 'agendamentos',
         detalhes: 'Exportação de relatório de agenda em PDF',
-        dados: { periodo: periodoRelatorio.tipo, profissional: profissionalNome, totalEventos: eventosFiltrados.length }
+        dados: {
+          periodo: periodoRelatorio.tipo,
+          profissional: profissionalNome,
+          totalEventos: eventosFiltrados.length
+        }
       });
       
       mostrarSnackbar('PDF gerado com sucesso!', 'success');
@@ -2130,6 +1808,10 @@ function ModernAgendamentos() {
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'exportar_pdf_agenda'
+      });
     }
   };
 
@@ -2155,10 +1837,9 @@ function ModernAgendamentos() {
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
-      const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
+      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
+        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
 
       const infoData = [
         ['RELATÓRIO DE AGENDA'],
@@ -2166,7 +1847,7 @@ function ModernAgendamentos() {
         ['Informações do Relatório'],
         ['Profissional', profissionalNome],
         ['Período', `${dataInicioFormat} - ${dataFimFormat}`],
-        ['Data de Emissão', formatDateTime(new Date())],
+        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
         ['Total de Eventos', eventosFiltrados.length],
       ];
 
@@ -2194,13 +1875,13 @@ function ModernAgendamentos() {
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
         ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
-          const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
-          const dateObj = new Date(evento.data + 'T12:00:00');
+          const servicos = evento.servicos || 
+            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
           
           return [
-            format(dateObj, 'dd/MM/yyyy'),
+            new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR'),
             evento.horario || evento.horaInicio || '--:--',
             cliente?.nome || '—',
             cliente?.telefone || '—',
@@ -2221,8 +1902,13 @@ function ModernAgendamentos() {
       XLSX.writeFile(wb, fileName);
       
       await auditoriaService.registrar('exportar_excel_agenda', {
+        entidade: 'agendamentos',
         detalhes: 'Exportação de relatório de agenda em Excel',
-        dados: { periodo: periodoRelatorio.tipo, profissional: profissionalNome, totalEventos: eventosFiltrados.length }
+        dados: {
+          periodo: periodoRelatorio.tipo,
+          profissional: profissionalNome,
+          totalEventos: eventosFiltrados.length
+        }
       });
       
       mostrarSnackbar('Planilha gerada com sucesso!', 'success');
@@ -2230,6 +1916,10 @@ function ModernAgendamentos() {
     } catch (error) {
       console.error('Erro ao gerar Excel:', error);
       mostrarSnackbar('Erro ao gerar planilha', 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'exportar_excel_agenda'
+      });
     }
   };
 
@@ -2244,6 +1934,10 @@ function ModernAgendamentos() {
 
     if (user?.cargo === 'profissional' && user?.profissionalId) {
       setSelectedProfessional(user.profissionalId);
+    }
+
+    if (user?.cargo === 'cliente' && user?.clienteId) {
+      setSelectedProfessional('all');
     }
   }, []);
 
@@ -2269,6 +1963,7 @@ function ModernAgendamentos() {
     carregarDisponibilidade();
   }, [updateTrigger]);
 
+  // 🔥 Verificar formulários pendentes quando agendamentos mudar
   useEffect(() => {
     if (agendamentos && agendamentos.length > 0) {
       verificarTodosFormularios();
@@ -2684,6 +2379,8 @@ function ModernAgendamentos() {
                                 const cliente = getClienteData(event.clienteId);
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
+                                
+                                // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                                 const temFormularioPendente = formulariosPendentes[event.id];
 
                                 if (!cliente) return null;
@@ -2697,7 +2394,7 @@ function ModernAgendamentos() {
                                     >
                                       <Card variant="outlined" sx={{ 
                                         p: 2,
-                                        position: 'relative',
+                                        position: 'relative', // Para o badge
                                         borderLeft: '4px solid',
                                         borderLeftColor: 
                                           event.tipo === 'atendimento' ? '#ff9800' :
@@ -2705,6 +2402,7 @@ function ModernAgendamentos() {
                                           event.status === 'pendente' ? '#ff9800' :
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
+                                        {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                                         {temFormularioPendente && (
                                           <Tooltip title="Formulário de anamnese pendente">
                                             <Badge
@@ -2787,6 +2485,7 @@ function ModernAgendamentos() {
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                              {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                                               {temFormularioPendente && (
                                                 <Tooltip title="Preencher formulário">
                                                   <IconButton
@@ -2937,7 +2636,7 @@ function ModernAgendamentos() {
                         {day.dayName}
                       </Typography>
                       <Typography variant="h6" sx={{ mb: 2 }}>
-                        {format(new Date(day.date + 'T12:00:00'), 'dd')}
+                        {new Date(day.date + 'T12:00:00').getDate()}
                       </Typography>
                       
                       {day.events.length > 0 ? (
@@ -2945,6 +2644,7 @@ function ModernAgendamentos() {
                           {day.events.slice(0, 3).map(event => {
                             const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
+                            // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                             const temFormularioPendente = formulariosPendentes[event.id];
                             
                             return (
@@ -3006,7 +2706,7 @@ function ModernAgendamentos() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {format(currentDate, 'MMMM [de] yyyy', { locale: ptBR })}
+              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </Typography>
 
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -3077,6 +2777,7 @@ function ModernAgendamentos() {
                             {day.events.slice(0, 2).map(event => {
                               const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
+                              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                               const temFormularioPendente = formulariosPendentes[event.id];
                               
                               return (
@@ -3124,7 +2825,12 @@ function ModernAgendamentos() {
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
           {selectedDayDetails?.date && 
-            format(new Date(selectedDayDetails.date + 'T12:00:00'), 'EEEE, d [de] MMMM [de] yyyy', { locale: ptBR })
+            new Date(selectedDayDetails.date + 'T12:00:00').toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
           }
         </DialogTitle>
         <DialogContent>
@@ -3133,12 +2839,14 @@ function ModernAgendamentos() {
               const cliente = getClienteData(event.clienteId);
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
+              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
               const temFormularioPendente = formulariosPendentes[event.id];
 
               if (!cliente) return null;
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
+                  {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                   {temFormularioPendente && (
                     <Tooltip title="Formulário de anamnese pendente">
                       <Badge
@@ -3225,6 +2933,7 @@ function ModernAgendamentos() {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                    {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                     {temFormularioPendente && (
                       <Button
                         size="small"
@@ -3313,6 +3022,7 @@ function ModernAgendamentos() {
           <form onSubmit={handleSave}>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
+                {/* Campo de Cliente com Pesquisa */}
                 <Grid item xs={12}>
                   <Box sx={{ mb: 2 }}>
                     {!formData.clienteId ? (
@@ -3334,6 +3044,7 @@ function ModernAgendamentos() {
                           </Button>
                         </Box>
 
+                        {/* Painel de Pesquisa */}
                         <Collapse in={showClientSearch}>
                           <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
                             <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
@@ -3407,6 +3118,7 @@ function ModernAgendamentos() {
                               </LocalizationProvider>
                             )}
 
+                            {/* Resultados da Busca */}
                             {searchClientResults.length > 0 && (
                               <Box sx={{ mt: 2 }}>
                                 <Typography variant="caption" color="textSecondary">
@@ -3456,7 +3168,7 @@ function ModernAgendamentos() {
                                               )}
                                               {cliente.dataNascimento && (
                                                 <Typography variant="caption">
-                                                  🎂 {formatDateBR(cliente.dataNascimento)}
+                                                  🎂 {formatarDataBrasil(cliente.dataNascimento)}
                                                 </Typography>
                                               )}
                                             </Box>
@@ -3479,6 +3191,7 @@ function ModernAgendamentos() {
                         </Collapse>
                       </Box>
                     ) : (
+                      // Cliente Selecionado
                       <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Avatar 
@@ -3519,11 +3232,13 @@ function ModernAgendamentos() {
                   </Box>
                 </Grid>
 
+                {/* Seção de Serviços Múltiplos */}
                 <Grid item xs={12}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                     Serviços do Agendamento
                   </Typography>
 
+                  {/* Lista de Serviços Selecionados */}
                   {servicosSelecionados.length > 0 && (
                     <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: '#faf5ff' }}>
                       <TableContainer>
@@ -3573,6 +3288,7 @@ function ModernAgendamentos() {
                     </Card>
                   )}
 
+                  {/* Adicionar Novo Serviço com Autocomplete */}
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={5}>
                       <Autocomplete
@@ -3666,6 +3382,7 @@ function ModernAgendamentos() {
                   )}
                 </Grid>
 
+                {/* Data e Hora */}
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
@@ -3771,6 +3488,7 @@ function ModernAgendamentos() {
         </Dialog>
       )}
 
+      {/* Dialog de Confirmação de Exclusão */}
       <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
         <DialogTitle sx={{ bgcolor: '#f44336', color: 'white' }}>
           Cancelar Agendamento
@@ -3792,6 +3510,7 @@ function ModernAgendamentos() {
         </DialogActions>
       </Dialog>
 
+      {/* Dialog de Relatórios */}
       {openRelatorioDialog && (cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && (
         <Dialog open={openRelatorioDialog} onClose={handleCloseRelatorio} maxWidth="sm" fullWidth>
           <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
@@ -3932,6 +3651,7 @@ function ModernAgendamentos() {
         </Dialog>
       )}
 
+      {/* Componente oculto para impressão */}
       <Box sx={{ display: 'none' }}>
         <RelatorioAgenda
           ref={relatorioRef}
@@ -3948,6 +3668,7 @@ function ModernAgendamentos() {
         />
       </Box>
 
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
