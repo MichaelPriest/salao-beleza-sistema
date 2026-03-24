@@ -52,7 +52,8 @@
     "recharts": "^2.8.0",
     "uuid": "^9.0.1",
     "web-vitals": "^2.1.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "html2pdf.js": "^0.10.1"
   },
   "scripts": {
     "start": "react-scripts start",
