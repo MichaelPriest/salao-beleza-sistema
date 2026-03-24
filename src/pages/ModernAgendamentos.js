@@ -1658,9 +1658,7 @@ function ModernAgendamentos() {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
       
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      
+      // 1. Preparar os dados filtrados
       let eventosFiltrados = filteredEvents;
       if (periodoRelatorio.tipo === 'dia') {
         eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
@@ -1669,70 +1667,28 @@ function ModernAgendamentos() {
           e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
         );
       }
-
+  
       eventosFiltrados.sort((a, b) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
       });
-
-      // Cabeçalho
-      doc.setFontSize(18);
-      doc.setTextColor(156, 39, 176);
-      doc.text('Relatório de Agenda', pageWidth / 2, 15, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
+  
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      doc.text(`Profissional: ${profissionalNome}`, pageWidth / 2, 22, { align: 'center' });
       
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
-      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
-      doc.text(`Período: ${dataInicioFormat} - ${dataFimFormat}`, pageWidth / 2, 28, { align: 'center' });
-      
-      doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 34, { align: 'center' });
-
-      let yPos = 40;
-
-      // Estatísticas
+      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
+      const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
+      const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
+  
       const totalEventos = eventosFiltrados.length;
       const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
       const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
-      const totalAndamento = eventosFiltrados.filter(e => e.status === 'em_andamento').length;
-
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('Resumo do Período', 14, yPos);
-      yPos += 6;
-
-      const statsData = [
-        ['Total de Eventos', totalEventos.toString()],
-        ['Agendamentos', totalAgendamentos.toString()],
-        ['Atendimentos', totalAtendimentos.toString()],
-        ['Em Andamento', totalAndamento.toString()],
-      ];
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Descrição', 'Quantidade']],
-        body: statsData,
-        theme: 'striped',
-        headStyles: { fillColor: [156, 39, 176], fontSize: 9 },
-        bodyStyles: { fontSize: 8 },
-        margin: { left: 14, right: 14 },
-      });
-
-      yPos = doc.lastAutoTable.finalY + 8;
-
-      // Eventos por dia
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('Agenda Detalhada', 14, yPos);
-      yPos += 6;
-
+      const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
+      const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
+      const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
+      const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+  
       const eventosPorData = {};
       eventosFiltrados.forEach(evento => {
         if (!eventosPorData[evento.data]) {
@@ -1740,59 +1696,554 @@ function ModernAgendamentos() {
         }
         eventosPorData[evento.data].push(evento);
       });
-
-      Object.keys(eventosPorData).sort().forEach(data => {
-        if (yPos > doc.internal.pageSize.getHeight() - 40) {
-          doc.addPage();
-          yPos = 20;
-        }
-
-        doc.setFontSize(10);
-        doc.setTextColor(156, 39, 176);
-        doc.text(new Date(data + 'T12:00:00').toLocaleDateString('pt-BR'), 14, yPos);
-        yPos += 4;
-
-        const eventosDoDia = eventosPorData[data];
-        const tableData = eventosDoDia.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
-          const profissional = profissionais?.find(p => p.id === evento.profissionalId);
-          const servicos = evento.servicos || 
-            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+  
+      // 2. Gerar HTML completo (mesmo da impressão)
+      const gerarTabelaEventos = () => {
+        let html = '';
+        
+        Object.keys(eventosPorData).sort().forEach(data => {
+          const eventosDoDia = eventosPorData[data];
+          const dateObj = new Date(data + 'T12:00:00');
+          const diaSemana = format(dateObj, 'EEEE', { locale: ptBR });
+          const diaNumero = format(dateObj, 'dd');
+          const mesAno = format(dateObj, 'MMMM [de] yyyy', { locale: ptBR });
           
-          return [
-            evento.horario || evento.horaInicio || '--:--',
-            cliente?.nome || '—',
-            servicos.map(s => s.nome).join(', ').substring(0, 30),
-            profissional?.nome || '—',
-            evento.tipo === 'agendamento' ? 'Agend.' : 'Atend.',
-            evento.status || '—'
-          ];
+          html += `
+            <div class="day-card">
+              <div class="day-header">
+                <div class="day-number">${diaNumero}</div>
+                <div class="day-info">
+                  <div class="day-name">${diaSemana}</div>
+                  <div class="day-date">${mesAno}</div>
+                </div>
+                <div class="day-count">${eventosDoDia.length} evento(s)</div>
+              </div>
+              <table class="events-table">
+                <thead>
+                  <tr>
+                    <th>Horário</th>
+                    <th>Cliente</th>
+                    <th>Telefone</th>
+                    <th>Serviços</th>
+                    <th>Profissional</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+          
+          eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
+          
+          eventosDoDia.forEach(evento => {
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
+            const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+            const valorEvento = evento.valorTotal || 0;
+            
+            let statusClass = '';
+            let statusLabel = '';
+            switch(evento.status) {
+              case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
+              case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
+              case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
+              case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
+              case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
+              default: statusClass = 'status-default'; statusLabel = evento.status;
+            }
+            
+            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+            
+            html += `
+              <tr>
+                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
+                <td><strong>${cliente?.nome || '—'}</strong></td>
+                <td class="phone-cell">${telefone}</td>
+                <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
+                <td>${profissionalItem?.nome || '—'}</td>
+                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
+              </tr>
+            `;
+          });
+          
+          const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+          html += `
+                </tbody>
+                <tfoot>
+                  <tr class="total-row">
+                    <td colspan="6"><strong>Total do Dia</strong></td>
+                    <td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          `;
         });
-
-        autoTable(doc, {
-          startY: yPos,
-          head: [['Horário', 'Cliente', 'Serviços', 'Profissional', 'Tipo', 'Status']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], fontSize: 7 },
-          bodyStyles: { fontSize: 6 },
-          margin: { left: 14, right: 14 },
-          columnStyles: {
-            0: { cellWidth: 18 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 40 },
-            3: { cellWidth: 25 },
-            4: { cellWidth: 15 },
-            5: { cellWidth: 20 },
-          },
-        });
-
-        yPos = doc.lastAutoTable.finalY + 6;
-      });
-
-      const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
-      doc.save(fileName);
+        
+        return html;
+      };
+  
+      // 3. HTML completo com estilos (mesmo da impressão)
+      const fullHTML = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Relatório de Agenda - ${profissionalNome}</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+              background: #ffffff;
+              padding: 20px;
+              font-size: 12px;
+              line-height: 1.5;
+              color: #333;
+            }
+            
+            .report-container {
+              max-width: 1200px;
+              margin: 0 auto;
+              background: white;
+              border-radius: 16px;
+              overflow: hidden;
+            }
+            
+            /* Cabeçalho */
+            .header {
+              background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%);
+              color: white;
+              padding: 30px;
+              text-align: center;
+              position: relative;
+              overflow: hidden;
+            }
+            
+            .header::before {
+              content: '';
+              position: absolute;
+              top: -50px;
+              right: -50px;
+              width: 150px;
+              height: 150px;
+              background: rgba(255,255,255,0.1);
+              border-radius: 50%;
+            }
+            
+            .header::after {
+              content: '';
+              position: absolute;
+              bottom: -30px;
+              left: -30px;
+              width: 120px;
+              height: 120px;
+              background: rgba(255,255,255,0.1);
+              border-radius: 50%;
+            }
+            
+            .header h1 {
+              font-size: 28px;
+              font-weight: 800;
+              margin-bottom: 8px;
+              letter-spacing: -0.5px;
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header h2 {
+              font-size: 18px;
+              font-weight: 500;
+              margin-bottom: 20px;
+              opacity: 0.95;
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header-info {
+              display: flex;
+              justify-content: center;
+              gap: 30px;
+              flex-wrap: wrap;
+              margin-top: 20px;
+              padding-top: 20px;
+              border-top: 1px solid rgba(255,255,255,0.2);
+              position: relative;
+              z-index: 1;
+            }
+            
+            .header-info-item {
+              text-align: center;
+            }
+            
+            .header-info-label {
+              font-size: 10px;
+              opacity: 0.8;
+              display: block;
+              margin-bottom: 4px;
+            }
+            
+            .header-info-value {
+              font-size: 13px;
+              font-weight: 600;
+            }
+            
+            /* Cards de estatísticas */
+            .stats-section {
+              padding: 25px 30px;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .stats-title {
+              font-size: 16px;
+              font-weight: 700;
+              color: #333;
+              margin-bottom: 15px;
+              padding-left: 12px;
+              border-left: 4px solid #9c27b0;
+            }
+            
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+              gap: 15px;
+              margin-bottom: 20px;
+            }
+            
+            .stat-card {
+              padding: 15px;
+              border-radius: 12px;
+              text-align: center;
+              color: white;
+            }
+            
+            .stat-card.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+            .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
+            .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
+            .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
+            .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
+            .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
+            
+            .stat-number {
+              font-size: 28px;
+              font-weight: 800;
+              margin-bottom: 5px;
+            }
+            
+            .stat-label {
+              font-size: 11px;
+              opacity: 0.9;
+            }
+            
+            .financial-summary {
+              background: #f5f5f5;
+              padding: 15px 20px;
+              border-radius: 12px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 15px;
+            }
+            
+            .total-value {
+              font-size: 24px;
+              font-weight: 800;
+              color: #9c27b0;
+            }
+            
+            .average-value {
+              font-size: 14px;
+              font-weight: 600;
+              color: #666;
+            }
+            
+            /* Cards de dias */
+            .day-card {
+              margin-bottom: 25px;
+              border: 1px solid #e0e0e0;
+              border-radius: 12px;
+              overflow: hidden;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            
+            .day-header {
+              background: #faf5ff;
+              padding: 15px 20px;
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              border-bottom: 2px solid #9c27b0;
+              flex-wrap: wrap;
+            }
+            
+            .day-number {
+              background: #9c27b0;
+              color: white;
+              width: 50px;
+              height: 50px;
+              border-radius: 10px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 24px;
+              font-weight: 800;
+            }
+            
+            .day-info {
+              flex: 1;
+            }
+            
+            .day-name {
+              font-size: 16px;
+              font-weight: 700;
+              color: #9c27b0;
+              text-transform: capitalize;
+            }
+            
+            .day-date {
+              font-size: 11px;
+              color: #666;
+            }
+            
+            .day-count {
+              background: #9c27b0;
+              color: white;
+              padding: 5px 12px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: 500;
+            }
+            
+            /* Tabelas */
+            .events-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+            }
+            
+            .events-table th {
+              background: #f8f9fa;
+              padding: 12px 10px;
+              text-align: left;
+              font-weight: 700;
+              color: #555;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .events-table td {
+              padding: 10px;
+              border-bottom: 1px solid #f0f0f0;
+            }
+            
+            .events-table tr:hover {
+              background: #faf5ff;
+            }
+            
+            .time-cell {
+              font-weight: 600;
+              color: #9c27b0;
+              width: 70px;
+            }
+            
+            .phone-cell {
+              width: 100px;
+            }
+            
+            .services-cell {
+              min-width: 150px;
+            }
+            
+            .value-cell {
+              text-align: right;
+              font-weight: 600;
+              color: #9c27b0;
+              width: 80px;
+            }
+            
+            .status-badge {
+              display: inline-block;
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 10px;
+              font-weight: 600;
+            }
+            
+            .status-confirmed { background: #e8f5e9; color: #4caf50; }
+            .status-pending { background: #fff3e0; color: #ff9800; }
+            .status-cancelled { background: #ffebee; color: #f44336; }
+            .status-finished { background: #e3f2fd; color: #2196f3; }
+            .status-progress { background: #f3e5f5; color: #9c27b0; }
+            .status-default { background: #f5f5f5; color: #9e9e9e; }
+            
+            .total-row {
+              background: #f5f5f5;
+              font-weight: 700;
+            }
+            
+            .total-row td {
+              border-top: 2px solid #e0e0e0;
+              padding: 12px 10px;
+            }
+            
+            /* Rodapé */
+            .footer {
+              background: #faf5ff;
+              padding: 20px;
+              text-align: center;
+              border-top: 1px solid #e0e0e0;
+              margin-top: 20px;
+            }
+            
+            .footer p {
+              font-size: 10px;
+              color: #666;
+              margin: 5px 0;
+            }
+            
+            .footer-copyright {
+              color: #9c27b0;
+              font-weight: 500;
+            }
+            
+            @media print {
+              body {
+                background: white;
+                padding: 0;
+                margin: 0;
+              }
+              
+              .day-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+              
+              .status-badge {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              
+              .stat-card {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <!-- Cabeçalho -->
+            <div class="header">
+              <h1>📋 RELATÓRIO DE AGENDA</h1>
+              <h2>${profissionalNome}</h2>
+              <div class="header-info">
+                <div class="header-info-item">
+                  <span class="header-info-label">Período</span>
+                  <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
+                </div>
+                <div class="header-info-item">
+                  <span class="header-info-label">Data de Emissão</span>
+                  <span class="header-info-value">${formatDateTime(new Date())}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Estatísticas -->
+            <div class="stats-section">
+              <div class="stats-title">📊 Resumo do Período</div>
+              <div class="stats-grid">
+                <div class="stat-card total">
+                  <div class="stat-number">${totalEventos}</div>
+                  <div class="stat-label">Total de Eventos</div>
+                </div>
+                <div class="stat-card agendamentos">
+                  <div class="stat-number">${totalAgendamentos}</div>
+                  <div class="stat-label">Agendamentos</div>
+                </div>
+                <div class="stat-card atendimentos">
+                  <div class="stat-number">${totalAtendimentos}</div>
+                  <div class="stat-label">Atendimentos</div>
+                </div>
+                <div class="stat-card confirmados">
+                  <div class="stat-number">${totalConfirmados}</div>
+                  <div class="stat-label">Confirmados</div>
+                </div>
+                <div class="stat-card pendentes">
+                  <div class="stat-number">${totalPendentes}</div>
+                  <div class="stat-label">Pendentes</div>
+                </div>
+                <div class="stat-card cancelados">
+                  <div class="stat-number">${totalCancelados}</div>
+                  <div class="stat-label">Cancelados</div>
+                </div>
+              </div>
+              
+              <div class="financial-summary">
+                <div>
+                  <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
+                  <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
+                </div>
+                <div style="display: flex; gap: 30px;">
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
+                    <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
+                    <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Agenda Detalhada -->
+            <div style="padding: 0 30px 30px 30px;">
+              <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
+              ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
+            </div>
+            
+            <!-- Rodapé -->
+            <div class="footer">
+              <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
+              <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
+              <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+  
+      // 4. Criar um elemento temporário para renderizar o HTML
+      const tempElement = document.createElement('div');
+      tempElement.innerHTML = fullHTML;
+      document.body.appendChild(tempElement);
+  
+      // 5. Configurar opções do PDF
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `relatorio_agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+  
+      // 6. Usar html2pdf (ou jsPDF com html2canvas)
+      // Importar html2pdf se não tiver: npm install html2pdf.js
+      const html2pdf = (await import('html2pdf.js')).default;
       
+      await html2pdf().set(opt).from(tempElement).save();
+      
+      // 7. Remover elemento temporário
+      document.body.removeChild(tempElement);
+      
+      // 8. Registrar auditoria
       await auditoriaService.registrar('exportar_pdf_agenda', {
         entidade: 'agendamentos',
         detalhes: 'Exportação de relatório de agenda em PDF',
@@ -1805,9 +2256,10 @@ function ModernAgendamentos() {
       
       mostrarSnackbar('PDF gerado com sucesso!', 'success');
       handleCloseRelatorio();
+      
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
-      mostrarSnackbar('Erro ao gerar PDF', 'error');
+      mostrarSnackbar('Erro ao gerar PDF: ' + error.message, 'error');
       
       await auditoriaService.registrarErro(error, { 
         acao: 'exportar_pdf_agenda'
