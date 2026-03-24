@@ -118,35 +118,12 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Funções auxiliares de data
-const getDaysInMonth = (date) => {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-};
-
 const getFirstDayOfMonth = (date) => {
   return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
 
 const formatDate = (date) => {
   return date.toISOString().split('T')[0];
-};
-
-const addDays = (date, days) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
-
-const addWeeks = (date, weeks) => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + weeks * 7);
-  return result;
-};
-
-const addMonths = (date, months) => {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
 };
 
 const getWeekDays = (date) => {
