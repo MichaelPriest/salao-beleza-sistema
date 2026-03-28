@@ -9,7 +9,6 @@ export const backupService = {
   listarBackups: async () => {
     try {
       const backups = await firebaseService.getAll('backups');
-      // Verificar se backups é um array antes de ordenar
       if (Array.isArray(backups)) {
         return backups.sort((a, b) => new Date(b.dataBackup) - new Date(a.dataBackup));
       }
@@ -23,7 +22,6 @@ export const backupService = {
   // Criar backup completo
   criarBackup: async () => {
     try {
-      // Lista de todas as coleções (incluindo as de fidelidade)
       const collections = [
         'clientes',
         'profissionais',
@@ -63,7 +61,6 @@ export const backupService = {
 
       let totalRegistros = 0;
 
-      // Buscar dados de cada coleção
       for (const collection of collections) {
         try {
           const dados = await firebaseService.getAll(collection).catch(() => []);
@@ -76,14 +73,11 @@ export const backupService = {
         }
       }
 
-      // Adicionar metadados
       backupData.totalRegistros = totalRegistros;
       backupData.criadoPor = JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema';
 
-      // Salvar backup no Firebase
       const backupId = await firebaseService.add('backups', backupData);
       
-      // Download do backup
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -91,7 +85,6 @@ export const backupService = {
       a.download = `backup_completo_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
 
-      // Limpar URL
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
       return { ...backupData, id: backupId };
@@ -101,7 +94,7 @@ export const backupService = {
     }
   },
 
-  // 🔥 FUNÇÃO CORRIGIDA: Restaurar backup PRESERVANDO IDs (sem toast.warning)
+  // 🔥 FUNÇÃO CORRIGIDA: Restaurar backup PRESERVANDO IDs (sem campos extras)
   restaurarBackup: async (arquivoBackup) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -167,16 +160,14 @@ export const backupService = {
                   }
 
                   let deveRestaurar = true;
-                  let itemParaSalvar = { ...item };
                   
-                  // Remover campos de timestamp que podem causar conflitos
-                  delete itemParaSalvar.createdAt;
-                  delete itemParaSalvar.updatedAt;
+                  // 🔥 IMPORTANTE: Não adicionar campos extras, usar apenas os dados originais
+                  const itemParaSalvar = { ...item };
                   
-                  // Adicionar timestamps atuais
-                  itemParaSalvar.restauradoEm = new Date().toISOString();
-                  itemParaSalvar.restauradoDe = backupData.dataBackup;
-
+                  // Remover campos que podem causar problemas (opcional)
+                  delete itemParaSalvar.restauradoEm;
+                  delete itemParaSalvar.restauradoDe;
+                  
                   // Regra especial para usuários
                   if (collection === 'usuarios') {
                     const email = itemParaSalvar.email?.toLowerCase();
@@ -232,7 +223,6 @@ export const backupService = {
               { id: 'restore', duration: 5000 }
             );
           } else {
-            // Usando toast.error em vez de toast.warning
             toast.error(
               `Backup parcialmente restaurado: ${restaurados} registros OK, ${erros} erros. Verifique o console para detalhes.`, 
               { id: 'restore', duration: 5000 }
@@ -271,7 +261,7 @@ export const backupService = {
     }
   },
 
-  // Excluir backup antigo (opcional)
+  // Excluir backup antigo
   excluirBackup: async (backupId) => {
     try {
       await firebaseService.delete('backups', backupId);
