@@ -1,6 +1,8 @@
 // src/services/backupService.js
 import { firebaseService } from './firebase';
 import { toast } from 'react-hot-toast';
+import { db } from './firebase';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 
 export const backupService = {
   // Listar histórico de backups
@@ -39,11 +41,18 @@ export const backupService = {
         'notificacoes',
         'auditoria',
         'logs',
-        // 🔥 NOVAS COLEÇÕES DE FIDELIDADE
         'recompensas',
         'pontuacao',
         'resgates_fidelidade',
-        'config_fidelidade'
+        'config_fidelidade',
+        'categorias_produtos',
+        'contas_pagar',
+        'contas_receber',
+        'movimentacoes_estoque',
+        'notificacoes_cliente',
+        'transacoes',
+        'indicacoes',
+        'caixa'
       ];
 
       const backupData = {
@@ -92,7 +101,7 @@ export const backupService = {
     }
   },
 
-  // Restaurar backup
+  // 🔥 FUNÇÃO CORRIGIDA: Restaurar backup PRESERVANDO IDs
   restaurarBackup: async (arquivoBackup) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -118,7 +127,8 @@ export const backupService = {
           const confirmar = window.confirm(
             `Este backup contém ${totalRegistros} registros.\n` +
             `Data: ${new Date(backupData.dataBackup).toLocaleString('pt-BR')}\n\n` +
-            `A restauração ADICIONARÁ esses dados aos existentes.\n` +
+            `⚠️ IMPORTANTE: A restauração SUBSTITUIRÁ os dados existentes mantendo os IDs originais.\n` +
+            `A coleção "usuários" preservará apenas o usuário administrador.\n\n` +
             `Deseja continuar?`
           );
 
@@ -127,42 +137,109 @@ export const backupService = {
             return;
           }
 
-          toast.loading('Restaurando backup...', { id: 'restore' });
+          toast.loading('Restaurando backup e preservando IDs originais...', { id: 'restore' });
 
+          // Usuário a ser preservado
+          const USUARIO_PRESERVADO = 'michael.rodrigoraimundo@gmail.com';
+          
           let restaurados = 0;
+          let atualizados = 0;
           let erros = 0;
+          
+          // Usar batch para melhor performance
+          let batch = writeBatch(db);
+          let operations = 0;
+          const MAX_BATCH_SIZE = 500;
 
           // Restaurar cada coleção
           for (const [collection, dados] of Object.entries(backupData.dados)) {
             if (!Array.isArray(dados) || dados.length === 0) continue;
 
+            console.log(`🔄 Restaurando coleção ${collection}: ${dados.length} registros`);
+
             try {
               for (const item of dados) {
                 try {
-                  // Verificar se o item tem ID, se não, criar um
-                  const itemParaSalvar = { ...item };
-                  if (!itemParaSalvar.id) {
-                    itemParaSalvar.id = firebaseService.generateId(collection);
+                  // Verificar se o item tem ID
+                  if (!item.id) {
+                    console.warn(`⚠️ Item sem ID em ${collection}, ignorando:`, item);
+                    erros++;
+                    continue;
+                  }
+
+                  let deveRestaurar = true;
+                  let itemParaSalvar = { ...item };
+                  
+                  // Remover campos de timestamp que podem causar conflitos
+                  delete itemParaSalvar.createdAt;
+                  delete itemParaSalvar.updatedAt;
+                  
+                  // Adicionar timestamps atuais
+                  itemParaSalvar.restauradoEm = new Date().toISOString();
+                  itemParaSalvar.restauradoDe = backupData.dataBackup;
+
+                  // Regra especial para usuários
+                  if (collection === 'usuarios') {
+                    const email = itemParaSalvar.email?.toLowerCase();
+                    if (email !== USUARIO_PRESERVADO.toLowerCase()) {
+                      console.log(`⏭️ Ignorando usuário ${item.id} (${email}) - não é o usuário preservado`);
+                      deveRestaurar = false;
+                    } else {
+                      console.log(`✅ Restaurando usuário preservado: ${item.id} (${email})`);
+                    }
+                  }
+
+                  if (deveRestaurar) {
+                    // 🔥 USAR setDoc com o ID ORIGINAL para preservá-lo
+                    const docRef = doc(db, collection, item.id);
+                    batch.set(docRef, itemParaSalvar);
+                    operations++;
+                    restaurados++;
+                    
+                    console.log(`✅ Restaurado ${collection}/${item.id} com ID original preservado`);
+                  }
+
+                  // Commit quando atingir o limite
+                  if (operations >= MAX_BATCH_SIZE) {
+                    await batch.commit();
+                    console.log(`📦 Lote de ${operations} operações commitado`);
+                    batch = writeBatch(db);
+                    operations = 0;
                   }
                   
-                  await firebaseService.add(collection, itemParaSalvar);
-                  restaurados++;
                 } catch (itemError) {
-                  console.warn(`⚠️ Erro ao restaurar item em ${collection}:`, itemError);
+                  console.warn(`⚠️ Erro ao restaurar item ${collection}/${item.id}:`, itemError);
                   erros++;
                 }
               }
-              console.log(`✅ Restaurada coleção ${collection}: ${dados.length} registros`);
+              
+              console.log(`✅ Processada coleção ${collection}: ${dados.length} registros`);
+              
             } catch (error) {
-              console.warn(`⚠️ Erro ao restaurar coleção ${collection}:`, error);
+              console.warn(`⚠️ Erro ao processar coleção ${collection}:`, error);
               erros += dados.length;
             }
           }
 
+          // Commit das operações restantes
+          if (operations > 0) {
+            await batch.commit();
+            console.log(`📦 Lote final de ${operations} operações commitado`);
+          }
+
           if (erros === 0) {
-            toast.success(`Backup restaurado com sucesso! ${restaurados} registros adicionados.`, { id: 'restore' });
+            toast.success(
+              `Backup restaurado com sucesso!\n` +
+              `${restaurados} registros restaurados com IDs originais.`, 
+              { id: 'restore', duration: 5000 }
+            );
           } else {
-            toast.success(`Backup parcialmente restaurado: ${restaurados} registros adicionados, ${erros} erros.`, { id: 'restore' });
+            toast.warning(
+              `Backup parcialmente restaurado:\n` +
+              `${restaurados} registros restaurados com IDs originais\n` +
+              `${erros} erros encontrados`, 
+              { id: 'restore', duration: 5000 }
+            );
           }
           
           resolve(true);
