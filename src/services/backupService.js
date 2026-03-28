@@ -101,7 +101,7 @@ export const backupService = {
     }
   },
 
-  // 🔥 FUNÇÃO CORRIGIDA: Restaurar backup PRESERVANDO IDs
+  // 🔥 FUNÇÃO CORRIGIDA: Restaurar backup PRESERVANDO IDs (sem toast.warning)
   restaurarBackup: async (arquivoBackup) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -143,7 +143,6 @@ export const backupService = {
           const USUARIO_PRESERVADO = 'michael.rodrigoraimundo@gmail.com';
           
           let restaurados = 0;
-          let atualizados = 0;
           let erros = 0;
           
           // Usar batch para melhor performance
@@ -229,15 +228,13 @@ export const backupService = {
 
           if (erros === 0) {
             toast.success(
-              `Backup restaurado com sucesso!\n` +
-              `${restaurados} registros restaurados com IDs originais.`, 
+              `Backup restaurado com sucesso!\n${restaurados} registros restaurados com IDs originais.`, 
               { id: 'restore', duration: 5000 }
             );
           } else {
-            toast.warning(
-              `Backup parcialmente restaurado:\n` +
-              `${restaurados} registros restaurados com IDs originais\n` +
-              `${erros} erros encontrados`, 
+            // Usando toast.error em vez de toast.warning
+            toast.error(
+              `Backup parcialmente restaurado: ${restaurados} registros OK, ${erros} erros. Verifique o console para detalhes.`, 
               { id: 'restore', duration: 5000 }
             );
           }
