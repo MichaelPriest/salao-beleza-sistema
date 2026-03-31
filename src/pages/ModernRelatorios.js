@@ -143,7 +143,7 @@ const formasPagamentoLabels = {
   credito_loja: { label: 'Crédito Loja', icon: '🏪', color: '#e91e63' },
 };
 
-// Funções de formatação - DEFINIDAS NO ESCOPO GLOBAL DO COMPONENTE
+// Funções de formatação
 const formatarMoeda = (valor) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -185,7 +185,7 @@ const formatarPercentual = (valor) => {
 
 // Componente de impressão
 const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos }, ref) => {
-  // Re-declarar funções de formatação para uso no componente de impressão
+  // Funções de formatação para impressão
   const formatarMoedaPrint = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -205,11 +205,23 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
     }
   };
 
+  const formatarDataHoraPrint = (data) => {
+    if (!data) return '-';
+    try {
+      if (data.seconds) {
+        return new Date(data.seconds * 1000).toLocaleString('pt-BR');
+      }
+      return new Date(data).toLocaleString('pt-BR');
+    } catch {
+      return data;
+    }
+  };
+
   const formatarNumeroPrint = (valor) => {
     return new Intl.NumberFormat('pt-BR').format(valor || 0);
   };
 
-  const formatarPercentual = (valor) => {
+  const formatarPercentualPrint = (valor) => {
     return `${(valor || 0).toFixed(1)}%`;
   };
 
@@ -263,21 +275,34 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         borderRadius: 1
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-          <Avatar
-            src={logo}
-            alt="Logo"
-            sx={{ 
-              width: 70, 
-              height: 70, 
-              bgcolor: '#9c27b0',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              mr: 2
-            }}
-            imgProps={{
-              onError: (e) => {
+          {logo ? (
+            <img 
+              src={logo} 
+              alt="Logo" 
+              style={{ 
+                width: 60, 
+                height: 60, 
+                objectFit: 'contain',
+                marginRight: 16,
+                borderRadius: 8
+              }} 
+              onError={(e) => {
                 e.target.style.display = 'none';
-              }
+                if (e.target.nextSibling) {
+                  e.target.nextSibling.style.display = 'flex';
+                }
+              }}
+            />
+          ) : null}
+          <Avatar
+            sx={{ 
+              width: 60, 
+              height: 60, 
+              bgcolor: '#9c27b0',
+              fontSize: '28px',
+              fontWeight: 'bold',
+              mr: 2,
+              display: logo ? 'none' : 'flex'
             }}
           >
             {getIconeRelatorio()}
@@ -293,7 +318,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </Box>
         <Box sx={{ textAlign: 'right' }}>
           <Typography variant="body2" sx={{ fontWeight: 600, color: '#666' }}>
-            Período: {formatarData(dataInicio)} - {formatarData(dataFim)}
+            Período: {formatarDataPrint(dataInicio)} - {formatarDataPrint(dataFim)}
           </Typography>
           <Typography variant="body2" sx={{ color: '#999', mt: 0.5 }}>
             Gerado em: {new Date().toLocaleString('pt-BR')}
@@ -315,11 +340,6 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                   <Typography variant="h5" sx={{ fontWeight: 700, color: resumo.color || '#9c27b0' }}>
                     {resumo.value}
                   </Typography>
-                  {resumo.trend && (
-                    <Typography variant="caption" sx={{ color: resumo.trend > 0 ? '#4caf50' : '#f44336' }}>
-                      {resumo.trend > 0 ? '↑' : '↓'} {Math.abs(resumo.trend)}%
-                    </Typography>
-                  )}
                 </Paper>
               </Grid>
             ))}
@@ -327,7 +347,184 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </Box>
       )}
 
-      {/* Conteúdo do relatório por tipo */}
+      {/* LISTA DETALHADA DE ATENDIMENTOS */}
+      {tipoRelatorio === 'atendimentos' && dados.atendimentosDetalhados && dados.atendimentosDetalhados.length > 0 && (
+        <>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 4 }}>
+            Lista de Atendimentos Realizados
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3, mb: 4 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data/Hora</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviços</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.atendimentosDetalhados.map((atendimento, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatarDataHoraPrint(atendimento.data)}</TableCell>
+                    <TableCell>{atendimento.clienteNome || 'Cliente não identificado'}</TableCell>
+                    <TableCell>{atendimento.profissionalNome || 'Profissional não identificado'}</TableCell>
+                    <TableCell>
+                      {atendimento.servicosRealizados?.map(s => s.nome).join(', ') || '-'}
+                    </TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(atendimento.valorTotal)}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={atendimento.status === 'finalizado' ? 'Finalizado' : atendimento.status}
+                        size="small"
+                        sx={{ bgcolor: '#4caf50', color: 'white' }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {/* LISTA DETALHADA DE CLIENTES */}
+      {tipoRelatorio === 'clientes' && dados.clientesDetalhados && dados.clientesDetalhados.length > 0 && (
+        <>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 4 }}>
+            Lista de Clientes
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3, mb: 4 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nome</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Telefone</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Email</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data Cadastro</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Gasto</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nível</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.clientesDetalhados.map((cliente, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{cliente.nome}</TableCell>
+                    <TableCell>{cliente.telefone || '-'}</TableCell>
+                    <TableCell>{cliente.email || '-'}</TableCell>
+                    <TableCell>{formatarDataPrint(cliente.dataCadastro)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(cliente.totalGasto || 0)}</TableCell>
+                    <TableCell align="right">{cliente.totalAtendimentos || 0}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={cliente.nivelFidelidade || 'Bronze'}
+                        size="small"
+                        sx={{ 
+                          bgcolor: cliente.nivelFidelidade === 'ouro' ? '#ffd700' : 
+                                   cliente.nivelFidelidade === 'prata' ? '#c0c0c0' : '#cd7f32',
+                          color: cliente.nivelFidelidade === 'ouro' ? '#000' : '#fff'
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {/* LISTA DETALHADA DE COMISSÕES */}
+      {tipoRelatorio === 'comissoes' && dados.comissoesDetalhadas && dados.comissoesDetalhadas.length > 0 && (
+        <>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 4 }}>
+            Lista de Comissões
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3, mb: 4 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Comissão</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.comissoesDetalhadas.map((comissao, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatarDataPrint(comissao.data)}</TableCell>
+                    <TableCell>{comissao.profissionalNome}</TableCell>
+                    <TableCell>{comissao.servicoNome}</TableCell>
+                    <TableCell>{comissao.clienteNome || '-'}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(comissao.valorServico)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(comissao.valor)}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={comissao.status === 'pago' ? 'Pago' : 'Pendente'}
+                        size="small"
+                        sx={{ bgcolor: comissao.status === 'pago' ? '#4caf50' : '#ff9800', color: 'white' }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {/* LISTA DETALHADA DE AGENDA */}
+      {tipoRelatorio === 'agenda' && dados.agendamentosDetalhados && dados.agendamentosDetalhados.length > 0 && (
+        <>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 4 }}>
+            Lista de Agendamentos
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3, mb: 4 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data/Hora</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.agendamentosDetalhados.map((agendamento, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{formatarDataHoraPrint(agendamento.data)}</TableCell>
+                    <TableCell>{agendamento.clienteNome}</TableCell>
+                    <TableCell>{agendamento.profissionalNome}</TableCell>
+                    <TableCell>{agendamento.servicoNome || '-'}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(agendamento.valor)}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={statusColors[agendamento.status]?.label || agendamento.status}
+                        size="small"
+                        sx={{ 
+                          bgcolor: statusColors[agendamento.status]?.color || '#9e9e9e', 
+                          color: 'white' 
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {/* Conteúdo do relatório por tipo - Financeiro */}
       {tipoRelatorio === 'financeiro' && dados.financeiro && (
         <>
           <Box sx={{ mb: 4 }}>
@@ -339,7 +536,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e8f5e9' }}>
                   <Typography variant="subtitle2" color="textSecondary">Total Receitas</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                    {formatarMoeda(dados.financeiro.totalReceitas)}
+                    {formatarMoedaPrint(dados.financeiro.totalReceitas)}
                   </Typography>
                 </Paper>
               </Grid>
@@ -347,7 +544,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#ffebee' }}>
                   <Typography variant="subtitle2" color="textSecondary">Total Despesas</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
-                    {formatarMoeda(dados.financeiro.totalDespesas)}
+                    {formatarMoedaPrint(dados.financeiro.totalDespesas)}
                   </Typography>
                 </Paper>
               </Grid>
@@ -355,7 +552,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e3f2fd' }}>
                   <Typography variant="subtitle2" color="textSecondary">Lucro Líquido</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: dados.financeiro.lucroLiquido >= 0 ? '#2196f3' : '#f44336' }}>
-                    {formatarMoeda(dados.financeiro.lucroLiquido)}
+                    {formatarMoedaPrint(dados.financeiro.lucroLiquido)}
                   </Typography>
                 </Paper>
               </Grid>
@@ -363,7 +560,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#fff3e0' }}>
                   <Typography variant="subtitle2" color="textSecondary">Margem</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                    {formatarPercentual(dados.financeiro.margem)}
+                    {formatarPercentualPrint(dados.financeiro.margem)}
                   </Typography>
                 </Paper>
               </Grid>
@@ -388,12 +585,12 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.graficoLinha?.map((row, index) => (
                   <TableRow key={index} sx={{ '&:nth-of-type(even)': { bgcolor: '#fafafa' } }}>
                     <TableCell sx={{ fontWeight: 500 }}>{row.dia}</TableCell>
-                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoeda(row.receitas)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarMoeda(row.despesas)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoedaPrint(row.receitas)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarMoedaPrint(row.despesas)}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, color: row.lucro >= 0 ? '#2196f3' : '#f44336' }}>
-                      {formatarMoeda(row.lucro)}
+                      {formatarMoedaPrint(row.lucro)}
                     </TableCell>
-                    <TableCell align="right">{formatarMoeda(row.acumulado)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.acumulado)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -428,8 +625,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                         {row.name}
                       </Box>
                     </TableCell>
-                    <TableCell align="right">{formatarMoeda(row.value)}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.value)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
                     <TableCell align="right">
                       {dados.financeiro?.totalReceitas > 0 
                         ? ((row.value / dados.financeiro.totalReceitas) * 100).toFixed(1)
@@ -443,6 +640,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Atendimentos - Resumo */}
       {tipoRelatorio === 'atendimentos' && dados.atendimentos && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -450,7 +648,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Atendimentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.atendimentos.total || 0)}
+                  {formatarNumeroPrint(dados.atendimentos.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -466,7 +664,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Faturamento</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarMoeda(dados.atendimentos.faturamento || 0)}
+                  {formatarMoedaPrint(dados.atendimentos.faturamento || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -490,9 +688,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.value)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.faturamento)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.ticketMedio)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.value)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.faturamento)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.ticketMedio)}</TableCell>
                     <TableCell align="right">
                       {dados.atendimentos.total > 0 ? ((row.value / dados.atendimentos.total) * 100).toFixed(1) : 0}%
                     </TableCell>
@@ -518,7 +716,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.horarios?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.horario}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
                     <TableCell align="right">
                       {dados.atendimentos.total > 0 ? ((row.quantidade / dados.atendimentos.total) * 100).toFixed(1) : 0}%
                     </TableCell>
@@ -530,6 +728,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Clientes - Resumo */}
       {tipoRelatorio === 'clientes' && dados.clientes && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -537,7 +736,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Total de Clientes</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {formatarNumero(dados.clientes.totalClientes || 0)}
+                  {formatarNumeroPrint(dados.clientes.totalClientes || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -545,7 +744,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Novos Clientes</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                  {formatarNumero(dados.clientes.novosClientes || 0)}
+                  {formatarNumeroPrint(dados.clientes.novosClientes || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -553,7 +752,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Atendimentos</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                  {formatarNumero(dados.clientes.totalAtendimentos || 0)}
+                  {formatarNumeroPrint(dados.clientes.totalAtendimentos || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -561,7 +760,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Ticket Médio</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  {formatarMoeda(dados.clientes.ticketMedio || 0)}
+                  {formatarMoedaPrint(dados.clientes.ticketMedio || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -592,9 +791,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                         sx={{ bgcolor: '#f3e5f5', color: '#9c27b0', fontWeight: 700 }}
                       />
                     </TableCell>
-                    <TableCell align="right">{formatarMoeda(cliente.totalGasto)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(cliente.ticketMedio)}</TableCell>
-                    <TableCell align="right">{formatarData(cliente.ultimaVisita)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(cliente.totalGasto)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(cliente.ticketMedio)}</TableCell>
+                    <TableCell align="right">{formatarDataPrint(cliente.ultimaVisita)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -623,7 +822,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                         sx={{ bgcolor: row.cor, color: 'white' }}
                       />
                     </TableCell>
-                    <TableCell align="right">{formatarNumero(row.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
                     <TableCell align="right">
                       {dados.clientes.totalClientes > 0 
                         ? ((row.quantidade / dados.clientes.totalClientes) * 100).toFixed(1)
@@ -637,6 +836,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Profissionais */}
       {tipoRelatorio === 'profissionais' && dados.profissionais && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -644,7 +844,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Atendimentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.profissionais.total || 0)}
+                  {formatarNumeroPrint(dados.profissionais.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -660,7 +860,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Comissões</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarMoeda(dados.profissionais.totalComissoes || 0)}
+                  {formatarMoedaPrint(dados.profissionais.totalComissoes || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -685,9 +885,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.atendimentos)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.comissoes)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.ticketMedio)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.atendimentos)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.comissoes)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.ticketMedio)}</TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                         <StarIcon sx={{ fontSize: 16, color: '#ff9800', mr: 0.5 }} />
@@ -705,6 +905,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Comissões - Resumo */}
       {tipoRelatorio === 'comissoes' && dados.comissoes && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -712,7 +913,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Comissões</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarMoeda(dados.comissoes.total || 0)}
+                  {formatarMoedaPrint(dados.comissoes.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -720,7 +921,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Comissões Pagas</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarMoeda(dados.comissoes.pagas || 0)}
+                  {formatarMoedaPrint(dados.comissoes.pagas || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -728,7 +929,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Pendentes</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff9800' }}>
-                  {formatarMoeda(dados.comissoes.pendentes || 0)}
+                  {formatarMoedaPrint(dados.comissoes.pendentes || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -752,9 +953,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {Object.entries(dados.comissoes.porProfissional || {}).map(([profissional, valores], index) => (
                   <TableRow key={index}>
                     <TableCell>{profissional}</TableCell>
-                    <TableCell align="right">{formatarMoeda(valores.total)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoeda(valores.pagas)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#ff9800' }}>{formatarMoeda(valores.pendentes)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(valores.total)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoedaPrint(valores.pagas)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#ff9800' }}>{formatarMoedaPrint(valores.pendentes)}</TableCell>
                     <TableCell align="right">
                       {dados.comissoes.total > 0 ? ((valores.total / dados.comissoes.total) * 100).toFixed(1) : 0}%
                     </TableCell>
@@ -780,7 +981,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.evolucaoComissoes?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.mes}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.total)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.total)}</TableCell>
                     <TableCell align="right" sx={{ color: row.variacao >= 0 ? '#4caf50' : '#f44336' }}>
                       {row.variacao >= 0 ? '↑' : '↓'} {Math.abs(row.variacao).toFixed(1)}%
                     </TableCell>
@@ -792,6 +993,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Serviços */}
       {tipoRelatorio === 'servicos' && dados.servicos && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -799,7 +1001,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Serviços</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.servicos.totalServicos || 0)}
+                  {formatarNumeroPrint(dados.servicos.totalServicos || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -807,7 +1009,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Atendimentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
-                  {formatarNumero(dados.servicos.totalAtendimentos || 0)}
+                  {formatarNumeroPrint(dados.servicos.totalAtendimentos || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -815,7 +1017,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Ticket Médio</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarMoeda(dados.servicos.ticketMedio || 0)}
+                  {formatarMoedaPrint(dados.servicos.ticketMedio || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -839,9 +1041,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.value)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.faturamento)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.ticketMedio)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.value)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.faturamento)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.ticketMedio)}</TableCell>
                     <TableCell align="right">
                       {dados.servicos.totalAtendimentos > 0 
                         ? ((row.value / dados.servicos.totalAtendimentos) * 100).toFixed(1)
@@ -870,9 +1072,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.categoriasServicos?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.categoria}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.quantidade)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.faturamento)}</TableCell>
-                    <TableCell align="right">{formatarPercentual(row.percentual)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.faturamento)}</TableCell>
+                    <TableCell align="right">{formatarPercentualPrint(row.percentual)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -881,6 +1083,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Produtos */}
       {tipoRelatorio === 'produtos' && dados.produtos && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -888,7 +1091,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Total de Produtos</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {formatarNumero(dados.produtos.totalProdutos || 0)}
+                  {formatarNumeroPrint(dados.produtos.totalProdutos || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -896,7 +1099,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Estoque Total</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                  {formatarNumero(dados.produtos.estoqueTotal || 0)}
+                  {formatarNumeroPrint(dados.produtos.estoqueTotal || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -904,7 +1107,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Valor em Estoque</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                  {formatarMoeda(dados.produtos.valorEstoque || 0)}
+                  {formatarMoedaPrint(dados.produtos.valorEstoque || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -912,7 +1115,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Produtos em Falta</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
-                  {formatarNumero(dados.produtos.produtosEmFalta || 0)}
+                  {formatarNumeroPrint(dados.produtos.produtosEmFalta || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -936,9 +1139,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.produtos.estoqueBaixo?.map((produto, index) => (
                   <TableRow key={index}>
                     <TableCell>{produto.nome}</TableCell>
-                    <TableCell align="right">{formatarNumero(produto.quantidade)}</TableCell>
-                    <TableCell align="right">{formatarNumero(produto.estoqueMinimo)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(produto.precoVenda)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(produto.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(produto.estoqueMinimo)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(produto.precoVenda)}</TableCell>
                     <TableCell align="right">
                       <Chip
                         label="Estoque Baixo"
@@ -977,9 +1180,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.produtos.topValorEstoque?.map((produto, index) => (
                   <TableRow key={index}>
                     <TableCell>{produto.nome}</TableCell>
-                    <TableCell align="right">{formatarNumero(produto.quantidade)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(produto.precoVenda)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(produto.valorTotal)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(produto.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(produto.precoVenda)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(produto.valorTotal)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -988,6 +1191,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Fornecedores */}
       {tipoRelatorio === 'fornecedores' && dados.fornecedores && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -995,7 +1199,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Fornecedores</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.fornecedores.total || 0)}
+                  {formatarNumeroPrint(dados.fornecedores.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1003,7 +1207,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Compras</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
-                  {formatarNumero(dados.fornecedores.totalCompras || 0)}
+                  {formatarNumeroPrint(dados.fornecedores.totalCompras || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1011,7 +1215,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Gasto</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarMoeda(dados.fornecedores.totalGasto || 0)}
+                  {formatarMoedaPrint(dados.fornecedores.totalGasto || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1035,8 +1239,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.compras)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.valor)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.compras)}</TableCell>
+                    <TableCell align="right">{formatarMoedaPrint(row.valor)}</TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                         <StarIcon sx={{ fontSize: 16, color: '#ff9800', mr: 0.5 }} />
@@ -1058,6 +1262,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Agenda - Resumo */}
       {tipoRelatorio === 'agenda' && dados.agenda && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -1065,7 +1270,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Agendamentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.agenda.total || 0)}
+                  {formatarNumeroPrint(dados.agenda.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1073,7 +1278,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Confirmados</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
-                  {formatarNumero(dados.agenda.confirmados || 0)}
+                  {formatarNumeroPrint(dados.agenda.confirmados || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1081,7 +1286,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Pendentes</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff9800' }}>
-                  {formatarNumero(dados.agenda.pendentes || 0)}
+                  {formatarNumeroPrint(dados.agenda.pendentes || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1105,10 +1310,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.data}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.total)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarNumero(row.confirmados)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#ff9800' }}>{formatarNumero(row.pendentes)}</TableCell>
-                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarNumero(row.cancelados)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.total)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarNumeroPrint(row.confirmados)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#ff9800' }}>{formatarNumeroPrint(row.pendentes)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarNumeroPrint(row.cancelados)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1117,6 +1322,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Cancelamentos */}
       {tipoRelatorio === 'cancelamentos' && dados.cancelamentos && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -1124,7 +1330,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Cancelamentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#f44336' }}>
-                  {formatarNumero(dados.cancelamentos.total || 0)}
+                  {formatarNumeroPrint(dados.cancelamentos.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1132,7 +1338,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Taxa de Cancelamento</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff9800' }}>
-                  {formatarPercentual(dados.cancelamentos.taxa || 0)}
+                  {formatarPercentualPrint(dados.cancelamentos.taxa || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1140,7 +1346,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Perda Estimada</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#f44336' }}>
-                  {formatarMoeda(dados.cancelamentos.perdaEstimada || 0)}
+                  {formatarMoedaPrint(dados.cancelamentos.perdaEstimada || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1162,7 +1368,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.motivo}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
                     <TableCell align="right">
                       {dados.cancelamentos.total > 0 ? ((row.quantidade / dados.cancelamentos.total) * 100).toFixed(1) : 0}%
                     </TableCell>
@@ -1174,6 +1380,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Performance */}
       {tipoRelatorio === 'performance' && dados.performance && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -1181,7 +1388,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Ticket Médio</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {formatarMoeda(dados.performance.ticketMedio || 0)}
+                  {formatarMoedaPrint(dados.performance.ticketMedio || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1189,7 +1396,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Faturamento/Dia</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                  {formatarMoeda(dados.performance.faturamentoPorDia || 0)}
+                  {formatarMoedaPrint(dados.performance.faturamentoPorDia || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1205,7 +1412,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Taxa Ocupação</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  {formatarPercentual(dados.performance.taxaOcupacao || 0)}
+                  {formatarPercentualPrint(dados.performance.taxaOcupacao || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1245,6 +1452,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
+      {/* Fidelidade */}
       {tipoRelatorio === 'fidelidade' && dados.fidelidade && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -1252,7 +1460,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total Pontos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.fidelidade.totalPontos || 0)}
+                  {formatarNumeroPrint(dados.fidelidade.totalPontos || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1260,7 +1468,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Pontos Resgatados</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
-                  {formatarNumero(dados.fidelidade.pontosResgatados || 0)}
+                  {formatarNumeroPrint(dados.fidelidade.pontosResgatados || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1268,7 +1476,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Pontos a Expirar</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff9800' }}>
-                  {formatarNumero(dados.fidelidade.pontosAExpirar || 0)}
+                  {formatarNumeroPrint(dados.fidelidade.pontosAExpirar || 0)}
                 </Typography>
               </Paper>
             </Grid>
@@ -1291,7 +1499,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 {dados.grafico?.map((row, index) => (
                   <TableRow key={index}>
                     <TableCell>{row.cliente}</TableCell>
-                    <TableCell align="right">{formatarNumero(row.pontos)}</TableCell>
+                    <TableCell align="right">{formatarNumeroPrint(row.pontos)}</TableCell>
                     <TableCell align="right">
                       <Chip
                         label={row.nivel}
@@ -1365,6 +1573,10 @@ function ModernRelatorios() {
     horarios: [],
     evolucaoComissoes: [],
     resumos: [],
+    atendimentosDetalhados: [],
+    clientesDetalhados: [],
+    comissoesDetalhadas: [],
+    agendamentosDetalhados: [],
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [detalhesOpen, setDetalhesOpen] = useState(false);
@@ -1388,6 +1600,8 @@ function ModernRelatorios() {
         const config = configData[0];
         if (config.salao && config.salao.logo) {
           setLogo(config.salao.logo);
+        } else if (config.logo) {
+          setLogo(config.logo);
         }
       }
     } catch (error) {
@@ -1681,7 +1895,7 @@ function ModernRelatorios() {
             atendimentos: desempenhoProfissionais[id],
             comissoes: totalComissoes,
             ticketMedio: ticketMedio || 0,
-            avaliacao: 4.5, // Placeholder
+            avaliacao: 4.5,
           };
         })
         .sort((a, b) => b.atendimentos - a.atendimentos);
@@ -1784,7 +1998,7 @@ function ModernRelatorios() {
       const diasUteis = diffDays;
       const faturamentoPorDia = totalReceitas / (diasUteis || 1);
       const atendimentosPorDia = atendimentosRealizados.length / (diasUteis || 1);
-      const capacidadeMaxima = 20; // Placeholder
+      const capacidadeMaxima = 20;
       const taxaOcupacao = (atendimentosPorDia / capacidadeMaxima) * 100;
 
       const indicadoresPerformance = [
@@ -1817,7 +2031,7 @@ function ModernRelatorios() {
         }));
 
       const totalPontos = (clientes || []).reduce((acc, c) => acc + (c.totalPontos || 0), 0);
-      const pontosResgatados = 0; // Placeholder
+      const pontosResgatados = 0;
       const pontosAExpirar = (clientes || []).reduce((acc, c) => {
         if (c.totalPontos && c.totalPontos > 0) {
           return acc + Math.floor(c.totalPontos * 0.1);
@@ -1881,6 +2095,36 @@ function ModernRelatorios() {
 
       const totalGastoFornecedores = Object.values(fornecedoresCompras).reduce((acc, f) => acc + f.valor, 0);
       const totalComprasFornecedores = Object.values(fornecedoresCompras).reduce((acc, f) => acc + f.compras, 0);
+
+      // Dados detalhados para impressão
+      const atendimentosDetalhadosData = atendimentosRealizados.map(a => ({
+        ...a,
+        clienteNome: clientes?.find(c => c.id === a.clienteId)?.nome || 'Cliente não identificado',
+        profissionalNome: profissionais?.find(p => p.id === a.profissionalId)?.nome || 'Profissional não identificado',
+        valorTotal: (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0)
+      }));
+
+      const clientesDetalhadosData = (clientes || []).map(c => ({
+        ...c,
+        totalGasto: gastoPorCliente[c.id] || 0,
+        totalAtendimentos: atendimentosPorCliente[c.id] || 0
+      }));
+
+      const comissoesDetalhadasData = comissoesFiltradas.map(c => ({
+        ...c,
+        profissionalNome: profissionais?.find(p => p.id === c.profissionalId)?.nome || c.profissionalNome,
+        clienteNome: clientes?.find(cl => cl.id === c.clienteId)?.nome,
+        servicoNome: servicos?.find(s => s.id === c.servicoId)?.nome,
+        valorServico: c.valorServico || 0
+      }));
+
+      const agendamentosDetalhadosData = agendamentosFiltrados.map(a => ({
+        ...a,
+        clienteNome: clientes?.find(c => c.id === a.clienteId)?.nome || 'Cliente não identificado',
+        profissionalNome: profissionais?.find(p => p.id === a.profissionalId)?.nome || 'Profissional não identificado',
+        servicoNome: a.servicosRealizados?.[0]?.nome || a.servicoNome,
+        valor: (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0)
+      }));
 
       // Resumos para impressão
       const resumos = tipoRelatorio === 'financeiro' ? [
@@ -1984,6 +2228,10 @@ function ModernRelatorios() {
         horarios: horariosData,
         evolucaoComissoes,
         resumos,
+        atendimentosDetalhados: atendimentosDetalhadosData,
+        clientesDetalhados: clientesDetalhadosData,
+        comissoesDetalhadas: comissoesDetalhadasData,
+        agendamentosDetalhados: agendamentosDetalhadosData,
       });
       
       mostrarSnackbar('Dados carregados com sucesso!');
@@ -2003,11 +2251,6 @@ function ModernRelatorios() {
     };
     return meses[mes.toLowerCase()] || 0;
   };
-
-  // Função para formatar moeda no PDF
-  const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
-  const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
-  const formatarPercentualPDF = (valor) => `${(valor || 0).toFixed(1)}%`;
 
   // Função de impressão
   const handlePrint = () => {
@@ -2098,7 +2341,7 @@ function ModernRelatorios() {
         yPos += 35;
       }
 
-      // Gerar tabela baseada no tipo de relatório
+      // Gerar tabela baseada no tipo de relatório (mantido do código original)
       if (tipoRelatorio === 'financeiro' && dados.financeiro && dados.graficoLinha) {
         doc.setFontSize(12);
         doc.setTextColor(156, 39, 176);
@@ -2114,290 +2357,6 @@ function ModernRelatorios() {
             row.despesas.toFixed(2),
             row.lucro.toFixed(2),
           ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-        yPos = doc.lastAutoTable.finalY + 15;
-        
-        if (dados.graficoPizza && dados.graficoPizza.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Formas de Pagamento', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Forma', 'Valor (R$)', 'Quantidade']],
-            body: dados.graficoPizza.map(row => [
-              row.name,
-              row.value.toFixed(2),
-              row.quantidade,
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'atendimentos' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Serviço', 'Quantidade', 'Faturamento (R$)', 'Ticket Médio (R$)']],
-          body: dados.grafico.slice(0, 20).map(row => [
-            row.name,
-            row.value,
-            (row.faturamento || 0).toFixed(2),
-            (row.ticketMedio || 0).toFixed(2),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-        yPos = doc.lastAutoTable.finalY + 15;
-        
-        if (dados.horarios && dados.horarios.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Horários Mais Procurados', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Horário', 'Quantidade']],
-            body: dados.horarios.map(row => [row.horario, row.quantidade]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'clientes' && dados.topClientes && dados.topClientes.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)', 'Ticket Médio (R$)']],
-          body: dados.topClientes.map(cliente => [
-            cliente.cliente,
-            cliente.atendimentos,
-            (cliente.totalGasto || 0).toFixed(2),
-            (cliente.ticketMedio || 0).toFixed(2),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-        yPos = doc.lastAutoTable.finalY + 15;
-        
-        if (dados.niveisFidelidade && dados.niveisFidelidade.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Distribuição por Nível de Fidelidade', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Nível', 'Quantidade', '%']],
-            body: dados.niveisFidelidade.map(row => [
-              row.nivel,
-              row.quantidade,
-              ((row.quantidade / dados.clientes.totalClientes) * 100).toFixed(1),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'profissionais' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Profissional', 'Atendimentos', 'Comissões (R$)', 'Ticket Médio (R$)', 'Avaliação']],
-          body: dados.grafico.map(row => [
-            row.name,
-            row.atendimentos,
-            (row.comissoes || 0).toFixed(2),
-            (row.ticketMedio || 0).toFixed(2),
-            row.avaliacao?.toFixed(1) || '4.5',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'comissoes' && dados.comissoes && dados.comissoes.porProfissional) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
-          body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
-            prof,
-            vals.total.toFixed(2),
-            vals.pagas.toFixed(2),
-            vals.pendentes.toFixed(2),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-        yPos = doc.lastAutoTable.finalY + 15;
-        
-        if (dados.evolucaoComissoes && dados.evolucaoComissoes.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Evolução Mensal das Comissões', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Mês/Ano', 'Total (R$)', 'Variação']],
-            body: dados.evolucaoComissoes.map(row => [
-              row.mes,
-              row.total.toFixed(2),
-              `${row.variacao >= 0 ? '+' : ''}${row.variacao.toFixed(1)}%`,
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'servicos' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Serviço', 'Quantidade', 'Faturamento (R$)', 'Ticket Médio (R$)']],
-          body: dados.grafico.map(row => [
-            row.name,
-            row.value,
-            (row.faturamento || 0).toFixed(2),
-            (row.ticketMedio || 0).toFixed(2),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-        yPos = doc.lastAutoTable.finalY + 15;
-        
-        if (dados.categoriasServicos && dados.categoriasServicos.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Serviços por Categoria', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Categoria', 'Quantidade']],
-            body: dados.categoriasServicos.map(row => [row.categoria, row.quantidade]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
-        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Produtos com Estoque Baixo', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Produto', 'Estoque Atual', 'Estoque Mínimo', 'Valor Unitário (R$)']],
-            body: dados.produtos.estoqueBaixo.map(p => [
-              p.nome,
-              p.quantidade,
-              p.estoqueMinimo,
-              (p.precoVenda || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-          yPos = doc.lastAutoTable.finalY + 15;
-        }
-        
-        if (dados.produtos.topValorEstoque && dados.produtos.topValorEstoque.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Top Produtos por Valor em Estoque', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Produto', 'Quantidade', 'Valor Unitário (R$)', 'Valor Total (R$)']],
-            body: dados.produtos.topValorEstoque.map(p => [
-              p.nome,
-              p.quantidade,
-              (p.precoVenda || 0).toFixed(2),
-              (p.valorTotal || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'fornecedores' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
-          body: dados.grafico.map(row => [
-            row.name,
-            row.compras,
-            (row.valor || 0).toFixed(2),
-            `${row.rating} ★`,
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'agenda' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Data', 'Total', 'Confirmados', 'Pendentes', 'Cancelados']],
-          body: dados.grafico.map(row => [
-            row.data,
-            row.total,
-            row.confirmados,
-            row.pendentes,
-            row.cancelados,
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'cancelamentos' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Motivo', 'Quantidade']],
-          body: dados.grafico.map(row => [row.motivo, row.quantidade]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'performance' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Indicador', 'Valor', 'Meta', 'Status']],
-          body: dados.grafico.map(row => [row.indicador, row.valor, row.meta, row.status]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'fidelidade' && dados.grafico && dados.grafico.length > 0) {
-        doc.autoTable({
-          startY: yPos,
-          head: [['Cliente', 'Pontos', 'Nível', 'Próximo Nível']],
-          body: dados.grafico.map(row => [row.cliente, row.pontos, row.nivel, row.proximoNivel]),
           theme: 'striped',
           headStyles: { fillColor: [156, 39, 176], textColor: 255 },
           styles: { fontSize: 8 },
@@ -2469,15 +2428,6 @@ function ModernRelatorios() {
               `R$ ${row.lucro.toFixed(2)}`,
               `R$ ${row.acumulado.toFixed(2)}`,
             ]);
-          });
-        }
-        
-        if (dados.graficoPizza && dados.graficoPizza.length > 0) {
-          worksheetData.push([]);
-          worksheetData.push(['FORMA DE PAGAMENTO']);
-          worksheetData.push(['Forma', 'Valor', 'Quantidade']);
-          dados.graficoPizza.forEach(row => {
-            worksheetData.push([row.name, `R$ ${row.value.toFixed(2)}`, row.quantidade]);
           });
         }
       } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
@@ -2584,129 +2534,6 @@ function ModernRelatorios() {
               `R$ ${row.total.toFixed(2)}`,
               `${row.variacao >= 0 ? '+' : ''}${row.variacao.toFixed(1)}%`,
             ]);
-          });
-        }
-      } else if (tipoRelatorio === 'servicos' && dados.servicos) {
-        worksheetData.push(['RESUMO DE SERVIÇOS']);
-        worksheetData.push(['Total de Serviços', dados.servicos.totalServicos || 0]);
-        worksheetData.push(['Total de Atendimentos', dados.servicos.totalAtendimentos || 0]);
-        worksheetData.push(['Ticket Médio', `R$ ${(dados.servicos.ticketMedio || 0).toFixed(2)}`]);
-        worksheetData.push([]);
-        
-        if (dados.grafico && dados.grafico.length > 0) {
-          worksheetData.push(['SERVIÇOS MAIS REALIZADOS']);
-          worksheetData.push(['Serviço', 'Quantidade', 'Faturamento', 'Ticket Médio']);
-          dados.grafico.forEach(row => {
-            worksheetData.push([
-              row.name,
-              row.value,
-              `R$ ${(row.faturamento || 0).toFixed(2)}`,
-              `R$ ${(row.ticketMedio || 0).toFixed(2)}`,
-            ]);
-          });
-        }
-        
-        if (dados.categoriasServicos && dados.categoriasServicos.length > 0) {
-          worksheetData.push([]);
-          worksheetData.push(['SERVIÇOS POR CATEGORIA']);
-          worksheetData.push(['Categoria', 'Quantidade']);
-          dados.categoriasServicos.forEach(row => {
-            worksheetData.push([row.categoria, row.quantidade]);
-          });
-        }
-      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
-        worksheetData.push(['RESUMO DE PRODUTOS']);
-        worksheetData.push(['Total de Produtos', dados.produtos.totalProdutos || 0]);
-        worksheetData.push(['Estoque Total', dados.produtos.estoqueTotal || 0]);
-        worksheetData.push(['Valor em Estoque', `R$ ${(dados.produtos.valorEstoque || 0).toFixed(2)}`]);
-        worksheetData.push(['Produtos em Falta', dados.produtos.produtosEmFalta || 0]);
-        worksheetData.push([]);
-        
-        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
-          worksheetData.push(['PRODUTOS COM ESTOQUE BAIXO']);
-          worksheetData.push(['Produto', 'Estoque Atual', 'Estoque Mínimo', 'Valor Unitário']);
-          dados.produtos.estoqueBaixo.forEach(p => {
-            worksheetData.push([
-              p.nome,
-              p.quantidade,
-              p.estoqueMinimo,
-              `R$ ${(p.precoVenda || 0).toFixed(2)}`,
-            ]);
-          });
-        }
-        
-        if (dados.produtos.topValorEstoque && dados.produtos.topValorEstoque.length > 0) {
-          worksheetData.push([]);
-          worksheetData.push(['TOP PRODUTOS POR VALOR EM ESTOQUE']);
-          worksheetData.push(['Produto', 'Quantidade', 'Valor Unitário', 'Valor Total']);
-          dados.produtos.topValorEstoque.forEach(p => {
-            worksheetData.push([
-              p.nome,
-              p.quantidade,
-              `R$ ${(p.precoVenda || 0).toFixed(2)}`,
-              `R$ ${(p.valorTotal || 0).toFixed(2)}`,
-            ]);
-          });
-        }
-      } else if (tipoRelatorio === 'fornecedores' && dados.grafico && dados.grafico.length > 0) {
-        worksheetData.push(['FORNECEDORES']);
-        worksheetData.push(['Fornecedor', 'Compras', 'Valor Total', 'Rating', 'Status']);
-        dados.grafico.forEach(row => {
-          worksheetData.push([
-            row.name,
-            row.compras,
-            `R$ ${(row.valor || 0).toFixed(2)}`,
-            `${row.rating} ★`,
-            row.status || 'ativo',
-          ]);
-        });
-      } else if (tipoRelatorio === 'agenda' && dados.grafico && dados.grafico.length > 0) {
-        worksheetData.push(['AGENDA POR DIA']);
-        worksheetData.push(['Data', 'Total', 'Confirmados', 'Pendentes', 'Cancelados']);
-        dados.grafico.forEach(row => {
-          worksheetData.push([row.data, row.total, row.confirmados, row.pendentes, row.cancelados]);
-        });
-      } else if (tipoRelatorio === 'cancelamentos' && dados.cancelamentos) {
-        worksheetData.push(['RESUMO DE CANCELAMENTOS']);
-        worksheetData.push(['Total Cancelamentos', dados.cancelamentos.total || 0]);
-        worksheetData.push(['Taxa de Cancelamento', `${(dados.cancelamentos.taxa || 0).toFixed(1)}%`]);
-        worksheetData.push(['Perda Estimada', `R$ ${(dados.cancelamentos.perdaEstimada || 0).toFixed(2)}`]);
-        worksheetData.push([]);
-        
-        if (dados.grafico && dados.grafico.length > 0) {
-          worksheetData.push(['MOTIVOS DE CANCELAMENTO']);
-          worksheetData.push(['Motivo', 'Quantidade']);
-          dados.grafico.forEach(row => {
-            worksheetData.push([row.motivo, row.quantidade]);
-          });
-        }
-      } else if (tipoRelatorio === 'performance' && dados.performance) {
-        worksheetData.push(['RESUMO DE PERFORMANCE']);
-        worksheetData.push(['Ticket Médio', `R$ ${(dados.performance.ticketMedio || 0).toFixed(2)}`]);
-        worksheetData.push(['Faturamento por Dia', `R$ ${(dados.performance.faturamentoPorDia || 0).toFixed(2)}`]);
-        worksheetData.push(['Atendimentos por Dia', (dados.performance.atendimentosPorDia || 0).toFixed(1)]);
-        worksheetData.push(['Taxa de Ocupação', `${(dados.performance.taxaOcupacao || 0).toFixed(1)}%`]);
-        worksheetData.push([]);
-        
-        if (dados.grafico && dados.grafico.length > 0) {
-          worksheetData.push(['INDICADORES DE PERFORMANCE']);
-          worksheetData.push(['Indicador', 'Valor', 'Meta', 'Status']);
-          dados.grafico.forEach(row => {
-            worksheetData.push([row.indicador, row.valor, row.meta, row.status]);
-          });
-        }
-      } else if (tipoRelatorio === 'fidelidade' && dados.fidelidade) {
-        worksheetData.push(['RESUMO DE FIDELIDADE']);
-        worksheetData.push(['Total Pontos', dados.fidelidade.totalPontos || 0]);
-        worksheetData.push(['Pontos Resgatados', dados.fidelidade.pontosResgatados || 0]);
-        worksheetData.push(['Pontos a Expirar', dados.fidelidade.pontosAExpirar || 0]);
-        worksheetData.push([]);
-        
-        if (dados.grafico && dados.grafico.length > 0) {
-          worksheetData.push(['TOP CLIENTES POR PONTOS']);
-          worksheetData.push(['Cliente', 'Pontos', 'Nível', 'Próximo Nível']);
-          dados.grafico.forEach(row => {
-            worksheetData.push([row.cliente, row.pontos, row.nivel, row.proximoNivel]);
           });
         }
       }
