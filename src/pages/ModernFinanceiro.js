@@ -1,5 +1,4 @@
 // src/pages/ModernRelatorios.js
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -99,18 +98,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-const getLogoFromConfig = (configuracoes) => {
-  // Tenta obter o logo das configurações do salão
-  if (configuracoes && configuracoes.length > 0) {
-    const config = configuracoes[0];
-    if (config.salao && config.salao.logo) {
-      return config.salao.logo;
-    }
-  }
-  // Retorna null se não encontrar, o componente usará o placeholder
-  return null;
-};
-
 const COLORS = ['#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', '#f8bbd0', '#f3e5f5', '#ce93d8', '#e1bee7'];
 
 // Constantes para status e tipos
@@ -201,6 +188,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               }
             }}
           >
+            {/* Placeholder quando não há logo */}
             BP
           </Avatar>
           <Box>
@@ -863,12 +851,31 @@ function ModernRelatorios() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [detalhesItem, setDetalhesItem] = useState(null);
+  const [configuracoes, setConfiguracoes] = useState(null);
+  const [logo, setLogo] = useState(null);
 
   const componentRef = useRef();
 
   useEffect(() => {
+    carregarConfiguracoes();
     carregarDados();
   }, [tipoRelatorio, periodo, dataInicio, dataFim]);
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const configData = await firebaseService.getAll('configuracoes').catch(() => []);
+      setConfiguracoes(configData);
+      
+      if (configData && configData.length > 0) {
+        const config = configData[0];
+        if (config.salao && config.salao.logo) {
+          setLogo(config.salao.logo);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
+    }
+  };
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -1322,7 +1329,7 @@ function ModernRelatorios() {
         doc.setTextColor(244, 67, 54);
         doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
         
-        // Lucro - CORREÇÃO AQUI: usando if separado
+        // Lucro - CORREÇÃO AQUI
         if (dados.financeiro.lucroLiquido >= 0) {
           doc.setTextColor(33, 150, 243); // Azul para lucro positivo
         } else {
@@ -2011,7 +2018,7 @@ function ModernRelatorios() {
           </Card>
         </Grid>
 
-        {/* Gráficos */}
+        {/* Cards de resumo e gráficos */}
         {tipoRelatorio === 'financeiro' && dados.graficoLinha && dados.graficoLinha.length > 0 && (
           <>
             <Grid item xs={12} md={8}>
@@ -2315,6 +2322,7 @@ function ModernRelatorios() {
           periodo={periodo}
           dataInicio={dataInicio}
           dataFim={dataFim}
+          logo={logo}
         />
       </Box>
 
