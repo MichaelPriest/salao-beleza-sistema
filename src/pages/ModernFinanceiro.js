@@ -1333,13 +1333,13 @@ function ModernRelatorios() {
 		  doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
 		  
 		  // Lucro - CORREÇÃO CRUCIAL: removendo o operador ternário problemático
-		  const lucroValue = dados.financeiro.lucroLiquido;
-		  if (lucroValue >= 0) {
-			doc.setTextColor(33, 150, 243);
-		  } else {
-			doc.setTextColor(244, 67, 54);
-		  }
-		  doc.text(formatarMoedaPDF(lucroValue), 137, yPos + 18);
+		const lucroValue = dados.financeiro.lucroLiquido;
+		if (lucroValue >= 0) {
+		  doc.setTextColor(33, 150, 243);
+		} else {
+		  doc.setTextColor(244, 67, 54);
+		}
+		doc.text(formatarMoedaPDF(lucroValue), 137, yPos + 18);
 		  
 		  yPos += 35;
 
