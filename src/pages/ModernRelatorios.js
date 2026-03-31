@@ -183,26 +183,6 @@ const formatarPercentual = (valor) => {
   return `${(valor || 0).toFixed(1)}%`;
 };
 
-const atendimentosRealizados = agendamentosFiltrados.filter(a => a.status === 'finalizado');
-
-const cancelamentos = agendamentosFiltrados.filter(a => a.status === 'cancelado');
-
-const totalGastoClientes = pagamentosFiltrados.reduce((total, pagamento) => {
-  return total + (pagamento.valor || 0);
-}, 0);
-
-const taxaCancelamento = agendamentosFiltrados.length > 0
-  ? (cancelamentos.length / agendamentosFiltrados.length) * 100
-  : 0;
-
-const perdaEstimada = cancelamentos.reduce((total, c) => {
-  return total + (c.valor || 0);
-}, 0);
-
-const ticketMedio = atendimentosRealizados.length > 0
-  ? totalGastoClientes / atendimentosRealizados.length
-  : 0;
-
 // Componente de impressão
 const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos }, ref) => {
   // Re-declarar funções de formatação para uso no componente de impressão
