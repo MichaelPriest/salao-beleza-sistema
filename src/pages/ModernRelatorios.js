@@ -184,8 +184,8 @@ const formatarPercentual = (valor) => {
 };
 
 // Componente de impressão
-const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos }, ref) => {
-  // Funções de formatação para impressão
+const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos, configuracao }, ref) => {
+  // Funções de formatação para impressão (mantidas)
   const formatarMoedaPrint = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -261,9 +261,17 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
     return icones[tipoRelatorio] || '📊';
   };
 
+  // Obter dados do salão da configuração
+  const salao = configuracao?.salao || {};
+  const contato = salao.contato || {};
+  const endereco = salao.endereco || {};
+  const nomeEmpresa = salao.nomeFantasia || salao.nome || 'Beauty Pro';
+  const enderecoCompleto = [endereco.logradouro, endereco.numero, endereco.bairro, endereco.cidade, endereco.estado, endereco.cep]
+    .filter(Boolean).join(', ');
+
   return (
-    <Box ref={ref} sx={{ p: 4, backgroundColor: 'dark', minHeight: '100vh' }}>
-      {/* Cabeçalho com logo */}
+    <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minHeight: '100vh' }}>
+      {/* Cabeçalho com logo e dados da empresa */}
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
@@ -280,8 +288,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               src={logo} 
               alt="Logo" 
               style={{ 
-                width: 60, 
-                height: 60, 
+                width: 70, 
+                height: 70, 
                 objectFit: 'contain',
                 marginRight: 16,
                 borderRadius: 8
@@ -296,8 +304,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
           ) : null}
           <Avatar
             sx={{ 
-              width: 60, 
-              height: 60, 
+              width: 70, 
+              height: 70, 
               bgcolor: '#9c27b0',
               fontSize: '28px',
               fontWeight: 'bold',
@@ -309,11 +317,36 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
           </Avatar>
           <Box>
             <Typography variant="h3" sx={{ fontWeight: 800, color: '#9c27b0', letterSpacing: 1 }}>
-              Beauty Pro
+              {nomeEmpresa}
             </Typography>
             <Typography variant="subtitle1" color="textSecondary" sx={{ fontWeight: 500 }}>
               {getTituloRelatorio()}
             </Typography>
+            {enderecoCompleto && (
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                📍 {enderecoCompleto}
+              </Typography>
+            )}
+            {contato.telefone && (
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'inline-block', mr: 2 }}>
+                📞 {contato.telefone}
+              </Typography>
+            )}
+            {contato.whatsapp && (
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'inline-block', mr: 2 }}>
+                💬 WhatsApp: {contato.whatsapp}
+              </Typography>
+            )}
+            {contato.email && (
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'inline-block' }}>
+                ✉️ {contato.email}
+              </Typography>
+            )}
+            {salao.cnpj && (
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                CNPJ: {salao.cnpj}
+              </Typography>
+            )}
           </Box>
         </Box>
         <Box sx={{ textAlign: 'right' }}>
@@ -1582,6 +1615,7 @@ function ModernRelatorios() {
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [detalhesItem, setDetalhesItem] = useState(null);
   const [configuracoes, setConfiguracoes] = useState(null);
+  const [configuracaoAtual, setConfiguracaoAtual] = useState(null);
   const [logo, setLogo] = useState(null);
 
   const componentRef = useRef();
@@ -1597,11 +1631,22 @@ function ModernRelatorios() {
       setConfiguracoes(configData);
       
       if (configData && configData.length > 0) {
-        const config = configData[0];
+        // Pega a configuração mais recente (última da lista) ou a primeira
+        const config = configData[configData.length - 1];
+        setConfiguracaoAtual(config);
+        
+        // Tenta pegar o logo de diferentes estruturas
         if (config.salao && config.salao.logo) {
           setLogo(config.salao.logo);
         } else if (config.logo) {
           setLogo(config.logo);
+        } else if (config.configuracoes?.logo) {
+          setLogo(config.configuracoes.logo);
+        }
+        
+        // Se não encontrou logo, tenta na primeira configuração
+        if (!logo && configData[0]?.salao?.logo) {
+          setLogo(configData[0].salao.logo);
         }
       }
     } catch (error) {
@@ -2281,72 +2326,159 @@ function ModernRelatorios() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
-      const addHeader = () => {
+      // Obter dados da empresa da configuração
+      const salao = configuracaoAtual?.salao || {};
+      const contato = salao.contato || {};
+      const endereco = salao.endereco || {};
+      const nomeEmpresa = salao.nomeFantasia || salao.nome || 'Beauty Pro';
+      const enderecoCompleto = [endereco.logradouro, endereco.numero, endereco.bairro, endereco.cidade, endereco.estado, endereco.cep]
+        .filter(Boolean).join(', ');
+      
+      // Função para adicionar cabeçalho completo
+      const addFullHeader = (doc) => {
+        // Barra roxa superior
         doc.setFillColor(156, 39, 176);
-        doc.rect(0, 0, pageWidth, 10, 'F');
-        doc.setTextColor(255, 255, 255);
+        doc.rect(0, 0, pageWidth, 12, 'F');
+        
+        // Logo ou ícone
+        if (logo) {
+          try {
+            // Tenta adicionar a imagem do logo
+            const imgData = logo;
+            doc.addImage(imgData, 'JPEG', 14, 18, 25, 25);
+          } catch (e) {
+            // Se não conseguir carregar a imagem, usa o ícone
+            doc.setFillColor(156, 39, 176);
+            doc.circle(26, 30, 12, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(14);
+            doc.text('BP', 26, 33, { align: 'center' });
+          }
+        } else {
+          // Avatar com ícone
+          doc.setFillColor(156, 39, 176);
+          doc.circle(26, 30, 12, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(14);
+          doc.text('BP', 26, 33, { align: 'center' });
+        }
+        
+        // Nome da empresa
+        doc.setTextColor(156, 39, 176);
+        doc.setFontSize(18);
+        doc.setFont(undefined, 'bold');
+        doc.text(nomeEmpresa, 45, 28);
+        
+        // Título do relatório
+        const tituloRelatorioObj = {
+          financeiro: 'Relatório Financeiro',
+          atendimentos: 'Relatório de Atendimentos',
+          clientes: 'Relatório de Clientes',
+          profissionais: 'Relatório de Profissionais',
+          comissoes: 'Relatório de Comissões',
+          servicos: 'Relatório de Serviços',
+          produtos: 'Relatório de Produtos',
+          fornecedores: 'Relatório de Fornecedores',
+          agenda: 'Relatório de Agenda',
+          cancelamentos: 'Relatório de Cancelamentos',
+          performance: 'Relatório de Performance',
+          fidelidade: 'Relatório de Fidelidade',
+        };
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(tituloRelatorioObj[tipoRelatorio], 45, 35);
+        
+        // Endereço e contatos
+        let yInfo = 45;
         doc.setFontSize(8);
-        doc.text('Beauty Pro Salon', 10, 6);
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
+        doc.setTextColor(80, 80, 80);
+        
+        if (enderecoCompleto) {
+          doc.text(`📍 ${enderecoCompleto}`, 14, yInfo);
+          yInfo += 5;
+        }
+        
+        let contatosLine = '';
+        if (contato.telefone) contatosLine += `📞 ${contato.telefone}  `;
+        if (contato.whatsapp) contatosLine += `💬 WhatsApp: ${contato.whatsapp}  `;
+        if (contato.email) contatosLine += `✉️ ${contato.email}`;
+        
+        if (contatosLine) {
+          doc.text(contatosLine, 14, yInfo);
+          yInfo += 5;
+        }
+        
+        if (salao.cnpj) {
+          doc.text(`CNPJ: ${salao.cnpj}`, 14, yInfo);
+          yInfo += 5;
+        }
+        
+        // Linha separadora
+        doc.setDrawColor(156, 39, 176);
+        doc.setLineWidth(0.5);
+        doc.line(14, yInfo + 2, pageWidth - 14, yInfo + 2);
+        
+        // Período e informações de geração
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(9);
+        doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 14, yInfo + 10);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, yInfo + 16);
+        doc.text(`Usuário: ${JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema'}`, 14, yInfo + 22);
+        
+        // Linha inferior do cabeçalho
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, yInfo + 28, pageWidth - 14, yInfo + 28);
+        
+        return yInfo + 32; // Retorna a posição Y após o cabeçalho
       };
-
-      addHeader();
       
-      doc.setTextColor(156, 39, 176);
-      doc.setFontSize(22);
-      doc.setFont(undefined, 'bold');
-      doc.text('Beauty Pro', 105, 25, { align: 'center' });
+      // Adicionar cabeçalho completo
+      let yPos = addFullHeader(doc);
       
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(16);
-      const tituloRelatorioObj = {
-        financeiro: 'Relatório Financeiro',
-        atendimentos: 'Relatório de Atendimentos',
-        clientes: 'Relatório de Clientes',
-        profissionais: 'Relatório de Profissionais',
-        comissoes: 'Relatório de Comissões',
-        servicos: 'Relatório de Serviços',
-        produtos: 'Relatório de Produtos',
-        fornecedores: 'Relatório de Fornecedores',
-        agenda: 'Relatório de Agenda',
-        cancelamentos: 'Relatório de Cancelamentos',
-        performance: 'Relatório de Performance',
-        fidelidade: 'Relatório de Fidelidade',
-      };
-      doc.text(tituloRelatorioObj[tipoRelatorio], 105, 35, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 105, 42, { align: 'center' });
-      
-      let yPos = 50;
-
       // Resumo em cards
       if (dados.resumos && dados.resumos.length > 0) {
         const colWidth = pageWidth / 4 - 10;
         dados.resumos.forEach((resumo, index) => {
           const x = 14 + (index * (colWidth + 5));
+          
+          // Fundo do card
           doc.setFillColor(248, 240, 250);
-          doc.roundedRect(x, yPos, colWidth, 25, 2, 2, 'F');
+          doc.roundedRect(x, yPos, colWidth, 28, 2, 2, 'F');
+          
+          // Label
           doc.setFontSize(8);
           doc.setTextColor(100, 100, 100);
+          doc.setFont(undefined, 'normal');
           doc.text(resumo.label, x + 5, yPos + 8);
+          
+          // Valor
           doc.setFontSize(12);
           doc.setFont(undefined, 'bold');
-          doc.setTextColor(resumo.color ? parseInt(resumo.color.slice(1, 3), 16) : 156, 
-                           resumo.color ? parseInt(resumo.color.slice(3, 5), 16) : 39, 
-                           resumo.color ? parseInt(resumo.color.slice(5, 7), 16) : 176);
-          doc.text(resumo.value, x + 5, yPos + 20);
+          const color = resumo.color || '#9c27b0';
+          doc.setTextColor(
+            parseInt(color.slice(1, 3), 16),
+            parseInt(color.slice(3, 5), 16),
+            parseInt(color.slice(5, 7), 16)
+          );
+          doc.text(resumo.value, x + 5, yPos + 22);
         });
-        yPos += 35;
+        yPos += 38;
       }
-
-      // Gerar tabela baseada no tipo de relatório (mantido do código original)
+      
+      // Gerar tabela baseada no tipo de relatório
       if (tipoRelatorio === 'financeiro' && dados.financeiro && dados.graficoLinha) {
-        doc.setFontSize(12);
+        // Verificar se precisa de nova página
+        if (yPos > pageHeight - 60) {
+          doc.addPage();
+          yPos = addFullHeader(doc);
+        }
+        
+        doc.setFontSize(11);
         doc.setTextColor(156, 39, 176);
+        doc.setFont(undefined, 'bold');
         doc.text('Evolução Diária', 14, yPos);
-        yPos += 5;
+        yPos += 8;
         
         doc.autoTable({
           startY: yPos,
@@ -2358,20 +2490,268 @@ function ModernRelatorios() {
             row.lucro.toFixed(2),
           ]),
           theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+          headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
           styles: { fontSize: 8 },
           margin: { left: 14, right: 14 },
         });
+        yPos = doc.lastAutoTable.finalY + 10;
+        
+        if (dados.graficoPizza && dados.graficoPizza.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Formas de Pagamento', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Forma', 'Valor (R$)', 'Quantidade']],
+            body: dados.graficoPizza.map(row => [
+              row.name,
+              row.value.toFixed(2),
+              row.quantidade,
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [255, 64, 129], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
+        // Tabela de atendimentos por serviço
+        if (dados.grafico && dados.grafico.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Atendimentos por Serviço', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Serviço', 'Quantidade', 'Faturamento (R$)', 'Ticket Médio (R$)']],
+            body: dados.grafico.slice(0, 20).map(row => [
+              row.name,
+              row.value,
+              (row.faturamento || 0).toFixed(2),
+              (row.ticketMedio || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+          yPos = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // Lista detalhada de atendimentos
+        if (dados.atendimentosDetalhados && dados.atendimentosDetalhados.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Lista de Atendimentos', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Data/Hora', 'Cliente', 'Profissional', 'Serviços', 'Valor (R$)', 'Status']],
+            body: dados.atendimentosDetalhados.map(a => [
+              a.data ? new Date(a.data).toLocaleString('pt-BR') : '-',
+              a.clienteNome || '-',
+              a.profissionalNome || '-',
+              a.servicosRealizados?.map(s => s.nome).join(', ') || '-',
+              (a.valorTotal || 0).toFixed(2),
+              a.status === 'finalizado' ? 'Finalizado' : a.status,
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [255, 64, 129], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 7 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'clientes' && dados.clientes) {
+        // Top clientes
+        if (dados.topClientes && dados.topClientes.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Top Clientes', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)', 'Ticket Médio (R$)']],
+            body: dados.topClientes.map(cliente => [
+              cliente.cliente,
+              cliente.atendimentos,
+              (cliente.totalGasto || 0).toFixed(2),
+              (cliente.ticketMedio || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+          yPos = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // Lista detalhada de clientes
+        if (dados.clientesDetalhados && dados.clientesDetalhados.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Lista de Clientes', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Nome', 'Telefone', 'Email', 'Total Gasto (R$)', 'Atendimentos', 'Nível']],
+            body: dados.clientesDetalhados.map(c => [
+              c.nome,
+              c.telefone || '-',
+              c.email || '-',
+              (c.totalGasto || 0).toFixed(2),
+              c.totalAtendimentos || 0,
+              c.nivelFidelidade || 'Bronze',
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [255, 64, 129], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 7 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
+        // Comissões por profissional
+        if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Comissões por Profissional', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
+            body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
+              prof,
+              vals.total.toFixed(2),
+              vals.pagas.toFixed(2),
+              vals.pendentes.toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+          yPos = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // Lista detalhada de comissões
+        if (dados.comissoesDetalhadas && dados.comissoesDetalhadas.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Lista de Comissões', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Data', 'Profissional', 'Serviço', 'Cliente', 'Valor Serviço (R$)', 'Comissão (R$)', 'Status']],
+            body: dados.comissoesDetalhadas.map(c => [
+              c.data ? new Date(c.data).toLocaleDateString('pt-BR') : '-',
+              c.profissionalNome,
+              c.servicoNome || '-',
+              c.clienteNome || '-',
+              (c.valorServico || 0).toFixed(2),
+              (c.valor || 0).toFixed(2),
+              c.status === 'pago' ? 'Pago' : 'Pendente',
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [255, 64, 129], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 7 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'agenda' && dados.agenda) {
+        // Lista detalhada de agendamentos
+        if (dados.agendamentosDetalhados && dados.agendamentosDetalhados.length > 0) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+          
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Lista de Agendamentos', 14, yPos);
+          yPos += 8;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Data/Hora', 'Cliente', 'Profissional', 'Serviço', 'Valor (R$)', 'Status']],
+            body: dados.agendamentosDetalhados.map(a => [
+              a.data ? new Date(a.data).toLocaleString('pt-BR') : '-',
+              a.clienteNome,
+              a.profissionalNome,
+              a.servicoNome || '-',
+              (a.valor || 0).toFixed(2),
+              statusColors[a.status]?.label || a.status,
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 7 },
+            margin: { left: 14, right: 14 },
+          });
+        }
       }
-
+      
       // Rodapé em todas as páginas
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFontSize(8);
+        doc.setFontSize(7);
         doc.setTextColor(150, 150, 150);
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
-        doc.text('Beauty Pro Salon', 10, pageHeight - 10);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 25, pageHeight - 8);
+        doc.text(nomeEmpresa, 14, pageHeight - 8);
+        
+        // Linha do rodapé
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.2);
+        doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
       }
       
       doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -3113,6 +3493,7 @@ function ModernRelatorios() {
           dataFim={dataFim}
           logo={logo}
           resumos={dados.resumos}
+          configuracao={configuracaoAtual}
         />
       </Box>
 
