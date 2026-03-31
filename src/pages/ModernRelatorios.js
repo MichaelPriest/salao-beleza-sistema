@@ -183,10 +183,6 @@ const formatarPercentual = (valor) => {
   return `${(valor || 0).toFixed(1)}%`;
 };
 
-const totalGastoClientes = pagamentosFiltrados.reduce((total, pagamento) => {
-  return total + (pagamento.valor || 0);
-}, 0);
-
 // Componente de impressão
 const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos }, ref) => {
   // Re-declarar funções de formatação para uso no componente de impressão
@@ -1556,6 +1552,10 @@ function ModernRelatorios() {
 
       // Atendimentos realizados (finalizados)
       const atendimentosRealizados = agendamentosFiltrados.filter(a => a.status === 'finalizado');
+      
+      const totalGastoClientes = atendimentosRealizados.reduce((acc, a) => {
+        return acc + (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0);
+      }, 0);      
       
       const servicosMap = {};
       let faturamentoAtendimentos = 0;
