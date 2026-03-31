@@ -1328,16 +1328,16 @@ function ModernRelatorios() {
 		  doc.setTextColor(76, 175, 80);
 		  doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
 		  
-		  // Despesas - Vermelho
-		  doc.setTextColor(244, 67, 54);
-		  doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
-		  
-		  // Lucro - CORREÇÃO CRUCIAL: removendo o operador ternário problemático
+		// Despesas - Vermelho
+		doc.setTextColor(244, 67, 54);
+		doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
+		
+		// Lucro - CORREÇÃO CRUCIAL: removendo o operador ternário problemático
 		const lucroValue = dados.financeiro.lucroLiquido;
 		if (lucroValue >= 0) {
-		  doc.setTextColor(33, 150, 243);
+		  doc.setTextColor(33, 150, 243);  // Azul para lucro positivo
 		} else {
-		  doc.setTextColor(244, 67, 54);
+		  doc.setTextColor(244, 67, 54);   // Vermelho para prejuízo
 		}
 		doc.text(formatarMoedaPDF(lucroValue), 137, yPos + 18);
 		  
