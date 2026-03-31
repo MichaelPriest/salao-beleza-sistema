@@ -262,7 +262,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
   };
 
   return (
-    <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minHeight: '100vh' }}>
+    <Box ref={ref} sx={{ p: 4, backgroundColor: 'dark', minHeight: '100vh' }}>
       {/* Cabeçalho com logo */}
       <Box sx={{ 
         display: 'flex', 
@@ -357,12 +357,12 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data/Hora</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviços</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data/Hora</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Serviços</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -379,7 +379,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip 
                         label={atendimento.status === 'finalizado' ? 'Finalizado' : atendimento.status}
                         size="small"
-                        sx={{ bgcolor: '#4caf50', color: 'white' }}
+                        sx={{ bgcolor: '#4caf50', color: 'dark' }}
                       />
                     </TableCell>
                   </TableRow>
@@ -400,13 +400,13 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nome</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Telefone</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Email</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data Cadastro</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Gasto</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nível</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Nome</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Telefone</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Email</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data Cadastro</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Total Gasto</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Nível</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -447,13 +447,13 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Serviço</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Comissão</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Comissão</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -469,7 +469,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip 
                         label={comissao.status === 'pago' ? 'Pago' : 'Pendente'}
                         size="small"
-                        sx={{ bgcolor: comissao.status === 'pago' ? '#4caf50' : '#ff9800', color: 'white' }}
+                        sx={{ bgcolor: comissao.status === 'pago' ? '#4caf50' : '#ff9800', color: 'dark' }}
                       />
                     </TableCell>
                   </TableRow>
@@ -490,12 +490,12 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data/Hora</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data/Hora</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -512,7 +512,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                         size="small"
                         sx={{ 
                           bgcolor: statusColors[agendamento.status]?.color || '#9e9e9e', 
-                          color: 'white' 
+                          color: 'dark' 
                         }}
                       />
                     </TableCell>
@@ -574,11 +574,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Receitas</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Despesas</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Lucro</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Acumulado</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Receitas</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Despesas</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Lucro</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Acumulado</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -604,10 +604,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Forma de Pagamento</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Forma de Pagamento</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -677,11 +677,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Faturamento</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Ticket Médio</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Faturamento</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Ticket Médio</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -707,9 +707,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Horário</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Horário</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -773,11 +773,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Gasto</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Ticket Médio</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Última Visita</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Total Gasto</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Ticket Médio</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Última Visita</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -807,9 +807,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nível</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Nível</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -819,7 +819,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip
                         label={row.nivel}
                         size="small"
-                        sx={{ bgcolor: row.cor, color: 'white' }}
+                        sx={{ bgcolor: row.cor, color: 'dark' }}
                       />
                     </TableCell>
                     <TableCell align="right">{formatarNumeroPrint(row.quantidade)}</TableCell>
@@ -873,12 +873,12 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Comissões</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Ticket Médio</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Avaliação</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Comissões</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Ticket Médio</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Avaliação</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -942,11 +942,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Total</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pagas</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pendentes</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>% do Total</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Pagas</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Pendentes</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>% do Total</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -972,9 +972,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Mês/Ano</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Variação</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Mês/Ano</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Variação</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1030,11 +1030,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Faturamento</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Ticket Médio</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Faturamento</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Ticket Médio</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1062,10 +1062,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Categoria</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Faturamento</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Categoria</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Faturamento</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1128,11 +1128,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Produto</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Estoque Atual</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Estoque Mínimo</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Unitário</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Produto</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Estoque Atual</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Estoque Mínimo</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Unitário</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1170,10 +1170,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Produto</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Unitário</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Total</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Produto</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Unitário</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Total</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1228,11 +1228,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Fornecedor</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Compras</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Total</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Rating</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Fornecedor</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Total Compras</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Rating</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1251,7 +1251,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip
                         label={row.status}
                         size="small"
-                        sx={{ bgcolor: row.status === 'ativo' ? '#4caf50' : '#f44336', color: 'white' }}
+                        sx={{ bgcolor: row.status === 'ativo' ? '#4caf50' : '#f44336', color: 'dark' }}
                       />
                     </TableCell>
                   </TableRow>
@@ -1299,11 +1299,11 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Confirmados</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pendentes</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Cancelados</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Data</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Confirmados</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Pendentes</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Cancelados</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1359,9 +1359,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Motivo</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Motivo</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1425,10 +1425,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Indicador</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Meta</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Indicador</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Valor</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Meta</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1441,7 +1441,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip
                         label={row.status}
                         size="small"
-                        sx={{ bgcolor: row.status === 'Atingida' ? '#4caf50' : '#ff9800', color: 'white' }}
+                        sx={{ bgcolor: row.status === 'Atingida' ? '#4caf50' : '#ff9800', color: 'dark' }}
                       />
                     </TableCell>
                   </TableRow>
@@ -1489,10 +1489,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pontos</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Nível</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Próximo Nível</TableCell>
+                  <TableCell sx={{ color: 'dark', fontWeight: 700 }}>Cliente</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Pontos</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Nível</TableCell>
+                  <TableCell align="right" sx={{ color: 'dark', fontWeight: 700 }}>Próximo Nível</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1504,7 +1504,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                       <Chip
                         label={row.nivel}
                         size="small"
-                        sx={{ bgcolor: row.cor, color: 'white' }}
+                        sx={{ bgcolor: row.cor, color: 'dark' }}
                       />
                     </TableCell>
                     <TableCell align="right">{row.proximoNivel}</TableCell>
@@ -3118,7 +3118,7 @@ function ModernRelatorios() {
 
       {/* Dialog de Detalhes */}
       <Dialog open={detalhesOpen} onClose={handleCloseDetalhes} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'dark' }}>
           Detalhes
         </DialogTitle>
         <DialogContent>
