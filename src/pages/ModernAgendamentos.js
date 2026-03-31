@@ -1,5 +1,5 @@
 // src/pages/ModernAgendamentos.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Box,
   Card,
