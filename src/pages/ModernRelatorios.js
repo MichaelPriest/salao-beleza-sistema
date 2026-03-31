@@ -2010,20 +2010,24 @@ function ModernRelatorios() {
   const formatarPercentualPDF = (valor) => `${(valor || 0).toFixed(1)}%`;
 
   // Função de impressão
-  const handlePrint = useReactToPrint({
-    content: () => componentRef.current,
-    documentTitle: `relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}`,
-    onBeforeGetContent: () => {
-      toast.loading('Preparando impressão...', { id: 'print' });
-    },
-    onAfterPrint: () => {
-      toast.success('Relatório enviado para impressão!', { id: 'print' });
-    },
-    onPrintError: (error) => {
-      console.error('Erro na impressão:', error);
-      toast.error('Erro ao imprimir relatório', { id: 'print' });
+  const handlePrint = () => {
+    if (!componentRef.current) {
+      toast.error('Componente de impressão não está pronto');
+      return;
     }
-  });
+    
+    toast.loading('Preparando impressão...', { id: 'print' });
+    
+    const printContent = componentRef.current;
+    const originalContents = document.body.innerHTML;
+    
+    document.body.innerHTML = printContent.innerHTML;
+    window.print();
+    document.body.innerHTML = originalContents;
+    window.location.reload();
+    
+    toast.success('Relatório enviado para impressão!', { id: 'print' });
+  };
 
   // Exportar para PDF
   const handleExportPDF = async () => {
