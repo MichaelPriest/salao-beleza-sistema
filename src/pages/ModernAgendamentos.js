@@ -422,7 +422,21 @@ function ModernAgendamentos() {
     servicos: [],
     valorTotal: 0
   });
-
+  
+  // Debounce states
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [debouncedCpfInput, setDebouncedCpfInput] = useState('');
+  const [debouncedDataNascimento, setDebouncedDataNascimento] = useState(null);
+  const [clientesCache, setClientesCache] = useState({});
+  const [throttleTimeout, setThrottleTimeout] = useState(null);
+  
+  // Memoização de dados
+  const clientesMemo = useMemo(() => clientes || [], [clientes]);
+  const servicosMemo = useMemo(() => servicos || [], [servicos]);
+  const profissionaisMemo = useMemo(() => profissionais || [], [profissionais]);
+  const agendamentosMemo = useMemo(() => agendamentos || [], [agendamentos]);
+  const atendimentosMemo = useMemo(() => atendimentos || [], [atendimentos]);
+  
   // ============================================
   // FUNÇÕES DE UTILIDADE
   // ============================================
@@ -575,6 +589,58 @@ function ModernAgendamentos() {
     }
   };
 
+  const removerMascaraCPF = useCallback((cpf) => {
+    return cpf ? cpf.replace(/\D/g, '') : '';
+  }, []);
+  
+  const buscarClientesOtimizado = useCallback(() => {
+    if (!clientesMemo.length) return [];
+  
+    let resultados = [];
+    const cacheKey = `${searchClientType}_${debouncedSearchTerm}_${debouncedCpfInput}_${debouncedDataNascimento}`;
+    
+    if (clientesCache[cacheKey]) {
+      return clientesCache[cacheKey];
+    }
+  
+    switch (searchClientType) {
+      case 'nome':
+        if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
+        const searchTermLower = debouncedSearchTerm.toLowerCase();
+        resultados = clientesMemo.filter(cliente => 
+          cliente.nome?.toLowerCase().includes(searchTermLower)
+        );
+        break;
+  
+      case 'cpf':
+        if (!debouncedCpfInput || debouncedCpfInput.length < 3) return [];
+        const cpfBusca = removerMascaraCPF(debouncedCpfInput);
+        resultados = clientesMemo.filter(cliente => {
+          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
+          return cpfCliente.includes(cpfBusca);
+        });
+        break;
+  
+      case 'dataNascimento':
+        if (!debouncedDataNascimento) return [];
+        const dataBusca = formatDate(debouncedDataNascimento);
+        resultados = clientesMemo.filter(cliente => {
+          const dataCliente = cliente.dataNascimento ? 
+            formatDate(new Date(cliente.dataNascimento)) : '';
+          return dataCliente === dataBusca;
+        });
+        break;
+  
+      default:
+        break;
+    }
+  
+    resultados = resultados.slice(0, 20);
+    setClientesCache(prev => ({ ...prev, [cacheKey]: resultados }));
+    
+    return resultados;
+  }, [clientesMemo, searchClientType, debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, clientesCache, removerMascaraCPF]);
+  
   // ============================================
   // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
   // ============================================
@@ -979,6 +1045,38 @@ function ModernAgendamentos() {
     return getClienteData(formData.clienteId);
   };
 
+  const servicosFiltradosMemo = useMemo(() => {
+    if (!servicosMemo.length) return [];
+    return servicosMemo.filter(servico => 
+      servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
+    );
+  }, [servicosMemo, buscaServico]);
+  
+  const profissionaisFiltradosMemo = useMemo(() => {
+    if (!profissionaisMemo.length) return [];
+    return profissionaisMemo.filter(prof => 
+      prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
+    );
+  }, [profissionaisMemo, buscaProfissional]);
+  
+  const servicosDisponiveisMemo = useMemo(() => {
+    if (!formData.profissionalId || !servicosMemo.length) return [];
+    const profissional = profissionaisMemo.find(p => p.id === formData.profissionalId);
+    if (profissional && profissional.servicosIds) {
+      return servicosMemo.filter(s => 
+        profissional.servicosIds.includes(s.id) && s.ativo !== false
+      );
+    }
+    return servicosMemo.filter(s => s.ativo !== false);
+  }, [formData.profissionalId, servicosMemo, profissionaisMemo]);
+  
+  const horariosDisponiveisMemo = useMemo(() => {
+    if (!formData.profissionalId || !formData.data) return [];
+    return timeSlots.filter(time => 
+      verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
+    );
+  }, [formData.profissionalId, formData.data, verificarDisponibilidadeProfissional]);
+  
   // ============================================
   // FUNÇÕES DE NAVEGAÇÃO
   // ============================================
@@ -2474,6 +2572,29 @@ const handleExportPDF = async () => {
     }
   }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
 
+  // Debounce para pesquisa de clientes
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchClientTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchClientTerm]);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCpfInput(cpfInput), 300);
+    return () => clearTimeout(timer);
+  }, [cpfInput]);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedDataNascimento(dataNascimentoInput), 300);
+    return () => clearTimeout(timer);
+  }, [dataNascimentoInput]);
+  
+  useEffect(() => {
+    if (showClientSearch) {
+      const resultados = buscarClientesOtimizado();
+      setSearchClientResults(resultados);
+    }
+  }, [debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, searchClientType, showClientSearch, buscarClientesOtimizado]);
+  
   // ============================================
   // RENDER
   // ============================================
