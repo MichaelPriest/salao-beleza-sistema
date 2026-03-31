@@ -143,16 +143,57 @@ const formasPagamentoLabels = {
   credito_loja: { label: 'Crédito Loja', icon: '🏪', color: '#e91e63' },
 };
 
-// Componente de impressão aprimorado
+// Funções de formatação - DEFINIDAS NO ESCOPO GLOBAL DO COMPONENTE
+const formatarMoeda = (valor) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(valor || 0);
+};
+
+const formatarData = (data) => {
+  if (!data) return '-';
+  try {
+    if (data.seconds) {
+      return new Date(data.seconds * 1000).toLocaleDateString('pt-BR');
+    }
+    return new Date(data).toLocaleDateString('pt-BR');
+  } catch {
+    return data;
+  }
+};
+
+const formatarDataHora = (data) => {
+  if (!data) return '-';
+  try {
+    if (data.seconds) {
+      return new Date(data.seconds * 1000).toLocaleString('pt-BR');
+    }
+    return new Date(data).toLocaleString('pt-BR');
+  } catch {
+    return data;
+  }
+};
+
+const formatarNumero = (valor) => {
+  return new Intl.NumberFormat('pt-BR').format(valor || 0);
+};
+
+const formatarPercentual = (valor) => {
+  return `${(valor || 0).toFixed(1)}%`;
+};
+
+// Componente de impressão
 const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim, logo, resumos }, ref) => {
-  const formatarMoeda = (valor) => {
+  // Re-declarar funções de formatação para uso no componente de impressão
+  const formatarMoedaPrint = (valor) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(valor || 0);
   };
 
-  const formatarData = (data) => {
+  const formatarDataPrint = (data) => {
     if (!data) return '-';
     try {
       if (data.seconds) {
@@ -164,19 +205,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
     }
   };
 
-  const formatarDataHora = (data) => {
-    if (!data) return '-';
-    try {
-      if (data.seconds) {
-        return new Date(data.seconds * 1000).toLocaleString('pt-BR');
-      }
-      return new Date(data).toLocaleString('pt-BR');
-    } catch {
-      return data;
-    }
-  };
-
-  const formatarNumero = (valor) => {
+  const formatarNumeroPrint = (valor) => {
     return new Intl.NumberFormat('pt-BR').format(valor || 0);
   };
 
