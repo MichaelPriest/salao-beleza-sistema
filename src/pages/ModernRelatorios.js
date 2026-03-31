@@ -133,6 +133,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
   const formatarData = (data) => {
     if (!data) return '-';
     try {
+      if (data.seconds) {
+        return new Date(data.seconds * 1000).toLocaleDateString('pt-BR');
+      }
       return new Date(data).toLocaleDateString('pt-BR');
     } catch {
       return data;
@@ -188,7 +191,6 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               }
             }}
           >
-            {/* Placeholder quando não há logo */}
             BP
           </Avatar>
           <Box>
@@ -307,13 +309,13 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
           </TableContainer>
 
           <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
-            Resumo por Categoria
+            Resumo por Forma de Pagamento
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ mb: 4, boxShadow: 3 }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Categoria</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Forma de Pagamento</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
@@ -335,8 +337,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                     </TableCell>
                     <TableCell align="right">{formatarMoeda(row.value)}</TableCell>
                     <TableCell align="right">
-                      {dados.financeiro?.totalReceitas + dados.financeiro?.totalDespesas > 0 
-                        ? ((row.value / (dados.financeiro?.totalReceitas + dados.financeiro?.totalDespesas)) * 100).toFixed(1)
+                      {dados.financeiro?.totalReceitas > 0 
+                        ? ((row.value / dados.financeiro.totalReceitas) * 100).toFixed(1)
                         : 0}%
                     </TableCell>
                   </TableRow>
@@ -903,10 +905,10 @@ function ModernRelatorios() {
       const dataFimObj = new Date(dataFim);
       dataFimObj.setHours(23, 59, 59, 999);
 
-      // Buscar todos os dados necessários
+      // Buscar todos os dados necessários da estrutura real
       const [
-        transacoes,
-        atendimentos,
+        pagamentos,
+        agendamentos,
         clientes,
         profissionais,
         comissoes,
@@ -914,8 +916,8 @@ function ModernRelatorios() {
         produtos,
         fornecedores,
       ] = await Promise.all([
-        firebaseService.getAll('transacoes').catch(() => []),
-        firebaseService.getAll('historico_atendimentos').catch(() => []),
+        firebaseService.getAll('pagamentos').catch(() => []),
+        firebaseService.getAll('agendamentos').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
@@ -924,28 +926,47 @@ function ModernRelatorios() {
         firebaseService.getAll('fornecedores').catch(() => []),
       ]);
 
-      // Filtrar por período
-      const transacoesFiltradas = (transacoes || []).filter(t => {
-        if (!t.data) return false;
-        const data = new Date(t.data);
+      // Filtrar pagamentos por período (considerando Timestamp do Firebase)
+      const pagamentosFiltrados = (pagamentos || []).filter(p => {
+        if (!p.data) return false;
+        let data;
+        if (p.data.seconds) {
+          data = new Date(p.data.seconds * 1000);
+        } else {
+          data = new Date(p.data);
+        }
         return data >= dataInicioObj && data <= dataFimObj;
       });
 
-      const atendimentosFiltrados = (atendimentos || []).filter(a => {
+      // Filtrar agendamentos finalizados por período
+      const agendamentosFiltrados = (agendamentos || []).filter(a => {
         if (!a.data) return false;
-        const data = new Date(a.data);
-        return data >= dataInicioObj && data <= dataFimObj;
+        let data;
+        if (a.data.seconds) {
+          data = new Date(a.data.seconds * 1000);
+        } else {
+          data = new Date(a.data);
+        }
+        return data >= dataInicioObj && data <= dataFimObj && a.status === 'finalizado';
       });
 
+      // Filtrar clientes por data de cadastro (string 'YYYY-MM-DD')
       const clientesFiltrados = (clientes || []).filter(c => {
         if (!c.dataCadastro) return false;
-        const data = new Date(c.dataCadastro);
+        const [ano, mes, dia] = c.dataCadastro.split('-');
+        const data = new Date(ano, mes - 1, dia);
         return data >= dataInicioObj && data <= dataFimObj;
       });
 
+      // Filtrar comissões por período
       const comissoesFiltradas = (comissoes || []).filter(c => {
         if (!c.data) return false;
-        const data = new Date(c.data);
+        let data;
+        if (c.data.seconds) {
+          data = new Date(c.data.seconds * 1000);
+        } else {
+          data = new Date(c.data);
+        }
         return data >= dataInicioObj && data <= dataFimObj;
       });
 
@@ -968,23 +989,28 @@ function ModernRelatorios() {
         };
       }
 
-      transacoesFiltradas.forEach(t => {
-        if (!t.data) return;
-        const data = new Date(t.data).toLocaleDateString('pt-BR');
-        if (dias[data]) {
-          const valor = Number(t.valor) || 0;
-          if (t.tipo === 'receita' && t.status === 'pago') {
-            dias[data].receitas += valor;
-            const forma = (t.formaPagamento || '').toLowerCase();
-            if (forma === 'dinheiro') dias[data].dinheiro += valor;
-            else if (forma === 'pix') dias[data].pix += valor;
-            else dias[data].cartao += valor;
-          } else if (t.tipo === 'despesa' && t.status === 'pago') {
-            dias[data].despesas += valor;
-          }
+      // Preencher com pagamentos (receitas)
+      pagamentosFiltrados.forEach(p => {
+        if (!p.data) return;
+        let data;
+        if (p.data.seconds) {
+          data = new Date(p.data.seconds * 1000).toLocaleDateString('pt-BR');
+        } else {
+          data = new Date(p.data).toLocaleDateString('pt-BR');
+        }
+        if (dias[data] && p.status === 'pago') {
+          const valor = Number(p.valor) || 0;
+          dias[data].receitas += valor;
+          const forma = (p.formaPagamento || '').toLowerCase();
+          if (forma === 'dinheiro') dias[data].dinheiro += valor;
+          else if (forma === 'pix') dias[data].pix += valor;
+          else dias[data].cartao += valor;
           dias[data].lucro = dias[data].receitas - dias[data].despesas;
         }
       });
+
+      // Preencher com despesas (se houver coleção de contas a pagar)
+      // Por enquanto, consideramos apenas receitas
 
       const dadosGraficoLinha = Object.values(dias).sort((a, b) => {
         const [diaA, mesA, anoA] = a.dia.split('/');
@@ -992,81 +1018,85 @@ function ModernRelatorios() {
         return new Date(anoA, mesA - 1, diaA) - new Date(anoB, mesB - 1, diaB);
       });
 
-      // Gerar dados de pizza (categorias)
-      const categorias = {};
-      transacoesFiltradas.forEach(t => {
-        if (t.status !== 'pago') return;
-        let cat = t.categoria || 'Outros';
-        if (t.origem === 'comissao') cat = 'Comissões';
-        if (t.origem === 'compra') cat = 'Compras';
-        const valor = Number(t.valor) || 0;
-        categorias[cat] = (categorias[cat] || 0) + valor;
+      // Gerar dados de pizza (formas de pagamento)
+      const formasPagamento = {};
+      pagamentosFiltrados.forEach(p => {
+        if (p.status !== 'pago') return;
+        const forma = formasPagamentoLabels[p.formaPagamento]?.label || 'Outros';
+        const valor = Number(p.valor) || 0;
+        formasPagamento[forma] = (formasPagamento[forma] || 0) + valor;
       });
 
-      const dadosGraficoPizza = Object.keys(categorias)
-        .map(cat => ({ name: cat, value: categorias[cat] }))
+      const dadosGraficoPizza = Object.keys(formasPagamento)
+        .map(cat => ({ name: cat, value: formasPagamento[cat] }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 8);
 
       // Dados financeiros
-      const totalReceitas = transacoesFiltradas
-        .filter(t => t.tipo === 'receita' && t.status === 'pago')
-        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+      const totalReceitas = pagamentosFiltrados
+        .filter(p => p.status === 'pago')
+        .reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
       
-      const totalDespesas = transacoesFiltradas
-        .filter(t => t.tipo === 'despesa' && t.status === 'pago')
-        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+      const totalDespesas = 0; // Ajustar conforme necessidade
 
-      // Dados de atendimentos
+      // Dados de atendimentos (agendamentos finalizados)
       const servicosMap = {};
       let faturamentoAtendimentos = 0;
-      atendimentosFiltrados.forEach(a => {
-        const servico = a.servicoNome || a.servicoId || 'Não identificado';
-        servicosMap[servico] = (servicosMap[servico] || 0) + 1;
-        faturamentoAtendimentos += Number(a.valor) || 0;
+      
+      agendamentosFiltrados.forEach(a => {
+        const servicosRealizados = a.servicosRealizados || [];
+        servicosRealizados.forEach(servico => {
+          const servicoNome = servico.nome || servico.id || 'Não identificado';
+          servicosMap[servicoNome] = (servicosMap[servicoNome] || 0) + 1;
+          faturamentoAtendimentos += Number(servico.preco) || 0;
+        });
       });
 
       const dadosGraficoAtendimentos = Object.keys(servicosMap)
         .map(nome => ({ 
           name: nome, 
           value: servicosMap[nome],
-          faturamento: (atendimentosFiltrados.filter(a => (a.servicoNome || a.servicoId) === nome).reduce((acc, a) => acc + (Number(a.valor) || 0), 0))
+          faturamento: agendamentosFiltrados
+            .filter(a => (a.servicosRealizados || []).some(s => (s.nome || s.id) === nome))
+            .reduce((acc, a) => acc + (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0), 0)
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 10);
 
       // Dados de clientes
-      const frequenciaClientes = {};
-      let totalGastoClientes = 0;
-      atendimentosFiltrados.forEach(a => {
+      const gastoPorCliente = {};
+      const atendimentosPorCliente = {};
+      
+      agendamentosFiltrados.forEach(a => {
         const clienteId = a.clienteId;
         if (clienteId) {
-          frequenciaClientes[clienteId] = (frequenciaClientes[clienteId] || 0) + 1;
-          totalGastoClientes += Number(a.valor) || 0;
+          atendimentosPorCliente[clienteId] = (atendimentosPorCliente[clienteId] || 0) + 1;
+          const valorAtendimento = (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0);
+          gastoPorCliente[clienteId] = (gastoPorCliente[clienteId] || 0) + valorAtendimento;
         }
       });
 
-      const topClientes = Object.keys(frequenciaClientes)
+      const topClientes = Object.keys(atendimentosPorCliente)
         .map(id => {
           const cliente = (clientes || []).find(c => c.id === id);
-          const totalGasto = atendimentosFiltrados
-            .filter(a => a.clienteId === id)
-            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0);
           return {
             cliente: cliente?.nome || 'Cliente não encontrado',
-            atendimentos: frequenciaClientes[id],
-            totalGasto: totalGasto,
+            atendimentos: atendimentosPorCliente[id],
+            totalGasto: gastoPorCliente[id] || 0,
           };
         })
-        .sort((a, b) => b.atendimentos - a.atendimentos)
+        .sort((a, b) => b.totalGasto - a.totalGasto)
         .slice(0, 5);
 
-      const ticketMedioClientes = totalGastoClientes / (atendimentosFiltrados.length || 1);
+      const totalAtendimentosClientes = agendamentosFiltrados.length;
+      const totalGastoClientes = Object.values(gastoPorCliente).reduce((acc, val) => acc + val, 0);
+      const ticketMedioClientes = totalAtendimentosClientes > 0 ? totalGastoClientes / totalAtendimentosClientes : 0;
 
       // Dados de profissionais
       const desempenhoProfissionais = {};
       let totalComissoesPeriodo = 0;
-      atendimentosFiltrados.forEach(a => {
+      
+      agendamentosFiltrados.forEach(a => {
         const profissionalId = a.profissionalId;
         if (profissionalId) {
           desempenhoProfissionais[profissionalId] = (desempenhoProfissionais[profissionalId] || 0) + 1;
@@ -1079,9 +1109,12 @@ function ModernRelatorios() {
           const comissoesProf = comissoesFiltradas.filter(c => c.profissionalId === id);
           const totalComissoes = comissoesProf.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
           totalComissoesPeriodo += totalComissoes;
-          const ticketMedio = (atendimentosFiltrados
+          
+          const totalGastoProfissional = agendamentosFiltrados
             .filter(a => a.profissionalId === id)
-            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0)) / (desempenhoProfissionais[id] || 1);
+            .reduce((acc, a) => acc + (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0), 0);
+          const ticketMedio = desempenhoProfissionais[id] > 0 ? totalGastoProfissional / desempenhoProfissionais[id] : 0;
+          
           return {
             name: profissional?.nome?.split(' ')[0] || 'Profissional',
             atendimentos: desempenhoProfissionais[id],
@@ -1093,45 +1126,55 @@ function ModernRelatorios() {
 
       // Dados de comissões
       const comissoesPorProfissional = {};
+      let totalComissoes = 0;
+      let comissoesPagas = 0;
+      let comissoesPendentes = 0;
+      
       comissoesFiltradas.forEach(c => {
-        const profissional = c.profissionalNome || c.profissionalId || 'Não identificado';
+        const profissional = c.profissionalNome || 
+          (profissionais.find(p => p.id === c.profissionalId)?.nome) || 
+          'Não identificado';
         if (!comissoesPorProfissional[profissional]) {
           comissoesPorProfissional[profissional] = { total: 0, pagas: 0, pendentes: 0 };
         }
         const valor = Number(c.valor) || 0;
         comissoesPorProfissional[profissional].total += valor;
+        totalComissoes += valor;
+        
         if (c.status === 'pago') {
           comissoesPorProfissional[profissional].pagas += valor;
+          comissoesPagas += valor;
         } else {
           comissoesPorProfissional[profissional].pendentes += valor;
+          comissoesPendentes += valor;
         }
       });
-
-      const totalComissoes = comissoesFiltradas.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-      const comissoesPagas = comissoesFiltradas.filter(c => c.status === 'pago').reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-      const comissoesPendentes = totalComissoes - comissoesPagas;
 
       // Dados de serviços
       const servicosAtendimentos = {};
       let totalAtendimentosServicos = 0;
-      atendimentosFiltrados.forEach(a => {
-        const servicoNome = a.servicoNome || 'Não identificado';
-        servicosAtendimentos[servicoNome] = (servicosAtendimentos[servicoNome] || 0) + 1;
-        totalAtendimentosServicos++;
+      
+      agendamentosFiltrados.forEach(a => {
+        const servicosRealizados = a.servicosRealizados || [];
+        servicosRealizados.forEach(servico => {
+          const servicoNome = servico.nome || servico.id || 'Não identificado';
+          servicosAtendimentos[servicoNome] = (servicosAtendimentos[servicoNome] || 0) + 1;
+          totalAtendimentosServicos++;
+        });
       });
 
       const dadosGraficoServicos = Object.keys(servicosAtendimentos)
         .map(nome => ({
           name: nome,
           value: servicosAtendimentos[nome],
-          faturamento: atendimentosFiltrados
-            .filter(a => (a.servicoNome || a.servicoId) === nome)
-            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0)
+          faturamento: agendamentosFiltrados
+            .filter(a => (a.servicosRealizados || []).some(s => (s.nome || s.id) === nome))
+            .reduce((acc, a) => acc + (a.servicosRealizados || []).reduce((sum, s) => sum + (Number(s.preco) || 0), 0), 0)
         }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 10);
 
-      const ticketMedioServicos = totalGastoClientes / (totalAtendimentosServicos || 1);
+      const ticketMedioServicos = totalAtendimentosServicos > 0 ? totalGastoClientes / totalAtendimentosServicos : 0;
 
       // Dados de produtos
       const produtosData = produtos || [];
@@ -1143,8 +1186,10 @@ function ModernRelatorios() {
       // Dados de fornecedores
       const fornecedoresData = fornecedores || [];
       const totalFornecedores = fornecedoresData.length;
-      const comprasData = await firebaseService.getAll('compras').catch(() => []);
-      const comprasFiltradas = (comprasData || []).filter(c => {
+      
+      // Buscar compras (se houver)
+      const compras = await firebaseService.getAll('compras').catch(() => []);
+      const comprasFiltradas = (compras || []).filter(c => {
         if (!c.dataCompra) return false;
         const data = new Date(c.dataCompra);
         return data >= dataInicioObj && data <= dataFimObj;
@@ -1186,19 +1231,19 @@ function ModernRelatorios() {
           margem: totalReceitas > 0 ? ((totalReceitas - totalDespesas) / totalReceitas) * 100 : 0,
         },
         atendimentos: {
-          total: atendimentosFiltrados.length,
-          mediaDia: diffDays > 0 ? atendimentosFiltrados.length / diffDays : 0,
+          total: agendamentosFiltrados.length,
+          mediaDia: diffDays > 0 ? agendamentosFiltrados.length / diffDays : 0,
           faturamento: faturamentoAtendimentos,
         },
         clientes: {
           totalClientes: clientes.length,
           novosClientes: clientesFiltrados.length,
-          totalAtendimentos: atendimentosFiltrados.length,
+          totalAtendimentos: totalAtendimentosClientes,
           ticketMedio: ticketMedioClientes,
         },
         profissionais: {
-          total: atendimentosFiltrados.length,
-          mediaPorProfissional: profissionais.length > 0 ? atendimentosFiltrados.length / profissionais.length : 0,
+          total: agendamentosFiltrados.length,
+          mediaPorProfissional: profissionais.length > 0 ? agendamentosFiltrados.length / profissionais.length : 0,
           totalComissoes: totalComissoesPeriodo,
         },
         comissoes: {
@@ -1261,419 +1306,408 @@ function ModernRelatorios() {
   const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
   const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
 
-	// Exportar para PDF
-	const handleExportPDF = async () => {
-	  try {
-		toast.loading('Gerando PDF...', { id: 'pdf' });
-		
-		const doc = new jsPDF('p', 'mm', 'a4');
-		const pageWidth = doc.internal.pageSize.getWidth();
-		const pageHeight = doc.internal.pageSize.getHeight();
-		
-		const addHeader = () => {
-		  doc.setFillColor(156, 39, 176);
-		  doc.rect(0, 0, pageWidth, 10, 'F');
-		  doc.setTextColor(255, 255, 255);
-		  doc.setFontSize(8);
-		  doc.text('Beauty Pro Salon', 10, 6);
-		  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
-		};
+  // Exportar para PDF
+  const handleExportPDF = async () => {
+    try {
+      toast.loading('Gerando PDF...', { id: 'pdf' });
+      
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      const addHeader = () => {
+        doc.setFillColor(156, 39, 176);
+        doc.rect(0, 0, pageWidth, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.text('Beauty Pro Salon', 10, 6);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
+      };
 
-		addHeader();
-		
-		doc.setTextColor(156, 39, 176);
-		doc.setFontSize(22);
-		doc.setFont(undefined, 'bold');
-		doc.text('Beauty Pro', 105, 25, { align: 'center' });
-		
-		doc.setTextColor(0, 0, 0);
-		doc.setFontSize(16);
-		const tituloRelatorioObj = {
-		  financeiro: 'Relatório Financeiro',
-		  atendimentos: 'Relatório de Atendimentos',
-		  clientes: 'Relatório de Clientes',
-		  profissionais: 'Relatório de Profissionais',
-		  comissoes: 'Relatório de Comissões',
-		  servicos: 'Relatório de Serviços',
-		  produtos: 'Relatório de Produtos',
-		  fornecedores: 'Relatório de Fornecedores',
-		};
-		doc.text(tituloRelatorioObj[tipoRelatorio], 105, 35, { align: 'center' });
-		
-		doc.setFontSize(10);
-		doc.setFont(undefined, 'normal');
-		doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 105, 42, { align: 'center' });
-		
-		let yPos = 50;
+      addHeader();
+      
+      doc.setTextColor(156, 39, 176);
+      doc.setFontSize(22);
+      doc.setFont(undefined, 'bold');
+      doc.text('Beauty Pro', 105, 25, { align: 'center' });
+      
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(16);
+      const tituloRelatorioObj = {
+        financeiro: 'Relatório Financeiro',
+        atendimentos: 'Relatório de Atendimentos',
+        clientes: 'Relatório de Clientes',
+        profissionais: 'Relatório de Profissionais',
+        comissoes: 'Relatório de Comissões',
+        servicos: 'Relatório de Serviços',
+        produtos: 'Relatório de Produtos',
+        fornecedores: 'Relatório de Fornecedores',
+      };
+      doc.text(tituloRelatorioObj[tipoRelatorio], 105, 35, { align: 'center' });
+      
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 105, 42, { align: 'center' });
+      
+      let yPos = 50;
 
-		const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
-		const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
+      if (tipoRelatorio === 'financeiro' && dados.financeiro) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Receitas', 19, yPos + 6);
+        doc.text('Total Despesas', 78, yPos + 6);
+        doc.text('Lucro Líquido', 137, yPos + 6);
+        
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
+        doc.setTextColor(244, 67, 54);
+        doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
+        doc.setTextColor(
+          ...(dados.financeiro.lucroLiquido >= 0 ? [33, 150, 243] : [244, 67, 54])
+        );
+        doc.text(formatarMoedaPDF(dados.financeiro.lucroLiquido), 137, yPos + 18);
+        yPos += 35;
 
-		if (tipoRelatorio === 'financeiro' && dados.financeiro) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(8);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Receitas', 19, yPos + 6);
-		  doc.text('Total Despesas', 78, yPos + 6);
-		  doc.text('Lucro Líquido', 137, yPos + 6);
-		  
-		  doc.setFontSize(11);
-		  doc.setFont(undefined, 'bold');
-		  
-		  // Receitas - Verde
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
-		  
-		// Despesas - Vermelho
-		doc.setTextColor(244, 67, 54);
-		doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
-		
-    // Verde para lucro positivo, vermelho para prejuízo
-    doc.setTextColor(
-      ...(dados.financeiro.lucroLiquido >= 0 ? [33, 150, 243] : [244, 67, 54])
-    );
-    doc.text(formatarMoedaPDF(dados.financeiro.lucroLiquido), 137, yPos + 18);
-    yPos += 35;
-		  
-		  yPos += 35;
+        if (dados.graficoLinha && dados.graficoLinha.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Evolução Diária', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Data', 'Receitas (R$)', 'Despesas (R$)', 'Lucro (R$)']],
+            body: dados.graficoLinha.map(row => [
+              row.dia,
+              row.receitas.toFixed(2),
+              row.despesas.toFixed(2),
+              row.lucro.toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+          yPos = doc.lastAutoTable.finalY + 15;
+        }
+      } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
+        doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total de Atendimentos', 24, yPos + 6);
+        doc.text('Faturamento Total', 117, yPos + 6);
+        
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.atendimentos.total), 24, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.atendimentos.faturamento), 117, yPos + 18);
+        
+        yPos += 35;
 
-		  // Tabela de evolução diária
-		  if (dados.graficoLinha && dados.graficoLinha.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.setFont(undefined, 'bold');
-			doc.text('Evolução Diária', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Data', 'Receitas (R$)', 'Despesas (R$)', 'Lucro (R$)']],
-			  body: dados.graficoLinha.map(row => [
-				row.dia,
-				row.receitas.toFixed(2),
-				row.despesas.toFixed(2),
-				row.lucro.toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-			yPos = doc.lastAutoTable.finalY + 15;
-		  }
-		} else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
-		  doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(8);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total de Atendimentos', 24, yPos + 6);
-		  doc.text('Faturamento Total', 117, yPos + 6);
-		  
-		  doc.setFontSize(14);
-		  doc.setFont(undefined, 'bold');
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.atendimentos.total), 24, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.atendimentos.faturamento), 117, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Atendimentos por Serviço', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.value,
+              (row.faturamento || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'clientes' && dados.clientes) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Clientes', 19, yPos + 6);
+        doc.text('Novos Clientes', 78, yPos + 6);
+        doc.text('Ticket Médio', 137, yPos + 6);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.clientes.totalClientes), 19, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarNumeroPDF(dados.clientes.novosClientes), 78, yPos + 18);
+        doc.setTextColor(255, 64, 129);
+        doc.text(formatarMoedaPDF(dados.clientes.ticketMedio), 137, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.grafico && dados.grafico.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Atendimentos por Serviço', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
-			  body: dados.grafico.map(row => [
-				row.name,
-				row.value,
-				(row.faturamento || 0).toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'clientes' && dados.clientes) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(7);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Clientes', 19, yPos + 6);
-		  doc.text('Novos Clientes', 78, yPos + 6);
-		  doc.text('Ticket Médio', 137, yPos + 6);
-		  
-		  doc.setFontSize(12);
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.clientes.totalClientes), 19, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarNumeroPDF(dados.clientes.novosClientes), 78, yPos + 18);
-		  doc.setTextColor(255, 64, 129);
-		  doc.text(formatarMoedaPDF(dados.clientes.ticketMedio), 137, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.topClientes && dados.topClientes.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Top 5 Clientes', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)']],
+            body: dados.topClientes.map(cliente => [
+              cliente.cliente,
+              cliente.atendimentos,
+              (cliente.totalGasto || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
+        doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total de Atendimentos', 24, yPos + 6);
+        doc.text('Média por Profissional', 117, yPos + 6);
+        
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.profissionais.total), 24, yPos + 18);
+        doc.setTextColor(255, 64, 129);
+        doc.text((dados.profissionais.mediaPorProfissional || 0).toFixed(1), 117, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.topClientes && dados.topClientes.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Top 5 Clientes', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)']],
-			  body: dados.topClientes.map(cliente => [
-				cliente.cliente,
-				cliente.atendimentos,
-				(cliente.totalGasto || 0).toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
-		  doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(8);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total de Atendimentos', 24, yPos + 6);
-		  doc.text('Média por Profissional', 117, yPos + 6);
-		  
-		  doc.setFontSize(14);
-		  doc.setFont(undefined, 'bold');
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.profissionais.total), 24, yPos + 18);
-		  doc.setTextColor(255, 64, 129);
-		  doc.text((dados.profissionais.mediaPorProfissional || 0).toFixed(1), 117, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Atendimentos por Profissional', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Profissional', 'Atendimentos', 'Comissões (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.atendimentos,
+              (row.comissoes || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Comissões', 19, yPos + 6);
+        doc.text('Comissões Pagas', 78, yPos + 6);
+        doc.text('Comissões Pendentes', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarMoedaPDF(dados.comissoes.total), 19, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.comissoes.pagas), 78, yPos + 18);
+        doc.setTextColor(255, 152, 0);
+        doc.text(formatarMoedaPDF(dados.comissoes.pendentes), 137, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.grafico && dados.grafico.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Atendimentos por Profissional', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Profissional', 'Atendimentos', 'Comissões (R$)']],
-			  body: dados.grafico.map(row => [
-				row.name,
-				row.atendimentos,
-				(row.comissoes || 0).toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(7);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Comissões', 19, yPos + 6);
-		  doc.text('Comissões Pagas', 78, yPos + 6);
-		  doc.text('Comissões Pendentes', 137, yPos + 6);
-		  
-		  doc.setFontSize(10);
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarMoedaPDF(dados.comissoes.total), 19, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.comissoes.pagas), 78, yPos + 18);
-		  doc.setTextColor(255, 152, 0);
-		  doc.text(formatarMoedaPDF(dados.comissoes.pendentes), 137, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Comissões por Profissional', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
+            body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
+              prof,
+              vals.total.toFixed(2),
+              vals.pagas.toFixed(2),
+              vals.pendentes.toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'servicos' && dados.servicos) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Serviços', 19, yPos + 6);
+        doc.text('Atendimentos', 78, yPos + 6);
+        doc.text('Ticket Médio', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.servicos.totalServicos), 19, yPos + 18);
+        doc.setTextColor(255, 64, 129);
+        doc.text(formatarNumeroPDF(dados.servicos.totalAtendimentos), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.servicos.ticketMedio), 137, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Comissões por Profissional', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
-			  body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
-				prof,
-				vals.total.toFixed(2),
-				vals.pagas.toFixed(2),
-				vals.pendentes.toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'servicos' && dados.servicos) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(7);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Serviços', 19, yPos + 6);
-		  doc.text('Atendimentos', 78, yPos + 6);
-		  doc.text('Ticket Médio', 137, yPos + 6);
-		  
-		  doc.setFontSize(10);
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.servicos.totalServicos), 19, yPos + 18);
-		  doc.setTextColor(255, 64, 129);
-		  doc.text(formatarNumeroPDF(dados.servicos.totalAtendimentos), 78, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.servicos.ticketMedio), 137, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Serviços Mais Realizados', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.value,
+              (row.faturamento || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Produtos', 19, yPos + 6);
+        doc.text('Estoque Total', 78, yPos + 6);
+        doc.text('Valor Estoque', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.produtos.totalProdutos), 19, yPos + 18);
+        doc.setTextColor(33, 150, 243);
+        doc.text(formatarNumeroPDF(dados.produtos.estoqueTotal), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.produtos.valorEstoque), 137, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.grafico && dados.grafico.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Serviços Mais Realizados', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
-			  body: dados.grafico.map(row => [
-				row.name,
-				row.value,
-				(row.faturamento || 0).toFixed(2),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'produtos' && dados.produtos) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(7);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Produtos', 19, yPos + 6);
-		  doc.text('Estoque Total', 78, yPos + 6);
-		  doc.text('Valor Estoque', 137, yPos + 6);
-		  
-		  doc.setFontSize(10);
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.produtos.totalProdutos), 19, yPos + 18);
-		  doc.setTextColor(33, 150, 243);
-		  doc.text(formatarNumeroPDF(dados.produtos.estoqueTotal), 78, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.produtos.valorEstoque), 137, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Produtos com Estoque Baixo', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Produto', 'Estoque Atual', 'Estoque Mínimo']],
+            body: dados.produtos.estoqueBaixo.map(p => [
+              p.nome,
+              formatarNumeroPDF(p.quantidade),
+              formatarNumeroPDF(p.estoqueMinimo),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Fornecedores', 19, yPos + 6);
+        doc.text('Total Compras', 78, yPos + 6);
+        doc.text('Total Gasto', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.fornecedores.total), 19, yPos + 18);
+        doc.setTextColor(33, 150, 243);
+        doc.text(formatarNumeroPDF(dados.fornecedores.totalCompras), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.fornecedores.totalGasto), 137, yPos + 18);
+        
+        yPos += 35;
 
-		  if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Produtos com Estoque Baixo', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Produto', 'Estoque Atual', 'Estoque Mínimo']],
-			  body: dados.produtos.estoqueBaixo.map(p => [
-				p.nome,
-				formatarNumeroPDF(p.quantidade),
-				formatarNumeroPDF(p.estoqueMinimo),
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		} else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
-		  doc.setFillColor(245, 245, 245);
-		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-		  
-		  doc.setFontSize(7);
-		  doc.setTextColor(100, 100, 100);
-		  doc.text('Total Fornecedores', 19, yPos + 6);
-		  doc.text('Total Compras', 78, yPos + 6);
-		  doc.text('Total Gasto', 137, yPos + 6);
-		  
-		  doc.setFontSize(10);
-		  doc.setTextColor(156, 39, 176);
-		  doc.text(formatarNumeroPDF(dados.fornecedores.total), 19, yPos + 18);
-		  doc.setTextColor(33, 150, 243);
-		  doc.text(formatarNumeroPDF(dados.fornecedores.totalCompras), 78, yPos + 18);
-		  doc.setTextColor(76, 175, 80);
-		  doc.text(formatarMoedaPDF(dados.fornecedores.totalGasto), 137, yPos + 18);
-		  
-		  yPos += 35;
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Fornecedores', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.compras,
+              (row.valor || 0).toFixed(2),
+              `${row.rating} ★`,
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      }
 
-		  if (dados.grafico && dados.grafico.length > 0) {
-			doc.setFontSize(12);
-			doc.setTextColor(156, 39, 176);
-			doc.text('Fornecedores', 14, yPos);
-			yPos += 5;
-			
-			doc.autoTable({
-			  startY: yPos,
-			  head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
-			  body: dados.grafico.map(row => [
-				row.name,
-				row.compras,
-				(row.valor || 0).toFixed(2),
-				`${row.rating} ★`,
-			  ]),
-			  theme: 'striped',
-			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-			  styles: { fontSize: 8 },
-			  margin: { left: 14, right: 14 },
-			});
-		  }
-		}
-
-		// Rodapé em todas as páginas
-		const pageCount = doc.internal.getNumberOfPages();
-		for (let i = 1; i <= pageCount; i++) {
-		  doc.setPage(i);
-		  doc.setFontSize(8);
-		  doc.setTextColor(150, 150, 150);
-		  doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
-		  doc.text('Beauty Pro Salon', 10, pageHeight - 10);
-		}
-		
-		doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
-		toast.success('PDF gerado com sucesso!', { id: 'pdf' });
-	  } catch (error) {
-		console.error('Erro ao gerar PDF:', error);
-		toast.error('Erro ao gerar PDF', { id: 'pdf' });
-	  }
-	};
+      // Rodapé em todas as páginas
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
+        doc.text('Beauty Pro Salon', 10, pageHeight - 10);
+      }
+      
+      doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('PDF gerado com sucesso!', { id: 'pdf' });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF', { id: 'pdf' });
+    }
+  };
 
   // Exportar para Excel
   const handleExportExcel = () => {
@@ -1716,6 +1750,15 @@ function ModernRelatorios() {
               `R$ ${row.despesas.toFixed(2)}`,
               `R$ ${row.lucro.toFixed(2)}`,
             ]);
+          });
+        }
+        
+        if (dados.graficoPizza && dados.graficoPizza.length > 0) {
+          worksheetData.push([]);
+          worksheetData.push(['FORMA DE PAGAMENTO']);
+          worksheetData.push(['Forma', 'Valor']);
+          dados.graficoPizza.forEach(row => {
+            worksheetData.push([row.name, `R$ ${row.value.toFixed(2)}`]);
           });
         }
       } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
@@ -2062,7 +2105,7 @@ function ModernRelatorios() {
                 <Card>
                   <CardContent>
                     <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PieChartIcon /> Distribuição por Categoria
+                      <PieChartIcon /> Distribuição por Forma de Pagamento
                     </Typography>
                     <Box sx={{ height: 350 }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -2109,11 +2152,12 @@ function ModernRelatorios() {
                       <BarChart data={dados.grafico}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
-                        <YAxis />
+                        <YAxis yAxisId="left" orientation="left" />
+                        <YAxis yAxisId="right" orientation="right" />
                         <RechartsTooltip />
                         <Legend />
-                        <Bar dataKey="value" fill="#9c27b0" name="Quantidade" />
-                        <Bar dataKey="faturamento" fill="#ff4081" name="Faturamento" />
+                        <Bar yAxisId="left" dataKey="value" fill="#9c27b0" name="Quantidade" />
+                        <Bar yAxisId="right" dataKey="faturamento" fill="#ff4081" name="Faturamento" />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box>
