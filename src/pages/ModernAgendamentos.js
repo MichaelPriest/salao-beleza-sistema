@@ -1,5 +1,5 @@
 // src/pages/ModernAgendamentos.js
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -387,7 +387,6 @@ function ModernAgendamentos() {
   // Estados para pesquisa de clientes
   const [searchClientTerm, setSearchClientTerm] = useState('');
   const [searchClientType, setSearchClientType] = useState('nome');
-  const [searchClientResults, setSearchClientResults] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [cpfInput, setCpfInput] = useState('');
   const [dataNascimentoInput, setDataNascimentoInput] = useState(null);
@@ -395,8 +394,6 @@ function ModernAgendamentos() {
   // Estados para múltiplos serviços
   const [servicosSelecionados, setServicosSelecionados] = useState([]);
   const [servicoAtual, setServicoAtual] = useState('');
-  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
-  const [profissionalSelecionado, setProfissionalSelecionado] = useState('');
 
   // Estados para pesquisa de profissionais e serviços nos selects
   const [buscaProfissional, setBuscaProfissional] = useState('');
@@ -427,8 +424,6 @@ function ModernAgendamentos() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [debouncedCpfInput, setDebouncedCpfInput] = useState('');
   const [debouncedDataNascimento, setDebouncedDataNascimento] = useState(null);
-  const [clientesCache, setClientesCache] = useState({});
-  const [throttleTimeout, setThrottleTimeout] = useState(null);
   
   // Memoização de dados
   const clientesMemo = useMemo(() => clientes || [], [clientes]);
@@ -589,53 +584,51 @@ function ModernAgendamentos() {
     }
   };
   
-  const buscarClientesOtimizado = useCallback(() => {
-    if (!clientesMemo.length) return [];
-  
-    let resultados = [];
-    const cacheKey = `${searchClientType}_${debouncedSearchTerm}_${debouncedCpfInput}_${debouncedDataNascimento}`;
-    
-    if (clientesCache[cacheKey]) {
-      return clientesCache[cacheKey];
-    }
-  
+  const clientesIndexados = useMemo(() => (
+    clientesMemo.map((cliente) => ({
+      ...cliente,
+      nomeBusca: (cliente.nome || '').toLowerCase(),
+      cpfBusca: removerMascaraCPF(cliente.cpf || ''),
+      dataNascimentoBusca: cliente.dataNascimento ? formatDate(new Date(cliente.dataNascimento)) : ''
+    }))
+  ), [clientesMemo]);
+
+  const searchClientResults = useMemo(() => {
+    if (!showClientSearch || !clientesIndexados.length) return [];
+
     switch (searchClientType) {
-      case 'nome':
-        if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
-        const searchTermLower = debouncedSearchTerm.toLowerCase();
-        resultados = clientesMemo.filter(cliente => 
-          cliente.nome?.toLowerCase().includes(searchTermLower)
-        );
-        break;
-  
-      case 'cpf':
-        if (!debouncedCpfInput || debouncedCpfInput.length < 3) return [];
+      case 'nome': {
+        const termo = debouncedSearchTerm.trim().toLowerCase();
+        if (termo.length < 2) return [];
+        return clientesIndexados
+          .filter(cliente => cliente.nomeBusca.includes(termo))
+          .slice(0, 20);
+      }
+      case 'cpf': {
         const cpfBusca = removerMascaraCPF(debouncedCpfInput);
-        resultados = clientesMemo.filter(cliente => {
-          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
-          return cpfCliente.includes(cpfBusca);
-        });
-        break;
-  
-      case 'dataNascimento':
+        if (cpfBusca.length < 3) return [];
+        return clientesIndexados
+          .filter(cliente => cliente.cpfBusca.includes(cpfBusca))
+          .slice(0, 20);
+      }
+      case 'dataNascimento': {
         if (!debouncedDataNascimento) return [];
         const dataBusca = formatDate(debouncedDataNascimento);
-        resultados = clientesMemo.filter(cliente => {
-          const dataCliente = cliente.dataNascimento ? 
-            formatDate(new Date(cliente.dataNascimento)) : '';
-          return dataCliente === dataBusca;
-        });
-        break;
-  
+        return clientesIndexados
+          .filter(cliente => cliente.dataNascimentoBusca === dataBusca)
+          .slice(0, 20);
+      }
       default:
-        break;
+        return [];
     }
-  
-    resultados = resultados.slice(0, 20);
-    setClientesCache(prev => ({ ...prev, [cacheKey]: resultados }));
-    
-    return resultados;
-  }, [clientesMemo, searchClientType, debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, clientesCache, removerMascaraCPF]);
+  }, [
+    showClientSearch,
+    clientesIndexados,
+    searchClientType,
+    debouncedSearchTerm,
+    debouncedCpfInput,
+    debouncedDataNascimento
+  ]);
   
   // ============================================
   // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
@@ -834,49 +827,6 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES DE PESQUISA DE CLIENTES
-  // ============================================
-
-  const buscarClientes = () => {
-    if (!clientes) return [];
-
-    let resultados = [];
-
-    switch (searchClientType) {
-      case 'nome':
-        if (!searchClientTerm || searchClientTerm.length < 2) return [];
-        resultados = clientes.filter(cliente => 
-          cliente.nome?.toLowerCase().includes(searchClientTerm.toLowerCase())
-        );
-        break;
-
-      case 'cpf':
-        if (!cpfInput || cpfInput.length < 3) return [];
-        const cpfBusca = removerMascaraCPF(cpfInput);
-        resultados = clientes.filter(cliente => {
-          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
-          return cpfCliente.includes(cpfBusca);
-        });
-        break;
-
-      case 'dataNascimento':
-        if (!dataNascimentoInput) return [];
-        const dataBusca = formatDate(dataNascimentoInput);
-        resultados = clientes.filter(cliente => {
-          const dataCliente = cliente.dataNascimento ? 
-            formatDate(new Date(cliente.dataNascimento)) : '';
-          return dataCliente === dataBusca;
-        });
-        break;
-
-      default:
-        break;
-    }
-
-    return resultados.slice(0, 10);
-  };
-
-  // ============================================
   // FUNÇÕES DE FILTRAGEM DE EVENTOS
   // ============================================
 
@@ -985,14 +935,6 @@ function ModernAgendamentos() {
   // FUNÇÕES DE SERVIÇOS
   // ============================================
 
-  const servicosFiltrados = servicosDisponiveis.filter(servico => 
-    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
-  );
-
-  const profissionaisFiltrados = (profissionais || []).filter(prof => 
-    prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
-  );
-
   const adicionarServico = () => {
     if (!servicoAtual) {
       toast.error('Selecione um serviço');
@@ -1041,20 +983,6 @@ function ModernAgendamentos() {
     return getClienteData(formData.clienteId);
   };
 
-  const servicosFiltradosMemo = useMemo(() => {
-    if (!servicosMemo.length) return [];
-    return servicosMemo.filter(servico => 
-      servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
-    );
-  }, [servicosMemo, buscaServico]);
-  
-  const profissionaisFiltradosMemo = useMemo(() => {
-    if (!profissionaisMemo.length) return [];
-    return profissionaisMemo.filter(prof => 
-      prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
-    );
-  }, [profissionaisMemo, buscaProfissional]);
-  
   const servicosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !servicosMemo.length) return [];
     const profissional = profissionaisMemo.find(p => p.id === formData.profissionalId);
@@ -1065,6 +993,20 @@ function ModernAgendamentos() {
     }
     return servicosMemo.filter(s => s.ativo !== false);
   }, [formData.profissionalId, servicosMemo, profissionaisMemo]);
+
+  const servicosFiltradosMemo = useMemo(() => {
+    if (!servicosDisponiveisMemo.length) return [];
+    return servicosDisponiveisMemo.filter(servico => 
+      servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
+    );
+  }, [servicosDisponiveisMemo, buscaServico]);
+  
+  const profissionaisFiltradosMemo = useMemo(() => {
+    if (!profissionaisMemo.length) return [];
+    return profissionaisMemo.filter(prof => 
+      prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
+    );
+  }, [profissionaisMemo, buscaProfissional]);
   
   const horariosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !formData.data) return [];
@@ -2499,23 +2441,6 @@ const handleExportPDF = async () => {
   }, [agendamentos, updateTrigger]);
 
   useEffect(() => {
-    if (formData.profissionalId && servicos) {
-      const profissional = profissionais?.find(p => p.id === formData.profissionalId);
-      
-      if (profissional && profissional.servicosIds) {
-        const servicosDoProfissional = servicos.filter(s => 
-          profissional.servicosIds.includes(s.id) && s.ativo !== false
-        );
-        setServicosDisponiveis(servicosDoProfissional);
-      } else {
-        setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
-      }
-    } else {
-      setServicosDisponiveis([]);
-    }
-  }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
-
-  useEffect(() => {
     if (formData.profissionalId && formData.data) {
       const horarios = timeSlots.filter(time => 
         verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
@@ -2561,13 +2486,6 @@ const handleExportPDF = async () => {
     }
   }, [openDialog, selectedAppointment, selectedDate, usuario, cargo, updateTrigger]);
 
-  useEffect(() => {
-    if (showClientSearch) {
-      const resultados = buscarClientes();
-      setSearchClientResults(resultados);
-    }
-  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
-
   // Debounce para pesquisa de clientes
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchTerm(searchClientTerm), 300);
@@ -2583,13 +2501,6 @@ const handleExportPDF = async () => {
     const timer = setTimeout(() => setDebouncedDataNascimento(dataNascimentoInput), 300);
     return () => clearTimeout(timer);
   }, [dataNascimentoInput]);
-  
-  useEffect(() => {
-    if (showClientSearch) {
-      const resultados = buscarClientesOtimizado();
-      setSearchClientResults(resultados);
-    }
-  }, [debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, searchClientType, showClientSearch, buscarClientesOtimizado]);
   
   // ============================================
   // RENDER
@@ -3843,12 +3754,11 @@ const handleExportPDF = async () => {
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={5}>
                       <Autocomplete
-                        options={profissionaisFiltrados}
+                        options={profissionaisFiltradosMemo}
                         getOptionLabel={(option) => option.nome || ''}
                         value={profissionais?.find(p => p.id === formData.profissionalId) || null}
                         onChange={(e, newValue) => {
                           setFormData({ ...formData, profissionalId: newValue?.id || '' });
-                          setProfissionalSelecionado(newValue?.id || '');
                         }}
                         inputValue={buscaProfissional}
                         onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
@@ -3877,7 +3787,7 @@ const handleExportPDF = async () => {
 
                     <Grid item xs={12} md={5}>
                       <Autocomplete
-                        options={servicosFiltrados}
+                        options={servicosFiltradosMemo}
                         getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
                         value={servicos?.find(s => s.id === servicoAtual) || null}
                         onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
