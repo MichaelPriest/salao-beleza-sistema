@@ -1261,417 +1261,421 @@ function ModernRelatorios() {
   const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
   const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
 
-  // Exportar para PDF - CORRIGIDO
-  const handleExportPDF = async () => {
-    try {
-      toast.loading('Gerando PDF...', { id: 'pdf' });
-      
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      
-      const addHeader = () => {
-        doc.setFillColor(156, 39, 176);
-        doc.rect(0, 0, pageWidth, 10, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.text('Beauty Pro Salon', 10, 6);
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
-      };
+	// Exportar para PDF
+	const handleExportPDF = async () => {
+	  try {
+		toast.loading('Gerando PDF...', { id: 'pdf' });
+		
+		const doc = new jsPDF('p', 'mm', 'a4');
+		const pageWidth = doc.internal.pageSize.getWidth();
+		const pageHeight = doc.internal.pageSize.getHeight();
+		
+		const addHeader = () => {
+		  doc.setFillColor(156, 39, 176);
+		  doc.rect(0, 0, pageWidth, 10, 'F');
+		  doc.setTextColor(255, 255, 255);
+		  doc.setFontSize(8);
+		  doc.text('Beauty Pro Salon', 10, 6);
+		  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
+		};
 
-      addHeader();
-      
-      doc.setTextColor(156, 39, 176);
-      doc.setFontSize(22);
-      doc.setFont(undefined, 'bold');
-      doc.text('Beauty Pro', 105, 25, { align: 'center' });
-      
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(16);
-      const tituloRelatorioObj = {
-        financeiro: 'Relatório Financeiro',
-        atendimentos: 'Relatório de Atendimentos',
-        clientes: 'Relatório de Clientes',
-        profissionais: 'Relatório de Profissionais',
-        comissoes: 'Relatório de Comissões',
-        servicos: 'Relatório de Serviços',
-        produtos: 'Relatório de Produtos',
-        fornecedores: 'Relatório de Fornecedores',
-      };
-      doc.text(tituloRelatorioObj[tipoRelatorio], 105, 35, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 105, 42, { align: 'center' });
-      
-      let yPos = 50;
+		addHeader();
+		
+		doc.setTextColor(156, 39, 176);
+		doc.setFontSize(22);
+		doc.setFont(undefined, 'bold');
+		doc.text('Beauty Pro', 105, 25, { align: 'center' });
+		
+		doc.setTextColor(0, 0, 0);
+		doc.setFontSize(16);
+		const tituloRelatorioObj = {
+		  financeiro: 'Relatório Financeiro',
+		  atendimentos: 'Relatório de Atendimentos',
+		  clientes: 'Relatório de Clientes',
+		  profissionais: 'Relatório de Profissionais',
+		  comissoes: 'Relatório de Comissões',
+		  servicos: 'Relatório de Serviços',
+		  produtos: 'Relatório de Produtos',
+		  fornecedores: 'Relatório de Fornecedores',
+		};
+		doc.text(tituloRelatorioObj[tipoRelatorio], 105, 35, { align: 'center' });
+		
+		doc.setFontSize(10);
+		doc.setFont(undefined, 'normal');
+		doc.text(`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`, 105, 42, { align: 'center' });
+		
+		let yPos = 50;
 
-      if (tipoRelatorio === 'financeiro' && dados.financeiro) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Receitas', 19, yPos + 6);
-        doc.text('Total Despesas', 78, yPos + 6);
-        doc.text('Lucro Líquido', 137, yPos + 6);
-        
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'bold');
-        
-        // Receitas - Verde
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
-        
-        // Despesas - Vermelho
-        doc.setTextColor(244, 67, 54);
-        doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
-        
-        // Lucro - CORREÇÃO AQUI
-        if (dados.financeiro.lucroLiquido >= 0) {
-          doc.setTextColor(33, 150, 243); // Azul para lucro positivo
-        } else {
-          doc.setTextColor(244, 67, 54); // Vermelho para prejuízo
-        }
-        doc.text(formatarMoedaPDF(dados.financeiro.lucroLiquido), 137, yPos + 18);
-        
-        yPos += 35;
+		const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
+		const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
 
-        // Tabela de evolução diária
-        if (dados.graficoLinha && dados.graficoLinha.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.setFont(undefined, 'bold');
-          doc.text('Evolução Diária', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Data', 'Receitas (R$)', 'Despesas (R$)', 'Lucro (R$)']],
-            body: dados.graficoLinha.map(row => [
-              row.dia,
-              row.receitas.toFixed(2),
-              row.despesas.toFixed(2),
-              row.lucro.toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-          yPos = doc.lastAutoTable.finalY + 15;
-        }
-      } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
-        doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
-        
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total de Atendimentos', 24, yPos + 6);
-        doc.text('Faturamento Total', 117, yPos + 6);
-        
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.atendimentos.total), 24, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.atendimentos.faturamento), 117, yPos + 18);
-        
-        yPos += 35;
+		if (tipoRelatorio === 'financeiro' && dados.financeiro) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(8);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Receitas', 19, yPos + 6);
+		  doc.text('Total Despesas', 78, yPos + 6);
+		  doc.text('Lucro Líquido', 137, yPos + 6);
+		  
+		  doc.setFontSize(11);
+		  doc.setFont(undefined, 'bold');
+		  
+		  // Receitas - Verde
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
+		  
+		  // Despesas - Vermelho
+		  doc.setTextColor(244, 67, 54);
+		  doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
+		  
+		  // Lucro - CORREÇÃO CRUCIAL: removendo o operador ternário problemático
+		  const lucroValue = dados.financeiro.lucroLiquido;
+		  if (lucroValue >= 0) {
+			doc.setTextColor(33, 150, 243);
+		  } else {
+			doc.setTextColor(244, 67, 54);
+		  }
+		  doc.text(formatarMoedaPDF(lucroValue), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.grafico && dados.grafico.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Atendimentos por Serviço', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
-            body: dados.grafico.map(row => [
-              row.name,
-              row.value,
-              (row.faturamento || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'clientes' && dados.clientes) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Clientes', 19, yPos + 6);
-        doc.text('Novos Clientes', 78, yPos + 6);
-        doc.text('Ticket Médio', 137, yPos + 6);
-        
-        doc.setFontSize(12);
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.clientes.totalClientes), 19, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarNumeroPDF(dados.clientes.novosClientes), 78, yPos + 18);
-        doc.setTextColor(255, 64, 129);
-        doc.text(formatarMoedaPDF(dados.clientes.ticketMedio), 137, yPos + 18);
-        
-        yPos += 35;
+		  // Tabela de evolução diária
+		  if (dados.graficoLinha && dados.graficoLinha.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.setFont(undefined, 'bold');
+			doc.text('Evolução Diária', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Data', 'Receitas (R$)', 'Despesas (R$)', 'Lucro (R$)']],
+			  body: dados.graficoLinha.map(row => [
+				row.dia,
+				row.receitas.toFixed(2),
+				row.despesas.toFixed(2),
+				row.lucro.toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+			yPos = doc.lastAutoTable.finalY + 15;
+		  }
+		} else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
+		  doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(8);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total de Atendimentos', 24, yPos + 6);
+		  doc.text('Faturamento Total', 117, yPos + 6);
+		  
+		  doc.setFontSize(14);
+		  doc.setFont(undefined, 'bold');
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.atendimentos.total), 24, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.atendimentos.faturamento), 117, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.topClientes && dados.topClientes.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Top 5 Clientes', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)']],
-            body: dados.topClientes.map(cliente => [
-              cliente.cliente,
-              cliente.atendimentos,
-              (cliente.totalGasto || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
-        doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
-        
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total de Atendimentos', 24, yPos + 6);
-        doc.text('Média por Profissional', 117, yPos + 6);
-        
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.profissionais.total), 24, yPos + 18);
-        doc.setTextColor(255, 64, 129);
-        doc.text((dados.profissionais.mediaPorProfissional || 0).toFixed(1), 117, yPos + 18);
-        
-        yPos += 35;
+		  if (dados.grafico && dados.grafico.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Atendimentos por Serviço', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+			  body: dados.grafico.map(row => [
+				row.name,
+				row.value,
+				(row.faturamento || 0).toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'clientes' && dados.clientes) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(7);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Clientes', 19, yPos + 6);
+		  doc.text('Novos Clientes', 78, yPos + 6);
+		  doc.text('Ticket Médio', 137, yPos + 6);
+		  
+		  doc.setFontSize(12);
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.clientes.totalClientes), 19, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarNumeroPDF(dados.clientes.novosClientes), 78, yPos + 18);
+		  doc.setTextColor(255, 64, 129);
+		  doc.text(formatarMoedaPDF(dados.clientes.ticketMedio), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.grafico && dados.grafico.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Atendimentos por Profissional', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Profissional', 'Atendimentos', 'Comissões (R$)']],
-            body: dados.grafico.map(row => [
-              row.name,
-              row.atendimentos,
-              (row.comissoes || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Comissões', 19, yPos + 6);
-        doc.text('Comissões Pagas', 78, yPos + 6);
-        doc.text('Comissões Pendentes', 137, yPos + 6);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarMoedaPDF(dados.comissoes.total), 19, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.comissoes.pagas), 78, yPos + 18);
-        doc.setTextColor(255, 152, 0);
-        doc.text(formatarMoedaPDF(dados.comissoes.pendentes), 137, yPos + 18);
-        
-        yPos += 35;
+		  if (dados.topClientes && dados.topClientes.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Top 5 Clientes', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)']],
+			  body: dados.topClientes.map(cliente => [
+				cliente.cliente,
+				cliente.atendimentos,
+				(cliente.totalGasto || 0).toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
+		  doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(8);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total de Atendimentos', 24, yPos + 6);
+		  doc.text('Média por Profissional', 117, yPos + 6);
+		  
+		  doc.setFontSize(14);
+		  doc.setFont(undefined, 'bold');
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.profissionais.total), 24, yPos + 18);
+		  doc.setTextColor(255, 64, 129);
+		  doc.text((dados.profissionais.mediaPorProfissional || 0).toFixed(1), 117, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Comissões por Profissional', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
-            body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
-              prof,
-              vals.total.toFixed(2),
-              vals.pagas.toFixed(2),
-              vals.pendentes.toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'servicos' && dados.servicos) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Serviços', 19, yPos + 6);
-        doc.text('Atendimentos', 78, yPos + 6);
-        doc.text('Ticket Médio', 137, yPos + 6);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.servicos.totalServicos), 19, yPos + 18);
-        doc.setTextColor(255, 64, 129);
-        doc.text(formatarNumeroPDF(dados.servicos.totalAtendimentos), 78, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.servicos.ticketMedio), 137, yPos + 18);
-        
-        yPos += 35;
+		  if (dados.grafico && dados.grafico.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Atendimentos por Profissional', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Profissional', 'Atendimentos', 'Comissões (R$)']],
+			  body: dados.grafico.map(row => [
+				row.name,
+				row.atendimentos,
+				(row.comissoes || 0).toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(7);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Comissões', 19, yPos + 6);
+		  doc.text('Comissões Pagas', 78, yPos + 6);
+		  doc.text('Comissões Pendentes', 137, yPos + 6);
+		  
+		  doc.setFontSize(10);
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarMoedaPDF(dados.comissoes.total), 19, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.comissoes.pagas), 78, yPos + 18);
+		  doc.setTextColor(255, 152, 0);
+		  doc.text(formatarMoedaPDF(dados.comissoes.pendentes), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.grafico && dados.grafico.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Serviços Mais Realizados', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
-            body: dados.grafico.map(row => [
-              row.name,
-              row.value,
-              (row.faturamento || 0).toFixed(2),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Produtos', 19, yPos + 6);
-        doc.text('Estoque Total', 78, yPos + 6);
-        doc.text('Valor Estoque', 137, yPos + 6);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.produtos.totalProdutos), 19, yPos + 18);
-        doc.setTextColor(33, 150, 243);
-        doc.text(formatarNumeroPDF(dados.produtos.estoqueTotal), 78, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.produtos.valorEstoque), 137, yPos + 18);
-        
-        yPos += 35;
+		  if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Comissões por Profissional', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
+			  body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
+				prof,
+				vals.total.toFixed(2),
+				vals.pagas.toFixed(2),
+				vals.pendentes.toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'servicos' && dados.servicos) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(7);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Serviços', 19, yPos + 6);
+		  doc.text('Atendimentos', 78, yPos + 6);
+		  doc.text('Ticket Médio', 137, yPos + 6);
+		  
+		  doc.setFontSize(10);
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.servicos.totalServicos), 19, yPos + 18);
+		  doc.setTextColor(255, 64, 129);
+		  doc.text(formatarNumeroPDF(dados.servicos.totalAtendimentos), 78, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.servicos.ticketMedio), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Produtos com Estoque Baixo', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Produto', 'Estoque Atual', 'Estoque Mínimo']],
-            body: dados.produtos.estoqueBaixo.map(p => [
-              p.nome,
-              formatarNumeroPDF(p.quantidade),
-              formatarNumeroPDF(p.estoqueMinimo),
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      } else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
-        
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Total Fornecedores', 19, yPos + 6);
-        doc.text('Total Compras', 78, yPos + 6);
-        doc.text('Total Gasto', 137, yPos + 6);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(156, 39, 176);
-        doc.text(formatarNumeroPDF(dados.fornecedores.total), 19, yPos + 18);
-        doc.setTextColor(33, 150, 243);
-        doc.text(formatarNumeroPDF(dados.fornecedores.totalCompras), 78, yPos + 18);
-        doc.setTextColor(76, 175, 80);
-        doc.text(formatarMoedaPDF(dados.fornecedores.totalGasto), 137, yPos + 18);
-        
-        yPos += 35;
+		  if (dados.grafico && dados.grafico.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Serviços Mais Realizados', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+			  body: dados.grafico.map(row => [
+				row.name,
+				row.value,
+				(row.faturamento || 0).toFixed(2),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'produtos' && dados.produtos) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(7);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Produtos', 19, yPos + 6);
+		  doc.text('Estoque Total', 78, yPos + 6);
+		  doc.text('Valor Estoque', 137, yPos + 6);
+		  
+		  doc.setFontSize(10);
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.produtos.totalProdutos), 19, yPos + 18);
+		  doc.setTextColor(33, 150, 243);
+		  doc.text(formatarNumeroPDF(dados.produtos.estoqueTotal), 78, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.produtos.valorEstoque), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-        if (dados.grafico && dados.grafico.length > 0) {
-          doc.setFontSize(12);
-          doc.setTextColor(156, 39, 176);
-          doc.text('Fornecedores', 14, yPos);
-          yPos += 5;
-          
-          doc.autoTable({
-            startY: yPos,
-            head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
-            body: dados.grafico.map(row => [
-              row.name,
-              row.compras,
-              (row.valor || 0).toFixed(2),
-              `${row.rating} ★`,
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-            styles: { fontSize: 8 },
-            margin: { left: 14, right: 14 },
-          });
-        }
-      }
+		  if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Produtos com Estoque Baixo', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Produto', 'Estoque Atual', 'Estoque Mínimo']],
+			  body: dados.produtos.estoqueBaixo.map(p => [
+				p.nome,
+				formatarNumeroPDF(p.quantidade),
+				formatarNumeroPDF(p.estoqueMinimo),
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		} else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
+		  doc.setFillColor(245, 245, 245);
+		  doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+		  doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+		  
+		  doc.setFontSize(7);
+		  doc.setTextColor(100, 100, 100);
+		  doc.text('Total Fornecedores', 19, yPos + 6);
+		  doc.text('Total Compras', 78, yPos + 6);
+		  doc.text('Total Gasto', 137, yPos + 6);
+		  
+		  doc.setFontSize(10);
+		  doc.setTextColor(156, 39, 176);
+		  doc.text(formatarNumeroPDF(dados.fornecedores.total), 19, yPos + 18);
+		  doc.setTextColor(33, 150, 243);
+		  doc.text(formatarNumeroPDF(dados.fornecedores.totalCompras), 78, yPos + 18);
+		  doc.setTextColor(76, 175, 80);
+		  doc.text(formatarMoedaPDF(dados.fornecedores.totalGasto), 137, yPos + 18);
+		  
+		  yPos += 35;
 
-      // Rodapé em todas as páginas
-      const pageCount = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
-        doc.text('Beauty Pro Salon', 10, pageHeight - 10);
-      }
-      
-      doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
-      toast.success('PDF gerado com sucesso!', { id: 'pdf' });
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar PDF', { id: 'pdf' });
-    }
-  };
+		  if (dados.grafico && dados.grafico.length > 0) {
+			doc.setFontSize(12);
+			doc.setTextColor(156, 39, 176);
+			doc.text('Fornecedores', 14, yPos);
+			yPos += 5;
+			
+			doc.autoTable({
+			  startY: yPos,
+			  head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
+			  body: dados.grafico.map(row => [
+				row.name,
+				row.compras,
+				(row.valor || 0).toFixed(2),
+				`${row.rating} ★`,
+			  ]),
+			  theme: 'striped',
+			  headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+			  styles: { fontSize: 8 },
+			  margin: { left: 14, right: 14 },
+			});
+		  }
+		}
+
+		// Rodapé em todas as páginas
+		const pageCount = doc.internal.getNumberOfPages();
+		for (let i = 1; i <= pageCount; i++) {
+		  doc.setPage(i);
+		  doc.setFontSize(8);
+		  doc.setTextColor(150, 150, 150);
+		  doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
+		  doc.text('Beauty Pro Salon', 10, pageHeight - 10);
+		}
+		
+		doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
+		toast.success('PDF gerado com sucesso!', { id: 'pdf' });
+	  } catch (error) {
+		console.error('Erro ao gerar PDF:', error);
+		toast.error('Erro ao gerar PDF', { id: 'pdf' });
+	  }
+	};
 
   // Exportar para Excel
   const handleExportExcel = () => {
