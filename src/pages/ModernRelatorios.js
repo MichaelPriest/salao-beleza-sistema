@@ -1,4 +1,6 @@
 // src/pages/ModernRelatorios.js
+// Versão melhorada com mais relatórios e integração completa
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -24,14 +26,50 @@ import {
   Avatar,
   Alert,
   Snackbar,
+  Tabs,
+  Tab,
+  Divider,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
 } from '@mui/material';
 import {
   Download as DownloadIcon,
   Print as PrintIcon,
   PictureAsPdf as PdfIcon,
   TableChart as ExcelIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  People as PeopleIcon,
+  Person as PersonIcon,
+  MonetizationOn as MoneyIcon,
+  AttachMoney as AttachMoneyIcon,
+  CalendarToday as CalendarIcon,
+  Receipt as ReceiptIcon,
+  Assessment as AssessmentIcon,
+  Visibility as VisibilityIcon,
+  Close as CloseIcon,
+  ContentCopy as CopyIcon,
+  Share as ShareIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon,
+  Timeline as TimelineIcon,
+  Category as CategoryIcon,
+  Percent as PercentIcon,
+  Store as StoreIcon,
+  ShoppingCart as ShoppingCartIcon,
+  CreditCard as CreditCardIcon,
+  QrCode as QrCodeIcon,
+  LocalAtm as LocalAtmIcon,
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import {
@@ -47,6 +85,15 @@ import {
   Cell,
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  ComposedChart,
+  Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
@@ -62,7 +109,28 @@ try {
   logo = null;
 }
 
-const COLORS = ['#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', '#f8bbd0', '#f3e5f5'];
+const COLORS = ['#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', '#f8bbd0', '#f3e5f5', '#ce93d8', '#e1bee7'];
+
+// Constantes para status e tipos
+const statusColors = {
+  pendente: { color: '#ff9800', label: 'Pendente' },
+  pago: { color: '#4caf50', label: 'Pago' },
+  atrasado: { color: '#f44336', label: 'Atrasado' },
+  cancelado: { color: '#9e9e9e', label: 'Cancelado' },
+  finalizado: { color: '#4caf50', label: 'Finalizado' },
+  confirmado: { color: '#2196f3', label: 'Confirmado' },
+};
+
+const formasPagamentoLabels = {
+  dinheiro: { label: 'Dinheiro', icon: '💵' },
+  cartao_credito: { label: 'Cartão Crédito', icon: '💳' },
+  cartao_debito: { label: 'Cartão Débito', icon: '💳' },
+  pix: { label: 'PIX', icon: '⚡' },
+  boleto: { label: 'Boleto', icon: '📄' },
+  transferencia: { label: 'Transferência', icon: '🔄' },
+  cheque: { label: 'Cheque', icon: '📝' },
+  credito_loja: { label: 'Crédito Loja', icon: '🏪' },
+};
 
 // Componente para impressão
 const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataInicio, dataFim }, ref) => {
@@ -74,7 +142,12 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
   };
 
   const formatarData = (data) => {
-    return new Date(data).toLocaleDateString('pt-BR');
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR');
+    } catch {
+      return data;
+    }
   };
 
   const formatarNumero = (valor) => {
@@ -87,6 +160,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
       case 'atendimentos': return 'Relatório de Atendimentos';
       case 'clientes': return 'Relatório de Clientes';
       case 'profissionais': return 'Relatório de Profissionais';
+      case 'comissoes': return 'Relatório de Comissões';
+      case 'servicos': return 'Relatório de Serviços';
+      case 'produtos': return 'Relatório de Produtos';
+      case 'fornecedores': return 'Relatório de Fornecedores';
       default: return 'Relatório';
     }
   };
@@ -168,58 +245,50 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </Grid>
       </Box>
 
-      {/* Resumo Executivo */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
-          Resumo Executivo
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa' }}>
-              <Typography variant="subtitle2" color="textSecondary">Total</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                {tipoRelatorio === 'financeiro' 
-                  ? formatarMoeda(dados.total)
-                  : formatarNumero(dados.total)}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa' }}>
-              <Typography variant="subtitle2" color="textSecondary">Quantidade</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                {formatarNumero(dados.quantidade || dados.total || 0)}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa' }}>
-              <Typography variant="subtitle2" color="textSecondary">
-                {tipoRelatorio === 'financeiro' ? 'Ticket Médio' : 'Média/Dia'}
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                {tipoRelatorio === 'financeiro'
-                  ? formatarMoeda(dados.media)
-                  : dados.mediaDia?.toFixed(1) || '0'}
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={3}>
-            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa' }}>
-              <Typography variant="subtitle2" color="textSecondary">Dias no Período</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                {Math.ceil((new Date(dataFim) - new Date(dataInicio)) / (1000 * 60 * 60 * 24)) + 1}
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
-
       {/* Conteúdo do relatório */}
-      {tipoRelatorio === 'financeiro' && (
+      {tipoRelatorio === 'financeiro' && dados.financeiro && (
         <>
-          {/* Tabela de pagamentos detalhada */}
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 3 }}>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+              Resumo Financeiro
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={3}>
+                <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e8f5e9' }}>
+                  <Typography variant="subtitle2" color="textSecondary">Total Receitas</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                    {formatarMoeda(dados.financeiro.totalReceitas)}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={3}>
+                <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#ffebee' }}>
+                  <Typography variant="subtitle2" color="textSecondary">Total Despesas</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#f44336' }}>
+                    {formatarMoeda(dados.financeiro.totalDespesas)}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={3}>
+                <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e3f2fd' }}>
+                  <Typography variant="subtitle2" color="textSecondary">Lucro Líquido</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: dados.financeiro.lucroLiquido >= 0 ? '#2196f3' : '#f44336' }}>
+                    {formatarMoeda(dados.financeiro.lucroLiquido)}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={3}>
+                <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#fff3e0' }}>
+                  <Typography variant="subtitle2" color="textSecondary">Margem</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                    {dados.financeiro.margem.toFixed(1)}%
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
             Detalhamento por Dia
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ mb: 4, boxShadow: 3 }}>
@@ -227,42 +296,34 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
               <TableHead>
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Dinheiro</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Cartão</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>PIX</TableCell>
-                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Receitas</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Despesas</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Lucro</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {dados.graficoLinha?.map((row, index) => (
                   <TableRow key={index} sx={{ '&:nth-of-type(even)': { bgcolor: '#fafafa' } }}>
                     <TableCell sx={{ fontWeight: 500 }}>{row.dia}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.dinheiro)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.cartao)}</TableCell>
-                    <TableCell align="right">{formatarMoeda(row.pix)}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(row.total)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#4caf50' }}>{formatarMoeda(row.receitas)}</TableCell>
+                    <TableCell align="right" sx={{ color: '#f44336' }}>{formatarMoeda(row.despesas)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: row.lucro >= 0 ? '#2196f3' : '#f44336' }}>
+                      {formatarMoeda(row.lucro)}
+                    </TableCell>
                   </TableRow>
                 ))}
-                <TableRow sx={{ bgcolor: '#f3e5f5' }}>
-                  <TableCell sx={{ fontWeight: 700 }}>TOTAL</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.dinheiro || 0), 0) || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.cartao || 0), 0) || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.graficoLinha?.reduce((acc, row) => acc + (row.pix || 0), 0) || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.total || 0)}</TableCell>
-                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
 
-          {/* Resumo por forma de pagamento */}
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 3 }}>
-            Resumo por Forma de Pagamento
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Resumo por Categoria
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ mb: 4, boxShadow: 3 }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: '#ff4081' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Forma de Pagamento</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Categoria</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
@@ -284,43 +345,48 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                     </TableCell>
                     <TableCell align="right">{formatarMoeda(row.value)}</TableCell>
                     <TableCell align="right">
-                      {dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : 0}%
+                      {dados.financeiro?.totalReceitas + dados.financeiro?.totalDespesas > 0 
+                        ? ((row.value / (dados.financeiro?.totalReceitas + dados.financeiro?.totalDespesas)) * 100).toFixed(1)
+                        : 0}%
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow sx={{ bgcolor: '#f3e5f5' }}>
-                  <TableCell sx={{ fontWeight: 700 }}>TOTAL</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{formatarMoeda(dados.total || 0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>100%</TableCell>
-                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
         </>
       )}
 
-      {tipoRelatorio === 'atendimentos' && (
+      {tipoRelatorio === 'atendimentos' && dados.atendimentos && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={6}>
+            <Grid item xs={4}>
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Atendimentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.total || 0)}
+                  {formatarNumero(dados.atendimentos.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={4}>
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Média por Dia</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
-                  {(dados.mediaDia || 0).toFixed(1)}
+                  {(dados.atendimentos.mediaDia || 0).toFixed(1)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Faturamento</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.atendimentos.faturamento || 0)}
                 </Typography>
               </Paper>
             </Grid>
           </Grid>
 
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 3 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
             Atendimentos por Serviço
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
@@ -329,6 +395,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Faturamento</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
@@ -337,8 +404,9 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
                     <TableCell align="right">{formatarNumero(row.value)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(row.faturamento)}</TableCell>
                     <TableCell align="right">
-                      {dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : 0}%
+                      {dados.atendimentos.total > 0 ? ((row.value / dados.atendimentos.total) * 100).toFixed(1) : 0}%
                     </TableCell>
                   </TableRow>
                 ))}
@@ -348,37 +416,45 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
-      {tipoRelatorio === 'clientes' && (
+      {tipoRelatorio === 'clientes' && dados.clientes && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={4}>
+            <Grid item xs={3}>
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Total de Clientes</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {formatarNumero(dados.totalClientes || 0)}
+                  {formatarNumero(dados.clientes.totalClientes || 0)}
                 </Typography>
               </Paper>
             </Grid>
-            <Grid item xs={4}>
+            <Grid item xs={3}>
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Novos Clientes</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                  {formatarNumero(dados.novosClientes || 0)}
+                  {formatarNumero(dados.clientes.novosClientes || 0)}
                 </Typography>
               </Paper>
             </Grid>
-            <Grid item xs={4}>
+            <Grid item xs={3}>
               <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle2" color="textSecondary">Atendimentos</Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                  {formatarNumero(dados.totalAtendimentos || 0)}
+                  {formatarNumero(dados.clientes.totalAtendimentos || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={3}>
+              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle2" color="textSecondary">Ticket Médio</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                  {formatarMoeda(dados.clientes.ticketMedio || 0)}
                 </Typography>
               </Paper>
             </Grid>
           </Grid>
 
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 3 }}>
-            Top 5 Clientes por Atendimentos
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Top 5 Clientes
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
             <Table>
@@ -386,6 +462,7 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cliente</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Gasto</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
@@ -400,9 +477,10 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                         sx={{ bgcolor: '#f3e5f5', color: '#9c27b0', fontWeight: 700 }}
                       />
                     </TableCell>
+                    <TableCell align="right">{formatarMoeda(cliente.totalGasto)}</TableCell>
                     <TableCell align="right">
-                      {dados.totalAtendimentos > 0 
-                        ? ((cliente.atendimentos / dados.totalAtendimentos) * 100).toFixed(1) 
+                      {dados.clientes.totalAtendimentos > 0 
+                        ? ((cliente.atendimentos / dados.clientes.totalAtendimentos) * 100).toFixed(1)
                         : 0}%
                     </TableCell>
                   </TableRow>
@@ -413,29 +491,37 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
         </>
       )}
 
-      {tipoRelatorio === 'profissionais' && (
+      {tipoRelatorio === 'profissionais' && dados.profissionais && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={6}>
+            <Grid item xs={4}>
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Total de Atendimentos</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
-                  {formatarNumero(dados.total || 0)}
+                  {formatarNumero(dados.profissionais.total || 0)}
                 </Typography>
               </Paper>
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={4}>
               <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
                 <Typography variant="subtitle1" color="textSecondary">Média por Profissional</Typography>
                 <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
-                  {(dados.mediaPorProfissional || 0).toFixed(1)}
+                  {(dados.profissionais.mediaPorProfissional || 0).toFixed(1)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total Comissões</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.profissionais.totalComissoes || 0)}
                 </Typography>
               </Paper>
             </Grid>
           </Grid>
 
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2, mt: 3 }}>
-            Atendimentos por Profissional
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Desempenho por Profissional
           </Typography>
           <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
             <Table>
@@ -443,6 +529,8 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                 <TableRow sx={{ bgcolor: '#9c27b0' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Atendimentos</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Comissões</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Ticket Médio</TableCell>
                   <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
                 </TableRow>
               </TableHead>
@@ -451,8 +539,267 @@ const RelatorioPrint = React.forwardRef(({ dados, tipoRelatorio, periodo, dataIn
                   <TableRow key={index}>
                     <TableCell>{row.name}</TableCell>
                     <TableCell align="right">{formatarNumero(row.atendimentos)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(row.comissoes)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(row.ticketMedio)}</TableCell>
                     <TableCell align="right">
-                      {dados.total > 0 ? ((row.atendimentos / dados.total) * 100).toFixed(1) : 0}%
+                      {dados.profissionais.total > 0 ? ((row.atendimentos / dados.profissionais.total) * 100).toFixed(1) : 0}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {tipoRelatorio === 'comissoes' && dados.comissoes && (
+        <>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total Comissões</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
+                  {formatarMoeda(dados.comissoes.total || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Comissões Pagas</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.comissoes.pagas || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Pendentes</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff9800' }}>
+                  {formatarMoeda(dados.comissoes.pendentes || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Comissões por Profissional
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Profissional</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pagas</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Pendentes</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {Object.entries(dados.comissoes.porProfissional || {}).map(([profissional, valores], index) => (
+                  <TableRow key={index}>
+                    <TableCell>{profissional}</TableCell>
+                    <TableCell align="right">{formatarMoeda(valores.total)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(valores.pagas)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(valores.pendentes)}</TableCell>
+                    <TableCell align="right">
+                      {dados.comissoes.total > 0 ? ((valores.total / dados.comissoes.total) * 100).toFixed(1) : 0}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {tipoRelatorio === 'servicos' && dados.servicos && (
+        <>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total de Serviços</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
+                  {formatarNumero(dados.servicos.totalServicos || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total Atendimentos</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
+                  {formatarNumero(dados.servicos.totalAtendimentos || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Ticket Médio</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.servicos.ticketMedio || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Serviços Mais Realizados
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Serviço</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Quantidade</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Faturamento</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>%</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.grafico?.map((row, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell align="right">{formatarNumero(row.value)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(row.faturamento)}</TableCell>
+                    <TableCell align="right">
+                      {dados.servicos.totalAtendimentos > 0 
+                        ? ((row.value / dados.servicos.totalAtendimentos) * 100).toFixed(1)
+                        : 0}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {tipoRelatorio === 'produtos' && dados.produtos && (
+        <>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total de Produtos</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
+                  {formatarNumero(dados.produtos.totalProdutos || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Estoque Total</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
+                  {formatarNumero(dados.produtos.estoqueTotal || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Valor em Estoque</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.produtos.valorEstoque || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Produtos com Estoque Baixo
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Produto</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Estoque Atual</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Estoque Mínimo</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Unitário</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.produtos.estoqueBaixo?.map((produto, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{produto.nome}</TableCell>
+                    <TableCell align="right">{formatarNumero(produto.quantidade)}</TableCell>
+                    <TableCell align="right">{formatarNumero(produto.estoqueMinimo)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(produto.precoVenda)}</TableCell>
+                    <TableCell align="right">
+                      <Chip
+                        label="Estoque Baixo"
+                        size="small"
+                        color="warning"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(!dados.produtos.estoqueBaixo || dados.produtos.estoqueBaixo.length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Nenhum produto com estoque baixo
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {tipoRelatorio === 'fornecedores' && dados.fornecedores && (
+        <>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total de Fornecedores</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#9c27b0' }}>
+                  {formatarNumero(dados.fornecedores.total || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total Compras</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#ff4081' }}>
+                  {formatarNumero(dados.fornecedores.totalCompras || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={4}>
+              <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f8f0fa', boxShadow: 3 }}>
+                <Typography variant="subtitle1" color="textSecondary">Total Gasto</Typography>
+                <Typography variant="h2" sx={{ fontWeight: 800, color: '#4caf50' }}>
+                  {formatarMoeda(dados.fornecedores.totalGasto || 0)}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0', mb: 2 }}>
+            Fornecedores
+          </Typography>
+          <TableContainer component={Paper} variant="outlined" sx={{ boxShadow: 3 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#9c27b0' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Fornecedor</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Total Compras</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Valor Total</TableCell>
+                  <TableCell align="right" sx={{ color: 'white', fontWeight: 700 }}>Rating</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dados.grafico?.map((row, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell align="right">{formatarNumero(row.compras)}</TableCell>
+                    <TableCell align="right">{formatarMoeda(row.valor)}</TableCell>
+                    <TableCell align="right">
+                      <Chip
+                        label={`${row.rating} ★`}
+                        size="small"
+                        sx={{ bgcolor: '#ff9800', color: 'white' }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -498,34 +845,28 @@ function ModernRelatorios() {
     new Date().toISOString().split('T')[0]
   );
   const [dados, setDados] = useState({
+    financeiro: null,
+    atendimentos: null,
+    clientes: null,
+    profissionais: null,
+    comissoes: null,
+    servicos: null,
+    produtos: null,
+    fornecedores: null,
     graficoLinha: [],
     graficoPizza: [],
     grafico: [],
-    total: 0,
-    quantidade: 0,
-    media: 0,
     topClientes: [],
-    totalClientes: 0,
-    novosClientes: 0,
-    totalAtendimentos: 0,
-    mediaDia: 0,
-    mediaPorProfissional: 0
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [detalhesItem, setDetalhesItem] = useState(null);
 
   const componentRef = useRef();
-  const [isPrintReady, setIsPrintReady] = useState(false);
 
   useEffect(() => {
     carregarDados();
   }, [tipoRelatorio, periodo, dataInicio, dataFim]);
-
-  useEffect(() => {
-    // Verificar se o componente de impressão está pronto
-    if (componentRef.current) {
-      setIsPrintReady(true);
-    }
-  }, [dados]);
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -535,33 +876,352 @@ function ModernRelatorios() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleOpenDetalhes = (item) => {
+    setDetalhesItem(item);
+    setDetalhesOpen(true);
+  };
+
+  const handleCloseDetalhes = () => {
+    setDetalhesOpen(false);
+    setDetalhesItem(null);
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
       
-      let response;
-      switch (tipoRelatorio) {
-        case 'financeiro':
-          response = await gerarRelatorioFinanceiro();
-          break;
-        case 'atendimentos':
-          response = await gerarRelatorioAtendimentos();
-          break;
-        case 'clientes':
-          response = await gerarRelatorioClientes();
-          break;
-        case 'profissionais':
-          response = await gerarRelatorioProfissionais();
-          break;
-        default:
-          response = {};
-          break;
-      }
+      const dataInicioObj = new Date(dataInicio);
+      const dataFimObj = new Date(dataFim);
+      dataFimObj.setHours(23, 59, 59, 999);
+
+      // Buscar todos os dados necessários
+      const [
+        transacoes,
+        atendimentos,
+        clientes,
+        profissionais,
+        comissoes,
+        servicos,
+        produtos,
+        fornecedores,
+      ] = await Promise.all([
+        firebaseService.getAll('transacoes').catch(() => []),
+        firebaseService.getAll('historico_atendimentos').catch(() => []),
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+        firebaseService.getAll('comissoes').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('fornecedores').catch(() => []),
+      ]);
+
+      // Filtrar por período
+      const transacoesFiltradas = (transacoes || []).filter(t => {
+        if (!t.data) return false;
+        const data = new Date(t.data);
+        return data >= dataInicioObj && data <= dataFimObj;
+      });
+
+      const atendimentosFiltrados = (atendimentos || []).filter(a => {
+        if (!a.data) return false;
+        const data = new Date(a.data);
+        return data >= dataInicioObj && data <= dataFimObj;
+      });
+
+      const clientesFiltrados = (clientes || []).filter(c => {
+        if (!c.dataCadastro) return false;
+        const data = new Date(c.dataCadastro);
+        return data >= dataInicioObj && data <= dataFimObj;
+      });
+
+      const comissoesFiltradas = (comissoes || []).filter(c => {
+        if (!c.data) return false;
+        const data = new Date(c.data);
+        return data >= dataInicioObj && data <= dataFimObj;
+      });
+
+      // Gerar dados de linha (evolução diária)
+      const dias = {};
+      const diffDays = Math.ceil((dataFimObj - dataInicioObj) / (1000 * 60 * 60 * 24)) + 1;
       
-      setDados(prevDados => ({
-        ...prevDados,
-        ...response
-      }));
+      for (let i = 0; i <= diffDays; i++) {
+        const data = new Date(dataInicioObj);
+        data.setDate(dataInicioObj.getDate() + i);
+        const dia = data.toLocaleDateString('pt-BR');
+        dias[dia] = { 
+          dia, 
+          receitas: 0, 
+          despesas: 0, 
+          lucro: 0,
+          dinheiro: 0,
+          cartao: 0,
+          pix: 0,
+        };
+      }
+
+      transacoesFiltradas.forEach(t => {
+        if (!t.data) return;
+        const data = new Date(t.data).toLocaleDateString('pt-BR');
+        if (dias[data]) {
+          const valor = Number(t.valor) || 0;
+          if (t.tipo === 'receita' && t.status === 'pago') {
+            dias[data].receitas += valor;
+            const forma = (t.formaPagamento || '').toLowerCase();
+            if (forma === 'dinheiro') dias[data].dinheiro += valor;
+            else if (forma === 'pix') dias[data].pix += valor;
+            else dias[data].cartao += valor;
+          } else if (t.tipo === 'despesa' && t.status === 'pago') {
+            dias[data].despesas += valor;
+          }
+          dias[data].lucro = dias[data].receitas - dias[data].despesas;
+        }
+      });
+
+      const dadosGraficoLinha = Object.values(dias).sort((a, b) => {
+        const [diaA, mesA, anoA] = a.dia.split('/');
+        const [diaB, mesB, anoB] = b.dia.split('/');
+        return new Date(anoA, mesA - 1, diaA) - new Date(anoB, mesB - 1, diaB);
+      });
+
+      // Gerar dados de pizza (categorias)
+      const categorias = {};
+      transacoesFiltradas.forEach(t => {
+        if (t.status !== 'pago') return;
+        let cat = t.categoria || 'Outros';
+        if (t.origem === 'comissao') cat = 'Comissões';
+        if (t.origem === 'compra') cat = 'Compras';
+        const valor = Number(t.valor) || 0;
+        categorias[cat] = (categorias[cat] || 0) + valor;
+      });
+
+      const dadosGraficoPizza = Object.keys(categorias)
+        .map(cat => ({ name: cat, value: categorias[cat] }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8);
+
+      // Dados financeiros
+      const totalReceitas = transacoesFiltradas
+        .filter(t => t.tipo === 'receita' && t.status === 'pago')
+        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+      
+      const totalDespesas = transacoesFiltradas
+        .filter(t => t.tipo === 'despesa' && t.status === 'pago')
+        .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+
+      // Dados de atendimentos
+      const servicosMap = {};
+      let faturamentoAtendimentos = 0;
+      atendimentosFiltrados.forEach(a => {
+        const servico = a.servicoNome || a.servicoId || 'Não identificado';
+        servicosMap[servico] = (servicosMap[servico] || 0) + 1;
+        faturamentoAtendimentos += Number(a.valor) || 0;
+      });
+
+      const dadosGraficoAtendimentos = Object.keys(servicosMap)
+        .map(nome => ({ 
+          name: nome, 
+          value: servicosMap[nome],
+          faturamento: (atendimentosFiltrados.filter(a => (a.servicoNome || a.servicoId) === nome).reduce((acc, a) => acc + (Number(a.valor) || 0), 0))
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+      // Dados de clientes
+      const frequenciaClientes = {};
+      let totalGastoClientes = 0;
+      atendimentosFiltrados.forEach(a => {
+        const clienteId = a.clienteId;
+        if (clienteId) {
+          frequenciaClientes[clienteId] = (frequenciaClientes[clienteId] || 0) + 1;
+          totalGastoClientes += Number(a.valor) || 0;
+        }
+      });
+
+      const topClientes = Object.keys(frequenciaClientes)
+        .map(id => {
+          const cliente = (clientes || []).find(c => c.id === id);
+          const totalGasto = atendimentosFiltrados
+            .filter(a => a.clienteId === id)
+            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0);
+          return {
+            cliente: cliente?.nome || 'Cliente não encontrado',
+            atendimentos: frequenciaClientes[id],
+            totalGasto: totalGasto,
+          };
+        })
+        .sort((a, b) => b.atendimentos - a.atendimentos)
+        .slice(0, 5);
+
+      const ticketMedioClientes = totalGastoClientes / (atendimentosFiltrados.length || 1);
+
+      // Dados de profissionais
+      const desempenhoProfissionais = {};
+      let totalComissoesPeriodo = 0;
+      atendimentosFiltrados.forEach(a => {
+        const profissionalId = a.profissionalId;
+        if (profissionalId) {
+          desempenhoProfissionais[profissionalId] = (desempenhoProfissionais[profissionalId] || 0) + 1;
+        }
+      });
+
+      const dadosGraficoProfissionais = Object.keys(desempenhoProfissionais)
+        .map(id => {
+          const profissional = (profissionais || []).find(p => p.id === id);
+          const comissoesProf = comissoesFiltradas.filter(c => c.profissionalId === id);
+          const totalComissoes = comissoesProf.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+          totalComissoesPeriodo += totalComissoes;
+          const ticketMedio = (atendimentosFiltrados
+            .filter(a => a.profissionalId === id)
+            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0)) / (desempenhoProfissionais[id] || 1);
+          return {
+            name: profissional?.nome?.split(' ')[0] || 'Profissional',
+            atendimentos: desempenhoProfissionais[id],
+            comissoes: totalComissoes,
+            ticketMedio: ticketMedio || 0,
+          };
+        })
+        .sort((a, b) => b.atendimentos - a.atendimentos);
+
+      // Dados de comissões
+      const comissoesPorProfissional = {};
+      comissoesFiltradas.forEach(c => {
+        const profissional = c.profissionalNome || c.profissionalId || 'Não identificado';
+        if (!comissoesPorProfissional[profissional]) {
+          comissoesPorProfissional[profissional] = { total: 0, pagas: 0, pendentes: 0 };
+        }
+        const valor = Number(c.valor) || 0;
+        comissoesPorProfissional[profissional].total += valor;
+        if (c.status === 'pago') {
+          comissoesPorProfissional[profissional].pagas += valor;
+        } else {
+          comissoesPorProfissional[profissional].pendentes += valor;
+        }
+      });
+
+      const totalComissoes = comissoesFiltradas.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+      const comissoesPagas = comissoesFiltradas.filter(c => c.status === 'pago').reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
+      const comissoesPendentes = totalComissoes - comissoesPagas;
+
+      // Dados de serviços
+      const servicosAtendimentos = {};
+      let totalAtendimentosServicos = 0;
+      atendimentosFiltrados.forEach(a => {
+        const servicoNome = a.servicoNome || 'Não identificado';
+        servicosAtendimentos[servicoNome] = (servicosAtendimentos[servicoNome] || 0) + 1;
+        totalAtendimentosServicos++;
+      });
+
+      const dadosGraficoServicos = Object.keys(servicosAtendimentos)
+        .map(nome => ({
+          name: nome,
+          value: servicosAtendimentos[nome],
+          faturamento: atendimentosFiltrados
+            .filter(a => (a.servicoNome || a.servicoId) === nome)
+            .reduce((acc, a) => acc + (Number(a.valor) || 0), 0)
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+      const ticketMedioServicos = totalGastoClientes / (totalAtendimentosServicos || 1);
+
+      // Dados de produtos
+      const produtosData = produtos || [];
+      const totalProdutos = produtosData.length;
+      const estoqueTotal = produtosData.reduce((acc, p) => acc + (Number(p.quantidadeEstoque) || 0), 0);
+      const valorEstoque = produtosData.reduce((acc, p) => acc + ((Number(p.quantidadeEstoque) || 0) * (Number(p.precoVenda) || 0)), 0);
+      const estoqueBaixo = produtosData.filter(p => (Number(p.quantidadeEstoque) || 0) <= (Number(p.estoqueMinimo) || 0));
+
+      // Dados de fornecedores
+      const fornecedoresData = fornecedores || [];
+      const totalFornecedores = fornecedoresData.length;
+      const comprasData = await firebaseService.getAll('compras').catch(() => []);
+      const comprasFiltradas = (comprasData || []).filter(c => {
+        if (!c.dataCompra) return false;
+        const data = new Date(c.dataCompra);
+        return data >= dataInicioObj && data <= dataFimObj;
+      });
+      
+      const fornecedoresCompras = {};
+      comprasFiltradas.forEach(c => {
+        const fornId = c.fornecedorId;
+        if (fornId) {
+          if (!fornecedoresCompras[fornId]) {
+            fornecedoresCompras[fornId] = { compras: 0, valor: 0 };
+          }
+          fornecedoresCompras[fornId].compras += 1;
+          fornecedoresCompras[fornId].valor += Number(c.valorTotal) || 0;
+        }
+      });
+
+      const dadosGraficoFornecedores = Object.keys(fornecedoresCompras)
+        .map(id => {
+          const fornecedor = fornecedoresData.find(f => f.id === id);
+          return {
+            name: fornecedor?.nome || 'Fornecedor',
+            compras: fornecedoresCompras[id].compras,
+            valor: fornecedoresCompras[id].valor,
+            rating: Number(fornecedor?.rating) || 0,
+          };
+        })
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+
+      const totalGastoFornecedores = Object.values(fornecedoresCompras).reduce((acc, f) => acc + f.valor, 0);
+      const totalComprasFornecedores = Object.values(fornecedoresCompras).reduce((acc, f) => acc + f.compras, 0);
+
+      setDados({
+        financeiro: {
+          totalReceitas,
+          totalDespesas,
+          lucroLiquido: totalReceitas - totalDespesas,
+          margem: totalReceitas > 0 ? ((totalReceitas - totalDespesas) / totalReceitas) * 100 : 0,
+        },
+        atendimentos: {
+          total: atendimentosFiltrados.length,
+          mediaDia: diffDays > 0 ? atendimentosFiltrados.length / diffDays : 0,
+          faturamento: faturamentoAtendimentos,
+        },
+        clientes: {
+          totalClientes: clientes.length,
+          novosClientes: clientesFiltrados.length,
+          totalAtendimentos: atendimentosFiltrados.length,
+          ticketMedio: ticketMedioClientes,
+        },
+        profissionais: {
+          total: atendimentosFiltrados.length,
+          mediaPorProfissional: profissionais.length > 0 ? atendimentosFiltrados.length / profissionais.length : 0,
+          totalComissoes: totalComissoesPeriodo,
+        },
+        comissoes: {
+          total: totalComissoes,
+          pagas: comissoesPagas,
+          pendentes: comissoesPendentes,
+          porProfissional: comissoesPorProfissional,
+        },
+        servicos: {
+          totalServicos: servicos.length,
+          totalAtendimentos: totalAtendimentosServicos,
+          ticketMedio: ticketMedioServicos,
+        },
+        produtos: {
+          totalProdutos,
+          estoqueTotal,
+          valorEstoque,
+          estoqueBaixo,
+        },
+        fornecedores: {
+          total: totalFornecedores,
+          totalCompras: totalComprasFornecedores,
+          totalGasto: totalGastoFornecedores,
+        },
+        graficoLinha: dadosGraficoLinha,
+        graficoPizza: dadosGraficoPizza,
+        grafico: tipoRelatorio === 'atendimentos' ? dadosGraficoAtendimentos :
+                tipoRelatorio === 'profissionais' ? dadosGraficoProfissionais :
+                tipoRelatorio === 'servicos' ? dadosGraficoServicos :
+                tipoRelatorio === 'fornecedores' ? dadosGraficoFornecedores : [],
+        topClientes,
+      });
       
       mostrarSnackbar('Dados carregados com sucesso!');
     } catch (error) {
@@ -572,258 +1232,7 @@ function ModernRelatorios() {
     }
   };
 
-  const gerarRelatorioFinanceiro = async () => {
-    try {
-      const pagamentos = await firebaseService.getAll('transacoes').catch(() => []);
-
-      const dataInicioObj = new Date(dataInicio);
-      const dataFimObj = new Date(dataFim);
-      dataFimObj.setHours(23, 59, 59);
-
-      const pagamentosFiltrados = pagamentos.filter(p => {
-        if (!p.data || p.status !== 'pago') return false;
-        const dataPagamento = new Date(p.data);
-        return dataPagamento >= dataInicioObj && dataPagamento <= dataFimObj;
-      });
-
-      const dias = {};
-      pagamentosFiltrados.forEach(p => {
-        const data = new Date(p.data);
-        const dia = data.toLocaleDateString('pt-BR');
-        
-        if (!dias[dia]) {
-          dias[dia] = { total: 0, dinheiro: 0, cartao: 0, pix: 0 };
-        }
-        
-        const valor = Number(p.valor) || 0;
-        dias[dia].total += valor;
-        
-        const forma = (p.formaPagamento || '').toLowerCase();
-        if (forma === 'dinheiro') {
-          dias[dia].dinheiro += valor;
-        } else if (forma === 'pix') {
-          dias[dia].pix += valor;
-        } else if (forma?.includes('cartao')) {
-          dias[dia].cartao += valor;
-        } else {
-          dias[dia].cartao += valor; // Default para cartão
-        }
-      });
-
-      const dadosGrafico = Object.keys(dias).map(dia => ({
-        dia,
-        total: dias[dia].total,
-        dinheiro: dias[dia].dinheiro,
-        cartao: dias[dia].cartao,
-        pix: dias[dia].pix,
-      })).sort((a, b) => {
-        const [diaA, mesA, anoA] = a.dia.split('/');
-        const [diaB, mesB, anoB] = b.dia.split('/');
-        return new Date(anoA, mesA - 1, diaA) - new Date(anoB, mesB - 1, diaB);
-      });
-
-      const totalPeriodo = pagamentosFiltrados.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
-      
-      const formasMap = {};
-      pagamentosFiltrados.forEach(p => {
-        const forma = (p.formaPagamento || 'outros').toLowerCase();
-        const valor = Number(p.valor) || 0;
-        
-        if (forma === 'dinheiro') {
-          formasMap['Dinheiro'] = (formasMap['Dinheiro'] || 0) + valor;
-        } else if (forma === 'pix') {
-          formasMap['PIX'] = (formasMap['PIX'] || 0) + valor;
-        } else if (forma?.includes('cartao')) {
-          formasMap['Cartão'] = (formasMap['Cartão'] || 0) + valor;
-        } else {
-          formasMap['Outros'] = (formasMap['Outros'] || 0) + valor;
-        }
-      });
-
-      const porForma = Object.keys(formasMap)
-        .filter(key => formasMap[key] > 0)
-        .map(key => ({ name: key, value: formasMap[key] }));
-
-      return {
-        graficoLinha: dadosGrafico,
-        graficoPizza: porForma,
-        total: totalPeriodo,
-        quantidade: pagamentosFiltrados.length,
-        media: pagamentosFiltrados.length > 0 ? totalPeriodo / pagamentosFiltrados.length : 0,
-      };
-    } catch (error) {
-      console.error('Erro no relatório financeiro:', error);
-      return {
-        graficoLinha: [],
-        graficoPizza: [],
-        total: 0,
-        quantidade: 0,
-        media: 0,
-      };
-    }
-  };
-
-  const gerarRelatorioAtendimentos = async () => {
-    try {
-      const [atendimentos, servicos] = await Promise.all([
-        firebaseService.getAll('historico_atendimentos').catch(() => []),
-        firebaseService.getAll('servicos').catch(() => []),
-      ]);
-
-      const dataInicioObj = new Date(dataInicio);
-      const dataFimObj = new Date(dataFim);
-      dataFimObj.setHours(23, 59, 59);
-
-      const atendimentosFiltrados = atendimentos.filter(a => {
-        if (!a.data) return false;
-        const dataAtendimento = new Date(a.data);
-        return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
-      });
-
-      const porServico = {};
-      atendimentosFiltrados.forEach(a => {
-        if (a.servicos && a.servicos.length > 0) {
-          a.servicos.forEach(nomeServico => {
-            porServico[nomeServico] = (porServico[nomeServico] || 0) + 1;
-          });
-        } else {
-          porServico['Não identificado'] = (porServico['Não identificado'] || 0) + 1;
-        }
-      });
-
-      const dadosGrafico = Object.keys(porServico).map(nome => ({
-        name: nome,
-        value: porServico[nome],
-      })).sort((a, b) => b.value - a.value);
-
-      const diffTime = Math.abs(new Date(dataFim) - new Date(dataInicio));
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-      return {
-        grafico: dadosGrafico,
-        total: atendimentosFiltrados.length,
-        mediaDia: diffDays > 0 ? atendimentosFiltrados.length / diffDays : 0,
-      };
-    } catch (error) {
-      console.error('Erro no relatório de atendimentos:', error);
-      return {
-        grafico: [],
-        total: 0,
-        mediaDia: 0,
-      };
-    }
-  };
-
-  const gerarRelatorioClientes = async () => {
-    try {
-      const [clientes, atendimentos] = await Promise.all([
-        firebaseService.getAll('clientes').catch(() => []),
-        firebaseService.getAll('historico_atendimentos').catch(() => []),
-      ]);
-
-      const dataInicioObj = new Date(dataInicio);
-      const dataFimObj = new Date(dataFim);
-      dataFimObj.setHours(23, 59, 59);
-
-      const atendimentosFiltrados = atendimentos.filter(a => {
-        if (!a.data) return false;
-        const dataAtendimento = new Date(a.data);
-        return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
-      });
-
-      const frequencia = {};
-      atendimentosFiltrados.forEach(a => {
-        const clienteId = a.clienteId;
-        if (clienteId) {
-          frequencia[clienteId] = (frequencia[clienteId] || 0) + 1;
-        }
-      });
-
-      const topClientes = Object.keys(frequencia)
-        .map(id => {
-          const cliente = clientes.find(c => c.id === id);
-          return {
-            cliente: cliente?.nome || 'Cliente não encontrado',
-            atendimentos: frequencia[id],
-          };
-        })
-        .sort((a, b) => b.atendimentos - a.atendimentos)
-        .slice(0, 5);
-
-      const novosClientes = clientes.filter(c => {
-        if (!c.dataCadastro) return false;
-        const dataCadastro = new Date(c.dataCadastro);
-        return dataCadastro >= dataInicioObj && dataCadastro <= dataFimObj;
-      }).length;
-
-      return {
-        topClientes,
-        totalClientes: clientes.length,
-        novosClientes,
-        totalAtendimentos: atendimentosFiltrados.length,
-      };
-    } catch (error) {
-      console.error('Erro no relatório de clientes:', error);
-      return {
-        topClientes: [],
-        totalClientes: 0,
-        novosClientes: 0,
-        totalAtendimentos: 0,
-      };
-    }
-  };
-
-  const gerarRelatorioProfissionais = async () => {
-    try {
-      const [profissionais, atendimentos] = await Promise.all([
-        firebaseService.getAll('profissionais').catch(() => []),
-        firebaseService.getAll('historico_atendimentos').catch(() => []),
-      ]);
-
-      const dataInicioObj = new Date(dataInicio);
-      const dataFimObj = new Date(dataFim);
-      dataFimObj.setHours(23, 59, 59);
-
-      const atendimentosFiltrados = atendimentos.filter(a => {
-        if (!a.data) return false;
-        const dataAtendimento = new Date(a.data);
-        return dataAtendimento >= dataInicioObj && dataAtendimento <= dataFimObj;
-      });
-
-      const desempenho = {};
-      atendimentosFiltrados.forEach(a => {
-        const profissionalId = a.profissionalId;
-        if (profissionalId) {
-          desempenho[profissionalId] = (desempenho[profissionalId] || 0) + 1;
-        }
-      });
-
-      const dadosGrafico = Object.keys(desempenho).map(id => {
-        const profissional = profissionais.find(p => p.id === id);
-        return {
-          name: profissional?.nome?.split(' ')[0] || 'Profissional',
-          atendimentos: desempenho[id],
-        };
-      }).sort((a, b) => b.atendimentos - a.atendimentos);
-
-      return {
-        grafico: dadosGrafico,
-        total: atendimentosFiltrados.length,
-        mediaPorProfissional: profissionais.length > 0 
-          ? atendimentosFiltrados.length / profissionais.length 
-          : 0,
-      };
-    } catch (error) {
-      console.error('Erro no relatório de profissionais:', error);
-      return {
-        grafico: [],
-        total: 0,
-        mediaPorProfissional: 0,
-      };
-    }
-  };
-
-  // Função de impressão corrigida
+  // Função de impressão
   const handlePrint = useReactToPrint({
     content: () => componentRef.current,
     documentTitle: `relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}`,
@@ -839,7 +1248,8 @@ function ModernRelatorios() {
     }
   });
 
-  const handleExportPDF = () => {
+  // Exportar para PDF
+  const handleExportPDF = async () => {
     try {
       toast.loading('Gerando PDF...', { id: 'pdf' });
       
@@ -847,21 +1257,17 @@ function ModernRelatorios() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
-      // Função para adicionar cabeçalho em cada página
       const addHeader = () => {
         doc.setFillColor(156, 39, 176);
         doc.rect(0, 0, pageWidth, 10, 'F');
-        
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(8);
-        doc.text('Beauty Pro Salon - Sistema de Gerenciamento', 10, 6);
+        doc.text('Beauty Pro Salon', 10, 6);
         doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth - 60, 6);
       };
 
-      // Adicionar cabeçalho
       addHeader();
       
-      // Título principal
       doc.setTextColor(156, 39, 176);
       doc.setFontSize(22);
       doc.setFont(undefined, 'bold');
@@ -869,11 +1275,16 @@ function ModernRelatorios() {
       
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(16);
-      doc.setFont(undefined, 'bold');
-      const tituloRelatorio = tipoRelatorio === 'financeiro' ? 'Relatório Financeiro' :
-                            tipoRelatorio === 'atendimentos' ? 'Relatório de Atendimentos' :
-                            tipoRelatorio === 'clientes' ? 'Relatório de Clientes' :
-                            'Relatório de Profissionais';
+      const tituloRelatorio = {
+        financeiro: 'Relatório Financeiro',
+        atendimentos: 'Relatório de Atendimentos',
+        clientes: 'Relatório de Clientes',
+        profissionais: 'Relatório de Profissionais',
+        comissoes: 'Relatório de Comissões',
+        servicos: 'Relatório de Serviços',
+        produtos: 'Relatório de Produtos',
+        fornecedores: 'Relatório de Fornecedores',
+      }[tipoRelatorio];
       doc.text(tituloRelatorio, 105, 35, { align: 'center' });
       
       doc.setFontSize(10);
@@ -882,88 +1293,58 @@ function ModernRelatorios() {
       
       let yPos = 50;
 
-      if (tipoRelatorio === 'financeiro') {
-        // Cards de resumo
+      // Cards de resumo baseado no tipo
+      const formatarMoedaPDF = (valor) => `R$ ${(valor || 0).toFixed(2)}`;
+      const formatarNumeroPDF = (valor) => new Intl.NumberFormat('pt-BR').format(valor || 0);
+
+      if (tipoRelatorio === 'financeiro' && dados.financeiro) {
         doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 60, 20, 2, 2, 'F');
-        doc.roundedRect(78, yPos, 60, 20, 2, 2, 'F');
-        doc.roundedRect(142, yPos, 60, 20, 2, 2, 'F');
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
         
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
-        doc.text('Total do Período', 24, yPos + 5);
-        doc.text('Quantidade', 88, yPos + 5);
-        doc.text('Ticket Médio', 152, yPos + 5);
+        doc.text('Total Receitas', 19, yPos + 6);
+        doc.text('Total Despesas', 78, yPos + 6);
+        doc.text('Lucro Líquido', 137, yPos + 6);
         
-        doc.setFontSize(12);
+        doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(76, 175, 80);
-        doc.text(`R$ ${(dados.total || 0).toFixed(2)}`, 24, yPos + 15);
+        doc.text(formatarMoedaPDF(dados.financeiro.totalReceitas), 19, yPos + 18);
+        doc.setTextColor(244, 67, 54);
+        doc.text(formatarMoedaPDF(dados.financeiro.totalDespesas), 78, yPos + 18);
+        doc.setTextColor(dados.financeiro.lucroLiquido >= 0 ? 33, 150, 243 : 244, 67, 54);
+        doc.text(formatarMoedaPDF(dados.financeiro.lucroLiquido), 137, yPos + 18);
         
-        doc.setTextColor(156, 39, 176);
-        doc.text(`${dados.quantidade || 0}`, 88, yPos + 15);
-        
-        doc.setTextColor(255, 64, 129);
-        doc.text(`R$ ${(dados.media || 0).toFixed(2)}`, 152, yPos + 15);
-        
-        yPos += 30;
+        yPos += 35;
 
-        // Tabela de pagamentos
-        doc.setFontSize(12);
-        doc.setTextColor(156, 39, 176);
-        doc.setFont(undefined, 'bold');
-        doc.text('Detalhamento por Dia', 14, yPos);
-        
-        yPos += 5;
-        
-        doc.autoTable({
-          startY: yPos,
-          head: [['Data', 'Dinheiro (R$)', 'Cartão (R$)', 'PIX (R$)', 'Total (R$)']],
-          body: dados.graficoLinha?.map(row => [
-            row.dia,
-            Number(row.dinheiro || 0).toFixed(2),
-            Number(row.cartao || 0).toFixed(2),
-            Number(row.pix || 0).toFixed(2),
-            Number(row.total || 0).toFixed(2),
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-
-        yPos = doc.lastAutoTable.finalY + 15;
-
-        // Verificar se precisa de nova página
-        if (yPos > pageHeight - 40) {
-          doc.addPage();
-          addHeader();
-          yPos = 20;
+        // Tabela de evolução diária
+        if (dados.graficoLinha && dados.graficoLinha.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text('Evolução Diária', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Data', 'Receitas (R$)', 'Despesas (R$)', 'Lucro (R$)']],
+            body: dados.graficoLinha.map(row => [
+              row.dia,
+              row.receitas.toFixed(2),
+              row.despesas.toFixed(2),
+              row.lucro.toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+          yPos = doc.lastAutoTable.finalY + 15;
         }
-
-        // Tabela de formas de pagamento
-        doc.setFontSize(12);
-        doc.setTextColor(156, 39, 176);
-        doc.setFont(undefined, 'bold');
-        doc.text('Resumo por Forma de Pagamento', 14, yPos);
-        
-        yPos += 5;
-        
-        doc.autoTable({
-          startY: yPos,
-          head: [['Forma de Pagamento', 'Valor (R$)', '%']],
-          body: dados.graficoPizza?.map(row => [
-            row.name,
-            Number(row.value || 0).toFixed(2),
-            dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [255, 64, 129], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'atendimentos') {
-        // Cards de resumo
+      } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
         doc.setFillColor(245, 245, 245);
         doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
         doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
@@ -971,90 +1352,80 @@ function ModernRelatorios() {
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
         doc.text('Total de Atendimentos', 24, yPos + 6);
-        doc.text('Média por Dia', 117, yPos + 6);
+        doc.text('Faturamento Total', 117, yPos + 6);
         
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(156, 39, 176);
-        doc.text(`${dados.total || 0}`, 24, yPos + 18);
+        doc.text(formatarNumeroPDF(dados.atendimentos.total), 24, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.atendimentos.faturamento), 117, yPos + 18);
         
-        doc.setTextColor(255, 64, 129);
-        doc.text(`${(dados.mediaDia || 0).toFixed(1)}`, 117, yPos + 18);
-        
-        yPos += 40;
+        yPos += 35;
 
-        // Tabela de atendimentos por serviço
-        doc.setFontSize(12);
-        doc.setTextColor(156, 39, 176);
-        doc.setFont(undefined, 'bold');
-        doc.text('Atendimentos por Serviço', 14, yPos);
-        
-        yPos += 5;
-        
-        doc.autoTable({
-          startY: yPos,
-          head: [['Serviço', 'Quantidade', '%']],
-          body: dados.grafico?.map(row => [
-            row.name,
-            row.value,
-            dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'clientes') {
-        // Cards de resumo
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Atendimentos por Serviço', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.value,
+              (row.faturamento || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'clientes' && dados.clientes) {
         doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, yPos, 55, 20, 2, 2, 'F');
-        doc.roundedRect(73, yPos, 55, 20, 2, 2, 'F');
-        doc.roundedRect(132, yPos, 55, 20, 2, 2, 'F');
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
         
         doc.setFontSize(7);
         doc.setTextColor(100, 100, 100);
-        doc.text('Total Clientes', 19, yPos + 5);
-        doc.text('Novos Clientes', 78, yPos + 5);
-        doc.text('Atendimentos', 137, yPos + 5);
+        doc.text('Total Clientes', 19, yPos + 6);
+        doc.text('Novos Clientes', 78, yPos + 6);
+        doc.text('Ticket Médio', 137, yPos + 6);
         
         doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
         doc.setTextColor(156, 39, 176);
-        doc.text(`${dados.totalClientes || 0}`, 19, yPos + 15);
-        
+        doc.text(formatarNumeroPDF(dados.clientes.totalClientes), 19, yPos + 18);
         doc.setTextColor(76, 175, 80);
-        doc.text(`${dados.novosClientes || 0}`, 78, yPos + 15);
-        
+        doc.text(formatarNumeroPDF(dados.clientes.novosClientes), 78, yPos + 18);
         doc.setTextColor(255, 64, 129);
-        doc.text(`${dados.totalAtendimentos || 0}`, 137, yPos + 15);
+        doc.text(formatarMoedaPDF(dados.clientes.ticketMedio), 137, yPos + 18);
         
-        yPos += 30;
+        yPos += 35;
 
-        // Tabela de top clientes
-        doc.setFontSize(12);
-        doc.setTextColor(156, 39, 176);
-        doc.setFont(undefined, 'bold');
-        doc.text('Top 5 Clientes por Atendimentos', 14, yPos);
-        
-        yPos += 5;
-        
-        doc.autoTable({
-          startY: yPos,
-          head: [['Cliente', 'Atendimentos', '%']],
-          body: dados.topClientes?.map(cliente => [
-            cliente.cliente,
-            cliente.atendimentos,
-            dados.totalAtendimentos > 0 
-              ? ((cliente.atendimentos / dados.totalAtendimentos) * 100).toFixed(1)
-              : '0',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
-      } else if (tipoRelatorio === 'profissionais') {
-        // Cards de resumo
+        if (dados.topClientes && dados.topClientes.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Top 5 Clientes', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Cliente', 'Atendimentos', 'Total Gasto (R$)']],
+            body: dados.topClientes.map(cliente => [
+              cliente.cliente,
+              cliente.atendimentos,
+              (cliente.totalGasto || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
         doc.setFillColor(245, 245, 245);
         doc.roundedRect(14, yPos, 85, 25, 2, 2, 'F');
         doc.roundedRect(107, yPos, 85, 25, 2, 2, 'F');
@@ -1064,47 +1435,215 @@ function ModernRelatorios() {
         doc.text('Total de Atendimentos', 24, yPos + 6);
         doc.text('Média por Profissional', 117, yPos + 6);
         
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
         doc.setTextColor(156, 39, 176);
-        doc.text(`${dados.total || 0}`, 24, yPos + 18);
-        
+        doc.text(formatarNumeroPDF(dados.profissionais.total), 24, yPos + 18);
         doc.setTextColor(255, 64, 129);
-        doc.text(`${(dados.mediaPorProfissional || 0).toFixed(1)}`, 117, yPos + 18);
+        doc.text((dados.profissionais.mediaPorProfissional || 0).toFixed(1), 117, yPos + 18);
         
-        yPos += 40;
+        yPos += 35;
 
-        // Tabela de profissionais
-        doc.setFontSize(12);
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Atendimentos por Profissional', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Profissional', 'Atendimentos', 'Comissões (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.atendimentos,
+              (row.comissoes || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Comissões', 19, yPos + 6);
+        doc.text('Comissões Pagas', 78, yPos + 6);
+        doc.text('Comissões Pendentes', 137, yPos + 6);
+        
+        doc.setFontSize(10);
         doc.setTextColor(156, 39, 176);
-        doc.setFont(undefined, 'bold');
-        doc.text('Atendimentos por Profissional', 14, yPos);
+        doc.text(formatarMoedaPDF(dados.comissoes.total), 19, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.comissoes.pagas), 78, yPos + 18);
+        doc.setTextColor(255, 152, 0);
+        doc.text(formatarMoedaPDF(dados.comissoes.pendentes), 137, yPos + 18);
         
-        yPos += 5;
+        yPos += 35;
+
+        if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Comissões por Profissional', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Profissional', 'Total (R$)', 'Pagas (R$)', 'Pendentes (R$)']],
+            body: Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => [
+              prof,
+              vals.total.toFixed(2),
+              vals.pagas.toFixed(2),
+              vals.pendentes.toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'servicos' && dados.servicos) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
         
-        doc.autoTable({
-          startY: yPos,
-          head: [['Profissional', 'Atendimentos', '%']],
-          body: dados.grafico?.map(row => [
-            row.name,
-            row.atendimentos,
-            dados.total > 0 ? ((row.atendimentos / dados.total) * 100).toFixed(1) : '0',
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [156, 39, 176], textColor: 255 },
-          styles: { fontSize: 8 },
-          margin: { left: 14, right: 14 },
-        });
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Serviços', 19, yPos + 6);
+        doc.text('Atendimentos', 78, yPos + 6);
+        doc.text('Ticket Médio', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.servicos.totalServicos), 19, yPos + 18);
+        doc.setTextColor(255, 64, 129);
+        doc.text(formatarNumeroPDF(dados.servicos.totalAtendimentos), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.servicos.ticketMedio), 137, yPos + 18);
+        
+        yPos += 35;
+
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Serviços Mais Realizados', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Serviço', 'Quantidade', 'Faturamento (R$)']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.value,
+              (row.faturamento || 0).toFixed(2),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Produtos', 19, yPos + 6);
+        doc.text('Estoque Total', 78, yPos + 6);
+        doc.text('Valor Estoque', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.produtos.totalProdutos), 19, yPos + 18);
+        doc.setTextColor(33, 150, 243);
+        doc.text(formatarNumeroPDF(dados.produtos.estoqueTotal), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.produtos.valorEstoque), 137, yPos + 18);
+        
+        yPos += 35;
+
+        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Produtos com Estoque Baixo', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Produto', 'Estoque Atual', 'Estoque Mínimo']],
+            body: dados.produtos.estoqueBaixo.map(p => [
+              p.nome,
+              formatarNumeroPDF(p.quantidade),
+              formatarNumeroPDF(p.estoqueMinimo),
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
+      } else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(73, yPos, 55, 25, 2, 2, 'F');
+        doc.roundedRect(132, yPos, 55, 25, 2, 2, 'F');
+        
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Fornecedores', 19, yPos + 6);
+        doc.text('Total Compras', 78, yPos + 6);
+        doc.text('Total Gasto', 137, yPos + 6);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(156, 39, 176);
+        doc.text(formatarNumeroPDF(dados.fornecedores.total), 19, yPos + 18);
+        doc.setTextColor(33, 150, 243);
+        doc.text(formatarNumeroPDF(dados.fornecedores.totalCompras), 78, yPos + 18);
+        doc.setTextColor(76, 175, 80);
+        doc.text(formatarMoedaPDF(dados.fornecedores.totalGasto), 137, yPos + 18);
+        
+        yPos += 35;
+
+        if (dados.grafico && dados.grafico.length > 0) {
+          doc.setFontSize(12);
+          doc.setTextColor(156, 39, 176);
+          doc.text('Fornecedores', 14, yPos);
+          yPos += 5;
+          
+          doc.autoTable({
+            startY: yPos,
+            head: [['Fornecedor', 'Compras', 'Valor Total (R$)', 'Rating']],
+            body: dados.grafico.map(row => [
+              row.name,
+              row.compras,
+              (row.valor || 0).toFixed(2),
+              `${row.rating} ★`,
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255 },
+            styles: { fontSize: 8 },
+            margin: { left: 14, right: 14 },
+          });
+        }
       }
 
-      // Adicionar rodapé em todas as páginas
+      // Rodapé em todas as páginas
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
         doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, pageHeight - 10);
-        doc.text('Beauty Pro Salon - Sistema de Gerenciamento', 10, pageHeight - 10);
+        doc.text('Beauty Pro Salon', 10, pageHeight - 10);
       }
       
       doc.save(`relatorio_${tipoRelatorio}_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -1115,102 +1654,184 @@ function ModernRelatorios() {
     }
   };
 
+  // Exportar para Excel
   const handleExportExcel = () => {
     try {
       toast.loading('Gerando Excel...', { id: 'excel' });
       
       let worksheetData = [];
       
-      // Cabeçalho do relatório
       worksheetData.push(['Beauty Pro Salon']);
-      worksheetData.push([`Relatório ${tipoRelatorio}`]);
+      worksheetData.push([`Relatório ${{
+        financeiro: 'Financeiro',
+        atendimentos: 'Atendimentos',
+        clientes: 'Clientes',
+        profissionais: 'Profissionais',
+        comissoes: 'Comissões',
+        servicos: 'Serviços',
+        produtos: 'Produtos',
+        fornecedores: 'Fornecedores',
+      }[tipoRelatorio]}`]);
       worksheetData.push([`Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`]);
       worksheetData.push([`Gerado em: ${new Date().toLocaleString('pt-BR')}`]);
       worksheetData.push([]);
       
-      if (tipoRelatorio === 'financeiro') {
+      if (tipoRelatorio === 'financeiro' && dados.financeiro) {
         worksheetData.push(['RESUMO FINANCEIRO']);
-        worksheetData.push(['Total do Período', `R$ ${(dados.total || 0).toFixed(2)}`]);
-        worksheetData.push(['Quantidade de Pagamentos', dados.quantidade || 0]);
-        worksheetData.push(['Ticket Médio', `R$ ${(dados.media || 0).toFixed(2)}`]);
+        worksheetData.push(['Total Receitas', `R$ ${(dados.financeiro.totalReceitas || 0).toFixed(2)}`]);
+        worksheetData.push(['Total Despesas', `R$ ${(dados.financeiro.totalDespesas || 0).toFixed(2)}`]);
+        worksheetData.push(['Lucro Líquido', `R$ ${(dados.financeiro.lucroLiquido || 0).toFixed(2)}`]);
+        worksheetData.push(['Margem', `${(dados.financeiro.margem || 0).toFixed(1)}%`]);
         worksheetData.push([]);
-        worksheetData.push(['DETALHAMENTO POR DIA']);
-        worksheetData.push(['Data', 'Dinheiro', 'Cartão', 'PIX', 'Total']);
-        dados.graficoLinha?.forEach(row => {
-          worksheetData.push([
-            row.dia,
-            Number(row.dinheiro || 0).toFixed(2),
-            Number(row.cartao || 0).toFixed(2),
-            Number(row.pix || 0).toFixed(2),
-            Number(row.total || 0).toFixed(2),
-          ]);
-        });
-        worksheetData.push([]);
-        worksheetData.push(['RESUMO POR FORMA DE PAGAMENTO']);
-        worksheetData.push(['Forma', 'Valor', '%']);
-        dados.graficoPizza?.forEach(row => {
-          worksheetData.push([
-            row.name,
-            Number(row.value || 0).toFixed(2),
-            dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
-          ]);
-        });
-      } else if (tipoRelatorio === 'atendimentos') {
+        
+        if (dados.graficoLinha && dados.graficoLinha.length > 0) {
+          worksheetData.push(['EVOLUÇÃO DIÁRIA']);
+          worksheetData.push(['Data', 'Receitas', 'Despesas', 'Lucro']);
+          dados.graficoLinha.forEach(row => {
+            worksheetData.push([
+              row.dia,
+              `R$ ${row.receitas.toFixed(2)}`,
+              `R$ ${row.despesas.toFixed(2)}`,
+              `R$ ${row.lucro.toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'atendimentos' && dados.atendimentos) {
         worksheetData.push(['RESUMO DE ATENDIMENTOS']);
-        worksheetData.push(['Total de Atendimentos', dados.total || 0]);
-        worksheetData.push(['Média por Dia', (dados.mediaDia || 0).toFixed(1)]);
+        worksheetData.push(['Total de Atendimentos', dados.atendimentos.total || 0]);
+        worksheetData.push(['Média por Dia', (dados.atendimentos.mediaDia || 0).toFixed(1)]);
+        worksheetData.push(['Faturamento Total', `R$ ${(dados.atendimentos.faturamento || 0).toFixed(2)}`]);
         worksheetData.push([]);
-        worksheetData.push(['ATENDIMENTOS POR SERVIÇO']);
-        worksheetData.push(['Serviço', 'Quantidade', '%']);
-        dados.grafico?.forEach(row => {
-          worksheetData.push([
-            row.name,
-            row.value,
-            dados.total > 0 ? ((row.value / dados.total) * 100).toFixed(1) : '0',
-          ]);
-        });
-      } else if (tipoRelatorio === 'clientes') {
+        
+        if (dados.grafico && dados.grafico.length > 0) {
+          worksheetData.push(['ATENDIMENTOS POR SERVIÇO']);
+          worksheetData.push(['Serviço', 'Quantidade', 'Faturamento']);
+          dados.grafico.forEach(row => {
+            worksheetData.push([
+              row.name,
+              row.value,
+              `R$ ${(row.faturamento || 0).toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'clientes' && dados.clientes) {
         worksheetData.push(['RESUMO DE CLIENTES']);
-        worksheetData.push(['Total de Clientes', dados.totalClientes || 0]);
-        worksheetData.push(['Novos Clientes', dados.novosClientes || 0]);
-        worksheetData.push(['Atendimentos no Período', dados.totalAtendimentos || 0]);
+        worksheetData.push(['Total de Clientes', dados.clientes.totalClientes || 0]);
+        worksheetData.push(['Novos Clientes', dados.clientes.novosClientes || 0]);
+        worksheetData.push(['Total de Atendimentos', dados.clientes.totalAtendimentos || 0]);
+        worksheetData.push(['Ticket Médio', `R$ ${(dados.clientes.ticketMedio || 0).toFixed(2)}`]);
         worksheetData.push([]);
-        worksheetData.push(['TOP 5 CLIENTES']);
-        worksheetData.push(['Cliente', 'Atendimentos', '%']);
-        dados.topClientes?.forEach(cliente => {
-          worksheetData.push([
-            cliente.cliente,
-            cliente.atendimentos,
-            dados.totalAtendimentos > 0 
-              ? ((cliente.atendimentos / dados.totalAtendimentos) * 100).toFixed(1)
-              : '0',
-          ]);
-        });
-      } else if (tipoRelatorio === 'profissionais') {
+        
+        if (dados.topClientes && dados.topClientes.length > 0) {
+          worksheetData.push(['TOP 5 CLIENTES']);
+          worksheetData.push(['Cliente', 'Atendimentos', 'Total Gasto']);
+          dados.topClientes.forEach(cliente => {
+            worksheetData.push([
+              cliente.cliente,
+              cliente.atendimentos,
+              `R$ ${(cliente.totalGasto || 0).toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'profissionais' && dados.profissionais) {
         worksheetData.push(['RESUMO DE PROFISSIONAIS']);
-        worksheetData.push(['Total de Atendimentos', dados.total || 0]);
-        worksheetData.push(['Média por Profissional', (dados.mediaPorProfissional || 0).toFixed(1)]);
+        worksheetData.push(['Total de Atendimentos', dados.profissionais.total || 0]);
+        worksheetData.push(['Média por Profissional', (dados.profissionais.mediaPorProfissional || 0).toFixed(1)]);
+        worksheetData.push(['Total de Comissões', `R$ ${(dados.profissionais.totalComissoes || 0).toFixed(2)}`]);
         worksheetData.push([]);
-        worksheetData.push(['ATENDIMENTOS POR PROFISSIONAL']);
-        worksheetData.push(['Profissional', 'Atendimentos', '%']);
-        dados.grafico?.forEach(row => {
-          worksheetData.push([
-            row.name,
-            row.atendimentos,
-            dados.total > 0 ? ((row.atendimentos / dados.total) * 100).toFixed(1) : '0',
-          ]);
-        });
+        
+        if (dados.grafico && dados.grafico.length > 0) {
+          worksheetData.push(['DESEMPENHO POR PROFISSIONAL']);
+          worksheetData.push(['Profissional', 'Atendimentos', 'Comissões', 'Ticket Médio']);
+          dados.grafico.forEach(row => {
+            worksheetData.push([
+              row.name,
+              row.atendimentos,
+              `R$ ${(row.comissoes || 0).toFixed(2)}`,
+              `R$ ${(row.ticketMedio || 0).toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'comissoes' && dados.comissoes) {
+        worksheetData.push(['RESUMO DE COMISSÕES']);
+        worksheetData.push(['Total de Comissões', `R$ ${(dados.comissoes.total || 0).toFixed(2)}`]);
+        worksheetData.push(['Comissões Pagas', `R$ ${(dados.comissoes.pagas || 0).toFixed(2)}`]);
+        worksheetData.push(['Comissões Pendentes', `R$ ${(dados.comissoes.pendentes || 0).toFixed(2)}`]);
+        worksheetData.push([]);
+        
+        if (dados.comissoes.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0) {
+          worksheetData.push(['COMISSÕES POR PROFISSIONAL']);
+          worksheetData.push(['Profissional', 'Total', 'Pagas', 'Pendentes']);
+          Object.entries(dados.comissoes.porProfissional).forEach(([prof, vals]) => {
+            worksheetData.push([
+              prof,
+              `R$ ${vals.total.toFixed(2)}`,
+              `R$ ${vals.pagas.toFixed(2)}`,
+              `R$ ${vals.pendentes.toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'servicos' && dados.servicos) {
+        worksheetData.push(['RESUMO DE SERVIÇOS']);
+        worksheetData.push(['Total de Serviços', dados.servicos.totalServicos || 0]);
+        worksheetData.push(['Total de Atendimentos', dados.servicos.totalAtendimentos || 0]);
+        worksheetData.push(['Ticket Médio', `R$ ${(dados.servicos.ticketMedio || 0).toFixed(2)}`]);
+        worksheetData.push([]);
+        
+        if (dados.grafico && dados.grafico.length > 0) {
+          worksheetData.push(['SERVIÇOS MAIS REALIZADOS']);
+          worksheetData.push(['Serviço', 'Quantidade', 'Faturamento']);
+          dados.grafico.forEach(row => {
+            worksheetData.push([
+              row.name,
+              row.value,
+              `R$ ${(row.faturamento || 0).toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'produtos' && dados.produtos) {
+        worksheetData.push(['RESUMO DE PRODUTOS']);
+        worksheetData.push(['Total de Produtos', dados.produtos.totalProdutos || 0]);
+        worksheetData.push(['Estoque Total', dados.produtos.estoqueTotal || 0]);
+        worksheetData.push(['Valor em Estoque', `R$ ${(dados.produtos.valorEstoque || 0).toFixed(2)}`]);
+        worksheetData.push([]);
+        
+        if (dados.produtos.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0) {
+          worksheetData.push(['PRODUTOS COM ESTOQUE BAIXO']);
+          worksheetData.push(['Produto', 'Estoque Atual', 'Estoque Mínimo', 'Valor Unitário']);
+          dados.produtos.estoqueBaixo.forEach(p => {
+            worksheetData.push([
+              p.nome,
+              p.quantidade,
+              p.estoqueMinimo,
+              `R$ ${(p.precoVenda || 0).toFixed(2)}`,
+            ]);
+          });
+        }
+      } else if (tipoRelatorio === 'fornecedores' && dados.fornecedores) {
+        worksheetData.push(['RESUMO DE FORNECEDORES']);
+        worksheetData.push(['Total de Fornecedores', dados.fornecedores.total || 0]);
+        worksheetData.push(['Total de Compras', dados.fornecedores.totalCompras || 0]);
+        worksheetData.push(['Total Gasto', `R$ ${(dados.fornecedores.totalGasto || 0).toFixed(2)}`]);
+        worksheetData.push([]);
+        
+        if (dados.grafico && dados.grafico.length > 0) {
+          worksheetData.push(['FORNECEDORES']);
+          worksheetData.push(['Fornecedor', 'Compras', 'Valor Total', 'Rating']);
+          dados.grafico.forEach(row => {
+            worksheetData.push([
+              row.name,
+              row.compras,
+              `R$ ${(row.valor || 0).toFixed(2)}`,
+              `${row.rating} ★`,
+            ]);
+          });
+        }
       }
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-      
-      // Estilizar células
-      const wscols = [
-        { wch: 30 }, // Coluna A
-        { wch: 15 }, // Coluna B
-        { wch: 10 }, // Coluna C
-      ];
+      const wscols = [{ wch: 30 }, { wch: 20 }, { wch: 20 }];
       ws['!cols'] = wscols;
       
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
@@ -1223,6 +1844,7 @@ function ModernRelatorios() {
     }
   };
 
+  // Exportar para JSON
   const handleExportJSON = () => {
     const relatorio = {
       titulo: `Relatório ${tipoRelatorio}`,
@@ -1233,11 +1855,6 @@ function ModernRelatorios() {
       geradoEm: new Date().toISOString(),
       usuario: JSON.parse(localStorage.getItem('usuario') || '{}').nome || 'Sistema',
       dados: dados,
-      resumo: {
-        total: dados.total,
-        quantidade: dados.quantidade || dados.total,
-        media: dados.media || dados.mediaDia || 0,
-      }
     };
 
     const blob = new Blob([JSON.stringify(relatorio, null, 2)], { type: 'application/json' });
@@ -1322,10 +1939,14 @@ function ModernRelatorios() {
                       label="Tipo de Relatório"
                       onChange={(e) => setTipoRelatorio(e.target.value)}
                     >
-                      <MenuItem value="financeiro">Financeiro</MenuItem>
-                      <MenuItem value="atendimentos">Atendimentos</MenuItem>
-                      <MenuItem value="clientes">Clientes</MenuItem>
-                      <MenuItem value="profissionais">Profissionais</MenuItem>
+                      <MenuItem value="financeiro">📊 Financeiro</MenuItem>
+                      <MenuItem value="atendimentos">💇 Atendimentos</MenuItem>
+                      <MenuItem value="clientes">👥 Clientes</MenuItem>
+                      <MenuItem value="profissionais">👩‍💼 Profissionais</MenuItem>
+                      <MenuItem value="comissoes">💰 Comissões</MenuItem>
+                      <MenuItem value="servicos">✂️ Serviços</MenuItem>
+                      <MenuItem value="produtos">📦 Produtos</MenuItem>
+                      <MenuItem value="fornecedores">🏢 Fornecedores</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -1377,99 +1998,32 @@ function ModernRelatorios() {
           </Card>
         </Grid>
 
-        {/* Cards de resumo */}
-        <Grid item xs={12}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={3}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <Card sx={{ bgcolor: '#f8f0fa' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Total {tipoRelatorio === 'financeiro' ? 'Faturado' : 'Atendimentos'}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                      {tipoRelatorio === 'financeiro' 
-                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dados.total || 0)
-                        : dados.total || 0}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Grid>
-            
-            <Grid item xs={12} md={3}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <Card sx={{ bgcolor: '#f8f0fa' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      Quantidade
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff4081' }}>
-                      {new Intl.NumberFormat('pt-BR').format(dados.quantidade || dados.total || 0)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Grid>
-            
-            <Grid item xs={12} md={3}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card sx={{ bgcolor: '#f8f0fa' }}>
-                  <CardContent>
-                    <Typography color="textSecondary" gutterBottom>
-                      {tipoRelatorio === 'financeiro' ? 'Ticket Médio' : 'Média por Dia'}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                      {tipoRelatorio === 'financeiro'
-                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dados.media || 0)
-                        : (dados.mediaDia || 0).toFixed(1)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Grid>
-          </Grid>
-        </Grid>
-
         {/* Gráficos */}
-        {tipoRelatorio === 'financeiro' && (
+        {tipoRelatorio === 'financeiro' && dados.graficoLinha && dados.graficoLinha.length > 0 && (
           <>
             <Grid item xs={12} md={8}>
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
+                transition={{ delay: 0.2 }}
               >
                 <Card>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                      Evolução Financeira
+                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TimelineIcon /> Evolução Financeira
                     </Typography>
-                    <Box sx={{ height: 300 }}>
+                    <Box sx={{ height: 350 }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={dados.graficoLinha}>
+                        <ComposedChart data={dados.graficoLinha}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="dia" />
                           <YAxis />
-                          <RechartsTooltip 
-                            formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                          />
-                          <Area type="monotone" dataKey="dinheiro" stackId="1" stroke="#4caf50" fill="#4caf50" />
-                          <Area type="monotone" dataKey="cartao" stackId="1" stroke="#ff4081" fill="#ff4081" />
-                          <Area type="monotone" dataKey="pix" stackId="1" stroke="#9c27b0" fill="#9c27b0" />
-                        </AreaChart>
+                          <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                          <Legend />
+                          <Area type="monotone" dataKey="receitas" fill="#4caf50" fillOpacity={0.3} stroke="#4caf50" name="Receitas" />
+                          <Area type="monotone" dataKey="despesas" fill="#f44336" fillOpacity={0.3} stroke="#f44336" name="Despesas" />
+                          <Line type="monotone" dataKey="lucro" stroke="#2196f3" strokeWidth={2} name="Lucro" />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </Box>
                   </CardContent>
@@ -1481,14 +2035,14 @@ function ModernRelatorios() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.3 }}
               >
                 <Card>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                      Formas de Pagamento
+                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PieChartIcon /> Distribuição por Categoria
                     </Typography>
-                    <Box sx={{ height: 300 }}>
+                    <Box sx={{ height: 350 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -1505,9 +2059,7 @@ function ModernRelatorios() {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <RechartsTooltip 
-                            formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                          />
+                          <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
                         </PieChart>
                       </ResponsiveContainer>
                     </Box>
@@ -1518,26 +2070,219 @@ function ModernRelatorios() {
           </>
         )}
 
-        {tipoRelatorio !== 'financeiro' && (
+        {tipoRelatorio === 'atendimentos' && dados.grafico && dados.grafico.length > 0 && (
           <Grid item xs={12}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.2 }}
             >
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                    Distribuição
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <BarChartIcon /> Atendimentos por Serviço
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dados.grafico}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar dataKey="value" fill="#9c27b0" name="Quantidade" />
+                        <Bar dataKey="faturamento" fill="#ff4081" name="Faturamento" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'clientes' && dados.topClientes && dados.topClientes.length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PeopleIcon /> Top Clientes
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dados.topClientes}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="cliente" angle={-45} textAnchor="end" height={100} interval={0} />
+                        <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="atendimentos" fill="#9c27b0" name="Atendimentos" />
+                        <Bar yAxisId="right" dataKey="totalGasto" fill="#ff4081" name="Total Gasto" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'profissionais' && dados.grafico && dados.grafico.length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon /> Desempenho dos Profissionais
                   </Typography>
                   <Box sx={{ height: 400 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={dados.grafico}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
+                        <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="atendimentos" fill="#9c27b0" name="Atendimentos" />
+                        <Bar yAxisId="right" dataKey="comissoes" fill="#ff4081" name="Comissões" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'comissoes' && dados.comissoes?.porProfissional && Object.keys(dados.comissoes.porProfissional).length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PercentIcon /> Comissões por Profissional
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={Object.entries(dados.comissoes.porProfissional).map(([prof, vals]) => ({ name: prof, ...vals }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
+                        <YAxis />
+                        <RechartsTooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                        <Legend />
+                        <Bar dataKey="total" fill="#9c27b0" name="Total" />
+                        <Bar dataKey="pagas" fill="#4caf50" name="Pagas" />
+                        <Bar dataKey="pendentes" fill="#ff9800" name="Pendentes" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'servicos' && dados.grafico && dados.grafico.length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CategoryIcon /> Serviços Mais Realizados
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dados.grafico}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} interval={0} />
+                        <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="value" fill="#9c27b0" name="Quantidade" />
+                        <Bar yAxisId="right" dataKey="faturamento" fill="#ff4081" name="Faturamento" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'produtos' && dados.produtos?.estoqueBaixo && dados.produtos.estoqueBaixo.length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <StoreIcon /> Produtos com Estoque Baixo
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dados.produtos.estoqueBaixo}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="nome" angle={-45} textAnchor="end" height={100} interval={0} />
                         <YAxis />
                         <RechartsTooltip />
-                        <Bar dataKey="value" fill="#9c27b0" />
+                        <Legend />
+                        <Bar dataKey="quantidade" fill="#ff9800" name="Estoque Atual" />
+                        <Bar dataKey="estoqueMinimo" fill="#f44336" name="Estoque Mínimo" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
+        )}
+
+        {tipoRelatorio === 'fornecedores' && dados.grafico && dados.grafico.length > 0 && (
+          <Grid item xs={12}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ShoppingCartIcon /> Compras por Fornecedor
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dados.grafico}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
+                        <YAxis yAxisId="left" orientation="left" stroke="#9c27b0" />
+                        <YAxis yAxisId="right" orientation="right" stroke="#ff4081" />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="compras" fill="#9c27b0" name="Compras" />
+                        <Bar yAxisId="right" dataKey="valor" fill="#ff4081" name="Valor Total" />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box>
@@ -1559,6 +2304,63 @@ function ModernRelatorios() {
           dataFim={dataFim}
         />
       </Box>
+
+      {/* Dialog de Detalhes */}
+      <Dialog open={detalhesOpen} onClose={handleCloseDetalhes} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Detalhes
+        </DialogTitle>
+        <DialogContent>
+          {detalhesItem && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body1" gutterBottom>
+                <strong>Nome:</strong> {detalhesItem.name}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>Valor:</strong> R$ {(detalhesItem.value || 0).toFixed(2)}
+              </Typography>
+              {detalhesItem.faturamento && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Faturamento:</strong> R$ {(detalhesItem.faturamento || 0).toFixed(2)}
+                </Typography>
+              )}
+              {detalhesItem.atendimentos && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Atendimentos:</strong> {detalhesItem.atendimentos}
+                </Typography>
+              )}
+              {detalhesItem.comissoes && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Comissões:</strong> R$ {(detalhesItem.comissoes || 0).toFixed(2)}
+                </Typography>
+              )}
+              {detalhesItem.ticketMedio && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Ticket Médio:</strong> R$ {(detalhesItem.ticketMedio || 0).toFixed(2)}
+                </Typography>
+              )}
+              {detalhesItem.compras && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Compras:</strong> {detalhesItem.compras}
+                </Typography>
+              )}
+              {detalhesItem.rating && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Rating:</strong> {detalhesItem.rating} ★
+                </Typography>
+              )}
+              {detalhesItem.cliente && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Cliente:</strong> {detalhesItem.cliente}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDetalhes}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar */}
       <Snackbar
