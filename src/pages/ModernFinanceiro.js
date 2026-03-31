@@ -1,5 +1,5 @@
 // src/pages/ModernFinanceiro.js
-// VERSÃO COMPLETA - TODAS AS FUNCIONALIDADES
+// VERSÃO COMPLETA CORRIGIDA - Trata corretamente datas e objetos do Firebase
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -32,7 +32,6 @@ import {
   Snackbar,
   InputAdornment,
   Divider,
-  LinearProgress,
   TablePagination,
   Tabs,
   Tab,
@@ -177,6 +176,86 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+// ==================== FUNÇÕES AUXILIARES DE SEGURANÇA ====================
+
+/**
+ * Converte qualquer formato de data para string ISO
+ * Suporta: string, timestamp Firebase, Date, objeto com toDate()
+ */
+const toISOString = (value) => {
+  if (!value) return null;
+  
+  try {
+    // Se já é string
+    if (typeof value === 'string') {
+      // Verifica se é uma data válida
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date.toISOString();
+      return value;
+    }
+    
+    // Se é timestamp do Firebase
+    if (value.seconds !== undefined) {
+      return new Date(value.seconds * 1000).toISOString();
+    }
+    
+    // Se tem método toDate (Firestore Timestamp)
+    if (typeof value.toDate === 'function') {
+      return value.toDate().toISOString();
+    }
+    
+    // Se é Date
+    if (value instanceof Date) {
+      if (!isNaN(value.getTime())) return value.toISOString();
+    }
+    
+    return null;
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
+ * Converte data para string no formato YYYY-MM-DD
+ */
+const toDateString = (value) => {
+  const isoString = toISOString(value);
+  if (!isoString) return null;
+  return isoString.split('T')[0];
+};
+
+/**
+ * Converte data para exibição (dd/MM/yyyy)
+ */
+const toDisplayDate = (value) => {
+  const isoString = toISOString(value);
+  if (!isoString) return '';
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    return format(date, 'dd/MM/yyyy');
+  } catch (e) {
+    return '';
+  }
+};
+
+/**
+ * Extrai valor numérico com segurança
+ */
+const toNumber = (value, defaultValue = 0) => {
+  if (value === undefined || value === null) return defaultValue;
+  const num = Number(value);
+  return isNaN(num) ? defaultValue : num;
+};
+
+/**
+ * Extrai string com segurança
+ */
+const toString = (value, defaultValue = '') => {
+  if (value === undefined || value === null) return defaultValue;
+  return String(value);
+};
+
 // ==================== CONSTANTES ====================
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3', '#00bcd4', '#795548'];
 
@@ -229,14 +308,24 @@ const perfisAcesso = {
 // ==================== FUNÇÕES AUXILIARES ====================
 const formatarDataBrasilia = (date) => {
   if (!date) return '';
-  const d = new Date(date);
-  return format(d, 'yyyy-MM-dd');
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return format(d, 'yyyy-MM-dd');
+  } catch (e) {
+    return '';
+  }
 };
 
 const formatarDataExibicao = (date) => {
   if (!date) return '';
-  const d = new Date(date);
-  return format(d, 'dd/MM/yyyy');
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return format(d, 'dd/MM/yyyy');
+  } catch (e) {
+    return '';
+  }
 };
 
 const formatarHoraBrasilia = () => {
@@ -357,6 +446,31 @@ function ModernFinanceiro() {
   const [relatorioTipo, setRelatorioTipo] = useState('fluxo');
   const [relatorioPeriodo, setRelatorioPeriodo] = useState('mes');
 
+  // ==================== FUNÇÕES AUXILIARES DE SEGURANÇA ====================
+  const safeToDate = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    if (value.toDate) return value.toDate();
+    if (value.seconds) return new Date(value.seconds * 1000);
+    if (value instanceof Date) return value;
+    return null;
+  };
+
+  const safeToDateString = (value) => {
+    const date = safeToDate(value);
+    if (!date) return null;
+    return format(date, 'yyyy-MM-dd');
+  };
+
+  const safeToDisplayDate = (value) => {
+    const date = safeToDate(value);
+    if (!date) return '';
+    return format(date, 'dd/MM/yyyy');
+  };
+
   // ==================== FUNÇÕES PRINCIPAIS ====================
   useEffect(() => {
     carregarUsuario();
@@ -429,9 +543,86 @@ function ModernFinanceiro() {
         firebaseService.getAll('conciliacoes').catch(() => []),
       ]);
       
-      setTransacoesManuais(transacoesManuaisData || []);
-      setComissoes(comissoesData || []);
-      setCompras(comprasData || []);
+      // Processar transações manuais
+      const transacoesProcessadas = (transacoesManuaisData || []).map(t => ({
+        ...t,
+        id: toString(t.id),
+        tipo: toString(t.tipo, 'receita'),
+        descricao: toString(t.descricao),
+        valor: toNumber(t.valor),
+        data: safeToDateString(t.data) || safeToDateString(t.createdAt) || new Date().toISOString().split('T')[0],
+        dataVencimento: safeToDateString(t.dataVencimento),
+        dataPagamento: toISOString(t.dataPagamento),
+        categoria: toString(t.categoria),
+        formaPagamento: toString(t.formaPagamento, 'dinheiro'),
+        status: toString(t.status, 'pendente'),
+        clienteId: toString(t.clienteId),
+        fornecedorId: toString(t.fornecedorId),
+        profissionalId: toString(t.profissionalId),
+        atendimentoId: toString(t.atendimentoId),
+        percentual: toNumber(t.percentual),
+        observacoes: toString(t.observacoes),
+        parcelas: toNumber(t.parcelas, 1),
+        recorrente: !!t.recorrente,
+        frequencia: toString(t.frequencia, 'mensal'),
+        anexos: t.anexos || [],
+        tags: t.tags || [],
+        itens: t.itens || [],
+        numeroPedido: toString(t.numeroPedido),
+        prazoEntrega: toString(t.prazoEntrega),
+        origem: toString(t.origem, 'manual'),
+        origemId: toString(t.origemId),
+        arquivado: !!t.arquivado,
+        createdAt: toISOString(t.createdAt),
+        updatedAt: toISOString(t.updatedAt),
+      }));
+      
+      setTransacoesManuais(transacoesProcessadas);
+      
+      // Processar comissões
+      const comissoesProcessadas = (comissoesData || []).map(c => ({
+        ...c,
+        id: toString(c.id),
+        atendimentoId: toString(c.atendimentoId),
+        agendamentoId: toString(c.agendamentoId),
+        profissionalId: toString(c.profissionalId),
+        profissionalNome: toString(c.profissionalNome),
+        servicoId: toString(c.servicoId),
+        servicoNome: toString(c.servicoNome),
+        valor: toNumber(c.valor),
+        valorAtendimento: toNumber(c.valorAtendimento),
+        percentual: toNumber(c.percentual),
+        status: toString(c.status, 'pendente'),
+        data: safeToDateString(c.data) || safeToDateString(c.dataRegistro) || safeToDateString(c.createdAt),
+        dataRegistro: toISOString(c.dataRegistro) || toISOString(c.createdAt),
+        createdAt: toISOString(c.createdAt),
+        updatedAt: toISOString(c.updatedAt),
+      }));
+      
+      setComissoes(comissoesProcessadas);
+      
+      // Processar compras
+      const comprasProcessadas = (comprasData || []).map(c => ({
+        ...c,
+        id: toString(c.id),
+        fornecedorId: toString(c.fornecedorId),
+        numeroPedido: toString(c.numeroPedido),
+        valorTotal: toNumber(c.valorTotal),
+        status: toString(c.status, 'pendente'),
+        dataCompra: safeToDateString(c.dataCompra) || safeToDateString(c.createdAt),
+        dataPagamento: toISOString(c.dataPagamento),
+        formaPagamento: toString(c.formaPagamento, 'pix'),
+        prazoEntrega: toString(c.prazoEntrega),
+        itens: c.itens || [],
+        observacoes: toString(c.observacoes),
+        anexos: c.anexos || [],
+        createdAt: toISOString(c.createdAt),
+        updatedAt: toISOString(c.updatedAt),
+      }));
+      
+      setCompras(comprasProcessadas);
+      
+      // Processar outros dados
       setClientes(clientesData || []);
       setFornecedores(fornecedoresData || []);
       setProfissionais(profissionaisData || []);
@@ -441,21 +632,39 @@ function ModernFinanceiro() {
       
       // Processar caixa
       if (caixaData && caixaData.length > 0) {
-        const caixaAtual = caixaData.sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0];
-        setCaixa(caixaAtual);
+        const caixaAtual = [...caixaData].sort((a, b) => {
+          const dateA = safeToDate(a.dataAbertura) || new Date(0);
+          const dateB = safeToDate(b.dataAbertura) || new Date(0);
+          return dateB - dateA;
+        })[0];
+        
+        setCaixa({
+          ...caixaAtual,
+          id: toString(caixaAtual.id),
+          saldoAtual: toNumber(caixaAtual.saldoAtual),
+          saldoInicial: toNumber(caixaAtual.saldoInicial),
+          status: toString(caixaAtual.status, 'fechado'),
+          dataAbertura: toISOString(caixaAtual.dataAbertura),
+          dataFechamento: toISOString(caixaAtual.dataFechamento),
+          movimentacoes: (caixaAtual.movimentacoes || []).map(m => ({
+            ...m,
+            valor: toNumber(m.valor),
+            data: toISOString(m.data),
+          })),
+        });
       } else {
         setCaixa({ saldoAtual: 0, status: 'fechado', movimentacoes: [] });
       }
       
       // Combinar transações
-      const comissoesComoTransacoes = (comissoesData || []).map(c => ({
+      const comissoesComoTransacoes = comissoesProcessadas.map(c => ({
         id: `comissao_${c.id}`,
         tipo: 'despesa',
         origem: 'comissao',
         origemId: c.id,
         descricao: `Comissão - ${c.servicoNome || 'Serviço'} - ${c.profissionalNome || ''}`,
-        valor: c.valor || 0,
-        data: c.dataRegistro ? c.dataRegistro.split('T')[0] : c.data,
+        valor: c.valor,
+        data: c.data,
         dataVencimento: c.data,
         categoria: 'Comissões',
         formaPagamento: 'credito_loja',
@@ -471,37 +680,44 @@ function ModernFinanceiro() {
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         anexos: c.anexos || [],
+        arquivado: false,
       }));
 
-      const comprasComoTransacoes = (comprasData || []).map(c => ({
+      const comprasComoTransacoes = comprasProcessadas.map(c => ({
         id: `compra_${c.id}`,
         tipo: 'despesa',
         origem: 'compra',
         origemId: c.id,
         descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
-        valor: c.valorTotal || 0,
+        valor: c.valorTotal,
         data: c.dataCompra,
         dataVencimento: c.dataCompra,
         categoria: 'Compras',
-        formaPagamento: c.formaPagamento || 'pix',
+        formaPagamento: c.formaPagamento,
         status: c.status === 'pago' ? 'pago' : (c.status === 'cancelada' ? 'cancelado' : 'pendente'),
         fornecedorId: c.fornecedorId,
         numeroPedido: c.numeroPedido,
         prazoEntrega: c.prazoEntrega,
-        itens: c.itens || [],
+        itens: c.itens,
         observacoes: c.observacoes,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         anexos: c.anexos || [],
+        arquivado: false,
       }));
 
       const todasTransacoes = [
-        ...(transacoesManuaisData || []),
+        ...transacoesProcessadas,
         ...comissoesComoTransacoes,
         ...comprasComoTransacoes,
       ];
       
-      todasTransacoes.sort((a, b) => new Date(b.data) - new Date(a.data));
+      todasTransacoes.sort((a, b) => {
+        const dateA = a.data ? new Date(a.data) : new Date(0);
+        const dateB = b.data ? new Date(b.data) : new Date(0);
+        return dateB - dateA;
+      });
+      
       setTransacoesCombinadas(todasTransacoes);
       
       // Extrair categorias
@@ -511,7 +727,6 @@ function ModernFinanceiro() {
       // Gerar alertas de vencimento
       gerarAlertasVencimento(todasTransacoes);
       
-      // Log de auditoria
       await registrarAuditoria(
         'carregar_financeiro',
         'listagem',
@@ -539,7 +754,6 @@ function ModernFinanceiro() {
 
       await registrarAuditoria('pagar_comissao', comissaoId, 'Comissão paga');
 
-      // Atualizar caixa
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const comissao = comissoes.find(c => c.id === comissaoId);
         if (comissao) {
@@ -746,7 +960,9 @@ function ModernFinanceiro() {
     transacoes.forEach(t => {
       if (t.status !== 'pendente') return;
       
-      const vencimento = new Date(t.dataVencimento || t.data);
+      const vencimento = t.dataVencimento ? new Date(t.dataVencimento) : new Date(t.data);
+      if (isNaN(vencimento.getTime())) return;
+      
       const diasAtraso = differenceInDays(hoje, vencimento);
       const diasParaVencer = differenceInDays(vencimento, hoje);
       
@@ -1270,7 +1486,7 @@ function ModernFinanceiro() {
 
     const atrasados = transacoesPeriodo.filter(t => {
       if (t.status !== 'pendente') return false;
-      const vencimento = new Date(t.dataVencimento || t.data);
+      const vencimento = t.dataVencimento ? new Date(t.dataVencimento) : new Date(t.data);
       return vencimento < new Date();
     }).length;
 
@@ -1555,7 +1771,7 @@ function ModernFinanceiro() {
               }
             >
               <strong>Caixa Aberto</strong> - Saldo atual: {formatarMoeda(caixa.saldoAtual)} | 
-              Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
+              Abertura: {safeToDisplayDate(caixa.dataAbertura)} {caixa.dataAbertura ? new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5) : ''}
             </Alert>
           </Zoom>
         )}
@@ -1701,7 +1917,7 @@ function ModernFinanceiro() {
               <Grid item xs={12} md={3}>
                 <DatePicker
                   label="Data Início"
-                  value={new Date(dataInicio)}
+                  value={dataInicio ? new Date(dataInicio) : null}
                   onChange={(newValue) => {
                     if (newValue) {
                       setDataInicio(formatarDataBrasilia(newValue));
@@ -1715,7 +1931,7 @@ function ModernFinanceiro() {
               <Grid item xs={12} md={3}>
                 <DatePicker
                   label="Data Fim"
-                  value={new Date(dataFim)}
+                  value={dataFim ? new Date(dataFim) : null}
                   onChange={(newValue) => {
                     if (newValue) {
                       setDataFim(formatarDataBrasilia(newValue));
@@ -1994,7 +2210,7 @@ function ModernFinanceiro() {
                             opacity: transacao.arquivado ? 0.7 : 1,
                           }}
                         >
-                          <TableCell>{formatarDataExibicao(transacao.data)}</TableCell>
+                          <TableCell>{safeToDisplayDate(transacao.data)}</TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Avatar sx={{ bgcolor: corTipo, width: 32, height: 32 }}>{iconeTipo}</Avatar>
@@ -2033,7 +2249,7 @@ function ModernFinanceiro() {
                           <TableCell>
                             {transacao.dataVencimento ? (
                               <Box>
-                                <Typography variant="body2">{formatarDataExibicao(transacao.dataVencimento)}</Typography>
+                                <Typography variant="body2">{safeToDisplayDate(transacao.dataVencimento)}</Typography>
                                 {transacao.status === 'pendente' && new Date(transacao.dataVencimento) < new Date() && (
                                   <Chip label="Vencida" size="small" color="error" sx={{ height: 20, fontSize: '0.7rem' }} />
                                 )}
@@ -2061,7 +2277,6 @@ function ModernFinanceiro() {
                               input.type = 'file';
                               input.onchange = (e) => {
                                 const file = e.target.files[0];
-                                // Handle file upload
                                 mostrarSnackbar('Anexo enviado com sucesso!');
                               };
                               input.click();
@@ -2295,7 +2510,7 @@ function ModernFinanceiro() {
                   </ListItem>
                   <ListItem>
                     <ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><CalendarIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Aberto em" secondary={new Date(caixa.dataAbertura).toLocaleString('pt-BR')} />
+                    <ListItemText primary="Aberto em" secondary={safeToDisplayDate(caixa.dataAbertura) + ' ' + (caixa.dataAbertura ? new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5) : '')} />
                   </ListItem>
                 </List>
               </Box>
@@ -2321,8 +2536,8 @@ function ModernFinanceiro() {
               <List>
                 <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9c27b0' }}><ReceiptIcon /></Avatar></ListItemAvatar><ListItemText primary="Descrição" secondary={transacaoSelecionada.descricao} /></ListItem>
                 <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' }}>{transacaoSelecionada.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}</Avatar></ListItemAvatar><ListItemText primary="Valor" secondary={formatarMoeda(transacaoSelecionada.valor)} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={formatarDataExibicao(transacaoSelecionada.data)} /></ListItem>
-                {transacaoSelecionada.dataVencimento && <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={formatarDataExibicao(transacaoSelecionada.dataVencimento)} /></ListItem>}
+                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={safeToDisplayDate(transacaoSelecionada.data)} /></ListItem>
+                {transacaoSelecionada.dataVencimento && <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={safeToDisplayDate(transacaoSelecionada.dataVencimento)} /></ListItem>}
                 <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem>
                 <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem>
                 <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem>
@@ -2384,7 +2599,7 @@ function ModernFinanceiro() {
               alertasVencimento.map((alerta, index) => (
                 <Alert key={index} severity={alerta.severidade} sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={() => handleMarcarComoPago(alerta)}>Pagar</Button>}>
                   <strong>{alerta.descricao}</strong> - {alerta.mensagem}<br />
-                  <small>Valor: {formatarMoeda(alerta.valor)} | Vencimento: {formatarDataExibicao(alerta.dataVencimento)}</small>
+                  <small>Valor: {formatarMoeda(alerta.valor)} | Vencimento: {safeToDisplayDate(alerta.dataVencimento)}</small>
                 </Alert>
               ))
             )}
@@ -2453,7 +2668,7 @@ function ModernFinanceiro() {
             </Button>
             {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom>Últimas Conciliações</Typography>}
             {conciliacoes.slice(0, 5).map((conc, idx) => (
-              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação realizada em {formatarDataExibicao(conc.dataConciliacao)}</Alert>
+              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação realizada em {safeToDisplayDate(conc.dataConciliacao)}</Alert>
             ))}
           </Box>
         </DialogContent>
@@ -2467,7 +2682,7 @@ function ModernFinanceiro() {
           <Box sx={{ mt: 2 }}>
             <Button variant="contained" startIcon={<AddIcon />} fullWidth sx={{ mb: 3 }} onClick={handleSalvarOrcamento}>Criar Novo Orçamento</Button>
             {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc, idx) => (
-              <Card key={idx} sx={{ mb: 2 }}><CardContent><Typography variant="subtitle1">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {formatarDataExibicao(orc.criadoEm)}</Typography><Button size="small">Editar</Button><Button size="small">Visualizar</Button></CardContent></Card>
+              <Card key={idx} sx={{ mb: 2 }}><CardContent><Typography variant="subtitle1">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {safeToDisplayDate(orc.criadoEm)}</Typography><Button size="small">Editar</Button><Button size="small">Visualizar</Button></CardContent></Card>
             ))}
           </Box>
         </DialogContent>
@@ -2480,7 +2695,7 @@ function ModernFinanceiro() {
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" gutterBottom>Perfil atual: <strong>{perfisAcesso[perfilAtual]?.label}</strong></Typography>
-            <FormControl fullWidth sx={{ mt: 2 }}><InputLabel>Alterar Perfil</InputLabel><Select value={perfilAtual} label="Alterar Perfil" onChange={(e) => handleTrocarPerfil(e.target.value)}>
+            <FormControl fullWidth sx={{ mt: 2 }}><InputLabel>Alterar Perfil</InputLabel><Select value={perfilAtual} label="Alterar Perfil" onChange={(e) => setPerfilAtual(e.target.value)}>
               {Object.entries(perfisAcesso).map(([key, value]) => (<MenuItem key={key} value={key}>{value.label}</MenuItem>))}
             </Select></FormControl>
             <Alert severity="info" sx={{ mt: 3 }}><strong>Permissões do perfil atual:</strong><ul>{perfisAcesso[perfilAtual]?.permissoes.map(perm => (<li key={perm}>{perm}</li>))}</ul></Alert>
