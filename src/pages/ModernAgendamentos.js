@@ -588,10 +588,6 @@ function ModernAgendamentos() {
       return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
-
-  const removerMascaraCPF = useCallback((cpf) => {
-    return cpf ? cpf.replace(/\D/g, '') : '';
-  }, []);
   
   const buscarClientesOtimizado = useCallback(() => {
     if (!clientesMemo.length) return [];
