@@ -125,7 +125,10 @@ const getFirstDayOfMonth = (date) => {
 };
 
 const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
+  if (!date) return '';
+  const dataNormalizada = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(dataNormalizada.getTime())) return '';
+  return dataNormalizada.toISOString().split('T')[0];
 };
 
 // ✅ ADICIONE ESTA FUNÇÃO AQUI
@@ -616,7 +619,7 @@ function ModernAgendamentos() {
       ...cliente,
       nomeBusca: (cliente.nome || '').toLowerCase(),
       cpfBusca: removerMascaraCPF(cliente.cpf || ''),
-      dataNascimentoBusca: cliente.dataNascimento ? formatDate(new Date(cliente.dataNascimento)) : ''
+      dataNascimentoBusca: formatDate(cliente.dataNascimento)
     }))
   ), [clientesMemo]);
 
@@ -641,6 +644,7 @@ function ModernAgendamentos() {
       case 'dataNascimento': {
         if (!debouncedDataNascimentoDeferred) return [];
         const dataBusca = formatDate(debouncedDataNascimentoDeferred);
+        if (!dataBusca) return [];
         return clientesIndexados
           .filter(cliente => cliente.dataNascimentoBusca === dataBusca)
           .slice(0, 20);
