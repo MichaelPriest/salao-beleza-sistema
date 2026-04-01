@@ -436,19 +436,32 @@ function ModernAgendamentos() {
   const profissionaisMemo = useMemo(() => profissionais || [], [profissionais]);
   const agendamentosMemo = useMemo(() => agendamentos || [], [agendamentos]);
   const atendimentosMemo = useMemo(() => atendimentos || [], [atendimentos]);
+  const clientesMap = useMemo(() => {
+    const map = new Map();
+    clientesMemo.forEach((cliente) => {
+      if (cliente.id) map.set(cliente.id, cliente);
+      if (cliente.uid) map.set(cliente.uid, cliente);
+      if (cliente.googleUid) map.set(cliente.googleUid, cliente);
+    });
+    return map;
+  }, [clientesMemo]);
+  const profissionaisMap = useMemo(() => {
+    const map = new Map();
+    profissionaisMemo.forEach((profissional) => {
+      if (profissional.id) map.set(profissional.id, profissional);
+      if (profissional.uid) map.set(profissional.uid, profissional);
+    });
+    return map;
+  }, [profissionaisMemo]);
   
   // ============================================
   // FUNÇÕES DE UTILIDADE
   // ============================================
 
   const getClienteData = (clienteId) => {
-    if (!clienteId || !clientes) return null;
+    if (!clienteId) return null;
     
-    const cliente = clientes.find(c => 
-      c.id === clienteId || 
-      c.uid === clienteId || 
-      c.googleUid === clienteId
-    );
+    const cliente = clientesMap.get(clienteId);
     
     if (!cliente) return null;
     
@@ -473,12 +486,9 @@ function ModernAgendamentos() {
   };
 
   const getProfissionalData = (profissionalId) => {
-    if (!profissionalId || !profissionais) return null;
+    if (!profissionalId) return null;
     
-    const profissional = profissionais.find(p => 
-      p.id === profissionalId || 
-      p.uid === profissionalId
-    );
+    const profissional = profissionaisMap.get(profissionalId);
     
     if (!profissional) return null;
     
@@ -996,9 +1006,15 @@ function ModernAgendamentos() {
     setFormData({ ...formData, valorTotal: 0, servicos: [] });
   };
 
-  const getSelectedClientData = () => {
-    return getClienteData(formData.clienteId);
-  };
+  const selectedClientData = useMemo(
+    () => getClienteData(formData.clienteId),
+    [formData.clienteId, clientesMap]
+  );
+
+  const profissionalSelecionadoForm = useMemo(
+    () => (formData.profissionalId ? profissionaisMap.get(formData.profissionalId) || null : null),
+    [formData.profissionalId, profissionaisMap]
+  );
 
   const servicosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !servicosMemo.length) return [];
@@ -3674,28 +3690,28 @@ const handleExportPDF = async () => {
                       <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Avatar 
-                            src={getSelectedClientData()?.foto}
+                            src={selectedClientData?.foto}
                             sx={{ 
                               bgcolor: '#9c27b0', 
                               width: 48, 
                               height: 48 
                             }}
                           >
-                            {!getSelectedClientData()?.foto && getSelectedClientData()?.nome?.charAt(0)}
+                            {!selectedClientData?.foto && selectedClientData?.nome?.charAt(0)}
                           </Avatar>
                           <Box sx={{ flex: 1 }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {getSelectedClientData()?.nome}
+                              {selectedClientData?.nome}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                              {getSelectedClientData()?.cpf && (
+                              {selectedClientData?.cpf && (
                                 <Typography variant="caption">
-                                  CPF: {formatarCPF(getSelectedClientData()?.cpf)}
+                                  CPF: {formatarCPF(selectedClientData?.cpf)}
                                 </Typography>
                               )}
-                              {getSelectedClientData()?.telefone && (
+                              {selectedClientData?.telefone && (
                                 <Typography variant="caption">
-                                  📞 {formatarTelefone(getSelectedClientData()?.telefone)}
+                                  📞 {formatarTelefone(selectedClientData?.telefone)}
                                 </Typography>
                               )}
                             </Box>
@@ -3774,7 +3790,7 @@ const handleExportPDF = async () => {
                         options={profissionaisFiltradosMemo}
                         filterOptions={(options) => options}
                         getOptionLabel={(option) => option.nome || ''}
-                        value={profissionais?.find(p => p.id === formData.profissionalId) || null}
+                        value={profissionalSelecionadoForm}
                         onChange={(e, newValue) => {
                           setFormData({ ...formData, profissionalId: newValue?.id || '' });
                         }}
