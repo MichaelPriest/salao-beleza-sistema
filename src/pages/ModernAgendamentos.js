@@ -400,6 +400,9 @@ function ModernAgendamentos() {
   const [buscaServico, setBuscaServico] = useState('');
   const buscaProfissionalDeferred = useDeferredValue(buscaProfissional);
   const buscaServicoDeferred = useDeferredValue(buscaServico);
+  const searchInputTimersRef = useRef({});
+  const searchNomeInputRef = useRef(null);
+  const searchCpfInputRef = useRef(null);
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -598,6 +601,15 @@ function ModernAgendamentos() {
       return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
+
+  const agendarAtualizacaoBusca = useCallback((chave, valor, setter, delay = 180) => {
+    if (searchInputTimersRef.current[chave]) {
+      clearTimeout(searchInputTimersRef.current[chave]);
+    }
+    searchInputTimersRef.current[chave] = setTimeout(() => {
+      setter(valor);
+    }, delay);
+  }, []);
   
   const clientesIndexados = useMemo(() => (
     clientesMemo.map((cliente) => ({
@@ -1337,6 +1349,11 @@ function ModernAgendamentos() {
 
   const handleClearClient = () => {
     setFormData({ ...formData, clienteId: '' });
+    setSearchClientTerm('');
+    setCpfInput('');
+    setDataNascimentoInput(null);
+    if (searchNomeInputRef.current) searchNomeInputRef.current.value = '';
+    if (searchCpfInputRef.current) searchCpfInputRef.current.value = '';
   };
 
   const handleSave = async (event) => {
@@ -2534,6 +2551,12 @@ const handleExportPDF = async () => {
     const timer = setTimeout(() => setDebouncedDataNascimento(dataNascimentoInput), 300);
     return () => clearTimeout(timer);
   }, [dataNascimentoInput]);
+
+  useEffect(() => () => {
+    Object.values(searchInputTimersRef.current).forEach((timerId) => {
+      if (timerId) clearTimeout(timerId);
+    });
+  }, []);
   
   // ============================================
   // RENDER
@@ -3562,8 +3585,9 @@ const handleExportPDF = async () => {
                                 fullWidth
                                 size="small"
                                 placeholder="Digite o nome do cliente..."
-                                value={searchClientTerm}
-                                onChange={(e) => setSearchClientTerm(e.target.value)}
+                                inputRef={searchNomeInputRef}
+                                defaultValue={searchClientTerm}
+                                onChange={(e) => agendarAtualizacaoBusca('cliente_nome', e.target.value, setSearchClientTerm)}
                                 InputProps={{
                                   startAdornment: (
                                     <InputAdornment position="start">
@@ -3572,7 +3596,10 @@ const handleExportPDF = async () => {
                                   ),
                                   endAdornment: searchClientTerm && (
                                     <InputAdornment position="end">
-                                      <IconButton size="small" onClick={() => setSearchClientTerm('')}>
+                                      <IconButton size="small" onClick={() => {
+                                        if (searchNomeInputRef.current) searchNomeInputRef.current.value = '';
+                                        setSearchClientTerm('');
+                                      }}>
                                         <ClearIcon fontSize="small" />
                                       </IconButton>
                                     </InputAdornment>
@@ -3587,8 +3614,9 @@ const handleExportPDF = async () => {
                                 fullWidth
                                 size="small"
                                 placeholder="Digite o CPF (apenas números)"
-                                value={cpfInput}
-                                onChange={(e) => setCpfInput(e.target.value)}
+                                inputRef={searchCpfInputRef}
+                                defaultValue={cpfInput}
+                                onChange={(e) => agendarAtualizacaoBusca('cliente_cpf', e.target.value, setCpfInput)}
                                 InputProps={{
                                   startAdornment: (
                                     <InputAdornment position="start">
@@ -3794,8 +3822,7 @@ const handleExportPDF = async () => {
                         onChange={(e, newValue) => {
                           setFormData({ ...formData, profissionalId: newValue?.id || '' });
                         }}
-                        inputValue={buscaProfissional}
-                        onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
+                        onInputChange={(e, newValue) => agendarAtualizacaoBusca('profissionais', newValue, setBuscaProfissional)}
                         renderInput={(params) => (
                           <TextField
                             {...params}
@@ -3826,8 +3853,7 @@ const handleExportPDF = async () => {
                         getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
                         value={servicos?.find(s => s.id === servicoAtual) || null}
                         onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
-                        inputValue={buscaServico}
-                        onInputChange={(e, newValue) => setBuscaServico(newValue)}
+                        onInputChange={(e, newValue) => agendarAtualizacaoBusca('servicos', newValue, setBuscaServico)}
                         disabled={!formData.profissionalId}
                         renderInput={(params) => (
                           <TextField
