@@ -1040,16 +1040,20 @@ function ModernAgendamentos() {
   }, [formData.profissionalId, servicosMemo, profissionaisMemo]);
 
   const servicosFiltradosMemo = useMemo(() => {
+    const termoServico = buscaServicoDeferred.trim().toLowerCase();
+    if (termoServico.length < 2) return [];
     if (!servicosDisponiveisMemo.length) return [];
     return servicosDisponiveisMemo.filter(servico => 
-      servico.nome?.toLowerCase().includes(buscaServicoDeferred.toLowerCase())
+      servico.nome?.toLowerCase().includes(termoServico)
     );
   }, [servicosDisponiveisMemo, buscaServicoDeferred]);
   
   const profissionaisFiltradosMemo = useMemo(() => {
+    const termoProfissional = buscaProfissionalDeferred.trim().toLowerCase();
+    if (termoProfissional.length < 2) return [];
     if (!profissionaisMemo.length) return [];
     return profissionaisMemo.filter(prof => 
-      prof.nome?.toLowerCase().includes(buscaProfissionalDeferred.toLowerCase())
+      prof.nome?.toLowerCase().includes(termoProfissional)
     );
   }, [profissionaisMemo, buscaProfissionalDeferred]);
   
@@ -3820,6 +3824,7 @@ const handleExportPDF = async () => {
                       <Autocomplete
                         options={profissionaisFiltradosMemo}
                         filterOptions={(options) => options}
+                        noOptionsText={buscaProfissionalDeferred.trim().length < 2 ? 'Digite ao menos 2 letras' : 'Nenhum profissional encontrado'}
                         getOptionLabel={(option) => option.nome || ''}
                         value={profissionalSelecionadoForm}
                         onChange={(e, newValue) => {
@@ -3853,6 +3858,7 @@ const handleExportPDF = async () => {
                       <Autocomplete
                         options={servicosFiltradosMemo}
                         filterOptions={(options) => options}
+                        noOptionsText={buscaServicoDeferred.trim().length < 2 ? 'Digite ao menos 2 letras' : 'Nenhum serviço encontrado'}
                         getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
                         value={servicos?.find(s => s.id === servicoAtual) || null}
                         onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
