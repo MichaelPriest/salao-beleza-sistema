@@ -1,5 +1,5 @@
 // src/pages/ModernAgendamentos.js
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -398,6 +398,8 @@ function ModernAgendamentos() {
   // Estados para pesquisa de profissionais e serviços nos selects
   const [buscaProfissional, setBuscaProfissional] = useState('');
   const [buscaServico, setBuscaServico] = useState('');
+  const buscaProfissionalDeferred = useDeferredValue(buscaProfissional);
+  const buscaServicoDeferred = useDeferredValue(buscaServico);
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -424,6 +426,9 @@ function ModernAgendamentos() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [debouncedCpfInput, setDebouncedCpfInput] = useState('');
   const [debouncedDataNascimento, setDebouncedDataNascimento] = useState(null);
+  const debouncedSearchTermDeferred = useDeferredValue(debouncedSearchTerm);
+  const debouncedCpfInputDeferred = useDeferredValue(debouncedCpfInput);
+  const debouncedDataNascimentoDeferred = useDeferredValue(debouncedDataNascimento);
   
   // Memoização de dados
   const clientesMemo = useMemo(() => clientes || [], [clientes]);
@@ -598,22 +603,22 @@ function ModernAgendamentos() {
 
     switch (searchClientType) {
       case 'nome': {
-        const termo = debouncedSearchTerm.trim().toLowerCase();
+        const termo = debouncedSearchTermDeferred.trim().toLowerCase();
         if (termo.length < 2) return [];
         return clientesIndexados
           .filter(cliente => cliente.nomeBusca.includes(termo))
           .slice(0, 20);
       }
       case 'cpf': {
-        const cpfBusca = removerMascaraCPF(debouncedCpfInput);
+        const cpfBusca = removerMascaraCPF(debouncedCpfInputDeferred);
         if (cpfBusca.length < 3) return [];
         return clientesIndexados
           .filter(cliente => cliente.cpfBusca.includes(cpfBusca))
           .slice(0, 20);
       }
       case 'dataNascimento': {
-        if (!debouncedDataNascimento) return [];
-        const dataBusca = formatDate(debouncedDataNascimento);
+        if (!debouncedDataNascimentoDeferred) return [];
+        const dataBusca = formatDate(debouncedDataNascimentoDeferred);
         return clientesIndexados
           .filter(cliente => cliente.dataNascimentoBusca === dataBusca)
           .slice(0, 20);
@@ -625,9 +630,9 @@ function ModernAgendamentos() {
     showClientSearch,
     clientesIndexados,
     searchClientType,
-    debouncedSearchTerm,
-    debouncedCpfInput,
-    debouncedDataNascimento
+    debouncedSearchTermDeferred,
+    debouncedCpfInputDeferred,
+    debouncedDataNascimentoDeferred
   ]);
   
   // ============================================
@@ -830,7 +835,7 @@ function ModernAgendamentos() {
   // FUNÇÕES DE FILTRAGEM DE EVENTOS
   // ============================================
 
-  const filtrarEventosPorUsuario = (eventos) => {
+  const filtrarEventosPorUsuario = useCallback((eventos) => {
     if (!usuario) return eventos;
 
     if (cargo === 'cliente' && usuario.clienteId) {
@@ -842,18 +847,18 @@ function ModernAgendamentos() {
     }
 
     return eventos;
-  };
+  }, [usuario, cargo]);
 
-  // Combinar agendamentos e atendimentos
-  const todosEventos = filtrarEventosPorUsuario([
-    ...(agendamentos || []).map(apt => ({
+  // Combinar agendamentos e atendimentos (memoizado para evitar recálculo ao digitar em campos)
+  const todosEventos = useMemo(() => filtrarEventosPorUsuario([
+    ...agendamentosMemo.map(apt => ({
       ...apt,
       tipo: 'agendamento',
       icone: <ScheduleIcon />,
       dataObj: apt.data,
       horarioObj: apt.horario
     })),
-    ...(atendimentos || []).map(att => ({
+    ...atendimentosMemo.map(att => ({
       ...att,
       tipo: 'atendimento',
       icone: <TimerIcon />,
@@ -861,66 +866,78 @@ function ModernAgendamentos() {
       dataObj: att.data,
       horarioObj: att.horaInicio
     }))
-  ]);
+  ]), [agendamentosMemo, atendimentosMemo, filtrarEventosPorUsuario]);
 
-  const filteredEvents = todosEventos.filter(event => {
+  const filteredEvents = useMemo(() => todosEventos.filter(event => {
     const professionalMatch = selectedProfessional === 'all' || event.profissionalId === selectedProfessional;
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
     
-    if (cargo === 'profissional') {
-      return statusMatch && tipoMatch;
-    }
-    
-    if (cargo === 'cliente') {
+    if (cargo === 'profissional' || cargo === 'cliente') {
       return statusMatch && tipoMatch;
     }
     
     return professionalMatch && statusMatch && tipoMatch;
-  });
+  }), [todosEventos, selectedProfessional, selectedStatus, showAtendimentos, cargo]);
 
-  const dayEvents = filteredEvents.filter(event => event.data === selectedDate);
-  const atendimentosEmAndamento = (atendimentos || []).filter(att => att.status === 'em_andamento');
+  const eventosPorData = useMemo(() => filteredEvents.reduce((acc, evento) => {
+    if (!acc[evento.data]) acc[evento.data] = [];
+    acc[evento.data].push(evento);
+    return acc;
+  }, {}), [filteredEvents]);
 
-  const weekDays_list = getWeekDays(currentDate);
-  const weekEvents = weekDays_list.map(day => ({
-    date: formatDate(day),
-    dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
-    events: filteredEvents.filter(event => event.data === formatDate(day))
-  }));
+  const dayEvents = useMemo(() => eventosPorData[selectedDate] || [], [eventosPorData, selectedDate]);
+  const atendimentosEmAndamento = useMemo(
+    () => atendimentosMemo.filter(att => att.status === 'em_andamento'),
+    [atendimentosMemo]
+  );
 
-  const monthDays = getDaysInMonth(currentDate);
-  const firstDay = getFirstDayOfMonth(currentDate);
-  const monthMatrix = [];
-  let dayCounter = 1;
+  const weekDays_list = useMemo(() => getWeekDays(currentDate), [currentDate]);
+  const weekEvents = useMemo(() => weekDays_list.map(day => {
+    const date = formatDate(day);
+    return {
+      date,
+      dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
+      events: eventosPorData[date] || []
+    };
+  }), [weekDays_list, eventosPorData]);
 
-  for (let i = 0; i < 6; i++) {
-    const week = [];
-    for (let j = 0; j < 7; j++) {
-      if (i === 0 && j < firstDay - 1) {
-        week.push(null);
-      } else if (dayCounter <= monthDays) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
-        const dateStr = formatDate(date);
-        const dayEvents = filteredEvents.filter(event => event.data === dateStr);
-        week.push({
-          day: dayCounter,
-          date: dateStr,
-          events: dayEvents,
-          count: dayEvents.length,
-          atendimentos: dayEvents.filter(e => e.tipo === 'atendimento').length,
-          agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
-        });
-        dayCounter++;
-      } else {
-        week.push(null);
+  const monthMatrix = useMemo(() => {
+    const monthDays = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate);
+    const matrix = [];
+    let dayCounter = 1;
+
+    for (let i = 0; i < 6; i++) {
+      const week = [];
+      for (let j = 0; j < 7; j++) {
+        if (i === 0 && j < firstDay - 1) {
+          week.push(null);
+        } else if (dayCounter <= monthDays) {
+          const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
+          const dateStr = formatDate(date);
+          const eventosDoDia = eventosPorData[dateStr] || [];
+          week.push({
+            day: dayCounter,
+            date: dateStr,
+            events: eventosDoDia,
+            count: eventosDoDia.length,
+            atendimentos: eventosDoDia.filter(e => e.tipo === 'atendimento').length,
+            agendamentos: eventosDoDia.filter(e => e.tipo === 'agendamento').length,
+          });
+          dayCounter++;
+        } else {
+          week.push(null);
+        }
       }
+      matrix.push(week);
+      if (dayCounter > monthDays) break;
     }
-    monthMatrix.push(week);
-    if (dayCounter > monthDays) break;
-  }
 
-  const stats = {
+    return matrix;
+  }, [currentDate, eventosPorData]);
+
+  const stats = useMemo(() => ({
     total: dayEvents.length,
     agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
     atendimentos: dayEvents.filter(e => e.tipo === 'atendimento').length,
@@ -929,7 +946,7 @@ function ModernAgendamentos() {
     em_andamento: dayEvents.filter(e => e.status === 'em_andamento').length,
     cancelados: dayEvents.filter(e => e.status === 'cancelado').length,
     finalizados: dayEvents.filter(e => e.status === 'finalizado').length,
-  };
+  }), [dayEvents]);
 
   // ============================================
   // FUNÇÕES DE SERVIÇOS
@@ -997,16 +1014,16 @@ function ModernAgendamentos() {
   const servicosFiltradosMemo = useMemo(() => {
     if (!servicosDisponiveisMemo.length) return [];
     return servicosDisponiveisMemo.filter(servico => 
-      servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
+      servico.nome?.toLowerCase().includes(buscaServicoDeferred.toLowerCase())
     );
-  }, [servicosDisponiveisMemo, buscaServico]);
+  }, [servicosDisponiveisMemo, buscaServicoDeferred]);
   
   const profissionaisFiltradosMemo = useMemo(() => {
     if (!profissionaisMemo.length) return [];
     return profissionaisMemo.filter(prof => 
-      prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
+      prof.nome?.toLowerCase().includes(buscaProfissionalDeferred.toLowerCase())
     );
-  }, [profissionaisMemo, buscaProfissional]);
+  }, [profissionaisMemo, buscaProfissionalDeferred]);
   
   const horariosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !formData.data) return [];
@@ -3755,6 +3772,7 @@ const handleExportPDF = async () => {
                     <Grid item xs={12} md={5}>
                       <Autocomplete
                         options={profissionaisFiltradosMemo}
+                        filterOptions={(options) => options}
                         getOptionLabel={(option) => option.nome || ''}
                         value={profissionais?.find(p => p.id === formData.profissionalId) || null}
                         onChange={(e, newValue) => {
@@ -3788,6 +3806,7 @@ const handleExportPDF = async () => {
                     <Grid item xs={12} md={5}>
                       <Autocomplete
                         options={servicosFiltradosMemo}
+                        filterOptions={(options) => options}
                         getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
                         value={servicos?.find(s => s.id === servicoAtual) || null}
                         onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
