@@ -1,5 +1,5 @@
 // src/pages/ModernAgendamentos.js
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -125,7 +125,10 @@ const getFirstDayOfMonth = (date) => {
 };
 
 const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
+  if (!date) return '';
+  const dataNormalizada = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(dataNormalizada.getTime())) return '';
+  return dataNormalizada.toISOString().split('T')[0];
 };
 
 // ✅ ADICIONE ESTA FUNÇÃO AQUI
@@ -387,7 +390,6 @@ function ModernAgendamentos() {
   // Estados para pesquisa de clientes
   const [searchClientTerm, setSearchClientTerm] = useState('');
   const [searchClientType, setSearchClientType] = useState('nome');
-  const [searchClientResults, setSearchClientResults] = useState([]);
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [cpfInput, setCpfInput] = useState('');
   const [dataNascimentoInput, setDataNascimentoInput] = useState(null);
@@ -395,12 +397,15 @@ function ModernAgendamentos() {
   // Estados para múltiplos serviços
   const [servicosSelecionados, setServicosSelecionados] = useState([]);
   const [servicoAtual, setServicoAtual] = useState('');
-  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
-  const [profissionalSelecionado, setProfissionalSelecionado] = useState('');
 
   // Estados para pesquisa de profissionais e serviços nos selects
   const [buscaProfissional, setBuscaProfissional] = useState('');
   const [buscaServico, setBuscaServico] = useState('');
+  const buscaProfissionalDeferred = useDeferredValue(buscaProfissional);
+  const buscaServicoDeferred = useDeferredValue(buscaServico);
+  const searchInputTimersRef = useRef({});
+  const searchNomeInputRef = useRef(null);
+  const searchCpfInputRef = useRef(null);
 
   // Hooks do Firebase
   const { data: agendamentos, loading: loadingAgendamentos, error: errorAgendamentos, adicionar, atualizar, excluir } = useFirebase('agendamentos');
@@ -427,8 +432,9 @@ function ModernAgendamentos() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [debouncedCpfInput, setDebouncedCpfInput] = useState('');
   const [debouncedDataNascimento, setDebouncedDataNascimento] = useState(null);
-  const [clientesCache, setClientesCache] = useState({});
-  const [throttleTimeout, setThrottleTimeout] = useState(null);
+  const debouncedSearchTermDeferred = useDeferredValue(debouncedSearchTerm);
+  const debouncedCpfInputDeferred = useDeferredValue(debouncedCpfInput);
+  const debouncedDataNascimentoDeferred = useDeferredValue(debouncedDataNascimento);
   
   // Memoização de dados
   const clientesMemo = useMemo(() => clientes || [], [clientes]);
@@ -436,19 +442,32 @@ function ModernAgendamentos() {
   const profissionaisMemo = useMemo(() => profissionais || [], [profissionais]);
   const agendamentosMemo = useMemo(() => agendamentos || [], [agendamentos]);
   const atendimentosMemo = useMemo(() => atendimentos || [], [atendimentos]);
+  const clientesMap = useMemo(() => {
+    const map = new Map();
+    clientesMemo.forEach((cliente) => {
+      if (cliente.id) map.set(cliente.id, cliente);
+      if (cliente.uid) map.set(cliente.uid, cliente);
+      if (cliente.googleUid) map.set(cliente.googleUid, cliente);
+    });
+    return map;
+  }, [clientesMemo]);
+  const profissionaisMap = useMemo(() => {
+    const map = new Map();
+    profissionaisMemo.forEach((profissional) => {
+      if (profissional.id) map.set(profissional.id, profissional);
+      if (profissional.uid) map.set(profissional.uid, profissional);
+    });
+    return map;
+  }, [profissionaisMemo]);
   
   // ============================================
   // FUNÇÕES DE UTILIDADE
   // ============================================
 
   const getClienteData = (clienteId) => {
-    if (!clienteId || !clientes) return null;
+    if (!clienteId) return null;
     
-    const cliente = clientes.find(c => 
-      c.id === clienteId || 
-      c.uid === clienteId || 
-      c.googleUid === clienteId
-    );
+    const cliente = clientesMap.get(clienteId);
     
     if (!cliente) return null;
     
@@ -473,12 +492,9 @@ function ModernAgendamentos() {
   };
 
   const getProfissionalData = (profissionalId) => {
-    if (!profissionalId || !profissionais) return null;
+    if (!profissionalId) return null;
     
-    const profissional = profissionais.find(p => 
-      p.id === profissionalId || 
-      p.uid === profissionalId
-    );
+    const profissional = profissionaisMap.get(profissionalId);
     
     if (!profissional) return null;
     
@@ -588,54 +604,62 @@ function ModernAgendamentos() {
       return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     }
   };
-  
-  const buscarClientesOtimizado = useCallback(() => {
-    if (!clientesMemo.length) return [];
-  
-    let resultados = [];
-    const cacheKey = `${searchClientType}_${debouncedSearchTerm}_${debouncedCpfInput}_${debouncedDataNascimento}`;
-    
-    if (clientesCache[cacheKey]) {
-      return clientesCache[cacheKey];
+
+  const agendarAtualizacaoBusca = useCallback((chave, valor, setter, delay = 180) => {
+    if (searchInputTimersRef.current[chave]) {
+      clearTimeout(searchInputTimersRef.current[chave]);
     }
+    searchInputTimersRef.current[chave] = setTimeout(() => {
+      setter(valor);
+    }, delay);
+  }, []);
   
+  const clientesIndexados = useMemo(() => (
+    clientesMemo.map((cliente) => ({
+      ...cliente,
+      nomeBusca: (cliente.nome || '').toLowerCase(),
+      cpfBusca: removerMascaraCPF(cliente.cpf || ''),
+      dataNascimentoBusca: formatDate(cliente.dataNascimento)
+    }))
+  ), [clientesMemo]);
+
+  const searchClientResults = useMemo(() => {
+    if (!showClientSearch || !clientesIndexados.length) return [];
+
     switch (searchClientType) {
-      case 'nome':
-        if (!debouncedSearchTerm || debouncedSearchTerm.length < 2) return [];
-        const searchTermLower = debouncedSearchTerm.toLowerCase();
-        resultados = clientesMemo.filter(cliente => 
-          cliente.nome?.toLowerCase().includes(searchTermLower)
-        );
-        break;
-  
-      case 'cpf':
-        if (!debouncedCpfInput || debouncedCpfInput.length < 3) return [];
-        const cpfBusca = removerMascaraCPF(debouncedCpfInput);
-        resultados = clientesMemo.filter(cliente => {
-          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
-          return cpfCliente.includes(cpfBusca);
-        });
-        break;
-  
-      case 'dataNascimento':
-        if (!debouncedDataNascimento) return [];
-        const dataBusca = formatDate(debouncedDataNascimento);
-        resultados = clientesMemo.filter(cliente => {
-          const dataCliente = cliente.dataNascimento ? 
-            formatDate(new Date(cliente.dataNascimento)) : '';
-          return dataCliente === dataBusca;
-        });
-        break;
-  
+      case 'nome': {
+        const termo = debouncedSearchTermDeferred.trim().toLowerCase();
+        if (termo.length < 2) return [];
+        return clientesIndexados
+          .filter(cliente => cliente.nomeBusca.includes(termo))
+          .slice(0, 20);
+      }
+      case 'cpf': {
+        const cpfBusca = removerMascaraCPF(debouncedCpfInputDeferred);
+        if (cpfBusca.length < 3) return [];
+        return clientesIndexados
+          .filter(cliente => cliente.cpfBusca.includes(cpfBusca))
+          .slice(0, 20);
+      }
+      case 'dataNascimento': {
+        if (!debouncedDataNascimentoDeferred) return [];
+        const dataBusca = formatDate(debouncedDataNascimentoDeferred);
+        if (!dataBusca) return [];
+        return clientesIndexados
+          .filter(cliente => cliente.dataNascimentoBusca === dataBusca)
+          .slice(0, 20);
+      }
       default:
-        break;
+        return [];
     }
-  
-    resultados = resultados.slice(0, 20);
-    setClientesCache(prev => ({ ...prev, [cacheKey]: resultados }));
-    
-    return resultados;
-  }, [clientesMemo, searchClientType, debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, clientesCache, removerMascaraCPF]);
+  }, [
+    showClientSearch,
+    clientesIndexados,
+    searchClientType,
+    debouncedSearchTermDeferred,
+    debouncedCpfInputDeferred,
+    debouncedDataNascimentoDeferred
+  ]);
   
   // ============================================
   // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
@@ -834,53 +858,10 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // FUNÇÕES DE PESQUISA DE CLIENTES
-  // ============================================
-
-  const buscarClientes = () => {
-    if (!clientes) return [];
-
-    let resultados = [];
-
-    switch (searchClientType) {
-      case 'nome':
-        if (!searchClientTerm || searchClientTerm.length < 2) return [];
-        resultados = clientes.filter(cliente => 
-          cliente.nome?.toLowerCase().includes(searchClientTerm.toLowerCase())
-        );
-        break;
-
-      case 'cpf':
-        if (!cpfInput || cpfInput.length < 3) return [];
-        const cpfBusca = removerMascaraCPF(cpfInput);
-        resultados = clientes.filter(cliente => {
-          const cpfCliente = removerMascaraCPF(cliente.cpf || '');
-          return cpfCliente.includes(cpfBusca);
-        });
-        break;
-
-      case 'dataNascimento':
-        if (!dataNascimentoInput) return [];
-        const dataBusca = formatDate(dataNascimentoInput);
-        resultados = clientes.filter(cliente => {
-          const dataCliente = cliente.dataNascimento ? 
-            formatDate(new Date(cliente.dataNascimento)) : '';
-          return dataCliente === dataBusca;
-        });
-        break;
-
-      default:
-        break;
-    }
-
-    return resultados.slice(0, 10);
-  };
-
-  // ============================================
   // FUNÇÕES DE FILTRAGEM DE EVENTOS
   // ============================================
 
-  const filtrarEventosPorUsuario = (eventos) => {
+  const filtrarEventosPorUsuario = useCallback((eventos) => {
     if (!usuario) return eventos;
 
     if (cargo === 'cliente' && usuario.clienteId) {
@@ -892,18 +873,18 @@ function ModernAgendamentos() {
     }
 
     return eventos;
-  };
+  }, [usuario, cargo]);
 
-  // Combinar agendamentos e atendimentos
-  const todosEventos = filtrarEventosPorUsuario([
-    ...(agendamentos || []).map(apt => ({
+  // Combinar agendamentos e atendimentos (memoizado para evitar recálculo ao digitar em campos)
+  const todosEventos = useMemo(() => filtrarEventosPorUsuario([
+    ...agendamentosMemo.map(apt => ({
       ...apt,
       tipo: 'agendamento',
       icone: <ScheduleIcon />,
       dataObj: apt.data,
       horarioObj: apt.horario
     })),
-    ...(atendimentos || []).map(att => ({
+    ...atendimentosMemo.map(att => ({
       ...att,
       tipo: 'atendimento',
       icone: <TimerIcon />,
@@ -911,66 +892,78 @@ function ModernAgendamentos() {
       dataObj: att.data,
       horarioObj: att.horaInicio
     }))
-  ]);
+  ]), [agendamentosMemo, atendimentosMemo, filtrarEventosPorUsuario]);
 
-  const filteredEvents = todosEventos.filter(event => {
+  const filteredEvents = useMemo(() => todosEventos.filter(event => {
     const professionalMatch = selectedProfessional === 'all' || event.profissionalId === selectedProfessional;
     const statusMatch = selectedStatus === 'all' || event.status === selectedStatus;
     const tipoMatch = showAtendimentos ? true : event.tipo === 'agendamento';
     
-    if (cargo === 'profissional') {
-      return statusMatch && tipoMatch;
-    }
-    
-    if (cargo === 'cliente') {
+    if (cargo === 'profissional' || cargo === 'cliente') {
       return statusMatch && tipoMatch;
     }
     
     return professionalMatch && statusMatch && tipoMatch;
-  });
+  }), [todosEventos, selectedProfessional, selectedStatus, showAtendimentos, cargo]);
 
-  const dayEvents = filteredEvents.filter(event => event.data === selectedDate);
-  const atendimentosEmAndamento = (atendimentos || []).filter(att => att.status === 'em_andamento');
+  const eventosPorData = useMemo(() => filteredEvents.reduce((acc, evento) => {
+    if (!acc[evento.data]) acc[evento.data] = [];
+    acc[evento.data].push(evento);
+    return acc;
+  }, {}), [filteredEvents]);
 
-  const weekDays_list = getWeekDays(currentDate);
-  const weekEvents = weekDays_list.map(day => ({
-    date: formatDate(day),
-    dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
-    events: filteredEvents.filter(event => event.data === formatDate(day))
-  }));
+  const dayEvents = useMemo(() => eventosPorData[selectedDate] || [], [eventosPorData, selectedDate]);
+  const atendimentosEmAndamento = useMemo(
+    () => atendimentosMemo.filter(att => att.status === 'em_andamento'),
+    [atendimentosMemo]
+  );
 
-  const monthDays = getDaysInMonth(currentDate);
-  const firstDay = getFirstDayOfMonth(currentDate);
-  const monthMatrix = [];
-  let dayCounter = 1;
+  const weekDays_list = useMemo(() => getWeekDays(currentDate), [currentDate]);
+  const weekEvents = useMemo(() => weekDays_list.map(day => {
+    const date = formatDate(day);
+    return {
+      date,
+      dayName: weekDays[day.getDay() === 0 ? 6 : day.getDay() - 1],
+      events: eventosPorData[date] || []
+    };
+  }), [weekDays_list, eventosPorData]);
 
-  for (let i = 0; i < 6; i++) {
-    const week = [];
-    for (let j = 0; j < 7; j++) {
-      if (i === 0 && j < firstDay - 1) {
-        week.push(null);
-      } else if (dayCounter <= monthDays) {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
-        const dateStr = formatDate(date);
-        const dayEvents = filteredEvents.filter(event => event.data === dateStr);
-        week.push({
-          day: dayCounter,
-          date: dateStr,
-          events: dayEvents,
-          count: dayEvents.length,
-          atendimentos: dayEvents.filter(e => e.tipo === 'atendimento').length,
-          agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
-        });
-        dayCounter++;
-      } else {
-        week.push(null);
+  const monthMatrix = useMemo(() => {
+    const monthDays = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate);
+    const matrix = [];
+    let dayCounter = 1;
+
+    for (let i = 0; i < 6; i++) {
+      const week = [];
+      for (let j = 0; j < 7; j++) {
+        if (i === 0 && j < firstDay - 1) {
+          week.push(null);
+        } else if (dayCounter <= monthDays) {
+          const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayCounter);
+          const dateStr = formatDate(date);
+          const eventosDoDia = eventosPorData[dateStr] || [];
+          week.push({
+            day: dayCounter,
+            date: dateStr,
+            events: eventosDoDia,
+            count: eventosDoDia.length,
+            atendimentos: eventosDoDia.filter(e => e.tipo === 'atendimento').length,
+            agendamentos: eventosDoDia.filter(e => e.tipo === 'agendamento').length,
+          });
+          dayCounter++;
+        } else {
+          week.push(null);
+        }
       }
+      matrix.push(week);
+      if (dayCounter > monthDays) break;
     }
-    monthMatrix.push(week);
-    if (dayCounter > monthDays) break;
-  }
 
-  const stats = {
+    return matrix;
+  }, [currentDate, eventosPorData]);
+
+  const stats = useMemo(() => ({
     total: dayEvents.length,
     agendamentos: dayEvents.filter(e => e.tipo === 'agendamento').length,
     atendimentos: dayEvents.filter(e => e.tipo === 'atendimento').length,
@@ -979,19 +972,11 @@ function ModernAgendamentos() {
     em_andamento: dayEvents.filter(e => e.status === 'em_andamento').length,
     cancelados: dayEvents.filter(e => e.status === 'cancelado').length,
     finalizados: dayEvents.filter(e => e.status === 'finalizado').length,
-  };
+  }), [dayEvents]);
 
   // ============================================
   // FUNÇÕES DE SERVIÇOS
   // ============================================
-
-  const servicosFiltrados = servicosDisponiveis.filter(servico => 
-    servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
-  );
-
-  const profissionaisFiltrados = (profissionais || []).filter(prof => 
-    prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
-  );
 
   const adicionarServico = () => {
     if (!servicoAtual) {
@@ -1037,24 +1022,16 @@ function ModernAgendamentos() {
     setFormData({ ...formData, valorTotal: 0, servicos: [] });
   };
 
-  const getSelectedClientData = () => {
-    return getClienteData(formData.clienteId);
-  };
+  const selectedClientData = useMemo(
+    () => getClienteData(formData.clienteId),
+    [formData.clienteId, clientesMap]
+  );
 
-  const servicosFiltradosMemo = useMemo(() => {
-    if (!servicosMemo.length) return [];
-    return servicosMemo.filter(servico => 
-      servico.nome?.toLowerCase().includes(buscaServico.toLowerCase())
-    );
-  }, [servicosMemo, buscaServico]);
-  
-  const profissionaisFiltradosMemo = useMemo(() => {
-    if (!profissionaisMemo.length) return [];
-    return profissionaisMemo.filter(prof => 
-      prof.nome?.toLowerCase().includes(buscaProfissional.toLowerCase())
-    );
-  }, [profissionaisMemo, buscaProfissional]);
-  
+  const profissionalSelecionadoForm = useMemo(
+    () => (formData.profissionalId ? profissionaisMap.get(formData.profissionalId) || null : null),
+    [formData.profissionalId, profissionaisMap]
+  );
+
   const servicosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !servicosMemo.length) return [];
     const profissional = profissionaisMemo.find(p => p.id === formData.profissionalId);
@@ -1065,6 +1042,24 @@ function ModernAgendamentos() {
     }
     return servicosMemo.filter(s => s.ativo !== false);
   }, [formData.profissionalId, servicosMemo, profissionaisMemo]);
+
+  const servicosFiltradosMemo = useMemo(() => {
+    const termoServico = buscaServicoDeferred.trim().toLowerCase();
+    if (termoServico.length < 2) return [];
+    if (!servicosDisponiveisMemo.length) return [];
+    return servicosDisponiveisMemo.filter(servico => 
+      servico.nome?.toLowerCase().includes(termoServico)
+    );
+  }, [servicosDisponiveisMemo, buscaServicoDeferred]);
+  
+  const profissionaisFiltradosMemo = useMemo(() => {
+    const termoProfissional = buscaProfissionalDeferred.trim().toLowerCase();
+    if (termoProfissional.length < 2) return [];
+    if (!profissionaisMemo.length) return [];
+    return profissionaisMemo.filter(prof => 
+      prof.nome?.toLowerCase().includes(termoProfissional)
+    );
+  }, [profissionaisMemo, buscaProfissionalDeferred]);
   
   const horariosDisponiveisMemo = useMemo(() => {
     if (!formData.profissionalId || !formData.data) return [];
@@ -1362,6 +1357,11 @@ function ModernAgendamentos() {
 
   const handleClearClient = () => {
     setFormData({ ...formData, clienteId: '' });
+    setSearchClientTerm('');
+    setCpfInput('');
+    setDataNascimentoInput(null);
+    if (searchNomeInputRef.current) searchNomeInputRef.current.value = '';
+    if (searchCpfInputRef.current) searchCpfInputRef.current.value = '';
   };
 
   const handleSave = async (event) => {
@@ -2499,23 +2499,6 @@ const handleExportPDF = async () => {
   }, [agendamentos, updateTrigger]);
 
   useEffect(() => {
-    if (formData.profissionalId && servicos) {
-      const profissional = profissionais?.find(p => p.id === formData.profissionalId);
-      
-      if (profissional && profissional.servicosIds) {
-        const servicosDoProfissional = servicos.filter(s => 
-          profissional.servicosIds.includes(s.id) && s.ativo !== false
-        );
-        setServicosDisponiveis(servicosDoProfissional);
-      } else {
-        setServicosDisponiveis(servicos.filter(s => s.ativo !== false));
-      }
-    } else {
-      setServicosDisponiveis([]);
-    }
-  }, [formData.profissionalId, servicos, profissionais, updateTrigger]);
-
-  useEffect(() => {
     if (formData.profissionalId && formData.data) {
       const horarios = timeSlots.filter(time => 
         verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
@@ -2561,13 +2544,6 @@ const handleExportPDF = async () => {
     }
   }, [openDialog, selectedAppointment, selectedDate, usuario, cargo, updateTrigger]);
 
-  useEffect(() => {
-    if (showClientSearch) {
-      const resultados = buscarClientes();
-      setSearchClientResults(resultados);
-    }
-  }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
-
   // Debounce para pesquisa de clientes
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchTerm(searchClientTerm), 300);
@@ -2583,13 +2559,12 @@ const handleExportPDF = async () => {
     const timer = setTimeout(() => setDebouncedDataNascimento(dataNascimentoInput), 300);
     return () => clearTimeout(timer);
   }, [dataNascimentoInput]);
-  
-  useEffect(() => {
-    if (showClientSearch) {
-      const resultados = buscarClientesOtimizado();
-      setSearchClientResults(resultados);
-    }
-  }, [debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, searchClientType, showClientSearch, buscarClientesOtimizado]);
+
+  useEffect(() => () => {
+    Object.values(searchInputTimersRef.current).forEach((timerId) => {
+      if (timerId) clearTimeout(timerId);
+    });
+  }, []);
   
   // ============================================
   // RENDER
@@ -2697,6 +2672,7 @@ const handleExportPDF = async () => {
         </Box>
       </Box>
 
+      <Collapse in={!openDialog} timeout={120} unmountOnExit>
       {/* Atendimentos em Andamento */}
       {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
@@ -3372,6 +3348,8 @@ const handleExportPDF = async () => {
         </Card>
       )}
 
+      </Collapse>
+
       {/* Dialog de Detalhes do Dia */}
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
@@ -3618,8 +3596,9 @@ const handleExportPDF = async () => {
                                 fullWidth
                                 size="small"
                                 placeholder="Digite o nome do cliente..."
-                                value={searchClientTerm}
-                                onChange={(e) => setSearchClientTerm(e.target.value)}
+                                inputRef={searchNomeInputRef}
+                                defaultValue={searchClientTerm}
+                                onChange={(e) => agendarAtualizacaoBusca('cliente_nome', e.target.value, setSearchClientTerm)}
                                 InputProps={{
                                   startAdornment: (
                                     <InputAdornment position="start">
@@ -3628,7 +3607,10 @@ const handleExportPDF = async () => {
                                   ),
                                   endAdornment: searchClientTerm && (
                                     <InputAdornment position="end">
-                                      <IconButton size="small" onClick={() => setSearchClientTerm('')}>
+                                      <IconButton size="small" onClick={() => {
+                                        if (searchNomeInputRef.current) searchNomeInputRef.current.value = '';
+                                        setSearchClientTerm('');
+                                      }}>
                                         <ClearIcon fontSize="small" />
                                       </IconButton>
                                     </InputAdornment>
@@ -3643,8 +3625,9 @@ const handleExportPDF = async () => {
                                 fullWidth
                                 size="small"
                                 placeholder="Digite o CPF (apenas números)"
-                                value={cpfInput}
-                                onChange={(e) => setCpfInput(e.target.value)}
+                                inputRef={searchCpfInputRef}
+                                defaultValue={cpfInput}
+                                onChange={(e) => agendarAtualizacaoBusca('cliente_cpf', e.target.value, setCpfInput)}
                                 InputProps={{
                                   startAdornment: (
                                     <InputAdornment position="start">
@@ -3746,28 +3729,28 @@ const handleExportPDF = async () => {
                       <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Avatar 
-                            src={getSelectedClientData()?.foto}
+                            src={selectedClientData?.foto}
                             sx={{ 
                               bgcolor: '#9c27b0', 
                               width: 48, 
                               height: 48 
                             }}
                           >
-                            {!getSelectedClientData()?.foto && getSelectedClientData()?.nome?.charAt(0)}
+                            {!selectedClientData?.foto && selectedClientData?.nome?.charAt(0)}
                           </Avatar>
                           <Box sx={{ flex: 1 }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {getSelectedClientData()?.nome}
+                              {selectedClientData?.nome}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                              {getSelectedClientData()?.cpf && (
+                              {selectedClientData?.cpf && (
                                 <Typography variant="caption">
-                                  CPF: {formatarCPF(getSelectedClientData()?.cpf)}
+                                  CPF: {formatarCPF(selectedClientData?.cpf)}
                                 </Typography>
                               )}
-                              {getSelectedClientData()?.telefone && (
+                              {selectedClientData?.telefone && (
                                 <Typography variant="caption">
-                                  📞 {formatarTelefone(getSelectedClientData()?.telefone)}
+                                  📞 {formatarTelefone(selectedClientData?.telefone)}
                                 </Typography>
                               )}
                             </Box>
@@ -3843,15 +3826,15 @@ const handleExportPDF = async () => {
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={5}>
                       <Autocomplete
-                        options={profissionaisFiltrados}
+                        options={profissionaisFiltradosMemo}
+                        filterOptions={(options) => options}
+                        noOptionsText={buscaProfissionalDeferred.trim().length < 2 ? 'Digite ao menos 2 letras' : 'Nenhum profissional encontrado'}
                         getOptionLabel={(option) => option.nome || ''}
-                        value={profissionais?.find(p => p.id === formData.profissionalId) || null}
+                        value={profissionalSelecionadoForm}
                         onChange={(e, newValue) => {
                           setFormData({ ...formData, profissionalId: newValue?.id || '' });
-                          setProfissionalSelecionado(newValue?.id || '');
                         }}
-                        inputValue={buscaProfissional}
-                        onInputChange={(e, newValue) => setBuscaProfissional(newValue)}
+                        onInputChange={(e, newValue) => agendarAtualizacaoBusca('profissionais', newValue, setBuscaProfissional)}
                         renderInput={(params) => (
                           <TextField
                             {...params}
@@ -3877,12 +3860,13 @@ const handleExportPDF = async () => {
 
                     <Grid item xs={12} md={5}>
                       <Autocomplete
-                        options={servicosFiltrados}
+                        options={servicosFiltradosMemo}
+                        filterOptions={(options) => options}
+                        noOptionsText={buscaServicoDeferred.trim().length < 2 ? 'Digite ao menos 2 letras' : 'Nenhum serviço encontrado'}
                         getOptionLabel={(option) => `${option.nome} - R$ ${option.preco?.toFixed(2)}`}
                         value={servicos?.find(s => s.id === servicoAtual) || null}
                         onChange={(e, newValue) => setServicoAtual(newValue?.id || '')}
-                        inputValue={buscaServico}
-                        onInputChange={(e, newValue) => setBuscaServico(newValue)}
+                        onInputChange={(e, newValue) => agendarAtualizacaoBusca('servicos', newValue, setBuscaServico)}
                         disabled={!formData.profissionalId}
                         renderInput={(params) => (
                           <TextField
