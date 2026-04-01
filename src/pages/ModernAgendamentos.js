@@ -2664,6 +2664,7 @@ const handleExportPDF = async () => {
         </Box>
       </Box>
 
+      <Collapse in={!openDialog} timeout={120} unmountOnExit>
       {/* Atendimentos em Andamento */}
       {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
@@ -3338,6 +3339,8 @@ const handleExportPDF = async () => {
           </CardContent>
         </Card>
       )}
+
+      </Collapse>
 
       {/* Dialog de Detalhes do Dia */}
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
