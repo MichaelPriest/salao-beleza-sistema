@@ -136,7 +136,7 @@ const LoadingSkeleton = () => (
   </Box>
 );
 
-// Componente de Indicacões para o Cliente
+// Componente de Indicações para o Cliente (CORRIGIDO)
 const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtualizados }) => {
   const [indicacoes, setIndicacoes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +196,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       }
     } catch (error) {
       console.error('Erro ao carregar indicações:', error);
+      toast.error('Erro ao carregar indicações');
     } finally {
       setLoading(false);
     }
@@ -215,6 +216,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA - SEM ERRO DE DATA
   const handleSalvarIndicacao = async () => {
     try {
       if (!formData.nome) {
@@ -222,25 +224,38 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
         return;
       }
 
-      const dataAtual = new Date();
+      // 🔥 Criar datas de forma segura
+      const agora = new Date();
+      const dataAtualISO = agora.toISOString();
+      
       const dataExpiracao = new Date();
-      dataExpiracao.setDate(dataAtual.getDate() + config.diasValidadeIndicacao);
+      dataExpiracao.setDate(agora.getDate() + (config.diasValidadeIndicacao || 30));
+      const dataExpiracaoISO = dataExpiracao.toISOString();
+
+      // 🔥 Validar se as datas são válidas
+      if (isNaN(agora.getTime()) || isNaN(dataExpiracao.getTime())) {
+        console.error('Datas inválidas:', { agora, dataExpiracao });
+        toast.error('Erro ao processar datas. Tente novamente.');
+        return;
+      }
 
       const indicacaoData = {
         clienteId: clienteId,
-        clienteNome: clienteNome,
+        clienteNome: clienteNome || 'Cliente',
         clienteIndicadoId: null,
-        clienteIndicadoNome: formData.nome,
-        clienteIndicadoEmail: formData.email,
-        clienteIndicadoTelefone: formData.telefone,
+        clienteIndicadoNome: formData.nome.trim(),
+        clienteIndicadoEmail: formData.email?.trim() || '',
+        clienteIndicadoTelefone: formData.telefone?.trim() || '',
         status: 'pendente',
         pontosGanhos: 0,
-        pontosBonus: config.pontosIndicacao,
-        dataCriacao: dataAtual.toISOString(),
-        dataExpiracao: dataExpiracao.toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        pontosBonus: config.pontosIndicacao || 100,
+        dataCriacao: dataAtualISO,
+        dataExpiracao: dataExpiracaoISO,
+        createdAt: dataAtualISO,
+        updatedAt: dataAtualISO,
       };
+
+      console.log('Salvando indicação:', indicacaoData);
 
       await firebaseService.add('indicacoes', indicacaoData);
       
@@ -249,21 +264,44 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       carregarIndicacoes();
     } catch (error) {
       console.error('Erro ao salvar indicação:', error);
-      toast.error('Erro ao salvar indicação');
+      toast.error('Erro ao salvar indicação: ' + (error.message || 'Tente novamente'));
     }
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA PARA COPIAR LINK
   const handleCopiarLink = (indicacao) => {
+    if (!indicacao || !indicacao.id) {
+      toast.error('Erro ao gerar link de indicação');
+      return;
+    }
     const link = `${window.location.origin}/cadastro?indicacao=${indicacao.id}`;
     navigator.clipboard.writeText(link);
     toast.success('Link copiado para a área de transferência!');
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA PARA ABRIR QR CODE
   const handleAbrirQRCode = (indicacao) => {
+    if (!indicacao || !indicacao.id) {
+      toast.error('Erro ao gerar QR Code');
+      return;
+    }
     setIndicacaoSelecionada(indicacao);
     setOpenQrCodeDialog(true);
   };
 
+  // 🔥 FUNÇÃO CORRIGIDA PARA FORMATAR DATA
+  const formatarData = (data) => {
+    if (!data) return '-';
+    try {
+      const date = new Date(data);
+      if (isNaN(date.getTime())) return '-';
+      return date.toLocaleDateString('pt-BR');
+    } catch {
+      return '-';
+    }
+  };
+
+  // 🔥 FUNÇÃO CORRIGIDA PARA STATUS
   const getStatusInfo = (status) => {
     const statusMap = {
       pendente: { label: 'Pendente', color: '#ff9800', icon: <ScheduleIcon /> },
@@ -272,15 +310,6 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       expirada: { label: 'Expirada', color: '#9e9e9e', icon: <InfoIcon /> },
     };
     return statusMap[status] || statusMap.pendente;
-  };
-
-  const formatarData = (data) => {
-    if (!data) return '-';
-    try {
-      return new Date(data).toLocaleDateString('pt-BR');
-    } catch {
-      return data;
-    }
   };
 
   if (loading) {
@@ -360,12 +389,20 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
             <TableBody>
               {indicacoes.map((indicacao) => {
                 const statusInfo = getStatusInfo(indicacao.status);
+                // 🔥 Verificar se a indicação expirou
+                const isExpirada = indicacao.status === 'pendente' && 
+                                   indicacao.dataExpiracao && 
+                                   new Date(indicacao.dataExpiracao) < new Date();
+                
+                const statusAtual = isExpirada ? 'expirada' : indicacao.status;
+                const statusAtualInfo = getStatusInfo(statusAtual);
+                
                 return (
                   <TableRow key={indicacao.id} hover>
                     <TableCell>
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {indicacao.clienteIndicadoNome}
+                          {indicacao.clienteIndicadoNome || 'Nome não informado'}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           {indicacao.clienteIndicadoEmail || indicacao.clienteIndicadoTelefone || 'Sem contato'}
@@ -378,33 +415,50 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
                     <TableCell>
                       <Chip
                         size="small"
-                        icon={statusInfo.icon}
-                        label={statusInfo.label}
+                        icon={statusAtualInfo.icon}
+                        label={statusAtualInfo.label}
                         sx={{
-                          bgcolor: alpha(statusInfo.color, 0.1),
-                          color: statusInfo.color,
+                          bgcolor: alpha(statusAtualInfo.color, 0.1),
+                          color: statusAtualInfo.color,
                         }}
                       />
                     </TableCell>
                     <TableCell align="right">
                       <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                        {indicacao.status === 'confirmada' ? `+${indicacao.pontosGanhos}` : `+${indicacao.pontosBonus || config.pontosIndicacao}`}
+                        {indicacao.status === 'confirmada' 
+                          ? `+${indicacao.pontosGanhos || 0}` 
+                          : `+${indicacao.pontosBonus || config.pontosIndicacao}`}
                       </Typography>
-                      {indicacao.status === 'pendente' && (
+                      {indicacao.status === 'pendente' && !isExpirada && (
                         <Typography variant="caption" color="textSecondary">
                           (pendente)
+                        </Typography>
+                      )}
+                      {isExpirada && (
+                        <Typography variant="caption" color="error">
+                          (expirada)
                         </Typography>
                       )}
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
                         <Tooltip title="Copiar link">
-                          <IconButton size="small" onClick={() => handleCopiarLink(indicacao)} sx={{ color: '#9c27b0' }}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleCopiarLink(indicacao)} 
+                            sx={{ color: '#9c27b0' }}
+                            disabled={isExpirada}
+                          >
                             <CopyIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="QR Code">
-                          <IconButton size="small" onClick={() => handleAbrirQRCode(indicacao)} sx={{ color: '#9c27b0' }}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleAbrirQRCode(indicacao)} 
+                            sx={{ color: '#9c27b0' }}
+                            disabled={isExpirada}
+                          >
                             <QrCodeIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -483,7 +537,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
 
       {/* Dialog QR Code */}
       <Dialog open={openQrCodeDialog} onClose={() => setOpenQrCodeDialog(false)} maxWidth="xs" fullWidth>
-        {indicacaoSelecionada && (
+        {indicacaoSelecionada && indicacaoSelecionada.id && (
           <>
             <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white', textAlign: 'center' }}>
               QR Code da Indicação
@@ -503,7 +557,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
                   }}
                 />
                 <Typography variant="body1" sx={{ mt: 2, fontWeight: 500 }}>
-                  {indicacaoSelecionada.clienteIndicadoNome}
+                  {indicacaoSelecionada.clienteIndicadoNome || 'Indicação'}
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
                   Escaneie para cadastrar o indicado
