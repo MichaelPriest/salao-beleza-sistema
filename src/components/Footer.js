@@ -1,5 +1,4 @@
 // src/components/Footer.js
-// VERSÃO COM ADAPTAÇÃO AO SIDEBAR
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -28,28 +27,30 @@ function Footer() {
   const [config, setConfig] = useState(null);
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear());
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Começa como false para modo full width
+  const [sidebarWidth, setSidebarWidth] = useState(0);
+  const [isFullWidthMode, setIsFullWidthMode] = useState(true); // Detectar se é SiteSalao
 
   useEffect(() => {
     carregarConfiguracoes();
     
     window.addEventListener('scroll', handleScroll);
     
-    // Escutar mudanças no estado do sidebar
-    const handleSidebarToggle = (event) => {
-      if (event.detail) {
-        setSidebarOpen(event.detail.open);
-        setSidebarWidth(event.detail.width);
-      }
-    };
-    
-    window.addEventListener('sidebarToggle', handleSidebarToggle);
-    
-    // Verificar estado inicial do sidebar
-    const checkSidebarState = () => {
+    // Verificar se estamos no SiteSalao (sem sidebar)
+    const checkIfSiteSalao = () => {
+      // Verifica se existe sidebar na página
       const sidebar = document.querySelector('.MuiDrawer-paper');
-      if (sidebar) {
+      const isAdminPage = window.location.pathname.includes('/admin') || 
+                         window.location.pathname.includes('/dashboard') ||
+                         window.location.pathname.includes('/login') && !window.location.pathname.includes('/cliente');
+      
+      // Se não tem sidebar OU é página de admin com sidebar, ajusta
+      if (!sidebar || !isAdminPage) {
+        setIsFullWidthMode(true);
+        setSidebarOpen(false);
+        setSidebarWidth(0);
+      } else {
+        setIsFullWidthMode(false);
         const width = sidebar.offsetWidth;
         const isOpen = width > 60;
         setSidebarOpen(isOpen);
@@ -57,11 +58,22 @@ function Footer() {
       }
     };
     
-    setTimeout(checkSidebarState, 100);
+    // Escutar mudanças no estado do sidebar (apenas para páginas admin)
+    const handleSidebarToggle = (event) => {
+      if (event.detail && !isFullWidthMode) {
+        setSidebarOpen(event.detail.open);
+        setSidebarWidth(event.detail.width);
+      }
+    };
+    
+    window.addEventListener('sidebarToggle', handleSidebarToggle);
+    
+    // Verificar estado inicial
+    setTimeout(checkIfSiteSalao, 100);
     
     // Observar mudanças no DOM
     const observer = new MutationObserver(() => {
-      checkSidebarState();
+      checkIfSiteSalao();
     });
     
     observer.observe(document.body, {
@@ -98,20 +110,31 @@ function Footer() {
 
   const salao = config?.salao || {};
 
+  // Estilos base do footer
+  const footerStyles = {
+    bgcolor: '#1a1a2e',
+    color: '#fff',
+    mt: 'auto',
+    borderTop: '1px solid rgba(255,255,255,0.1)',
+    transition: 'margin-left 0.3s ease-in-out, width 0.3s ease-in-out',
+  };
+
+  // Se for modo full width (SiteSalao), ocupa 100% da largura
+  if (isFullWidthMode) {
+    footerStyles.width = '100%';
+    footerStyles.ml = 0;
+  } else {
+    // Modo com sidebar (páginas admin)
+    footerStyles.width = `calc(100% - ${sidebarOpen ? sidebarWidth : 0}px)`;
+    footerStyles.ml = sidebarOpen ? `${sidebarWidth}px` : 0;
+  }
+
   return (
     <Box
       component="footer"
-      sx={{
-        bgcolor: '#1a1a2e',
-        color: '#fff',
-        mt: 'auto',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        transition: 'margin-left 0.3s ease-in-out, width 0.3s ease-in-out',
-        width: `calc(100% - ${sidebarOpen ? sidebarWidth : 0}px)`,
-        ml: sidebarOpen ? `${sidebarWidth}px` : 0,
-      }}
+      sx={footerStyles}
     >
-      <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth={isFullWidthMode ? "lg" : false} sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           justifyContent="space-between"
@@ -147,7 +170,12 @@ function Footer() {
           <Stack direction="row" spacing={2}>
             <Link
               href="#"
-              onClick={() => window.open('https://wa.me/' + (salao.contato?.whatsapp || ''), '_blank')}
+              onClick={(e) => {
+                e.preventDefault();
+                if (salao.contato?.whatsapp) {
+                  window.open('https://wa.me/' + (salao.contato?.whatsapp || ''), '_blank');
+                }
+              }}
               sx={{
                 color: '#fff',
                 textDecoration: 'none',
@@ -184,9 +212,18 @@ function Footer() {
             </Link>
           </Stack>
         </Stack>
+        
+        {/* Informações adicionais para o SiteSalao */}
+        {isFullWidthMode && (
+          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
+            <Typography variant="caption" sx={{ opacity: 0.5 }}>
+              Desenvolvido com ❤️ para seu negócio
+            </Typography>
+          </Box>
+        )}
       </Container>
 
-      {/* Botão Voltar ao Topo - Ajustado para não sobrepor o sidebar */}
+      {/* Botão Voltar ao Topo - Ajustado para não sobrepor o sidebar e funcionar no SiteSalao */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.div
@@ -201,7 +238,7 @@ function Footer() {
                 sx={{
                   position: 'fixed',
                   bottom: 20,
-                  right: sidebarOpen ? `${sidebarWidth + 20}px` : '20px',
+                  right: isFullWidthMode ? '20px' : (sidebarOpen ? `${sidebarWidth + 20}px` : '20px'),
                   bgcolor: '#9c27b0',
                   color: '#fff',
                   width: 40,
