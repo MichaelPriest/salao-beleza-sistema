@@ -304,11 +304,12 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  height: { xs: 40, sm: 50 },
-                  width: 'auto',
-                  maxWidth: { xs: 120, sm: 150 },
+                  width: 200,
+                  height: 200,
                   objectFit: 'contain',
-                  mr: 1,
+                  backgroundColor: 'transparent',
+                  boxShadow: 'none',
+                  border: 'none',
                 }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -374,10 +375,14 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  height: 60,
-                  width: 'auto',
+                  width: 200,
+                  height: 200,
+                  objectFit: 'contain',
                   mx: 'auto',
                   mb: 1,
+                  backgroundColor: 'transparent',
+                  boxShadow: 'none',
+                  border: 'none',
                 }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -1256,12 +1261,13 @@ function SiteSalao() {
                     src={salaoLogo}
                     alt={salaoNome}
                     sx={{
-                      height: 30,
-                      width: 'auto',
+                      width: 200,
+                      height: 200,
+                      objectFit: 'contain',
                       mr: 1,
-                      bgcolor: 'white',
-                      borderRadius: 1,
-                      p: 0.5,
+                      backgroundColor: 'transparent',
+                      boxShadow: 'none',
+                      border: 'none',
                     }}
                     onError={(e) => {
                       e.target.style.display = 'none';
