@@ -1,6 +1,6 @@
 // src/pages/ModernClientes.js
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // 🔥 ADICIONADO
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -40,11 +40,16 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  // 🔥 COMPONENTES ADICIONADOS
   List,
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Popover,
+  Slider,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Stack,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -62,10 +67,13 @@ import {
   Star as StarIcon,
   EmojiEvents as TrophyIcon,
   PersonAdd as PersonAddIcon,
-  // 🔥 NOVOS ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
   Quiz as QuizIcon,
   ExpandMore as ExpandMoreIcon,
+  FilterList as FilterListIcon,
+  Clear as ClearIcon,
+  Sort as SortIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -83,6 +91,7 @@ import {
   imageCompressor
 } from '../utils/plugins';
 import { ImprimirCliente } from '../components/ImprimirCliente';
+import * as XLSX from 'xlsx';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -92,8 +101,193 @@ function TabPanel({ children, value, index }) {
   );
 }
 
+// Componente de Filtros Avançados
+function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, onClearFilters }) {
+  const [localFilters, setLocalFilters] = useState(filters);
+
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const handleChange = (key, value) => {
+    setLocalFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const aplicarFiltros = () => {
+    onFilterChange(localFilters);
+    onClose();
+  };
+
+  const limparFiltros = () => {
+    const filtrosLimpos = {
+      status: [],
+      nivelFidelidade: [],
+      dataInicio: '',
+      dataFim: '',
+      pontosMin: 0,
+      pontosMax: 10000,
+      cidade: '',
+      bairro: '',
+    };
+    setLocalFilters(filtrosLimpos);
+    onClearFilters();
+    onClose();
+  };
+
+  const statusOptions = ['VIP', 'Regular', 'Novo'];
+  const nivelOptions = ['bronze', 'prata', 'ouro', 'platina'];
+
+  return (
+    <Popover
+      open={open}
+      anchorEl={anchorEl}
+      onClose={onClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      PaperProps={{
+        sx: { width: 400, p: 3, maxHeight: '80vh', overflow: 'auto' }
+      }}
+    >
+      <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+        Filtros Avançados
+      </Typography>
+
+      <Divider sx={{ mb: 2 }} />
+
+      {/* Status */}
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Status</Typography>
+      <FormGroup sx={{ mb: 2 }}>
+        <Grid container spacing={1}>
+          {statusOptions.map(opt => (
+            <Grid item key={opt}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={localFilters.status.includes(opt)}
+                    onChange={(e) => {
+                      const newStatus = e.target.checked
+                        ? [...localFilters.status, opt]
+                        : localFilters.status.filter(s => s !== opt);
+                      handleChange('status', newStatus);
+                    }}
+                    size="small"
+                  />
+                }
+                label={opt}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      </FormGroup>
+
+      {/* Nível Fidelidade */}
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Nível Fidelidade</Typography>
+      <FormGroup sx={{ mb: 2 }}>
+        <Grid container spacing={1}>
+          {nivelOptions.map(opt => (
+            <Grid item key={opt}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={localFilters.nivelFidelidade.includes(opt)}
+                    onChange={(e) => {
+                      const newNivel = e.target.checked
+                        ? [...localFilters.nivelFidelidade, opt]
+                        : localFilters.nivelFidelidade.filter(n => n !== opt);
+                      handleChange('nivelFidelidade', newNivel);
+                    }}
+                    size="small"
+                  />
+                }
+                label={opt.charAt(0).toUpperCase() + opt.slice(1)}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      </FormGroup>
+
+      {/* Pontuação */}
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Pontuação</Typography>
+      <Box sx={{ px: 1, mb: 2 }}>
+        <Slider
+          value={[localFilters.pontosMin, localFilters.pontosMax]}
+          onChange={(e, newValue) => {
+            handleChange('pontosMin', newValue[0]);
+            handleChange('pontosMax', newValue[1]);
+          }}
+          valueLabelDisplay="auto"
+          min={0}
+          max={10000}
+          step={100}
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+          <Typography variant="caption">{localFilters.pontosMin} pts</Typography>
+          <Typography variant="caption">{localFilters.pontosMax} pts</Typography>
+        </Box>
+      </Box>
+
+      {/* Data de Cadastro */}
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Data de Cadastro</Typography>
+      <Grid container spacing={1} sx={{ mb: 2 }}>
+        <Grid item xs={6}>
+          <TextField
+            fullWidth
+            type="date"
+            label="De"
+            size="small"
+            value={localFilters.dataInicio}
+            onChange={(e) => handleChange('dataInicio', e.target.value)}
+            InputLabelProps={{ shrink: true }}
+          />
+        </Grid>
+        <Grid item xs={6}>
+          <TextField
+            fullWidth
+            type="date"
+            label="Até"
+            size="small"
+            value={localFilters.dataFim}
+            onChange={(e) => handleChange('dataFim', e.target.value)}
+            InputLabelProps={{ shrink: true }}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Cidade/Bairro */}
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Localização</Typography>
+      <TextField
+        fullWidth
+        size="small"
+        label="Cidade"
+        value={localFilters.cidade}
+        onChange={(e) => handleChange('cidade', e.target.value)}
+        sx={{ mb: 1 }}
+      />
+      <TextField
+        fullWidth
+        size="small"
+        label="Bairro"
+        value={localFilters.bairro}
+        onChange={(e) => handleChange('bairro', e.target.value)}
+        sx={{ mb: 2 }}
+      />
+
+      <Divider sx={{ my: 2 }} />
+
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        <Button fullWidth variant="outlined" onClick={limparFiltros} startIcon={<ClearIcon />}>
+          Limpar
+        </Button>
+        <Button fullWidth variant="contained" onClick={aplicarFiltros} sx={{ bgcolor: '#9c27b0' }}>
+          Aplicar Filtros
+        </Button>
+      </Box>
+    </Popover>
+  );
+}
+
 function ModernClientes() {
-  const navigate = useNavigate(); // 🔥 ADICIONADO
+  const navigate = useNavigate();
   const componentRef = useRef(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -110,8 +304,24 @@ function ModernClientes() {
   const [indicacoes, setIndicacoes] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
   const [usuario, setUsuario] = useState(null);
+  const [sortField, setSortField] = useState('nome');
+  const [sortDirection, setSortDirection] = useState('asc');
   
-  // 🔥 ESTADOS PARA ANAMNESE
+  // Estado para filtros
+  const [filtrosAnchorEl, setFiltrosAnchorEl] = useState(null);
+  const [filtros, setFiltros] = useState({
+    status: [],
+    nivelFidelidade: [],
+    dataInicio: '',
+    dataFim: '',
+    pontosMin: 0,
+    pontosMax: 10000,
+    cidade: '',
+    bairro: '',
+  });
+  const [filtrosAtivos, setFiltrosAtivos] = useState(false);
+  
+  // Estados para Anamnese
   const [respostasAnamnese, setRespostasAnamnese] = useState([]);
   const [formularios, setFormularios] = useState([]);
   const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
@@ -159,14 +369,25 @@ function ModernClientes() {
     }
   }, []);
 
-  // Função para registrar na auditoria - VERSÃO CORRIGIDA
+  // Contar filtros ativos
+  useEffect(() => {
+    const ativos = 
+      filtros.status.length > 0 ||
+      filtros.nivelFidelidade.length > 0 ||
+      filtros.dataInicio !== '' ||
+      filtros.dataFim !== '' ||
+      filtros.pontosMin > 0 ||
+      filtros.pontosMax < 10000 ||
+      filtros.cidade !== '' ||
+      filtros.bairro !== '';
+    setFiltrosAtivos(ativos);
+  }, [filtros]);
+
   const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
     try {
-      // 🔥 Garantir que usuario não seja undefined
       const usuarioId = usuario?.id || 'sistema';
       const usuarioNome = usuario?.nome || 'Sistema';
       
-      // 🔥 Remover undefined de todos os campos
       const limparDados = (obj) => {
         if (!obj) return {};
         if (typeof obj !== 'object') return obj;
@@ -205,11 +426,9 @@ function ModernClientes() {
       console.log(`✅ Auditoria registrada: ${acao}`);
     } catch (error) {
       console.error('❌ Erro ao registrar auditoria:', error);
-      // Não interrompe o fluxo principal
     }
   };
 
-  // Função para calcular nível de fidelidade baseado em pontos
   const calcularNivelFidelidade = (pontos) => {
     if (pontos >= 5000) return 'platina';
     if (pontos >= 2000) return 'ouro';
@@ -217,7 +436,6 @@ function ModernClientes() {
     return 'bronze';
   };
 
-  // Função para carregar pontuação do cliente
   const carregarPontuacaoCliente = async (clienteId) => {
     try {
       const pontuacao = await firebaseService.query('pontuacao', [
@@ -237,7 +455,6 @@ function ModernClientes() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA CARREGAR RESPOSTAS DE ANAMNESE DO CLIENTE
   const carregarRespostasAnamnese = async (clienteId) => {
     try {
       const respostas = await firebaseService.query('respostas_anamnese', [
@@ -246,7 +463,6 @@ function ModernClientes() {
       
       setRespostasAnamnese(respostas || []);
       
-      // Carregar títulos dos formulários
       const formulariosIds = [...new Set(respostas.map(r => r.formularioId))];
       const formulariosData = await Promise.all(
         formulariosIds.map(id => firebaseService.getById('formularios_anamnese', id))
@@ -257,7 +473,6 @@ function ModernClientes() {
     }
   };
 
-  // 🔥 FUNÇÃO DE IMPRESSÃO
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: selectedCliente 
@@ -297,12 +512,122 @@ function ModernClientes() {
     }, 100);
   };
 
-  // Carregar clientes do Firebase
+  // Função para exportar para Excel
+  const handleExportExcel = () => {
+    try {
+      const dadosExport = filteredClientes.map(cliente => ({
+        'Nome': cliente.nome,
+        'Email': cliente.email,
+        'Telefone': cliente.telefone,
+        'CPF': cliente.cpf || '-',
+        'Status': cliente.status,
+        'Nível Fidelidade': cliente.nivelFidelidade?.toUpperCase() || '-',
+        'Pontos': cliente.totalPontos || 0,
+        'Data Cadastro': cliente.dataCadastro || '-',
+        'Cidade': cliente.cidade || '-',
+        'Indicado Por': cliente.indicadoPorNome || '-',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dadosExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+      XLSX.writeFile(wb, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+      toast.success('Exportação concluída!');
+      registrarAuditoria('exportar_clientes', 'lista', 'Exportação de clientes para Excel');
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      toast.error('Erro ao exportar dados');
+    }
+  };
+
+  // Função de ordenação
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Função de filtro por data
+  const filtrarPorData = (cliente, dataInicio, dataFim) => {
+    if (!dataInicio && !dataFim) return true;
+    const dataCadastro = cliente.dataCadastro;
+    if (!dataCadastro) return false;
+    
+    if (dataInicio && dataFim) {
+      return dataCadastro >= dataInicio && dataCadastro <= dataFim;
+    }
+    if (dataInicio) {
+      return dataCadastro >= dataInicio;
+    }
+    if (dataFim) {
+      return dataCadastro <= dataFim;
+    }
+    return true;
+  };
+
+  // Filtrar clientes com todos os filtros
+  const filteredClientes = clientes
+    .filter(cliente => {
+      // Filtro de busca
+      const matchesSearch = 
+        cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cliente.telefone?.includes(searchTerm) ||
+        cliente.cpf?.includes(searchTerm);
+      
+      if (!matchesSearch) return false;
+      
+      // Filtro por status
+      if (filtros.status.length > 0 && !filtros.status.includes(cliente.status)) return false;
+      
+      // Filtro por nível fidelidade
+      if (filtros.nivelFidelidade.length > 0 && !filtros.nivelFidelidade.includes(cliente.nivelFidelidade)) return false;
+      
+      // Filtro por pontuação
+      const pontos = cliente.totalPontos || 0;
+      if (pontos < filtros.pontosMin || pontos > filtros.pontosMax) return false;
+      
+      // Filtro por data
+      if (!filtrarPorData(cliente, filtros.dataInicio, filtros.dataFim)) return false;
+      
+      // Filtro por cidade
+      if (filtros.cidade && !cliente.cidade?.toLowerCase().includes(filtros.cidade.toLowerCase())) return false;
+      
+      // Filtro por bairro
+      if (filtros.bairro && !cliente.bairro?.toLowerCase().includes(filtros.bairro.toLowerCase())) return false;
+      
+      return true;
+    })
+    .sort((a, b) => {
+      let aVal = a[sortField] || '';
+      let bVal = b[sortField] || '';
+      
+      if (sortField === 'totalPontos') {
+        aVal = a.totalPontos || 0;
+        bVal = b.totalPontos || 0;
+      }
+      
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+  // Carregar clientes
   useEffect(() => {
     carregarClientes();
   }, []);
 
-  // Carregar indicações e anamnese quando cliente é selecionado
   useEffect(() => {
     if (selectedCliente?.id) {
       carregarIndicacoes(selectedCliente.id);
@@ -315,7 +640,6 @@ function ModernClientes() {
       setLoading(true);
       const data = await firebaseService.getAll('clientes');
       
-      // Calcular pontuação para cada cliente
       const clientesComPontos = await Promise.all(
         (data || []).map(async (cliente) => {
           const pontos = await carregarPontuacaoCliente(cliente.id);
@@ -345,7 +669,6 @@ function ModernClientes() {
     }
   };
 
-  // Carregar indicações do cliente
   const carregarIndicacoes = async (clienteId) => {
     try {
       const indicacoesData = await firebaseService.query('indicacoes', [
@@ -356,13 +679,6 @@ function ModernClientes() {
       console.error('Erro ao carregar indicações:', error);
     }
   };
-
-  const filteredClientes = clientes.filter(cliente =>
-    cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.telefone?.includes(searchTerm) ||
-    cliente.cpf?.includes(searchTerm)
-  );
 
   const handleAdd = () => {
     setSelectedCliente(null);
@@ -435,7 +751,6 @@ function ModernClientes() {
   };
 
   const handleView = async (cliente) => {
-    // Recarregar pontuação atualizada
     const pontos = await carregarPontuacaoCliente(cliente.id);
     const clienteAtualizado = {
       ...cliente,
@@ -453,14 +768,12 @@ function ModernClientes() {
     );
   };
 
-  // 🔥 FUNÇÃO PARA ABRIR DIALOG DE INDICAÇÃO
   const handleOpenIndicacao = (cliente) => {
     setSelectedCliente(cliente);
     setClienteIndicado(null);
     setOpenIndicacaoDialog(true);
   };
 
-  // 🔥 FUNÇÃO PARA REGISTRAR INDICAÇÃO
   const handleRegistrarIndicacao = async () => {
     if (!clienteIndicado) {
       toast.error('Selecione o cliente indicado');
@@ -473,7 +786,6 @@ function ModernClientes() {
     }
 
     try {
-      // Verificar se já existe indicação para este cliente
       const indicacoesExistentes = await firebaseService.query('indicacoes', [
         { field: 'clienteIndicadoId', operator: '==', value: clienteIndicado.id }
       ]);
@@ -483,18 +795,13 @@ function ModernClientes() {
         return;
       }
 
-      // Buscar configurações de fidelidade
       const configFidelidade = await firebaseService.getAll('config_fidelidade');
-      const config = configFidelidade[0] || { 
-        pontosPorReal: 1,
-        pontosAniversario: 50,
-        pontosIndicacao: 100 
-      };
+      const config = configFidelidade[0] || { pontosIndicacao: 100 };
 
       const pontosBonus = config.pontosIndicacao || 100;
 
       const indicacaoData = {
-        clienteId: selectedCliente.id, // Quem indicou
+        clienteId: selectedCliente.id,
         clienteNome: selectedCliente.nome,
         clienteIndicadoId: clienteIndicado.id,
         clienteIndicadoNome: clienteIndicado.nome,
@@ -508,7 +815,6 @@ function ModernClientes() {
 
       await firebaseService.add('indicacoes', indicacaoData);
 
-      // Atualizar o cliente indicado com quem o indicou
       await firebaseService.update('clientes', clienteIndicado.id, {
         indicadoPor: selectedCliente.id,
         indicadoPorNome: selectedCliente.nome,
@@ -537,73 +843,7 @@ function ModernClientes() {
     } catch (err) {
       console.error('Erro ao registrar indicação:', err);
       toast.error('Erro ao registrar indicação');
-      
-      await auditoriaService.registrarErro(err, {
-        acao: 'registrar_indicacao',
-        clienteIndicadorId: selectedCliente?.id,
-        clienteIndicadoId: clienteIndicado?.id
-      });
     }
-  };
-
-  // 🔥 FUNÇÃO PARA CONFIRMAR INDICAÇÃO
-  const handleConfirmarIndicacao = async (indicacaoId) => {
-    try {
-      const indicacao = indicacoes.find(i => i.id === indicacaoId);
-      if (!indicacao) return;
-
-      const configFidelidade = await firebaseService.getAll('config_fidelidade');
-      const config = configFidelidade[0] || { pontosIndicacao: 100 };
-      const pontosBonus = config.pontosIndicacao || 100;
-
-      await firebaseService.update('indicacoes', indicacaoId, {
-        status: 'confirmada',
-        pontosGanhos: pontosBonus,
-        dataConfirmacao: new Date().toISOString(),
-        updatedAt: Timestamp.now()
-      });
-
-      await firebaseService.add('pontuacao', {
-        clienteId: indicacao.clienteId,
-        clienteNome: indicacao.clienteNome,
-        quantidade: pontosBonus,
-        tipo: 'credito',
-        motivo: `Bônus por indicação de ${indicacao.clienteIndicadoNome}`,
-        data: new Date().toISOString(),
-        indicacaoId: indicacaoId,
-        createdAt: Timestamp.now()
-      });
-
-      await registrarAuditoria(
-        'confirmar_indicacao',
-        indicacao.clienteId,
-        `Indicação confirmada: ${indicacao.clienteIndicadoNome}`,
-        {
-          indicacaoId,
-          pontosBonus,
-          clienteIndicadorId: indicacao.clienteId,
-          clienteIndicadoId: indicacao.clienteIndicadoId
-        }
-      );
-
-      toast.success(`Indicação confirmada! ${pontosBonus} pontos creditados para ${indicacao.clienteNome}.`);
-      carregarIndicacoes(selectedCliente.id);
-      
-    } catch (error) {
-      console.error('Erro ao confirmar indicação:', error);
-      toast.error('Erro ao confirmar indicação');
-      
-      await auditoriaService.registrarErro(error, {
-        acao: 'confirmar_indicacao',
-        indicacaoId
-      });
-    }
-  };
-
-  // 🔥 FUNÇÃO PARA VER DETALHES DA ANAMNESE
-  const handleVerAnamnese = (resposta) => {
-    setAnamneseSelecionada(resposta);
-    setOpenAnamneseDialog(true);
   };
 
   const handleDelete = async (id) => {
@@ -625,11 +865,6 @@ function ModernClientes() {
       } catch (err) {
         console.error('Erro ao excluir cliente:', err);
         toast.error('Erro ao excluir cliente');
-        
-        await auditoriaService.registrarErro(err, {
-          acao: 'excluir_cliente',
-          clienteId: id
-        });
       }
     }
   };
@@ -637,7 +872,6 @@ function ModernClientes() {
   const handleSave = async (event) => {
     event.preventDefault();
     
-    // Validações
     if (!formData.nome) {
       toast.error('Nome é obrigatório');
       return;
@@ -649,18 +883,6 @@ function ModernClientes() {
     if (!formData.telefone) {
       toast.error('Telefone é obrigatório');
       return;
-    }
-  
-    if (formData.foto && imageCompressor) {
-      try {
-        const size = imageCompressor.getImageSize(formData.foto);
-        if (size > 250) {
-          toast.error(`Foto muito grande (${size.toFixed(0)}KB). Máximo 200KB.`);
-          return;
-        }
-      } catch (err) {
-        console.warn('Erro ao verificar tamanho da imagem:', err);
-      }
     }
   
     const agora = new Date().toISOString();
@@ -708,17 +930,7 @@ function ModernClientes() {
       carregarClientes();
     } catch (err) {
       console.error('Erro ao salvar cliente:', err);
-      
-      if (err.code === 'invalid-argument' && err.message.includes('too large')) {
-        toast.error('Foto muito grande. Escolha uma imagem menor.');
-      } else {
-        toast.error('Erro ao salvar cliente');
-      }
-      
-      await auditoriaService.registrarErro(err, {
-        acao: selectedCliente ? 'atualizar_cliente' : 'criar_cliente',
-        dados: formData
-      });
+      toast.error('Erro ao salvar cliente');
     }
   };
 
@@ -771,10 +983,43 @@ function ModernClientes() {
     }
   };
 
-  // 🔥 FUNÇÃO PARA OBTER TÍTULO DO FORMULÁRIO
   const getFormularioTitulo = (formularioId) => {
     const formulario = formularios.find(f => f.id === formularioId);
     return formulario?.titulo || 'Formulário';
+  };
+
+  const handleVerAnamnese = (resposta) => {
+    setAnamneseSelecionada(resposta);
+    setOpenAnamneseDialog(true);
+  };
+
+  const handleOpenFiltros = (event) => {
+    setFiltrosAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseFiltros = () => {
+    setFiltrosAnchorEl(null);
+  };
+
+  const handleApplyFilters = (newFilters) => {
+    setFiltros(newFilters);
+    setPage(0);
+    toast.success('Filtros aplicados');
+  };
+
+  const handleClearFilters = () => {
+    setFiltros({
+      status: [],
+      nivelFidelidade: [],
+      dataInicio: '',
+      dataFim: '',
+      pontosMin: 0,
+      pontosMax: 10000,
+      cidade: '',
+      bairro: '',
+    });
+    setPage(0);
+    toast.info('Filtros removidos');
   };
 
   if (loading) {
@@ -795,7 +1040,7 @@ function ModernClientes() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
             Clientes
@@ -804,125 +1049,162 @@ function ModernClientes() {
             Gerencie todos os clientes do salão
           </Typography>
         </Box>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{
-              background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              color: 'white',
-              boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
-            }}
-          >
-            Novo Cliente
-          </Button>
-        </motion.div>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportExcel}
+              sx={{ borderColor: '#4caf50', color: '#4caf50' }}
+            >
+              Exportar Excel
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{
+                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                color: 'white',
+                boxShadow: '0 3px 15px rgba(156,39,176,0.3)',
+              }}
+            >
+              Novo Cliente
+            </Button>
+          </motion.div>
+        </Box>
       </Box>
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Total de Clientes
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {clientes.length}
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Total de Clientes</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>{clientes.length}</Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card sx={{ bgcolor: '#f3e5f5' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Clientes VIP
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                  {clientes.filter(c => c.status === 'VIP').length}
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Clientes VIP</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>{clientes.filter(c => c.status === 'VIP').length}</Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
-
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card sx={{ bgcolor: '#e8f5e9' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Clientes Novos
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#2e7d32' }}>
-                  {clientes.filter(c => c.status === 'Novo').length}
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Clientes Novos</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#2e7d32' }}>{clientes.filter(c => c.status === 'Novo').length}</Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
-
         <Grid item xs={12} sm={6} md={3}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card sx={{ bgcolor: '#fff3e0' }}>
               <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Pontos Totais
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                  {clientes.reduce((acc, c) => acc + (c.totalPontos || 0), 0)}
-                </Typography>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>Pontos Totais</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>{clientes.reduce((acc, c) => acc + (c.totalPontos || 0), 0)}</Typography>
               </CardContent>
             </Card>
           </motion.div>
         </Grid>
       </Grid>
 
-      {/* Barra de Pesquisa */}
+      {/* Barra de Pesquisa e Filtros */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Buscar clientes por nome, email, telefone ou CPF..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 3,
-              },
-            }}
-          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Buscar clientes por nome, email, telefone ou CPF..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ flex: 1 }}
+            />
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip title="Filtros Avançados">
+                <Badge variant="dot" color="secondary" invisible={!filtrosAtivos}>
+                  <Button
+                    variant={filtrosAtivos ? "contained" : "outlined"}
+                    startIcon={<FilterListIcon />}
+                    onClick={handleOpenFiltros}
+                    sx={filtrosAtivos ? { bgcolor: '#9c27b0' } : {}}
+                  >
+                    Filtros
+                  </Button>
+                </Badge>
+              </Tooltip>
+              {filtrosAtivos && (
+                <Tooltip title="Limpar Filtros">
+                  <IconButton onClick={handleClearFilters} sx={{ color: '#f44336' }}>
+                    <ClearIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          </Stack>
+          
+          {/* Chips de filtros ativos */}
+          {filtrosAtivos && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {filtros.status.map(s => (
+                <Chip key={s} label={`Status: ${s}`} size="small" onDelete={() => {
+                  setFiltros(prev => ({ ...prev, status: prev.status.filter(st => st !== s) }));
+                }} />
+              ))}
+              {filtros.nivelFidelidade.map(n => (
+                <Chip key={n} label={`Nível: ${n}`} size="small" onDelete={() => {
+                  setFiltros(prev => ({ ...prev, nivelFidelidade: prev.nivelFidelidade.filter(nv => nv !== n) }));
+                }} />
+              ))}
+              {(filtros.pontosMin > 0 || filtros.pontosMax < 10000) && (
+                <Chip label={`Pontos: ${filtros.pontosMin} - ${filtros.pontosMax}`} size="small" onDelete={() => {
+                  setFiltros(prev => ({ ...prev, pontosMin: 0, pontosMax: 10000 }));
+                }} />
+              )}
+              {filtros.cidade && (
+                <Chip label={`Cidade: ${filtros.cidade}`} size="small" onDelete={() => {
+                  setFiltros(prev => ({ ...prev, cidade: '' }));
+                }} />
+              )}
+              {filtros.bairro && (
+                <Chip label={`Bairro: ${filtros.bairro}`} size="small" onDelete={() => {
+                  setFiltros(prev => ({ ...prev, bairro: '' }));
+                }} />
+              )}
+            </Box>
+          )}
         </CardContent>
       </Card>
+
+      {/* Componente de Filtros Avançados */}
+      <FiltrosAvancados
+        open={Boolean(filtrosAnchorEl)}
+        anchorEl={filtrosAnchorEl}
+        onClose={handleCloseFiltros}
+        filters={filtros}
+        onFilterChange={handleApplyFilters}
+        onClearFilters={handleClearFilters}
+      />
 
       {/* Tabela de Clientes */}
       <Card>
@@ -930,12 +1212,22 @@ function ModernClientes() {
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#faf5ff' }}>
-                <TableCell><strong>Cliente</strong></TableCell>
-                <TableCell><strong>Contato</strong></TableCell>
+                <TableCell sx={{ cursor: 'pointer' }} onClick={() => handleSort('nome')}>
+                  <strong>Cliente</strong> {sortField === 'nome' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer' }} onClick={() => handleSort('email')}>
+                  <strong>Contato</strong> {sortField === 'email' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableCell>
                 <TableCell><strong>CPF</strong></TableCell>
-                <TableCell><strong>Pontos</strong></TableCell>
-                <TableCell><strong>Nível</strong></TableCell>
-                <TableCell><strong>Status</strong></TableCell>
+                <TableCell sx={{ cursor: 'pointer' }} onClick={() => handleSort('totalPontos')}>
+                  <strong>Pontos</strong> {sortField === 'totalPontos' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer' }} onClick={() => handleSort('nivelFidelidade')}>
+                  <strong>Nível</strong> {sortField === 'nivelFidelidade' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer' }} onClick={() => handleSort('status')}>
+                  <strong>Status</strong> {sortField === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </TableCell>
                 <TableCell align="center"><strong>Ações</strong></TableCell>
               </TableRow>
             </TableHead>
@@ -954,36 +1246,14 @@ function ModernClientes() {
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Avatar 
-                            src={cliente.foto}
-                            sx={{ 
-                              width: 40, 
-                              height: 40,
-                              bgcolor: '#9c27b0',
-                            }}
-                          >
+                          <Avatar src={cliente.foto} sx={{ width: 40, height: 40, bgcolor: '#9c27b0' }}>
                             {!cliente.foto && cliente.nome?.charAt(0)}
                           </Avatar>
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {cliente.nome}
-                            </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                              ID: {cliente.id ? String(cliente.id).substring(0, 8) : 'N/A'}
-                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>{cliente.nome}</Typography>
+                            <Typography variant="caption" color="textSecondary">ID: {cliente.id ? String(cliente.id).substring(0, 8) : 'N/A'}</Typography>
                             {cliente.indicadoPorNome && (
-                              <Chip
-                                icon={<StarIcon />}
-                                label={`Indicado por: ${cliente.indicadoPorNome}`}
-                                size="small"
-                                sx={{ 
-                                  mt: 0.5, 
-                                  bgcolor: '#fff3e0',
-                                  color: '#ff9800',
-                                  fontSize: '0.6rem',
-                                  height: 20
-                                }}
-                              />
+                              <Chip icon={<StarIcon />} label={`Indicado por: ${cliente.indicadoPorNome}`} size="small" sx={{ mt: 0.5, bgcolor: '#fff3e0', color: '#ff9800', fontSize: '0.6rem', height: 20 }} />
                             )}
                           </Box>
                         </Box>
@@ -991,85 +1261,39 @@ function ModernClientes() {
                       <TableCell>
                         <Box>
                           <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <PhoneIcon fontSize="small" color="action" />
-                            {cliente.telefone}
+                            <PhoneIcon fontSize="small" color="action" /> {cliente.telefone}
                           </Typography>
                           <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <EmailIcon fontSize="small" color="action" />
-                            {cliente.email}
+                            <EmailIcon fontSize="small" color="action" /> {cliente.email}
                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{cliente.cpf || '-'}</Typography>
-                      </TableCell>
+                      <TableCell><Typography variant="body2">{cliente.cpf || '-'}</Typography></TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <StarIcon sx={{ color: '#ff9800', fontSize: 16 }} />
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                            {cliente.totalPontos || 0}
-                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>{cliente.totalPontos || 0}</Typography>
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={cliente.nivelFidelidade?.toUpperCase()}
-                          size="small"
-                          sx={{
-                            bgcolor: getNivelBg(cliente.nivelFidelidade),
-                            color: getNivelCor(cliente.nivelFidelidade),
-                            fontWeight: 600,
-                          }}
-                        />
+                        <Chip label={cliente.nivelFidelidade?.toUpperCase()} size="small" sx={{ bgcolor: getNivelBg(cliente.nivelFidelidade), color: getNivelCor(cliente.nivelFidelidade), fontWeight: 600 }} />
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={cliente.status}
-                          size="small"
-                          sx={{
-                            backgroundColor: getStatusBgColor(cliente.status),
-                            color: getStatusColor(cliente.status),
-                            fontWeight: 600,
-                          }}
-                        />
+                        <Chip label={cliente.status} size="small" sx={{ backgroundColor: getStatusBgColor(cliente.status), color: getStatusColor(cliente.status), fontWeight: 600 }} />
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                           <Tooltip title="Ver detalhes">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleView(cliente)}
-                              sx={{ color: '#9c27b0' }}
-                            >
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
+                            <IconButton size="small" onClick={() => handleView(cliente)} sx={{ color: '#9c27b0' }}><VisibilityIcon fontSize="small" /></IconButton>
                           </Tooltip>
                           <Tooltip title="Registrar indicação">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleOpenIndicacao(cliente)}
-                              sx={{ color: '#ff9800' }}
-                            >
-                              <PersonAddIcon fontSize="small" />
-                            </IconButton>
+                            <IconButton size="small" onClick={() => handleOpenIndicacao(cliente)} sx={{ color: '#ff9800' }}><PersonAddIcon fontSize="small" /></IconButton>
                           </Tooltip>
                           <Tooltip title="Editar">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleEdit(cliente)}
-                              sx={{ color: '#ff4081' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
+                            <IconButton size="small" onClick={() => handleEdit(cliente)} sx={{ color: '#ff4081' }}><EditIcon fontSize="small" /></IconButton>
                           </Tooltip>
                           <Tooltip title="Excluir">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleDelete(cliente.id)}
-                              sx={{ color: '#f44336' }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            <IconButton size="small" onClick={() => handleDelete(cliente.id)} sx={{ color: '#f44336' }}><DeleteIcon fontSize="small" /></IconButton>
                           </Tooltip>
                         </Box>
                       </TableCell>
@@ -1081,9 +1305,7 @@ function ModernClientes() {
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
                     <SearchIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                    <Typography variant="body1" color="textSecondary">
-                      Nenhum cliente encontrado
-                    </Typography>
+                    <Typography variant="body1" color="textSecondary">Nenhum cliente encontrado</Typography>
                   </TableCell>
                 </TableRow>
               )}
@@ -1092,7 +1314,7 @@ function ModernClientes() {
         </TableContainer>
         
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
+          rowsPerPageOptions={[5, 10, 25, 50, 100]}
           component="div"
           count={filteredClientes.length}
           rowsPerPage={rowsPerPage}
@@ -1107,7 +1329,7 @@ function ModernClientes() {
         />
       </Card>
 
-      {/* Dialog de Cadastro/Edição */}
+      {/* Dialog de Cadastro/Edição (mesmo código anterior) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedCliente ? 'Editar Cliente' : 'Novo Cliente'}
@@ -1125,131 +1347,46 @@ function ModernClientes() {
             <TabPanel value={tabValue} index={0}>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <ImageUpload
-                    value={formData.foto}
-                    onChange={(value) => setFormData({ ...formData, foto: value })}
-                    label="Foto do Cliente"
-                    maxSizeKB={150}
-                  />
+                  <ImageUpload value={formData.foto} onChange={(value) => setFormData({ ...formData, foto: value })} label="Foto do Cliente" maxSizeKB={150} />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Nome Completo"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    required
-                    size="small"
-                  />
+                  <TextField fullWidth label="Nome Completo" value={formData.nome} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} required size="small" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
-                    size="small"
-                  />
+                  <TextField fullWidth label="Email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required size="small" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <MaskedInput
-                    mask="telefone"
-                    label="Telefone Principal"
-                    name="telefone"
-                    value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    required
-                    size="small"
-                  />
+                  <MaskedInput mask="telefone" label="Telefone Principal" name="telefone" value={formData.telefone} onChange={(e) => setFormData({ ...formData, telefone: e.target.value })} required size="small" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <MaskedInput
-                    mask="telefone"
-                    label="Telefone Secundário"
-                    name="telefone2"
-                    value={formData.telefone2}
-                    onChange={(e) => setFormData({ ...formData, telefone2: e.target.value })}
-                    size="small"
-                  />
+                  <MaskedInput mask="telefone" label="Telefone Secundário" name="telefone2" value={formData.telefone2} onChange={(e) => setFormData({ ...formData, telefone2: e.target.value })} size="small" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <MaskedInput
-                    mask="cpf"
-                    label="CPF"
-                    name="cpf"
-                    value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                    size="small"
-                  />
+                  <MaskedInput mask="cpf" label="CPF" name="cpf" value={formData.cpf} onChange={(e) => setFormData({ ...formData, cpf: e.target.value })} size="small" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <MaskedInput
-                    mask="rg"
-                    label="RG"
-                    name="rg"
-                    value={formData.rg}
-                    onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
-                    size="small"
-                    placeholder="00.000.000-0"
-                  />
+                  <MaskedInput mask="rg" label="RG" name="rg" value={formData.rg} onChange={(e) => setFormData({ ...formData, rg: e.target.value })} size="small" placeholder="00.000.000-0" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
-                  <MaskedInput
-                    mask="data"
-                    label="Data de Nascimento"
-                    name="dataNascimento"
-                    value={formData.dataNascimento}
-                    onChange={(e) => setFormData({ ...formData, dataNascimento: e.target.value })}
-                    size="small"
-                    placeholder="DD/MM/AAAA"
-                  />
+                  <MaskedInput mask="data" label="Data de Nascimento" name="dataNascimento" value={formData.dataNascimento} onChange={(e) => setFormData({ ...formData, dataNascimento: e.target.value })} size="small" placeholder="DD/MM/AAAA" />
                 </Grid>
-
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Status</InputLabel>
-                    <Select
-                      value={formData.status}
-                      label="Status"
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    >
+                    <Select value={formData.status} label="Status" onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
                       <MenuItem value="VIP">VIP</MenuItem>
                       <MenuItem value="Regular">Regular</MenuItem>
                       <MenuItem value="Novo">Novo</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
-
-                {/* CAMPO DE INDICAÇÃO */}
                 <Grid item xs={12}>
                   <Autocomplete
                     options={clientes.filter(c => c.id !== (selectedCliente?.id || ''))}
                     getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`}
                     value={clientes.find(c => c.id === formData.indicadoPor) || null}
-                    onChange={(e, newValue) => setFormData({
-                      ...formData,
-                      indicadoPor: newValue?.id || '',
-                      indicadoPorNome: newValue?.nome || '',
-                      dataIndicacao: newValue ? new Date().toISOString() : null
-                    })}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Indicado por (cliente)"
-                        placeholder="Buscar cliente que indicou..."
-                        helperText="Selecione o cliente que fez a indicação"
-                        size="small"
-                      />
-                    )}
+                    onChange={(e, newValue) => setFormData({ ...formData, indicadoPor: newValue?.id || '', indicadoPorNome: newValue?.nome || '', dataIndicacao: newValue ? new Date().toISOString() : null })}
+                    renderInput={(params) => (<TextField {...params} label="Indicado por (cliente)" placeholder="Buscar cliente que indicou..." helperText="Selecione o cliente que fez a indicação" size="small" />)}
                   />
                 </Grid>
               </Grid>
@@ -1266,18 +1403,9 @@ function ModernClientes() {
                   cidade: formData.cidade,
                   estado: formData.estado,
                 }}
-                onChange={(campo, valor) => {
-                  setFormData(prev => ({ ...prev, [campo]: valor }));
-                }}
+                onChange={(campo, valor) => setFormData(prev => ({ ...prev, [campo]: valor }))}
                 onCepFound={(dados) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    logradouro: dados.logradouro || prev.logradouro,
-                    bairro: dados.bairro || prev.bairro,
-                    cidade: dados.cidade || prev.cidade,
-                    estado: dados.estado || prev.estado,
-                    complemento: dados.complemento || prev.complemento,
-                  }));
+                  setFormData(prev => ({ ...prev, logradouro: dados.logradouro || prev.logradouro, bairro: dados.bairro || prev.bairro, cidade: dados.cidade || prev.cidade, estado: dados.estado || prev.estado, complemento: dados.complemento || prev.complemento }));
                   toast.success('Endereço preenchido automaticamente!');
                 }}
               />
@@ -1286,37 +1414,12 @@ function ModernClientes() {
             <TabPanel value={tabValue} index={2}>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Profissional Preferido"
-                    value={formData.preferencias.profissionalPreferido}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      preferencias: { ...formData.preferencias, profissionalPreferido: e.target.value }
-                    })}
-                    size="small"
-                  />
+                  <TextField fullWidth label="Profissional Preferido" value={formData.preferencias.profissionalPreferido} onChange={(e) => setFormData({ ...formData, preferencias: { ...formData.preferencias, profissionalPreferido: e.target.value } })} size="small" />
                 </Grid>
-
                 <Grid item xs={12}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Serviços Preferidos</InputLabel>
-                    <Select
-                      multiple
-                      value={formData.preferencias.servicosPreferidos}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        preferencias: { ...formData.preferencias, servicosPreferidos: e.target.value }
-                      })}
-                      label="Serviços Preferidos"
-                      renderValue={(selected) => (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {selected.map((value) => (
-                            <Chip key={value} label={value} size="small" />
-                          ))}
-                        </Box>
-                      )}
-                    >
+                    <Select multiple value={formData.preferencias.servicosPreferidos} onChange={(e) => setFormData({ ...formData, preferencias: { ...formData.preferencias, servicosPreferidos: e.target.value } })} label="Serviços Preferidos" renderValue={(selected) => (<Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>{selected.map((value) => (<Chip key={value} label={value} size="small" />))}</Box>)}>
                       <MenuItem value="Corte">Corte</MenuItem>
                       <MenuItem value="Manicure">Manicure</MenuItem>
                       <MenuItem value="Pedicure">Pedicure</MenuItem>
@@ -1326,315 +1429,88 @@ function ModernClientes() {
                     </Select>
                   </FormControl>
                 </Grid>
-
                 <Grid item xs={12}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Receber Notificações</InputLabel>
-                    <Select
-                      value={formData.preferencias.notificacoes}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        preferencias: { ...formData.preferencias, notificacoes: e.target.value === 'true' }
-                      })}
-                      label="Receber Notificações"
-                    >
+                    <Select value={formData.preferencias.notificacoes} onChange={(e) => setFormData({ ...formData, preferencias: { ...formData.preferencias, notificacoes: e.target.value === 'true' } })} label="Receber Notificações">
                       <MenuItem value={true}>Sim</MenuItem>
                       <MenuItem value={false}>Não</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
-
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Observações"
-                    multiline
-                    rows={3}
-                    value={formData.observacoes}
-                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                    size="small"
-                    placeholder="Observações adicionais sobre o cliente..."
-                  />
+                  <TextField fullWidth label="Observações" multiline rows={3} value={formData.observacoes} onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })} size="small" placeholder="Observações adicionais sobre o cliente..." />
                 </Grid>
               </Grid>
             </TabPanel>
           </DialogContent>
           <DialogActions sx={{ p: 3 }}>
             <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              sx={{
-                background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-              }}
-            >
-              {selectedCliente ? 'Atualizar' : 'Cadastrar'}
-            </Button>
+            <Button type="submit" variant="contained" sx={{ background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)' }}>{selectedCliente ? 'Atualizar' : 'Cadastrar'}</Button>
           </DialogActions>
         </form>
       </Dialog>
 
-      {/* Dialog de Visualização */}
+      {/* Dialog de Visualização (mesmo código anterior) */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          Detalhes do Cliente
-        </DialogTitle>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>Detalhes do Cliente</DialogTitle>
         <DialogContent>
           {selectedCliente && (
             <Box sx={{ mt: 2 }}>
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
-                  <Avatar
-                    src={selectedCliente.foto}
-                    sx={{
-                      width: 150,
-                      height: 150,
-                      mx: 'auto',
-                      mb: 2,
-                      bgcolor: '#9c27b0',
-                      fontSize: '3rem',
-                    }}
-                  >
-                    {!selectedCliente.foto && selectedCliente.nome?.charAt(0)}
-                  </Avatar>
-                  <Typography variant="h5" gutterBottom>
-                    {selectedCliente.nome}
-                  </Typography>
-                  <Chip
-                    label={selectedCliente.status}
-                    sx={{
-                      backgroundColor: getStatusBgColor(selectedCliente.status),
-                      color: getStatusColor(selectedCliente.status),
-                      fontWeight: 600,
-                    }}
-                  />
-                  
-                  {/* INFORMAÇÃO DE PONTOS */}
+                  <Avatar src={selectedCliente.foto} sx={{ width: 150, height: 150, mx: 'auto', mb: 2, bgcolor: '#9c27b0', fontSize: '3rem' }}>{!selectedCliente.foto && selectedCliente.nome?.charAt(0)}</Avatar>
+                  <Typography variant="h5" gutterBottom>{selectedCliente.nome}</Typography>
+                  <Chip label={selectedCliente.status} sx={{ backgroundColor: getStatusBgColor(selectedCliente.status), color: getStatusColor(selectedCliente.status), fontWeight: 600 }} />
                   <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <StarIcon fontSize="small" />
-                      Pontos de Fidelidade: {selectedCliente.totalPontos || 0}
-                    </Typography>
-                    <Chip
-                      label={selectedCliente.nivelFidelidade?.toUpperCase()}
-                      size="small"
-                      sx={{
-                        mt: 1,
-                        bgcolor: getNivelBg(selectedCliente.nivelFidelidade),
-                        color: getNivelCor(selectedCliente.nivelFidelidade),
-                        fontWeight: 600,
-                      }}
-                    />
+                    <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}><StarIcon fontSize="small" /> Pontos de Fidelidade: {selectedCliente.totalPontos || 0}</Typography>
+                    <Chip label={selectedCliente.nivelFidelidade?.toUpperCase()} size="small" sx={{ mt: 1, bgcolor: getNivelBg(selectedCliente.nivelFidelidade), color: getNivelCor(selectedCliente.nivelFidelidade), fontWeight: 600 }} />
                   </Box>
-                  
-                  {/* INFORMAÇÃO DE INDICAÇÃO */}
                   {selectedCliente.indicadoPorNome && (
                     <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <StarIcon fontSize="small" />
-                        Indicado por: {selectedCliente.indicadoPorNome}
-                      </Typography>
-                      {selectedCliente.dataIndicacao && (
-                        <Typography variant="caption" color="textSecondary">
-                          em {new Date(selectedCliente.dataIndicacao).toLocaleDateString('pt-BR')}
-                        </Typography>
-                      )}
+                      <Typography variant="subtitle2" sx={{ color: '#ff9800', display: 'flex', alignItems: 'center', gap: 1 }}><StarIcon fontSize="small" /> Indicado por: {selectedCliente.indicadoPorNome}</Typography>
+                      {selectedCliente.dataIndicacao && <Typography variant="caption" color="textSecondary">em {new Date(selectedCliente.dataIndicacao).toLocaleDateString('pt-BR')}</Typography>}
                     </Box>
                   )}
                 </Grid>
 
                 <Grid item xs={12} md={8}>
                   <Card variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                      Informações de Contato
-                    </Typography>
-                    
+                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>Informações de Contato</Typography>
                     <Grid container spacing={2}>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">Telefone</Typography>
-                        <Typography variant="body2">{selectedCliente.telefone}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">Telefone 2</Typography>
-                        <Typography variant="body2">{selectedCliente.telefone2 || '-'}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">Email</Typography>
-                        <Typography variant="body2">{selectedCliente.email}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">CPF</Typography>
-                        <Typography variant="body2">{selectedCliente.cpf || '-'}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">RG</Typography>
-                        <Typography variant="body2">{selectedCliente.rg || '-'}</Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="caption" color="textSecondary">Data Nasc.</Typography>
-                        <Typography variant="body2">
-                          {selectedCliente.dataNascimento 
-                            ? new Date(selectedCliente.dataNascimento).toLocaleDateString('pt-BR')
-                            : '-'}
-                        </Typography>
-                      </Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">Telefone</Typography><Typography variant="body2">{selectedCliente.telefone}</Typography></Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">Telefone 2</Typography><Typography variant="body2">{selectedCliente.telefone2 || '-'}</Typography></Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">Email</Typography><Typography variant="body2">{selectedCliente.email}</Typography></Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">CPF</Typography><Typography variant="body2">{selectedCliente.cpf || '-'}</Typography></Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">RG</Typography><Typography variant="body2">{selectedCliente.rg || '-'}</Typography></Grid>
+                      <Grid item xs={6}><Typography variant="caption" color="textSecondary">Data Nasc.</Typography><Typography variant="body2">{selectedCliente.dataNascimento ? new Date(selectedCliente.dataNascimento).toLocaleDateString('pt-BR') : '-'}</Typography></Grid>
                     </Grid>
-
                     <Divider sx={{ my: 2 }} />
-
-                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                      Endereço
-                    </Typography>
-                    <Typography variant="body2">
-                      {selectedCliente.logradouro || ''} {selectedCliente.numero || ''}
-                      {selectedCliente.complemento && ` - ${selectedCliente.complemento}`}
-                      <br />
-                      {selectedCliente.bairro || ''} - {selectedCliente.cidade || ''}/{selectedCliente.estado || ''}
-                      <br />
-                      CEP: {selectedCliente.cep || ''}
-                    </Typography>
-
-                    {selectedCliente.observacoes && (
-                      <>
-                        <Divider sx={{ my: 2 }} />
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                          Observações
-                        </Typography>
-                        <Typography variant="body2">{selectedCliente.observacoes}</Typography>
-                      </>
-                    )}
+                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>Endereço</Typography>
+                    <Typography variant="body2">{selectedCliente.logradouro || ''} {selectedCliente.numero || ''}{selectedCliente.complemento && ` - ${selectedCliente.complemento}`}<br />{selectedCliente.bairro || ''} - {selectedCliente.cidade || ''}/{selectedCliente.estado || ''}<br />CEP: {selectedCliente.cep || ''}</Typography>
+                    {selectedCliente.observacoes && (<><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="textSecondary" gutterBottom>Observações</Typography><Typography variant="body2">{selectedCliente.observacoes}</Typography></>)}
                   </Card>
                 </Grid>
 
-                {/* SEÇÃO DE INDICAÇÕES FEITAS POR ESTE CLIENTE */}
                 {indicacoes.length > 0 && (
                   <Grid item xs={12}>
                     <Card variant="outlined">
                       <CardContent>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#ff9800' }}>
-                          <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                          Indicações Feitas
-                        </Typography>
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Cliente Indicado</TableCell>
-                                <TableCell>Data</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell align="right">Pontos</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {indicacoes.map((ind) => (
-                                <TableRow key={ind.id}>
-                                  <TableCell>{ind.clienteIndicadoNome}</TableCell>
-                                  <TableCell>{new Date(ind.dataIndicacao).toLocaleDateString('pt-BR')}</TableCell>
-                                  <TableCell>
-                                    <Chip
-                                      size="small"
-                                      label={ind.status === 'confirmada' ? 'Confirmada' : ind.status === 'pendente' ? 'Pendente' : 'Cancelada'}
-                                      color={ind.status === 'confirmada' ? 'success' : ind.status === 'pendente' ? 'warning' : 'error'}
-                                    />
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    {ind.status === 'confirmada' ? (
-                                      <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>
-                                        +{ind.pontosGanhos}
-                                      </Typography>
-                                    ) : (
-                                      <Typography sx={{ color: '#ff9800' }}>
-                                        +{ind.pontosBonus} (pendente)
-                                      </Typography>
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#ff9800' }}><PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Indicações Feitas</Typography>
+                        <TableContainer><Table size="small"><TableHead><TableRow><TableCell>Cliente Indicado</TableCell><TableCell>Data</TableCell><TableCell>Status</TableCell><TableCell align="right">Pontos</TableCell></TableRow></TableHead>
+                        <TableBody>{indicacoes.map((ind) => (<TableRow key={ind.id}><TableCell>{ind.clienteIndicadoNome}</TableCell><TableCell>{new Date(ind.dataIndicacao).toLocaleDateString('pt-BR')}</TableCell><TableCell><Chip size="small" label={ind.status === 'confirmada' ? 'Confirmada' : ind.status === 'pendente' ? 'Pendente' : 'Cancelada'} color={ind.status === 'confirmada' ? 'success' : ind.status === 'pendente' ? 'warning' : 'error'} /></TableCell><TableCell align="right">{ind.status === 'confirmada' ? <Typography sx={{ fontWeight: 600, color: '#4caf50' }}>+{ind.pontosGanhos}</Typography> : <Typography sx={{ color: '#ff9800' }}>+{ind.pontosBonus} (pendente)</Typography>}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
                       </CardContent>
                     </Card>
                   </Grid>
                 )}
 
-                {/* 🔥 SEÇÃO DE ANAMNESE */}
                 {respostasAnamnese.length > 0 && (
                   <Grid item xs={12}>
                     <Card variant="outlined" sx={{ mt: 2 }}>
                       <CardContent>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                          <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                          Histórico de Anamnese
-                        </Typography>
-                        
-                        <List sx={{ width: '100%' }}>
-                          {respostasAnamnese.map((resposta, index) => {
-                            const formularioTitulo = getFormularioTitulo(resposta.formularioId);
-                            return (
-                              <React.Fragment key={resposta.id}>
-                                <ListItem
-                                  button
-                                  onClick={() => handleVerAnamnese(resposta)}
-                                  sx={{
-                                    borderRadius: 1,
-                                    '&:hover': { bgcolor: '#f3e5f5' },
-                                    py: 1.5
-                                  }}
-                                >
-                                  <ListItemAvatar>
-                                    <Avatar sx={{ bgcolor: '#9c27b0' }}>
-                                      <QuizIcon />
-                                    </Avatar>
-                                  </ListItemAvatar>
-                                  <ListItemText
-                                    primary={
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                          {formularioTitulo}
-                                        </Typography>
-                                        <Chip
-                                          label={resposta.status}
-                                          size="small"
-                                          color={
-                                            resposta.status === 'respondido' ? 'info' :
-                                            resposta.status === 'visto' ? 'success' : 'default'
-                                          }
-                                          sx={{ height: 20 }}
-                                        />
-                                      </Box>
-                                    }
-                                    secondary={
-                                      <>
-                                        <Typography variant="caption" color="textSecondary">
-                                          Respondido em: {new Date(resposta.respondidoEm || resposta.criadoEm).toLocaleDateString('pt-BR')}
-                                        </Typography>
-                                        <br />
-                                        <Typography variant="caption" color="textSecondary">
-                                          {resposta.respostas?.length || 0} respostas
-                                        </Typography>
-                                      </>
-                                    }
-                                  />
-                                  <IconButton edge="end" onClick={() => handleVerAnamnese(resposta)}>
-                                    <VisibilityIcon />
-                                  </IconButton>
-                                </ListItem>
-                                {index < respostasAnamnese.length - 1 && <Divider />}
-                              </React.Fragment>
-                            );
-                          })}
-                        </List>
-                        
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          startIcon={<AssignmentIcon />}
-                          onClick={() => navigate(`/anamnese/respostas?cliente=${selectedCliente.id}`)}
-                          sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
-                        >
-                          Ver todas no módulo de Anamnese
-                        </Button>
+                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}><AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Histórico de Anamnese</Typography>
+                        <List sx={{ width: '100%' }}>{respostasAnamnese.map((resposta, index) => (<React.Fragment key={resposta.id}><ListItem button onClick={() => handleVerAnamnese(resposta)} sx={{ borderRadius: 1, '&:hover': { bgcolor: '#f3e5f5' }, py: 1.5 }}><ListItemAvatar><Avatar sx={{ bgcolor: '#9c27b0' }}><QuizIcon /></Avatar></ListItemAvatar><ListItemText primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{getFormularioTitulo(resposta.formularioId)}</Typography><Chip label={resposta.status} size="small" color={resposta.status === 'respondido' ? 'info' : resposta.status === 'visto' ? 'success' : 'default'} sx={{ height: 20 }} /></Box>} secondary={<><Typography variant="caption" color="textSecondary">Respondido em: {new Date(resposta.respondidoEm || resposta.criadoEm).toLocaleDateString('pt-BR')}</Typography><br /><Typography variant="caption" color="textSecondary">{resposta.respostas?.length || 0} respostas</Typography></>} /><IconButton edge="end" onClick={() => handleVerAnamnese(resposta)}><VisibilityIcon /></IconButton></ListItem>{index < respostasAnamnese.length - 1 && <Divider />}</React.Fragment>))}</List>
+                        <Button fullWidth variant="outlined" startIcon={<AssignmentIcon />} onClick={() => navigate(`/anamnese/respostas?cliente=${selectedCliente.id}`)} sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}>Ver todas no módulo de Anamnese</Button>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -1645,226 +1521,24 @@ function ModernClientes() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenViewDialog(false)}>Fechar</Button>
-          {selectedCliente && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrintCliente}
-                disabled={isPrinting}
-                sx={{ mr: 1 }}
-              >
-                {isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}
-              </Button>
-              {respostasAnamnese.length > 0 && (
-                <Button
-                  variant="contained"
-                  startIcon={<AssignmentIcon />}
-                  onClick={() => handleVerAnamnese(respostasAnamnese[0])}
-                  sx={{ bgcolor: '#9c27b0' }}
-                >
-                  Ver Anamnese
-                </Button>
-              )}
-            </>
-          )}
+          {selectedCliente && (<><Button variant="outlined" startIcon={<PrintIcon />} onClick={handlePrintCliente} disabled={isPrinting} sx={{ mr: 1 }}>{isPrinting ? 'Imprimindo...' : 'Imprimir Ficha'}</Button>{respostasAnamnese.length > 0 && (<Button variant="contained" startIcon={<AssignmentIcon />} onClick={() => handleVerAnamnese(respostasAnamnese[0])} sx={{ bgcolor: '#9c27b0' }}>Ver Anamnese</Button>)}</>)}
         </DialogActions>
       </Dialog>
 
-      {/* DIALOG DE INDICAÇÃO */}
+      {/* Dialog de Indicação */}
       <Dialog open={openIndicacaoDialog} onClose={() => setOpenIndicacaoDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
-          <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-          Registrar Indicação
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 3 }}>
-              Ao indicar um novo cliente, você ganhará pontos de fidelidade quando ele realizar o primeiro atendimento.
-            </Alert>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                  Cliente que está indicando:
-                </Typography>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar src={selectedCliente?.foto} sx={{ bgcolor: '#9c27b0' }}>
-                      {selectedCliente?.nome?.charAt(0)}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                        {selectedCliente?.nome}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {selectedCliente?.telefone}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                        <StarIcon sx={{ color: '#ff9800', fontSize: 14 }} />
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: '#ff9800' }}>
-                          {selectedCliente?.totalPontos || 0} pontos
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                  Cliente indicado:
-                </Typography>
-                <Autocomplete
-                  options={clientes.filter(c => c.id !== selectedCliente?.id)}
-                  getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`}
-                  value={clienteIndicado}
-                  onChange={(e, newValue) => setClienteIndicado(newValue)}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Buscar cliente indicado"
-                      placeholder="Digite o nome do cliente..."
-                      size="small"
-                      fullWidth
-                    />
-                  )}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenIndicacaoDialog(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            onClick={handleRegistrarIndicacao}
-            disabled={!clienteIndicado}
-            sx={{ bgcolor: '#ff9800' }}
-          >
-            Registrar Indicação
-          </Button>
-        </DialogActions>
+        <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Registrar Indicação</DialogTitle>
+        <DialogContent><Box sx={{ mt: 2 }}><Alert severity="info" sx={{ mb: 3 }}>Ao indicar um novo cliente, você ganhará pontos de fidelidade quando ele realizar o primeiro atendimento.</Alert><Grid container spacing={2}><Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Cliente que está indicando:</Typography><Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Avatar src={selectedCliente?.foto} sx={{ bgcolor: '#9c27b0' }}>{selectedCliente?.nome?.charAt(0)}</Avatar><Box><Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedCliente?.nome}</Typography><Typography variant="caption" color="textSecondary">{selectedCliente?.telefone}</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}><StarIcon sx={{ color: '#ff9800', fontSize: 14 }} /><Typography variant="caption" sx={{ fontWeight: 600, color: '#ff9800' }}>{selectedCliente?.totalPontos || 0} pontos</Typography></Box></Box></Box></Paper></Grid><Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Cliente indicado:</Typography><Autocomplete options={clientes.filter(c => c.id !== selectedCliente?.id)} getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`} value={clienteIndicado} onChange={(e, newValue) => setClienteIndicado(newValue)} renderInput={(params) => (<TextField {...params} label="Buscar cliente indicado" placeholder="Digite o nome do cliente..." size="small" fullWidth />)} /></Grid></Grid></Box></DialogContent>
+        <DialogActions><Button onClick={() => setOpenIndicacaoDialog(false)}>Cancelar</Button><Button variant="contained" onClick={handleRegistrarIndicacao} disabled={!clienteIndicado} sx={{ bgcolor: '#ff9800' }}>Registrar Indicação</Button></DialogActions>
       </Dialog>
 
-      {/* 🔥 DIALOG DE ANAMNESE */}
+      {/* Dialog de Anamnese */}
       <Dialog open={openAnamneseDialog} onClose={() => setOpenAnamneseDialog(false)} maxWidth="md" fullWidth>
-        {anamneseSelecionada && (
-          <>
-            <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AssignmentIcon />
-                <Typography variant="h6">
-                  {getFormularioTitulo(anamneseSelecionada.formularioId)}
-                </Typography>
-              </Box>
-            </DialogTitle>
-            <DialogContent>
-              <Box sx={{ mt: 2 }}>
-                {/* Informações do cliente */}
-                <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Cliente
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                        {anamneseSelecionada.clienteNome}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Serviço
-                      </Typography>
-                      <Typography variant="body1">
-                        {anamneseSelecionada.servicoNome}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Profissional
-                      </Typography>
-                      <Typography variant="body1">
-                        {anamneseSelecionada.profissionalId || 'Não informado'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">
-                        Respondido em
-                      </Typography>
-                      <Typography variant="body1">
-                        {anamneseSelecionada.respondidoEm ? new Date(anamneseSelecionada.respondidoEm).toLocaleString('pt-BR') : '-'}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Paper>
-
-                {/* Respostas */}
-                <Typography variant="h6" gutterBottom>
-                  Respostas:
-                </Typography>
-                
-                {anamneseSelecionada.respostas?.map((resposta, index) => (
-                  <Accordion key={index} defaultExpanded={index === 0}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        {resposta.pergunta}
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      {resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          {resposta.resposta.map((item, i) => (
-                            <Chip key={i} label={item} size="small" />
-                          ))}
-                        </Box>
-                      ) : (
-                        <Typography variant="body1">
-                          {resposta.resposta}
-                        </Typography>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
-
-                {/* Observações do profissional */}
-                <TextField
-                  fullWidth
-                  label="Observações do profissional"
-                  multiline
-                  rows={3}
-                  value={anamneseSelecionada.observacoesProfissional || ''}
-                  placeholder="Adicione observações sobre este formulário..."
-                  sx={{ mt: 3 }}
-                />
-              </Box>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setOpenAnamneseDialog(false)}>Fechar</Button>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setOpenAnamneseDialog(false);
-                  // Opcional: navegar para página de edição
-                }}
-                sx={{ bgcolor: '#9c27b0' }}
-              >
-                Editar Observações
-              </Button>
-            </DialogActions>
-          </>
-        )}
+        {anamneseSelecionada && (<><DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><AssignmentIcon /><Typography variant="h6">{getFormularioTitulo(anamneseSelecionada.formularioId)}</Typography></Box></DialogTitle><DialogContent><Box sx={{ mt: 2 }}><Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}><Grid container spacing={2}><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Cliente</Typography><Typography variant="body1" sx={{ fontWeight: 600 }}>{anamneseSelecionada.clienteNome}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Serviço</Typography><Typography variant="body1">{anamneseSelecionada.servicoNome}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Profissional</Typography><Typography variant="body1">{anamneseSelecionada.profissionalId || 'Não informado'}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Respondido em</Typography><Typography variant="body1">{anamneseSelecionada.respondidoEm ? new Date(anamneseSelecionada.respondidoEm).toLocaleString('pt-BR') : '-'}</Typography></Grid></Grid></Paper><Typography variant="h6" gutterBottom>Respostas:</Typography>{anamneseSelecionada.respostas?.map((resposta, index) => (<Accordion key={index} defaultExpanded={index === 0}><AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{resposta.pergunta}</Typography></AccordionSummary><AccordionDetails>{resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (<Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>{resposta.resposta.map((item, i) => (<Chip key={i} label={item} size="small" />))}</Box>) : (<Typography variant="body1">{resposta.resposta}</Typography>)}</AccordionDetails></Accordion>))}<TextField fullWidth label="Observações do profissional" multiline rows={3} value={anamneseSelecionada.observacoesProfissional || ''} placeholder="Adicione observações sobre este formulário..." sx={{ mt: 3 }} /></Box></DialogContent><DialogActions><Button onClick={() => setOpenAnamneseDialog(false)}>Fechar</Button><Button variant="contained" onClick={() => setOpenAnamneseDialog(false)} sx={{ bgcolor: '#9c27b0' }}>Editar Observações</Button></DialogActions></>)}
       </Dialog>
 
       {/* Componente oculto para impressão */}
-      {selectedCliente && (
-        <Box sx={{ display: 'none' }}>
-          <ImprimirCliente
-            ref={componentRef}
-            cliente={selectedCliente}
-          />
-        </Box>
-      )}
+      {selectedCliente && (<Box sx={{ display: 'none' }}><ImprimirCliente ref={componentRef} cliente={selectedCliente} /></Box>)}
     </Box>
   );
 }
