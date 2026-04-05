@@ -1,5 +1,5 @@
 // src/pages/SiteSalao.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -71,6 +71,7 @@ import {
   Share as ShareIcon,
   ContactPhone as ContactIcon,
   Lock as LockIcon,
+  Cached as CachedIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -97,6 +98,84 @@ const menuItems = [
   { id: 'contato', label: 'Contato', icon: <ContactIcon /> },
   { id: 'tutorial', label: 'Área Restrita', icon: <LockIcon /> },
 ];
+
+// Classe de Cache com TTL (Time To Live)
+class DataCache {
+  constructor(ttlMinutes = 30) {
+    this.cache = new Map();
+    this.ttl = ttlMinutes * 60 * 1000; // Converte para milissegundos
+  }
+
+  set(key, data) {
+    this.cache.set(key, {
+      data: data,
+      timestamp: Date.now(),
+    });
+    
+    // Salva no localStorage para persistência
+    try {
+      localStorage.setItem(`cache_${key}`, JSON.stringify({
+        data: data,
+        timestamp: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('Erro ao salvar cache no localStorage:', e);
+    }
+  }
+
+  get(key) {
+    const cached = this.cache.get(key);
+    
+    if (cached) {
+      const isExpired = Date.now() - cached.timestamp > this.ttl;
+      if (!isExpired) {
+        return cached.data;
+      }
+      this.cache.delete(key);
+    }
+    
+    // Tenta recuperar do localStorage
+    try {
+      const stored = localStorage.getItem(`cache_${key}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const isExpired = Date.now() - parsed.timestamp > this.ttl;
+        if (!isExpired) {
+          this.cache.set(key, parsed);
+          return parsed.data;
+        }
+        localStorage.removeItem(`cache_${key}`);
+      }
+    } catch (e) {
+      console.warn('Erro ao recuperar cache do localStorage:', e);
+    }
+    
+    return null;
+  }
+
+  clear(key) {
+    if (key) {
+      this.cache.delete(key);
+      localStorage.removeItem(`cache_${key}`);
+    } else {
+      this.cache.clear();
+      // Limpa todos os itens de cache do localStorage
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('cache_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
+  }
+
+  isValid(key) {
+    const cached = this.cache.get(key);
+    if (cached) {
+      return Date.now() - cached.timestamp <= this.ttl;
+    }
+    return false;
+  }
+}
 
 // Componente de Loading
 const LoadingSpinner = () => (
@@ -145,14 +224,19 @@ function SiteSalao() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
   
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Inicializar cache com TTL de 30 minutos
+  const cacheRef = useRef(new DataCache(30));
 
   // Dados das redes sociais
   const [redesAtivas, setRedesAtivas] = useState({
@@ -173,20 +257,54 @@ function SiteSalao() {
     carregarDados();
   }, []);
 
-  const carregarDados = async () => {
+  // Função para carregar dados com cache
+  const carregarDados = async (forceRefresh = false) => {
     try {
-      setLoading(true);
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       
-      const [configData, servicosData, profissionaisData] = await Promise.all([
-        siteService.buscarConfiguracoes(),
-        siteService.buscarServicos(),
-        siteService.buscarProfissionais(),
-      ]);
+      const cache = cacheRef.current;
+      
+      // Tentar carregar do cache
+      let configData = forceRefresh ? null : cache.get('config');
+      let servicosData = forceRefresh ? null : cache.get('servicos');
+      let profissionaisData = forceRefresh ? null : cache.get('profissionais');
+      
+      // Carregar configurações
+      if (!configData) {
+        console.log('🔄 Carregando configurações do servidor...');
+        configData = await siteService.buscarConfiguracoes();
+        cache.set('config', configData);
+      } else {
+        console.log('✅ Configurações carregadas do cache');
+      }
+      
+      // Carregar serviços
+      if (!servicosData) {
+        console.log('🔄 Carregando serviços do servidor...');
+        servicosData = await siteService.buscarServicos();
+        cache.set('servicos', servicosData);
+      } else {
+        console.log('✅ Serviços carregados do cache');
+      }
+      
+      // Carregar profissionais
+      if (!profissionaisData) {
+        console.log('🔄 Carregando profissionais do servidor...');
+        profissionaisData = await siteService.buscarProfissionais();
+        cache.set('profissionais', profissionaisData);
+      } else {
+        console.log('✅ Profissionais carregados do cache');
+      }
       
       setConfig(configData || {});
       setServicos(sanitizarServicos(servicosData));
       setProfissionais(sanitizarProfissionais(profissionaisData));
+      setLastUpdate(new Date());
       
       // Verificar quais redes sociais estão configuradas
       const contato = configData?.salao?.contato || {};
@@ -214,13 +332,25 @@ function SiteSalao() {
         setFacebookUrl(fbUrl);
       }
       
+      if (forceRefresh) {
+        mostrarSnackbar('Dados atualizados com sucesso!', 'success');
+      }
+      
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setError('Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
       toast.error('Erro ao carregar dados do salão');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  // Função para limpar cache
+  const limparCache = () => {
+    cacheRef.current.clear();
+    mostrarSnackbar('Cache limpo com sucesso!', 'info');
+    carregarDados(true);
   };
 
   const mostrarSnackbar = (message, severity = 'success') => {
@@ -265,6 +395,12 @@ function SiteSalao() {
     return <SpaIcon />;
   };
 
+  // Formatar data da última atualização
+  const formatarUltimaAtualizacao = () => {
+    if (!lastUpdate) return 'Nunca';
+    return lastUpdate.toLocaleString('pt-BR');
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -272,7 +408,15 @@ function SiteSalao() {
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', p: 3 }}>
-        <Alert severity="error" sx={{ maxWidth: 600 }}>
+        <Alert 
+          severity="error" 
+          sx={{ maxWidth: 600 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => carregarDados(true)}>
+              Tentar Novamente
+            </Button>
+          }
+        >
           {error}
         </Alert>
       </Box>
@@ -304,7 +448,7 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  height: { xs: 40, sm: 50 }, // Tamanho padrão: 40px mobile, 50px desktop
+                  height: { xs: 40, sm: 50 },
                   width: 'auto',
                   maxWidth: { xs: 120, sm: 150 },
                   objectFit: 'contain',
@@ -328,31 +472,58 @@ function SiteSalao() {
             )}
           </Box>
           
-          {/* Menu Desktop */}
-          {!isMobile ? (
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              {menuItems.map((item) => (
-                <Button
-                  key={item.id}
-                  onClick={() => scrollToSection(item.id)}
-                  startIcon={item.icon}
-                  sx={{
-                    color: activeSection === item.id ? '#9c27b0' : '#666',
-                    fontWeight: activeSection === item.id ? 600 : 400,
-                    '&:hover': {
-                      backgroundColor: 'rgba(156,39,176,0.1)',
-                    },
-                  }}
-                >
-                  {item.label}
-                </Button>
-              ))}
-            </Box>
-          ) : (
-            <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: '#9c27b0' }}>
-              <MenuIcon />
-            </IconButton>
-          )}
+          {/* Indicador de Cache e Botão Refresh */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title={`Última atualização: ${formatarUltimaAtualizacao()}`}>
+              <Chip
+                size="small"
+                icon={<CachedIcon sx={{ fontSize: 16 }} />}
+                label="Cache ativo"
+                variant="outlined"
+                sx={{ 
+                  borderColor: '#9c27b0', 
+                  color: '#9c27b0',
+                  display: { xs: 'none', sm: 'flex' }
+                }}
+              />
+            </Tooltip>
+            
+            <Tooltip title="Atualizar dados">
+              <IconButton 
+                onClick={() => carregarDados(true)} 
+                disabled={refreshing}
+                sx={{ color: '#9c27b0' }}
+              >
+                {refreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
+              </IconButton>
+            </Tooltip>
+            
+            {/* Menu Desktop */}
+            {!isMobile ? (
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                {menuItems.map((item) => (
+                  <Button
+                    key={item.id}
+                    onClick={() => scrollToSection(item.id)}
+                    startIcon={item.icon}
+                    sx={{
+                      color: activeSection === item.id ? '#9c27b0' : '#666',
+                      fontWeight: activeSection === item.id ? 600 : 400,
+                      '&:hover': {
+                        backgroundColor: 'rgba(156,39,176,0.1)',
+                      },
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Box>
+            ) : (
+              <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: '#9c27b0' }}>
+                <MenuIcon />
+              </IconButton>
+            )}
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -377,7 +548,7 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  height: 60, // Tamanho um pouco maior no menu mobile
+                  height: 60,
                   width: 'auto',
                   maxWidth: 150,
                   objectFit: 'contain',
@@ -416,7 +587,23 @@ function SiteSalao() {
                 />
               </ListItem>
             ))}
+            <Divider sx={{ my: 2 }} />
+            <ListItem button onClick={() => carregarDados(true)}>
+              <ListItemIcon><RefreshIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+              <ListItemText primary="Atualizar Dados" />
+            </ListItem>
+            <ListItem button onClick={limparCache}>
+              <ListItemIcon><CachedIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+              <ListItemText primary="Limpar Cache" />
+            </ListItem>
           </List>
+          
+          <Box sx={{ mt: 2, p: 2, bgcolor: '#f3e5f5', borderRadius: 2 }}>
+            <Typography variant="caption" color="textSecondary">
+              📦 Cache ativo<br />
+              Última atualização: {formatarUltimaAtualizacao()}
+            </Typography>
+          </Box>
         </Box>
       </Drawer>
 
@@ -1279,7 +1466,7 @@ function SiteSalao() {
                     src={salaoLogo}
                     alt={salaoNome}
                     sx={{
-                      height: 35, // Footer - tamanho menor
+                      height: 35,
                       width: 'auto',
                       maxWidth: 100,
                       objectFit: 'contain',
@@ -1295,6 +1482,11 @@ function SiteSalao() {
                   © {new Date().getFullYear()} - {salaoNome} - Todos os direitos reservados
                 </Typography>
               </Box>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="caption" align="right" sx={{ display: 'block' }}>
+                Cache ativo | Última atualização: {formatarUltimaAtualizacao()}
+              </Typography>
             </Grid>
           </Grid>
         </Container>
@@ -1327,5 +1519,9 @@ function SiteSalao() {
     </Box>
   );
 }
+
+// Import CircularProgress e RefreshIcon
+import { CircularProgress } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 export default SiteSalao;
