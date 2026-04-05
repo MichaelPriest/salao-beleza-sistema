@@ -35,13 +35,11 @@ import {
   Drawer,
   useMediaQuery,
   useTheme,
-  CircularProgress,
   Link,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   Badge,
-  Tooltip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -77,8 +75,6 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
-import { firebaseService } from '../services/firebase';
-import { notificacoesService } from '../services/notificacoesService';
 import { QRCodeSVG } from 'qrcode.react';
 
 // Mapa de nomes dos dias
@@ -114,10 +110,39 @@ const LoadingSpinner = () => (
   </Box>
 );
 
+// Função para sanitizar strings
+const sanitizarString = (value, defaultValue = '') => {
+  if (value === null || value === undefined) return defaultValue;
+  return String(value);
+};
+
+// Função para sanitizar arrays de dados
+const sanitizarServicos = (servicos) => {
+  if (!Array.isArray(servicos)) return [];
+  return servicos.map(servico => ({
+    id: servico.id || `servico_${Date.now()}_${Math.random()}`,
+    nome: sanitizarString(servico.nome, 'Serviço'),
+    descricao: sanitizarString(servico.descricao, 'Serviço de qualidade com profissionais especializados.'),
+    categoria: sanitizarString(servico.categoria, 'Outros'),
+    preco: typeof servico.preco === 'number' && !isNaN(servico.preco) ? servico.preco : 0,
+    duracao: typeof servico.duracao === 'number' && !isNaN(servico.duracao) ? servico.duracao : 30,
+  }));
+};
+
+const sanitizarProfissionais = (profissionais) => {
+  if (!Array.isArray(profissionais)) return [];
+  return profissionais.map(prof => ({
+    id: prof.id || `prof_${Date.now()}_${Math.random()}`,
+    nome: sanitizarString(prof.nome, 'Profissional'),
+    especialidade: sanitizarString(prof.especialidade, 'Especialidade'),
+    foto: sanitizarString(prof.foto, ''),
+    avaliacao: typeof prof.avaliacao === 'number' && !isNaN(prof.avaliacao) ? prof.avaliacao : 5,
+  }));
+};
+
 function SiteSalao() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -159,9 +184,9 @@ function SiteSalao() {
         siteService.buscarProfissionais(),
       ]);
       
-      setConfig(configData);
-      setServicos(servicosData);
-      setProfissionais(profissionaisData);
+      setConfig(configData || {});
+      setServicos(sanitizarServicos(servicosData));
+      setProfissionais(sanitizarProfissionais(profissionaisData));
       
       // Verificar quais redes sociais estão configuradas
       const contato = configData?.salao?.contato || {};
@@ -175,14 +200,14 @@ function SiteSalao() {
       });
 
       // Configurar URLs das redes
-      if (instagramAtivo) {
-        const user = contato.instagram.replace('@', '').trim();
+      if (instagramAtivo && contato.instagram) {
+        const user = String(contato.instagram).replace('@', '').trim();
         setInstagramUser(user);
         setInstagramUrl(`https://instagram.com/${user}`);
       }
       
-      if (facebookAtivo) {
-        let fbUrl = contato.facebook;
+      if (facebookAtivo && contato.facebook) {
+        let fbUrl = String(contato.facebook);
         if (!fbUrl.startsWith('http')) {
           fbUrl = `https://facebook.com/${fbUrl}`;
         }
@@ -220,10 +245,24 @@ function SiteSalao() {
     if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
     
     const diasAbertos = Object.entries(config.horarioFuncionamento)
-      .filter(([_, h]) => h.aberto)
-      .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`);
+      .filter(([_, h]) => h && h.aberto === true)
+      .map(([dia, h]) => {
+        const nomeDia = nomesDias[dia] || dia;
+        const abertura = h.abertura || '09:00';
+        const fechamento = h.fechamento || '18:00';
+        return `${nomeDia}: ${abertura} - ${fechamento}`;
+      });
     
-    return diasAbertos.join(' | ');
+    return diasAbertos.length > 0 ? diasAbertos.join(' | ') : 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
+  };
+
+  // Função para obter ícone do serviço
+  const getServicoIcon = (categoria) => {
+    const cat = sanitizarString(categoria).toLowerCase();
+    if (cat.includes('cabelo')) return <CutIcon />;
+    if (cat.includes('unha')) return <BrushIcon />;
+    if (cat.includes('maquiagem')) return <FaceIcon />;
+    return <SpaIcon />;
   };
 
   if (loading) {
@@ -240,9 +279,9 @@ function SiteSalao() {
     );
   }
 
-  const salaoNome = config?.salao?.nome || 'Beauty Pro';
-  const salaoLogo = config?.salao?.logo;
-  const salaoEndereco = config?.salao?.endereco;
+  const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
+  const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
+  const salaoEndereco = config?.salao?.endereco || {};
   const contato = config?.salao?.contato || {};
 
   return (
@@ -270,6 +309,9 @@ function SiteSalao() {
                   maxWidth: { xs: 120, sm: 150 },
                   objectFit: 'contain',
                   mr: 1,
+                }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
                 }}
               />
             ) : (
@@ -336,6 +378,9 @@ function SiteSalao() {
                   width: 'auto',
                   mx: 'auto',
                   mb: 1,
+                }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
                 }}
               />
               <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
@@ -830,10 +875,7 @@ function SiteSalao() {
                             boxShadow: '0 4px 10px rgba(156,39,176,0.3)',
                           }}
                         >
-                          {servico.categoria === 'Cabelo' ? <CutIcon /> :
-                           servico.categoria === 'Unhas' ? <BrushIcon /> :
-                           servico.categoria === 'Maquiagem' ? <FaceIcon /> :
-                           <SpaIcon />}
+                          {getServicoIcon(servico.categoria)}
                         </Avatar>
                         
                         <Box sx={{ mt: 4 }}>
@@ -841,7 +883,7 @@ function SiteSalao() {
                             {servico.nome}
                           </Typography>
                           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                            {servico.descricao || 'Serviço de qualidade com profissionais especializados.'}
+                            {servico.descricao}
                           </Typography>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Chip
@@ -851,7 +893,7 @@ function SiteSalao() {
                               sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
                             />
                             <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
-                              R$ {servico.preco?.toFixed(2)}
+                              R$ {servico.preco.toFixed(2)}
                             </Typography>
                           </Box>
                         </Box>
@@ -897,7 +939,7 @@ function SiteSalao() {
                   >
                     <Card sx={{ textAlign: 'center', p: 3, transition: '0.3s' }}>
                       <Avatar
-                        src={prof.foto}
+                        src={prof.foto || undefined}
                         sx={{
                           width: 120,
                           height: 120,
@@ -906,7 +948,7 @@ function SiteSalao() {
                           border: '4px solid #9c27b0',
                         }}
                       >
-                        {prof.nome?.charAt(0)}
+                        {prof.nome.charAt(0).toUpperCase()}
                       </Avatar>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {prof.nome}
@@ -914,7 +956,7 @@ function SiteSalao() {
                       <Typography variant="body2" color="textSecondary" gutterBottom>
                         {prof.especialidade}
                       </Typography>
-                      <Rating value={5} readOnly size="small" sx={{ color: '#ff9800' }} />
+                      <Rating value={prof.avaliacao} readOnly size="small" sx={{ color: '#ff9800' }} />
                     </Card>
                   </motion.div>
                 </Grid>
@@ -1091,14 +1133,20 @@ function SiteSalao() {
               </Typography>
               
               <List>
-                {salaoEndereco && (salaoEndereco.logradouro || salaoEndereco.cidade) && (
+                {(salaoEndereco.logradouro || salaoEndereco.cidade) && (
                   <ListItem>
                     <ListItemIcon>
                       <LocationIcon sx={{ color: '#9c27b0' }} />
                     </ListItemIcon>
                     <ListItemText 
                       primary="Endereço"
-                      secondary={`${salaoEndereco.logradouro || ''}, ${salaoEndereco.numero || ''} - ${salaoEndereco.bairro || ''}, ${salaoEndereco.cidade || ''}/${salaoEndereco.estado || ''}`}
+                      secondary={[
+                        salaoEndereco.logradouro || '',
+                        salaoEndereco.numero ? `, ${salaoEndereco.numero}` : '',
+                        salaoEndereco.bairro ? ` - ${salaoEndereco.bairro}` : '',
+                        salaoEndereco.cidade ? `, ${salaoEndereco.cidade}` : '',
+                        salaoEndereco.estado ? `/${salaoEndereco.estado}` : ''
+                      ].filter(Boolean).join('') || 'Endereço não informado'}
                     />
                   </ListItem>
                 )}
@@ -1142,7 +1190,7 @@ function SiteSalao() {
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                 {redesAtivas.whatsapp && contato.whatsapp && (
                   <IconButton 
-                    href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`} 
+                    href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`} 
                     target="_blank" 
                     sx={{ color: '#25D366' }}
                   >
@@ -1202,7 +1250,7 @@ function SiteSalao() {
           <Grid container alignItems="center" justifyContent="space-between" spacing={2}>
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' } }}>
-                {salaoLogo ? (
+                {salaoLogo && (
                   <Box
                     component="img"
                     src={salaoLogo}
@@ -1215,19 +1263,15 @@ function SiteSalao() {
                       borderRadius: 1,
                       p: 0.5,
                     }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
                   />
-                ) : (
-                  <SpaIcon sx={{ mr: 1 }} />
                 )}
-                {!salaoLogo && (
-                  <Typography variant="h6">{salaoNome}</Typography>
-                )}
+                <Typography variant="body2">
+                  © {new Date().getFullYear()} - {salaoNome} - Todos os direitos reservados
+                </Typography>
               </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="body2" align={{ xs: 'center', sm: 'right' }}>
-                © {new Date().getFullYear()} - Todos os direitos reservados
-              </Typography>
             </Grid>
           </Grid>
         </Container>
@@ -1245,7 +1289,7 @@ function SiteSalao() {
               transform: 'scale(1.1)',
             }
           }}
-          href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`}
+          href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`}
           target="_blank"
         >
           <WhatsAppIcon />
