@@ -20,6 +20,7 @@ import {
   Divider,
   Paper,
   Chip,
+  Link,
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
@@ -30,6 +31,10 @@ import {
   Close as CloseIcon,
   Star as StarIcon,
   EmojiEvents as TrophyIcon,
+  LocationOn as LocationIcon,
+  Schedule as ScheduleIcon,
+  Instagram as InstagramIcon,
+  Facebook as FacebookIcon,
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -50,23 +55,38 @@ function CadastroIndicacao() {
   const [carregandoIndicacao, setCarregandoIndicacao] = useState(true);
   const [erroIndicacao, setErroIndicacao] = useState(null);
   const [cadastroRealizado, setCadastroRealizado] = useState(false);
-  const [senha, setSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
-  const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [config, setConfig] = useState({ pontosIndicacao: 100 });
+  const [config, setConfig] = useState({ 
+    pontosIndicacao: 100,
+    pontosBoasVindas: 50,
+    diasValidadeIndicacao: 30 
+  });
+  const [configSalao, setConfigSalao] = useState(null);
+  const [redesSociais, setRedesSociais] = useState({
+    instagram: '',
+    facebook: '',
+    whatsapp: ''
+  });
 
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
     telefone: '',
+    telefone2: '',
     cpf: '',
+    rg: '',
     dataNascimento: '',
-    senha: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
   });
 
-  // Carregar dados da indicação
+  // Carregar dados da indicação e configurações do salão
   useEffect(() => {
-    const carregarIndicacao = async () => {
+    const carregarDados = async () => {
       if (!indicacaoId) {
         setErroIndicacao('Link de indicação inválido');
         setCarregandoIndicacao(false);
@@ -74,20 +94,42 @@ function CadastroIndicacao() {
       }
 
       try {
+        // Carregar configurações do salão
+        const configData = await firebaseService.getAll('configuracoes');
+        if (configData && configData.length > 0) {
+          const configSalaoData = configData[0];
+          setConfigSalao(configSalaoData);
+          
+          // Configurar redes sociais
+          const contato = configSalaoData?.salao?.contato || {};
+          setRedesSociais({
+            instagram: contato.instagram || '',
+            facebook: contato.facebook || '',
+            whatsapp: contato.whatsapp || '',
+          });
+        }
+
+        // Carregar configurações de fidelidade
+        const configFidelidade = await firebaseService.getAll('config_fidelidade');
+        if (configFidelidade && configFidelidade.length > 0) {
+          setConfig(prev => ({
+            ...prev,
+            pontosIndicacao: configFidelidade[0].pontosIndicacao || 100,
+            pontosBoasVindas: configFidelidade[0].pontosBoasVindas || 50,
+            diasValidadeIndicacao: configFidelidade[0].diasValidadeIndicacao || 30,
+          }));
+        }
+
         // Buscar indicação
-        const indicacoes = await firebaseService.query('indicacoes', [
-          { field: 'id', operator: '==', value: indicacaoId }
-        ]);
+        let indicacaoEncontrada = null;
         
-        let indicacaoEncontrada = indicacoes?.[0];
-        
-        if (!indicacaoEncontrada) {
-          // Tentar buscar por documentId
-          try {
-            indicacaoEncontrada = await firebaseService.getById('indicacoes', indicacaoId);
-          } catch (e) {
-            console.error('Erro ao buscar indicação por ID:', e);
-          }
+        try {
+          indicacaoEncontrada = await firebaseService.getById('indicacoes', indicacaoId);
+        } catch (e) {
+          const indicacoes = await firebaseService.query('indicacoes', [
+            { field: 'id', operator: '==', value: indicacaoId }
+          ]);
+          indicacaoEncontrada = indicacoes?.[0];
         }
 
         if (!indicacaoEncontrada) {
@@ -96,7 +138,7 @@ function CadastroIndicacao() {
           return;
         }
 
-        // Verificar se indicação expirou
+        // Verificar status
         if (indicacaoEncontrada.status === 'expirada') {
           setErroIndicacao('Esta indicação expirou');
           setCarregandoIndicacao(false);
@@ -131,7 +173,7 @@ function CadastroIndicacao() {
 
         setIndicacao(indicacaoEncontrada);
         
-        // Pré-preencher dados se fornecidos
+        // Pré-preencher dados
         if (indicacaoEncontrada.clienteIndicadoNome) {
           setFormData(prev => ({ ...prev, nome: indicacaoEncontrada.clienteIndicadoNome }));
         }
@@ -143,31 +185,30 @@ function CadastroIndicacao() {
         }
 
       } catch (error) {
-        console.error('Erro ao carregar indicação:', error);
+        console.error('Erro ao carregar dados:', error);
         setErroIndicacao('Erro ao carregar dados da indicação');
       } finally {
         setCarregandoIndicacao(false);
       }
     };
 
-    carregarIndicacao();
-    carregarConfiguracoes();
+    carregarDados();
   }, [indicacaoId]);
-
-  const carregarConfiguracoes = async () => {
-    try {
-      const configs = await firebaseService.getAll('config_fidelidade');
-      if (configs && configs.length > 0) {
-        setConfig(configs[0]);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configurações:', error);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCepFound = (dados) => {
+    setFormData(prev => ({
+      ...prev,
+      logradouro: dados.logradouro || prev.logradouro,
+      bairro: dados.bairro || prev.bairro,
+      cidade: dados.cidade || prev.cidade,
+      estado: dados.estado || prev.estado,
+    }));
+    toast.success('Endereço preenchido automaticamente!');
   };
 
   const validarEmail = (email) => {
@@ -181,10 +222,10 @@ function CadastroIndicacao() {
   };
 
   const validarCPF = (cpf) => {
+    if (!cpf) return true;
     const numeros = cpf.replace(/\D/g, '');
     if (numeros.length !== 11) return false;
     
-    // Validação básica de CPF
     let soma = 0;
     let resto;
     
@@ -213,6 +254,10 @@ function CadastroIndicacao() {
     }
     if (formData.nome.length < 3) {
       toast.error('Nome deve ter pelo menos 3 caracteres');
+      return false;
+    }
+    if (formData.cpf && !validarCPF(formData.cpf)) {
+      toast.error('CPF inválido');
       return false;
     }
     return true;
@@ -273,8 +318,17 @@ function CadastroIndicacao() {
         nome: formData.nome,
         email: formData.email,
         telefone: formData.telefone,
+        telefone2: formData.telefone2 || '',
         cpf: formData.cpf || '',
+        rg: formData.rg || '',
         dataNascimento: formData.dataNascimento || '',
+        cep: formData.cep || '',
+        logradouro: formData.logradouro || '',
+        numero: formData.numero || '',
+        complemento: formData.complemento || '',
+        bairro: formData.bairro || '',
+        cidade: formData.cidade || '',
+        estado: formData.estado || '',
         status: 'Novo',
         nivelFidelidade: 'bronze',
         totalPontos: 0,
@@ -283,41 +337,31 @@ function CadastroIndicacao() {
         indicadoPor: indicacao?.clienteId,
         indicadoPorNome: indicacao?.clienteNome,
         dataIndicacao: agora.toISOString(),
+        primeiroAtendimentoRealizado: false, // 🔥 Controle do primeiro atendimento
+        pontosIndicacaoLiberados: false, // 🔥 Pontos de indicação ainda não liberados
         createdAt: agora.toISOString(),
         updatedAt: agora.toISOString(),
       };
 
       const clienteId = await firebaseService.add('clientes', novoCliente);
 
-      // Atualizar indicação
+      // 🔥 ATUALIZAR INDICAÇÃO - NÃO LIBERAR PONTOS AINDA
       await firebaseService.update('indicacoes', indicacao.id, {
         clienteIndicadoId: clienteId,
         clienteIndicadoNome: formData.nome,
         clienteIndicadoEmail: formData.email,
         clienteIndicadoTelefone: formData.telefone,
-        status: 'confirmada',
-        dataConfirmacao: agora.toISOString(),
-        pontosGanhos: config.pontosIndicacao,
+        status: 'pendente', // 🔥 Continua pendente até primeiro atendimento
+        dataCadastro: agora.toISOString(),
+        pontosLiberados: false, // 🔥 Pontos ainda não liberados
         updatedAt: agora.toISOString(),
       });
 
-      // Adicionar pontos para o indicador
-      await firebaseService.add('pontuacao', {
-        clienteId: indicacao.clienteId,
-        clienteNome: indicacao.clienteNome,
-        quantidade: config.pontosIndicacao,
-        tipo: 'credito',
-        motivo: `Bônus por indicação de ${formData.nome}`,
-        data: agora.toISOString(),
-        indicacaoId: indicacao.id,
-        createdAt: agora.toISOString(),
-      });
-
-      // Adicionar pontos de boas-vindas para o novo cliente (opcional)
+      // 🔥 ADICIONAR PONTOS DE BOAS-VINDAS (liberados imediatamente)
       await firebaseService.add('pontuacao', {
         clienteId: clienteId,
         clienteNome: formData.nome,
-        quantidade: 50,
+        quantidade: config.pontosBoasVindas,
         tipo: 'credito',
         motivo: 'Bônus de boas-vindas',
         data: agora.toISOString(),
@@ -338,6 +382,26 @@ function CadastroIndicacao() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatarHorarioFuncionamento = () => {
+    if (!configSalao?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
+    
+    const nomesDias = {
+      segunda: 'Segunda',
+      terca: 'Terça',
+      quarta: 'Quarta',
+      quinta: 'Quinta',
+      sexta: 'Sexta',
+      sabado: 'Sábado',
+      domingo: 'Domingo'
+    };
+    
+    const diasAbertos = Object.entries(configSalao.horarioFuncionamento)
+      .filter(([_, h]) => h && h.aberto === true)
+      .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`);
+    
+    return diasAbertos.join(' | ');
   };
 
   if (carregandoIndicacao) {
@@ -388,7 +452,13 @@ function CadastroIndicacao() {
                 Cadastro Realizado com Sucesso!
               </Typography>
               <Typography variant="body2" color="textSecondary" paragraph>
-                Seja bem-vindo(a) ao nosso salão! Você recebeu 50 pontos de boas-vindas.
+                Seja bem-vindo(a) ao {configSalao?.salao?.nome || 'nosso salão'}!
+              </Typography>
+              <Typography variant="body2" color="textSecondary" paragraph>
+                Você recebeu {config.pontosBoasVindas} pontos de boas-vindas.
+              </Typography>
+              <Typography variant="body2" color="textSecondary" paragraph>
+                <strong>⭐ Você ganhará mais {config.pontosIndicacao} pontos quando realizar seu primeiro atendimento!</strong>
               </Typography>
               <Typography variant="body2" color="textSecondary" paragraph>
                 Em breve você será redirecionado para fazer login.
@@ -402,221 +472,509 @@ function CadastroIndicacao() {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Card>
-          <CardContent sx={{ p: 4 }}>
-            {/* Header com informações do indicador */}
-            <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <Avatar
-                sx={{
-                  width: 80,
-                  height: 80,
-                  bgcolor: '#9c27b0',
-                  mx: 'auto',
-                  mb: 2,
-                }}
-              >
-                <PersonAddIcon sx={{ fontSize: 40 }} />
-              </Avatar>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 1 }}>
-                Você foi indicado(a)!
-              </Typography>
-              <Typography variant="body1" color="textSecondary">
-                {indicacao?.clienteNome} indicou você para conhecer nosso salão.
-              </Typography>
-              <Chip
-                icon={<StarIcon />}
-                label={`Ganhe ${config.pontosIndicacao} pontos no primeiro atendimento`}
-                sx={{ mt: 2, bgcolor: '#fff3e0', color: '#ff9800' }}
-              />
-            </Box>
-
-            <Divider sx={{ my: 3 }} />
-
-            {/* Stepper */}
-            <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-              {steps.map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-
-            {/* Formulário */}
-            <Box component="form" noValidate>
-              {activeStep === 0 && (
-                <Grid container spacing={3}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Nome Completo *"
-                      name="nome"
-                      value={formData.nome}
-                      onChange={handleInputChange}
-                      required
-                      autoFocus
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <MaskedInput
-                      mask="cpf"
-                      label="CPF"
-                      name="cpf"
-                      value={formData.cpf}
-                      onChange={handleInputChange}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <MaskedInput
-                      mask="data"
-                      label="Data de Nascimento"
-                      name="dataNascimento"
-                      value={formData.dataNascimento}
-                      onChange={handleInputChange}
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </Grid>
-                </Grid>
-              )}
-
-              {activeStep === 1 && (
-                <Grid container spacing={3}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="E-mail *"
-                      name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      required
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <EmailIcon color="action" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <MaskedInput
-                      mask="telefone"
-                      label="Telefone *"
-                      name="telefone"
-                      value={formData.telefone}
-                      onChange={handleInputChange}
-                      required
-                      startAdornment={
-                        <InputAdornment position="start">
-                          <PhoneIcon color="action" />
-                        </InputAdornment>
-                      }
-                    />
-                  </Grid>
-                </Grid>
-              )}
-
-              {activeStep === 2 && (
-                <Box>
-                  <Alert severity="success" sx={{ mb: 3 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Revise seus dados antes de finalizar
-                    </Typography>
-                  </Alert>
-
-                  <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Nome Completo
-                        </Typography>
-                        <Typography variant="body1">{formData.nome}</Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          E-mail
-                        </Typography>
-                        <Typography variant="body1">{formData.email}</Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="subtitle2" color="textSecondary">
-                          Telefone
-                        </Typography>
-                        <Typography variant="body1">{formData.telefone}</Typography>
-                      </Grid>
-                      {formData.cpf && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle2" color="textSecondary">
-                            CPF
-                          </Typography>
-                          <Typography variant="body1">{formData.cpf}</Typography>
-                        </Grid>
-                      )}
-                      {formData.dataNascimento && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="subtitle2" color="textSecondary">
-                            Data de Nascimento
-                          </Typography>
-                          <Typography variant="body1">{formData.dataNascimento}</Typography>
-                        </Grid>
-                      )}
-                    </Grid>
-                  </Paper>
-
-                  <Alert severity="info" icon={<TrophyIcon />}>
-                    <Typography variant="body2">
-                      <strong>Benefícios de se cadastrar:</strong>
-                      <br />
-                      • 50 pontos de boas-vindas
-                      <br />
-                      • {config.pontosIndicacao} pontos extras quando realizar o primeiro atendimento
-                      <br />
-                      • Programa de fidelidade com descontos exclusivos
-                    </Typography>
-                  </Alert>
-                </Box>
-              )}
-
-              {/* Botões de navegação */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-                <Button
-                  onClick={handleBack}
-                  disabled={activeStep === 0}
-                  variant="outlined"
-                >
-                  Voltar
-                </Button>
-                {activeStep === steps.length - 1 ? (
-                  <Button
-                    variant="contained"
-                    onClick={handleSubmit}
-                    disabled={loading}
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Grid container spacing={4}>
+        {/* Coluna do Formulário */}
+        <Grid item xs={12} md={7}>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card>
+              <CardContent sx={{ p: 4 }}>
+                {/* Header com informações do indicador */}
+                <Box sx={{ textAlign: 'center', mb: 4 }}>
+                  <Avatar
                     sx={{
-                      background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                      width: 80,
+                      height: 80,
+                      bgcolor: '#9c27b0',
+                      mx: 'auto',
+                      mb: 2,
                     }}
                   >
-                    {loading ? <CircularProgress size={24} /> : 'Finalizar Cadastro'}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    onClick={handleNext}
-                    sx={{ bgcolor: '#9c27b0' }}
-                  >
-                    Próximo
-                  </Button>
+                    <PersonAddIcon sx={{ fontSize: 40 }} />
+                  </Avatar>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 1 }}>
+                    Você foi indicado(a)!
+                  </Typography>
+                  <Typography variant="body1" color="textSecondary">
+                    {indicacao?.clienteNome} indicou você para conhecer nosso salão.
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
+                    <Chip
+                      icon={<StarIcon />}
+                      label={`${config.pontosBoasVindas} pontos de boas-vindas`}
+                      sx={{ bgcolor: '#e8f5e9', color: '#4caf50' }}
+                    />
+                    <Chip
+                      icon={<TrophyIcon />}
+                      label={`+${config.pontosIndicacao} pontos no 1º atendimento`}
+                      sx={{ bgcolor: '#fff3e0', color: '#ff9800' }}
+                    />
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Stepper */}
+                <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+                  {steps.map((label) => (
+                    <Step key={label}>
+                      <StepLabel>{label}</StepLabel>
+                    </Step>
+                  ))}
+                </Stepper>
+
+                {/* Formulário */}
+                <Box component="form" noValidate>
+                  {activeStep === 0 && (
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Nome Completo *"
+                          name="nome"
+                          value={formData.nome}
+                          onChange={handleInputChange}
+                          required
+                          autoFocus
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <MaskedInput
+                          mask="cpf"
+                          label="CPF"
+                          name="cpf"
+                          value={formData.cpf}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <MaskedInput
+                          mask="rg"
+                          label="RG"
+                          name="rg"
+                          value={formData.rg}
+                          onChange={handleInputChange}
+                          placeholder="00.000.000-0"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <MaskedInput
+                          mask="data"
+                          label="Data de Nascimento"
+                          name="dataNascimento"
+                          value={formData.dataNascimento}
+                          onChange={handleInputChange}
+                          placeholder="DD/MM/AAAA"
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
+
+                  {activeStep === 1 && (
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="E-mail *"
+                          name="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          required
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <EmailIcon color="action" />
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <MaskedInput
+                          mask="telefone"
+                          label="Telefone *"
+                          name="telefone"
+                          value={formData.telefone}
+                          onChange={handleInputChange}
+                          required
+                          startAdornment={
+                            <InputAdornment position="start">
+                              <PhoneIcon color="action" />
+                            </InputAdornment>
+                          }
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <MaskedInput
+                          mask="telefone"
+                          label="Telefone Secundário"
+                          name="telefone2"
+                          value={formData.telefone2}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <MaskedInput
+                          mask="cep"
+                          label="CEP"
+                          name="cep"
+                          value={formData.cep}
+                          onChange={(e) => {
+                            handleInputChange(e);
+                            if (e.target.value.replace(/\D/g, '').length === 8) {
+                              // Buscar endereço automático
+                              fetch(`https://viacep.com.br/ws/${e.target.value.replace(/\D/g, '')}/json/`)
+                                .then(res => res.json())
+                                .then(data => {
+                                  if (!data.erro) {
+                                    handleCepFound(data);
+                                  }
+                                })
+                                .catch(console.error);
+                            }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={8}>
+                        <TextField
+                          fullWidth
+                          label="Logradouro"
+                          name="logradouro"
+                          value={formData.logradouro}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Número"
+                          name="numero"
+                          value={formData.numero}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Complemento"
+                          name="complemento"
+                          value={formData.complemento}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Bairro"
+                          name="bairro"
+                          value={formData.bairro}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          label="Cidade"
+                          name="cidade"
+                          value={formData.cidade}
+                          onChange={handleInputChange}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={2}>
+                        <TextField
+                          fullWidth
+                          label="UF"
+                          name="estado"
+                          value={formData.estado}
+                          onChange={handleInputChange}
+                          inputProps={{ maxLength: 2 }}
+                        />
+                      </Grid>
+                    </Grid>
+                  )}
+
+                  {activeStep === 2 && (
+                    <Box>
+                      <Alert severity="success" sx={{ mb: 3 }}>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Revise seus dados antes de finalizar
+                        </Typography>
+                      </Alert>
+
+                      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" color="textSecondary">
+                              Nome Completo
+                            </Typography>
+                            <Typography variant="body1">{formData.nome}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="subtitle2" color="textSecondary">
+                              E-mail
+                            </Typography>
+                            <Typography variant="body1">{formData.email}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="subtitle2" color="textSecondary">
+                              Telefone
+                            </Typography>
+                            <Typography variant="body1">{formData.telefone}</Typography>
+                          </Grid>
+                          {formData.cpf && (
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="subtitle2" color="textSecondary">
+                                CPF
+                              </Typography>
+                              <Typography variant="body1">{formData.cpf}</Typography>
+                            </Grid>
+                          )}
+                          {formData.dataNascimento && (
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="subtitle2" color="textSecondary">
+                                Data de Nascimento
+                              </Typography>
+                              <Typography variant="body1">{formData.dataNascimento}</Typography>
+                            </Grid>
+                          )}
+                          {(formData.logradouro || formData.cidade) && (
+                            <Grid item xs={12}>
+                              <Typography variant="subtitle2" color="textSecondary">
+                                Endereço
+                              </Typography>
+                              <Typography variant="body1">
+                                {formData.logradouro} {formData.numero}
+                                {formData.complemento && ` - ${formData.complemento}`}
+                                <br />
+                                {formData.bairro && `${formData.bairro} - `}
+                                {formData.cidade}/{formData.estado}
+                                {formData.cep && ` - CEP: ${formData.cep}`}
+                              </Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Paper>
+
+                      <Alert severity="info" icon={<TrophyIcon />}>
+                        <Typography variant="body2">
+                          <strong>🎁 Benefícios exclusivos:</strong>
+                          <br />
+                          • ✅ {config.pontosBoasVindas} pontos de boas-vindas (liberados agora)
+                          <br />
+                          • ⭐ {config.pontosIndicacao} pontos extras quando realizar seu primeiro atendimento
+                          <br />
+                          • 🎯 Programa de fidelidade com descontos exclusivos
+                          <br />
+                          • 💝 Brinde especial na primeira visita
+                        </Typography>
+                      </Alert>
+                    </Box>
+                  )}
+
+                  {/* Botões de navegação */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+                    <Button
+                      onClick={handleBack}
+                      disabled={activeStep === 0}
+                      variant="outlined"
+                    >
+                      Voltar
+                    </Button>
+                    {activeStep === steps.length - 1 ? (
+                      <Button
+                        variant="contained"
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        sx={{
+                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                        }}
+                      >
+                        {loading ? <CircularProgress size={24} /> : 'Finalizar Cadastro'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        onClick={handleNext}
+                        sx={{ bgcolor: '#9c27b0' }}
+                      >
+                        Próximo
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        {/* Coluna de Informações do Salão */}
+        <Grid item xs={12} md={5}>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <Card sx={{ position: 'sticky', top: 20 }}>
+              <CardContent sx={{ p: 4 }}>
+                {/* Logo do Salão */}
+                <Box sx={{ textAlign: 'center', mb: 3 }}>
+                  {configSalao?.salao?.logo ? (
+                    <Box
+                      component="img"
+                      src={configSalao.salao.logo}
+                      alt={configSalao.salao.nome}
+                      sx={{
+                        height: 80,
+                        width: 'auto',
+                        maxWidth: 200,
+                        objectFit: 'contain',
+                        mx: 'auto',
+                      }}
+                    />
+                  ) : (
+                    <Avatar
+                      sx={{
+                        width: 80,
+                        height: 80,
+                        bgcolor: '#9c27b0',
+                        mx: 'auto',
+                      }}
+                    >
+                      <PersonAddIcon sx={{ fontSize: 40 }} />
+                    </Avatar>
+                  )}
+                  <Typography variant="h5" sx={{ fontWeight: 700, mt: 2, color: '#9c27b0' }}>
+                    {configSalao?.salao?.nome || 'Beauty Pro'}
+                  </Typography>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Informações de Contato */}
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PhoneIcon sx={{ color: '#9c27b0' }} /> Contato
+                </Typography>
+                
+                {configSalao?.salao?.contato?.telefone && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="textSecondary">Telefone</Typography>
+                    <Typography variant="body1">{configSalao.salao.contato.telefone}</Typography>
+                  </Box>
                 )}
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-      </motion.div>
+                
+                {configSalao?.salao?.contato?.whatsapp && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="textSecondary">WhatsApp</Typography>
+                    <Typography variant="body1">{configSalao.salao.contato.whatsapp}</Typography>
+                  </Box>
+                )}
+                
+                {configSalao?.salao?.contato?.email && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="textSecondary">E-mail</Typography>
+                    <Typography variant="body1">{configSalao.salao.contato.email}</Typography>
+                  </Box>
+                )}
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Endereço */}
+                {configSalao?.salao?.endereco && (
+                  <>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <LocationIcon sx={{ color: '#9c27b0' }} /> Endereço
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {configSalao.salao.endereco.logradouro || ''} {configSalao.salao.endereco.numero || ''}
+                      {configSalao.salao.endereco.complemento && ` - ${configSalao.salao.endereco.complemento}`}
+                      <br />
+                      {configSalao.salao.endereco.bairro && `${configSalao.salao.endereco.bairro}, `}
+                      {configSalao.salao.endereco.cidade}/{configSalao.salao.endereco.estado}
+                      <br />
+                      CEP: {configSalao.salao.endereco.cep}
+                    </Typography>
+                    <Divider sx={{ my: 3 }} />
+                  </>
+                )}
+
+                {/* Horário de Funcionamento */}
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ScheduleIcon sx={{ color: '#9c27b0' }} /> Horário de Funcionamento
+                </Typography>
+                <Typography variant="body2">
+                  {formatarHorarioFuncionamento()}
+                </Typography>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Redes Sociais */}
+                {(redesSociais.instagram || redesSociais.facebook || redesSociais.whatsapp) && (
+                  <>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                      Redes Sociais
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      {redesSociais.instagram && (
+                        <IconButton
+                          href={`https://instagram.com/${redesSociais.instagram.replace('@', '')}`}
+                          target="_blank"
+                          sx={{ color: '#E1306C' }}
+                        >
+                          <InstagramIcon />
+                        </IconButton>
+                      )}
+                      {redesSociais.facebook && (
+                        <IconButton
+                          href={redesSociais.facebook.startsWith('http') ? redesSociais.facebook : `https://facebook.com/${redesSociais.facebook}`}
+                          target="_blank"
+                          sx={{ color: '#4267B2' }}
+                        >
+                          <FacebookIcon />
+                        </IconButton>
+                      )}
+                      {redesSociais.whatsapp && (
+                        <IconButton
+                          href={`https://wa.me/${redesSociais.whatsapp.replace(/\D/g, '')}`}
+                          target="_blank"
+                          sx={{ color: '#25D366' }}
+                        >
+                          <WhatsAppIcon />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </>
+                )}
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Benefícios */}
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                  🎯 Como funciona?
+                </Typography>
+                <Box component="ul" sx={{ pl: 2 }}>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    Cadastre-se através deste link exclusivo
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    Ganhe {config.pontosBoasVindas} pontos de boas-vindas
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    Agende seu primeiro serviço
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    Após realizar o atendimento, você e quem te indicou ganham {config.pontosIndicacao} pontos cada!
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+      </Grid>
     </Container>
   );
 }
