@@ -1,4 +1,4 @@
-// src/pages/ClienteDashboard.js
+// src/pages/ClienteDashboard.js - VERSÃO ATUALIZADA COM INDICAÇÕES
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -29,6 +29,13 @@ import {
   Badge,
   Fab,
   Zoom,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  InputAdornment,
+  alpha,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -47,11 +54,22 @@ import {
   Assessment as AssessmentIcon,
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
+  PersonAdd as PersonAddIcon,
+  CheckCircle as CheckIcon,
+  Cancel as CancelIcon,
+  Schedule as ScheduleIcon,
+  Info as InfoIcon,
+  ContentCopy as CopyIcon,
+  QrCode as QrCodeIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { QRCodeCanvas } from 'qrcode.react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function TabPanel({ children, value, index, isMobile }) {
   return (
@@ -118,6 +136,405 @@ const LoadingSkeleton = () => (
   </Box>
 );
 
+// Componente de Indicacões para o Cliente
+const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtualizados }) => {
+  const [indicacoes, setIndicacoes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openQrCodeDialog, setOpenQrCodeDialog] = useState(false);
+  const [indicacaoSelecionada, setIndicacaoSelecionada] = useState(null);
+  const [formData, setFormData] = useState({
+    nome: '',
+    email: '',
+    telefone: '',
+  });
+  const [config, setConfig] = useState({ pontosIndicacao: 100, diasValidadeIndicacao: 30 });
+  const [stats, setStats] = useState({
+    total: 0,
+    pendentes: 0,
+    confirmadas: 0,
+    pontosGanhos: 0,
+  });
+
+  useEffect(() => {
+    if (clienteId) {
+      carregarIndicacoes();
+      carregarConfiguracoes();
+    }
+  }, [clienteId]);
+
+  const carregarConfiguracoes = async () => {
+    try {
+      const configs = await firebaseService.getAll('config_fidelidade');
+      if (configs && configs.length > 0) {
+        setConfig(configs[0]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
+    }
+  };
+
+  const carregarIndicacoes = async () => {
+    try {
+      setLoading(true);
+      const indicacoesData = await firebaseService.query('indicacoes', [
+        { field: 'clienteId', operator: '==', value: clienteId }
+      ]);
+      
+      setIndicacoes(indicacoesData || []);
+      
+      const statsData = {
+        total: indicacoesData?.length || 0,
+        pendentes: indicacoesData?.filter(i => i.status === 'pendente').length || 0,
+        confirmadas: indicacoesData?.filter(i => i.status === 'confirmada').length || 0,
+        pontosGanhos: indicacoesData?.filter(i => i.status === 'confirmada').reduce((acc, i) => acc + (i.pontosGanhos || 0), 0) || 0,
+      };
+      setStats(statsData);
+      
+      if (onPontosAtualizados && statsData.pontosGanhos !== stats.pontosGanhos) {
+        onPontosAtualizados(statsData.pontosGanhos);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar indicações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenDialog = () => {
+    setFormData({ nome: '', email: '', telefone: '' });
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSalvarIndicacao = async () => {
+    try {
+      if (!formData.nome) {
+        toast.error('Nome do indicado é obrigatório');
+        return;
+      }
+
+      const dataAtual = new Date();
+      const dataExpiracao = new Date();
+      dataExpiracao.setDate(dataAtual.getDate() + config.diasValidadeIndicacao);
+
+      const indicacaoData = {
+        clienteId: clienteId,
+        clienteNome: clienteNome,
+        clienteIndicadoId: null,
+        clienteIndicadoNome: formData.nome,
+        clienteIndicadoEmail: formData.email,
+        clienteIndicadoTelefone: formData.telefone,
+        status: 'pendente',
+        pontosGanhos: 0,
+        pontosBonus: config.pontosIndicacao,
+        dataCriacao: dataAtual.toISOString(),
+        dataExpiracao: dataExpiracao.toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await firebaseService.add('indicacoes', indicacaoData);
+      
+      toast.success('Indicação registrada com sucesso!');
+      handleCloseDialog();
+      carregarIndicacoes();
+    } catch (error) {
+      console.error('Erro ao salvar indicação:', error);
+      toast.error('Erro ao salvar indicação');
+    }
+  };
+
+  const handleCopiarLink = (indicacao) => {
+    const link = `${window.location.origin}/cadastro?indicacao=${indicacao.id}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Link copiado para a área de transferência!');
+  };
+
+  const handleAbrirQRCode = (indicacao) => {
+    setIndicacaoSelecionada(indicacao);
+    setOpenQrCodeDialog(true);
+  };
+
+  const getStatusInfo = (status) => {
+    const statusMap = {
+      pendente: { label: 'Pendente', color: '#ff9800', icon: <ScheduleIcon /> },
+      confirmada: { label: 'Confirmada', color: '#4caf50', icon: <CheckIcon /> },
+      cancelada: { label: 'Cancelada', color: '#f44336', icon: <CancelIcon /> },
+      expirada: { label: 'Expirada', color: '#9e9e9e', icon: <InfoIcon /> },
+    };
+    return statusMap[status] || statusMap.pendente;
+  };
+
+  const formatarData = (data) => {
+    if (!data) return '-';
+    try {
+      return new Date(data).toLocaleDateString('pt-BR');
+    } catch {
+      return data;
+    }
+  };
+
+  if (loading) {
+    return <CircularProgress size={24} />;
+  }
+
+  return (
+    <Box>
+      {/* Card de Resumo de Indicações */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={4}>
+          <Card sx={{ textAlign: 'center', py: 1, bgcolor: '#f3e5f5' }}>
+            <PersonAddIcon sx={{ color: '#9c27b0', fontSize: 24 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+              {stats.total}
+            </Typography>
+            <Typography variant="caption">Total</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={4}>
+          <Card sx={{ textAlign: 'center', py: 1, bgcolor: '#fff3e0' }}>
+            <ScheduleIcon sx={{ color: '#ff9800', fontSize: 24 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
+              {stats.pendentes}
+            </Typography>
+            <Typography variant="caption">Pendentes</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={4}>
+          <Card sx={{ textAlign: 'center', py: 1, bgcolor: '#e8f5e9' }}>
+            <CheckIcon sx={{ color: '#4caf50', fontSize: 24 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
+              {stats.confirmadas}
+            </Typography>
+            <Typography variant="caption">Confirmadas</Typography>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Botão Nova Indicação */}
+      <Button
+        fullWidth
+        variant="contained"
+        startIcon={<PersonAddIcon />}
+        onClick={handleOpenDialog}
+        sx={{
+          mb: 3,
+          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+        }}
+      >
+        Nova Indicação
+      </Button>
+
+      {/* Lista de Indicações */}
+      {indicacoes.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <PersonAddIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Você ainda não fez nenhuma indicação
+          </Typography>
+          <Typography variant="caption" color="textSecondary">
+            Indique amigos e ganhe {config.pontosIndicacao} pontos por cada indicação confirmada!
+          </Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: '#faf5ff' }}>
+                <TableCell>Indicado</TableCell>
+                <TableCell>Data</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Pontos</TableCell>
+                <TableCell align="center">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {indicacoes.map((indicacao) => {
+                const statusInfo = getStatusInfo(indicacao.status);
+                return (
+                  <TableRow key={indicacao.id} hover>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {indicacao.clienteIndicadoNome}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {indicacao.clienteIndicadoEmail || indicacao.clienteIndicadoTelefone || 'Sem contato'}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {formatarData(indicacao.dataCriacao)}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        icon={statusInfo.icon}
+                        label={statusInfo.label}
+                        sx={{
+                          bgcolor: alpha(statusInfo.color, 0.1),
+                          color: statusInfo.color,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                        {indicacao.status === 'confirmada' ? `+${indicacao.pontosGanhos}` : `+${indicacao.pontosBonus || config.pontosIndicacao}`}
+                      </Typography>
+                      {indicacao.status === 'pendente' && (
+                        <Typography variant="caption" color="textSecondary">
+                          (pendente)
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                        <Tooltip title="Copiar link">
+                          <IconButton size="small" onClick={() => handleCopiarLink(indicacao)} sx={{ color: '#9c27b0' }}>
+                            <CopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="QR Code">
+                          <IconButton size="small" onClick={() => handleAbrirQRCode(indicacao)} sx={{ color: '#9c27b0' }}>
+                            <QrCodeIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Informação de Bônus */}
+      <Alert severity="info" sx={{ mt: 3 }} icon={<InfoIcon />}>
+        <Typography variant="body2">
+          <strong>Como funciona?</strong><br />
+          • Indique um amigo compartilhando o link ou QR Code<br />
+          • Quando ele se cadastrar e realizar o primeiro atendimento, você ganha <strong>{config.pontosIndicacao} pontos</strong><br />
+          • Quanto mais indicações, mais pontos você acumula!
+        </Typography>
+      </Alert>
+
+      {/* Dialog Nova Indicação */}
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          <PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Nova Indicação
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Nome do indicado *"
+                name="nome"
+                value={formData.nome}
+                onChange={handleInputChange}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="E-mail"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Telefone"
+                name="telefone"
+                value={formData.telefone}
+                onChange={handleInputChange}
+                placeholder="(11) 99999-9999"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Alert severity="info">
+                Ao se cadastrar, o indicado ganhará um bônus e você receberá {config.pontosIndicacao} pontos quando a indicação for confirmada.
+              </Alert>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button variant="contained" onClick={handleSalvarIndicacao} sx={{ bgcolor: '#9c27b0' }}>
+            Registrar Indicação
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog QR Code */}
+      <Dialog open={openQrCodeDialog} onClose={() => setOpenQrCodeDialog(false)} maxWidth="xs" fullWidth>
+        {indicacaoSelecionada && (
+          <>
+            <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white', textAlign: 'center' }}>
+              QR Code da Indicação
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ textAlign: 'center', py: 3 }}>
+                <QRCodeCanvas
+                  value={`${window.location.origin}/cadastro?indicacao=${indicacaoSelecionada.id}`}
+                  size={256}
+                  level="H"
+                  includeMargin
+                  style={{
+                    margin: '0 auto',
+                    padding: 16,
+                    background: 'white',
+                    borderRadius: 8,
+                  }}
+                />
+                <Typography variant="body1" sx={{ mt: 2, fontWeight: 500 }}>
+                  {indicacaoSelecionada.clienteIndicadoNome}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                  Escaneie para cadastrar o indicado
+                </Typography>
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  const canvas = document.querySelector('canvas');
+                  if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = `qrcode-indicacao-${indicacaoSelecionada.id}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                  }
+                }}
+                sx={{ bgcolor: '#9c27b0' }}
+              >
+                Download
+              </Button>
+              <Button onClick={() => setOpenQrCodeDialog(false)}>Fechar</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+    </Box>
+  );
+};
+
 function ClienteDashboard() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -173,7 +590,6 @@ function ClienteDashboard() {
       if (uid) idsParaBuscar.push(uid);
       if (clienteDocId && clienteDocId !== uid) idsParaBuscar.push(clienteDocId);
 
-      // Carregar dados em paralelo para melhor performance
       const [
         profissionaisData,
         agendamentosData,
@@ -208,7 +624,6 @@ function ClienteDashboard() {
         ))
       ]);
 
-      // Processar resultados
       if (profissionaisData.status === 'fulfilled') {
         setProfissionais(profissionaisData.value || []);
       }
@@ -292,6 +707,11 @@ function ClienteDashboard() {
   };
 
   const handleRefresh = () => {
+    carregarDados();
+  };
+
+  const handlePontosAtualizados = (pontosGanhos) => {
+    // Atualizar saldo quando houver mudança nos pontos por indicação
     carregarDados();
   };
 
@@ -407,11 +827,11 @@ function ClienteDashboard() {
   const progresso = getProgressoProximoNivel();
   const proximoNivel = getProximoNivelNome();
 
-  // Versão Mobile do Dashboard (sem menu, apenas conteúdo)
+  // Versão Mobile do Dashboard
   if (isMobile) {
     return (
       <Box sx={{ pb: 7 }}>
-        {/* Header Mobile simplificado (sem menu) */}
+        {/* Header Mobile */}
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
@@ -448,7 +868,7 @@ function ClienteDashboard() {
 
         {/* Conteúdo Principal Mobile */}
         <Box sx={{ p: 2 }}>
-          {/* Card de Boas Vindas Mobile */}
+          {/* Card de Boas Vindas */}
           <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -462,7 +882,7 @@ function ClienteDashboard() {
             </CardContent>
           </Card>
 
-          {/* Cards de Estatísticas Mobile */}
+          {/* Cards de Estatísticas */}
           <Grid container spacing={1} sx={{ mb: 2 }}>
             <Grid item xs={4}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
@@ -493,7 +913,7 @@ function ClienteDashboard() {
             </Grid>
           </Grid>
 
-          {/* Card de Fidelidade Mobile */}
+          {/* Card de Fidelidade */}
           <Card sx={{ mb: 2, bgcolor: nivelInfo.bg }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
@@ -540,6 +960,7 @@ function ClienteDashboard() {
               <Tab label="Agendamentos" icon={<EventIcon />} iconPosition="start" />
               <Tab label="Histórico" icon={<HistoryIcon />} iconPosition="start" />
               <Tab label="Resgates" icon={<GiftIcon />} iconPosition="start" />
+              <Tab label="Indicações" icon={<PersonAddIcon />} iconPosition="start" />
             </Tabs>
           </Box>
 
@@ -611,11 +1032,7 @@ function ClienteDashboard() {
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {formatarData(atend.data)}
                           </Typography>
-                          <Chip
-                            size="small"
-                            label="Realizado"
-                            color="success"
-                          />
+                          <Chip size="small" label="Realizado" color="success" />
                         </Box>
                         <Typography variant="body2">{atend.servicoNome}</Typography>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
@@ -685,9 +1102,18 @@ function ClienteDashboard() {
               </Paper>
             )}
           </TabPanel>
+
+          <TabPanel value={tabValue} index={3} isMobile>
+            <IndicacoesCliente 
+              clienteId={cliente.id || firebaseUser?.uid}
+              clienteNome={cliente.nome}
+              saldoPontos={saldo}
+              onPontosAtualizados={handlePontosAtualizados}
+            />
+          </TabPanel>
         </Box>
 
-        {/* FAB para ações rápidas (apenas mobile) */}
+        {/* FAB para ações rápidas */}
         <Zoom in={true}>
           <Fab
             color="primary"
@@ -707,10 +1133,10 @@ function ClienteDashboard() {
     );
   }
 
-  // Versão Desktop (mantida, sem alterações)
+  // Versão Desktop
   return (
     <Box>
-      {/* Header com botão de atualizar */}
+      {/* Header */}
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -761,7 +1187,7 @@ function ClienteDashboard() {
         </Box>
       </Box>
 
-      {/* Mensagem de erro (se houver) */}
+      {/* Mensagem de erro */}
       {error && (
         <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
@@ -770,34 +1196,17 @@ function ClienteDashboard() {
 
       {/* Cards de Resumo */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={4}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card sx={{ 
-              bgcolor: '#f3e5f5', 
-              height: '100%',
-              '&:hover': { boxShadow: 6 }
-            }}>
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}>
-                    <EventIcon />
-                  </Avatar>
+                  <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}><EventIcon /></Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
                       {proximosAgendamentos.length}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Próximos agendamentos
-                    </Typography>
-                    {proximosAgendamentos.length > 0 && (
-                      <Typography variant="caption" color="textSecondary">
-                        Próximo: {formatarData(proximosAgendamentos[0]?.data)}
-                      </Typography>
-                    )}
+                    <Typography variant="body2" color="textSecondary">Próximos agendamentos</Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -805,32 +1214,17 @@ function ClienteDashboard() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={4}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card sx={{ 
-              bgcolor: '#fff3e0', 
-              height: '100%',
-              '&:hover': { boxShadow: 6 }
-            }}>
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Card sx={{ bgcolor: '#fff3e0', height: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}>
-                    <StarIcon />
-                  </Avatar>
+                  <Avatar sx={{ bgcolor: '#ff9800', width: 56, height: 56 }}><StarIcon /></Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#ff9800' }}>
                       {saldo}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Pontos acumulados
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      Nível {nivelInfo.nome}
-                    </Typography>
+                    <Typography variant="body2" color="textSecondary">Pontos acumulados</Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -838,32 +1232,35 @@ function ClienteDashboard() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={4}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card sx={{ 
-              bgcolor: '#e8f5e8', 
-              height: '100%',
-              '&:hover': { boxShadow: 6 }
-            }}>
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Card sx={{ bgcolor: '#e8f5e8', height: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
-                    <GiftIcon />
-                  </Avatar>
+                  <Avatar sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}><GiftIcon /></Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
                       {recompensasDisponiveis.length}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Recompensas disponíveis
+                    <Typography variant="body2" color="textSecondary">Recompensas disponíveis</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+            <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}><PersonAddIcon /></Avatar>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                      {0}
                     </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      A partir de {recompensasDisponiveis[0]?.pontosNecessarios || 0} pontos
-                    </Typography>
+                    <Typography variant="body2" color="textSecondary">Indicações</Typography>
                   </Box>
                 </Box>
               </CardContent>
@@ -876,7 +1273,6 @@ function ClienteDashboard() {
       <Card sx={{ 
         mb: 4, 
         background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-        '&:hover': { boxShadow: 8 }
       }}>
         <CardContent>
           <Grid container spacing={3} alignItems="center">
@@ -889,9 +1285,6 @@ function ClienteDashboard() {
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.9 }}>
                     {saldo} pontos acumulados
-                  </Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                    {resgatesRecentes.length} recompensa(s) resgatada(s)
                   </Typography>
                 </Box>
               </Box>
@@ -915,9 +1308,6 @@ function ClienteDashboard() {
                       },
                     }}
                   />
-                  <Typography variant="caption" sx={{ opacity: 0.8, mt: 1, display: 'block' }}>
-                    {Math.round(progresso)}% completo
-                  </Typography>
                 </Box>
               )}
             </Grid>
@@ -931,143 +1321,79 @@ function ClienteDashboard() {
           <Tab label="Próximos Agendamentos" />
           <Tab label="Histórico" />
           <Tab label="Resgates" />
+          <Tab label="Indicações" />
         </Tabs>
       </Box>
 
       <TabPanel value={tabValue} index={0} isMobile={false}>
         <Grid container spacing={3}>
-          {/* Próximos Agendamentos */}
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                  Seus Agendamentos
-                </Typography>
-
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Seus Agendamentos</Typography>
                 {loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
+                  <CircularProgress />
                 ) : proximosAgendamentos.length > 0 ? (
-                  proximosAgendamentos.map((agendamento, index) => {
-                    const servicoNome = agendamento.servicos?.[0]?.nome || 
-                                        agendamento.servicoNome || 
-                                        'Serviço';
-                    
-                    return (
-                      <Card key={agendamento.id || index} variant="outlined" sx={{ mb: 2, p: 2 }}>
-                        <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={12} sm={6}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <CalendarIcon sx={{ color: '#9c27b0' }} />
-                              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                                {formatarData(agendamento.data)} às {agendamento.horario || '--:--'}
-                              </Typography>
-                            </Box>
-                            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                              {servicoNome}
+                  proximosAgendamentos.map((agendamento, index) => (
+                    <Card key={agendamento.id || index} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={6}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CalendarIcon sx={{ color: '#9c27b0' }} />
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                              {formatarData(agendamento.data)} às {agendamento.horario || '--:--'}
                             </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Chip
-                              label={getStatusLabel(agendamento.status)}
-                              color={getStatusColor(agendamento.status)}
-                              size="small"
-                            />
-                          </Grid>
-                          <Grid item xs={12} sm={3}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              fullWidth
-                              sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
-                              onClick={() => navigate('/cliente/agendamentos')}
-                            >
-                              Detalhes
-                            </Button>
-                          </Grid>
+                          </Box>
+                          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                            {agendamento.servicos?.[0]?.nome || agendamento.servicoNome}
+                          </Typography>
                         </Grid>
-                      </Card>
-                    );
-                  })
+                        <Grid item xs={12} sm={3}>
+                          <Chip label={getStatusLabel(agendamento.status)} color={getStatusColor(agendamento.status)} size="small" />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <Button variant="outlined" size="small" fullWidth sx={{ borderColor: '#9c27b0', color: '#9c27b0' }} onClick={() => navigate('/cliente/agendamentos')}>Detalhes</Button>
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  ))
                 ) : (
                   <Paper sx={{ p: 4, textAlign: 'center' }}>
                     <CalendarIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                    <Typography variant="body1" color="textSecondary" gutterBottom>
-                      Você não tem agendamentos futuros
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      onClick={handleAgendar}
-                      sx={{ mt: 2, bgcolor: '#9c27b0' }}
-                    >
-                      Agendar Agora
-                    </Button>
+                    <Typography variant="body1" color="textSecondary" gutterBottom>Você não tem agendamentos futuros</Typography>
+                    <Button variant="contained" onClick={handleAgendar} sx={{ mt: 2, bgcolor: '#9c27b0' }}>Agendar Agora</Button>
                   </Paper>
                 )}
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Recompensas Disponíveis */}
           <Grid item xs={12} md={4}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                  Recompensas em Destaque
-                </Typography>
-
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Recompensas em Destaque</Typography>
                 {loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
+                  <CircularProgress />
                 ) : recompensasDisponiveis.length > 0 ? (
                   recompensasDisponiveis.map((recompensa, index) => (
                     <Card key={recompensa.id || index} variant="outlined" sx={{ mb: 2, p: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                         <GiftIcon sx={{ color: '#ff9800' }} />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                          {recompensa.nome}
-                        </Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{recompensa.nome}</Typography>
                       </Box>
-                      <Typography variant="caption" color="textSecondary" display="block">
-                        {recompensa.descricao}
-                      </Typography>
+                      <Typography variant="caption" color="textSecondary" display="block">{recompensa.descricao}</Typography>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                        <Chip
-                          size="small"
-                          label={`${recompensa.pontosNecessarios || 0} pontos`}
-                          sx={{ 
-                            bgcolor: saldo >= (recompensa.pontosNecessarios || 0) ? '#e8f5e8' : '#fff3e0',
-                            color: saldo >= (recompensa.pontosNecessarios || 0) ? '#4caf50' : '#ff9800'
-                          }}
-                        />
-                        <Button 
-                          size="small" 
-                          sx={{ color: '#9c27b0' }}
-                          onClick={() => navigate('/cliente/recompensas')}
-                        >
-                          Ver
-                        </Button>
+                        <Chip size="small" label={`${recompensa.pontosNecessarios || 0} pontos`} sx={{ bgcolor: saldo >= (recompensa.pontosNecessarios || 0) ? '#e8f5e8' : '#fff3e0', color: saldo >= (recompensa.pontosNecessarios || 0) ? '#4caf50' : '#ff9800' }} />
+                        <Button size="small" sx={{ color: '#9c27b0' }} onClick={() => navigate('/cliente/recompensas')}>Ver</Button>
                       </Box>
                     </Card>
                   ))
                 ) : (
                   <Paper sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body2" color="textSecondary">
-                      Nenhuma recompensa disponível no momento
-                    </Typography>
+                    <Typography variant="body2" color="textSecondary">Nenhuma recompensa disponível no momento</Typography>
                   </Paper>
                 )}
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={handleVerRecompensas}
-                  sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
-                >
-                  Ver Todas as Recompensas
-                </Button>
+                <Button fullWidth variant="outlined" onClick={handleVerRecompensas} sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}>Ver Todas as Recompensas</Button>
               </CardContent>
             </Card>
           </Grid>
@@ -1077,14 +1403,9 @@ function ClienteDashboard() {
       <TabPanel value={tabValue} index={1} isMobile={false}>
         <Card>
           <CardContent>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-              Histórico de Atendimentos
-            </Typography>
-
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Histórico de Atendimentos</Typography>
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
+              <CircularProgress />
             ) : historicoAtendimentos.length > 0 ? (
               <TableContainer>
                 <Table>
@@ -1100,63 +1421,15 @@ function ClienteDashboard() {
                   </TableHead>
                   <TableBody>
                     {historicoAtendimentos.map((atendimento, index) => {
-                      const servicoNome = atendimento.servicos?.[0]?.nome || 
-                                         atendimento.servicoNome || 
-                                         'Serviço';
-                      
-                      let profissionalNome = 'Profissional não informado';
-                      let profissionalFoto = null;
-                      
-                      if (atendimento.profissionalId && profissionais.length > 0) {
-                        const profissional = profissionais.find(p => 
-                          p.id === atendimento.profissionalId || 
-                          p.uid === atendimento.profissionalId
-                        );
-                        if (profissional) {
-                          profissionalNome = profissional.nome;
-                          profissionalFoto = profissional.foto;
-                        }
-                      } else if (atendimento.profissionalNome) {
-                        profissionalNome = atendimento.profissionalNome;
-                      }
-                      
-                      const pontosGanhos = atendimento.pontosGanhos || 
-                                          Math.floor((atendimento.valorTotal || 0) * 0.1);
-                      
+                      const profissional = profissionais.find(p => p.id === atendimento.profissionalId);
                       return (
                         <TableRow key={atendimento.id || index}>
                           <TableCell>{formatarData(atendimento.data)}</TableCell>
-                          <TableCell>{servicoNome}</TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Avatar 
-                                src={profissionalFoto} 
-                                sx={{ width: 32, height: 32, bgcolor: '#ff9800' }}
-                              >
-                                {!profissionalFoto && profissionalNome.charAt(0)}
-                              </Avatar>
-                              <Typography variant="body2">
-                                {profissionalNome}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">
-                            R$ {atendimento.valorTotal?.toFixed(2) || '0,00'}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Chip
-                              size="small"
-                              label={`+${pontosGanhos}`}
-                              sx={{ bgcolor: '#fff3e0', color: '#ff9800' }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              size="small"
-                              label="Realizado"
-                              color="success"
-                            />
-                          </TableCell>
+                          <TableCell>{atendimento.servicoNome}</TableCell>
+                          <TableCell>{profissional?.nome || 'Profissional'}</TableCell>
+                          <TableCell align="right">R$ {atendimento.valorTotal?.toFixed(2)}</TableCell>
+                          <TableCell align="right"><Chip size="small" label={`+${atendimento.pontosGanhos || 0}`} sx={{ bgcolor: '#fff3e0', color: '#ff9800' }} /></TableCell>
+                          <TableCell align="center"><Chip size="small" label="Realizado" color="success" /></TableCell>
                         </TableRow>
                       );
                     })}
@@ -1166,9 +1439,7 @@ function ClienteDashboard() {
             ) : (
               <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <HistoryIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                <Typography variant="body1" color="textSecondary">
-                  Nenhum histórico de atendimentos encontrado
-                </Typography>
+                <Typography variant="body1" color="textSecondary">Nenhum histórico de atendimentos encontrado</Typography>
               </Paper>
             )}
           </CardContent>
@@ -1178,14 +1449,9 @@ function ClienteDashboard() {
       <TabPanel value={tabValue} index={2} isMobile={false}>
         <Card>
           <CardContent>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-              Histórico de Resgates
-            </Typography>
-
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Histórico de Resgates</Typography>
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
+              <CircularProgress />
             ) : resgatesRecentes.length > 0 ? (
               <TableContainer>
                 <Table>
@@ -1201,21 +1467,9 @@ function ClienteDashboard() {
                     {resgatesRecentes.map((resgate, index) => (
                       <TableRow key={resgate.id || index}>
                         <TableCell>{formatarDataHora(resgate.data)}</TableCell>
-                        <TableCell>{resgate.recompensaNome || 'Recompensa'}</TableCell>
-                        <TableCell align="right">
-                          <Chip
-                            size="small"
-                            label={`-${resgate.pontosGastos || 0}`}
-                            sx={{ bgcolor: '#ffebee', color: '#f44336' }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            size="small"
-                            label={resgate.utilizado ? 'Utilizado' : 'Disponível'}
-                            color={resgate.utilizado ? 'default' : 'success'}
-                          />
-                        </TableCell>
+                        <TableCell>{resgate.recompensaNome}</TableCell>
+                        <TableCell align="right"><Chip size="small" label={`-${resgate.pontosGastos || 0}`} sx={{ bgcolor: '#ffebee', color: '#f44336' }} /></TableCell>
+                        <TableCell align="center"><Chip size="small" label={resgate.utilizado ? 'Utilizado' : 'Disponível'} color={resgate.utilizado ? 'default' : 'success'} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1224,18 +1478,24 @@ function ClienteDashboard() {
             ) : (
               <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <GiftIcon sx={{ fontSize: 48, color: '#ccc', mb: 2 }} />
-                <Typography variant="body1" color="textSecondary">
-                  Você ainda não resgatou nenhuma recompensa
-                </Typography>
-                <Button
-                  variant="outlined"
-                  onClick={handleVerRecompensas}
-                  sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}
-                >
-                  Ver Recompensas Disponíveis
-                </Button>
+                <Typography variant="body1" color="textSecondary">Você ainda não resgatou nenhuma recompensa</Typography>
+                <Button variant="outlined" onClick={handleVerRecompensas} sx={{ mt: 2, borderColor: '#9c27b0', color: '#9c27b0' }}>Ver Recompensas Disponíveis</Button>
               </Paper>
             )}
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={3} isMobile={false}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Minhas Indicações</Typography>
+            <IndicacoesCliente 
+              clienteId={cliente.id || firebaseUser?.uid}
+              clienteNome={cliente.nome}
+              saldoPontos={saldo}
+              onPontosAtualizados={handlePontosAtualizados}
+            />
           </CardContent>
         </Card>
       </TabPanel>
