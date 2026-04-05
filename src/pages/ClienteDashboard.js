@@ -65,6 +65,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast'; // 🔥 IMPORTANTE: Importar o toast
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { QRCodeCanvas } from 'qrcode.react';
