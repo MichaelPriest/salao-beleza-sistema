@@ -149,6 +149,7 @@ import Disponibilidade from './pages/Disponibilidade';
 
 // Pages de Indicações
 import Indicacoes from './pages/Indicacoes';
+import CadastroIndicacao from './pages/CadastroIndicacao';
 
 // Pages de Categorias
 import CategoriasProdutos from './pages/CategoriasProdutos';
@@ -433,6 +434,11 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
+                {/* Rota para cadastro via indicação (sem AuthClienteProvider, layout simples) */}
+                <Route 
+                  path="/cadastro" 
+                  element={<CadastroIndicacao />} 
+                />                 
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
