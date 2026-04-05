@@ -84,8 +84,8 @@ import {
   LockOpen as LockOpenIcon,
   EventBusy as EventBusyIcon,
   EventAvailable as EventAvailableIcon,
-  // 🔥 ÍCONES PARA ANAMNESE
   Assignment as AssignmentIcon,
+  EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -119,7 +119,6 @@ const timeSlots = [
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Funções auxiliares de data
 const getFirstDayOfMonth = (date) => {
   return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 };
@@ -128,7 +127,6 @@ const formatDate = (date) => {
   return date.toISOString().split('T')[0];
 };
 
-// ✅ ADICIONE ESTA FUNÇÃO AQUI
 const formatDateTime = (date) => {
   return format(date, 'dd/MM/yyyy HH:mm:ss');
 };
@@ -141,6 +139,141 @@ const getWeekDays = (date) => {
     days.push(addDays(start, i));
   }
   return days;
+};
+
+// ============================================
+// 🔥 FUNÇÃO PARA LIBERAR PONTOS DE INDICAÇÃO
+// ============================================
+
+const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
+  try {
+    console.log('🎯 Verificando pontos de indicação para cliente:', clienteId);
+    
+    // Buscar cliente
+    const cliente = await firebaseService.getById('clientes', clienteId);
+    
+    if (!cliente) {
+      console.log('❌ Cliente não encontrado');
+      return false;
+    }
+    
+    // Verificar se já liberou os pontos de indicação
+    if (cliente.pontosIndicacaoLiberados) {
+      console.log('✅ Pontos de indicação já foram liberados anteriormente');
+      return false;
+    }
+    
+    // Verificar se é o primeiro atendimento
+    if (cliente.primeiroAtendimentoRealizado) {
+      console.log('✅ Primeiro atendimento já foi realizado anteriormente');
+      return false;
+    }
+    
+    // Verificar se tem indicação
+    if (!cliente.indicadoPor) {
+      console.log('ℹ️ Cliente não foi indicado por ninguém');
+      return false;
+    }
+    
+    // Buscar indicação
+    const indicacoes = await firebaseService.query('indicacoes', [
+      { field: 'clienteIndicadoId', operator: '==', value: clienteId }
+    ]);
+    
+    const indicacao = indicacoes?.[0];
+    if (!indicacao) {
+      console.log('❌ Indicação não encontrada');
+      return false;
+    }
+    
+    if (indicacao.pontosLiberados) {
+      console.log('✅ Pontos da indicação já foram liberados');
+      return false;
+    }
+    
+    // Buscar configurações de fidelidade
+    const configFidelidade = await firebaseService.getAll('config_fidelidade');
+    const pontosIndicacao = configFidelidade[0]?.pontosIndicacao || 100;
+    
+    const agora = new Date();
+    const agoraISO = agora.toISOString();
+    
+    // 🔥 Adicionar pontos para o cliente indicado (bônus do primeiro atendimento)
+    await firebaseService.add('pontuacao', {
+      clienteId: clienteId,
+      clienteNome: cliente.nome,
+      quantidade: pontosIndicacao,
+      tipo: 'credito',
+      motivo: `🎉 Bônus por primeiro atendimento (indicação de ${indicacao.clienteNome})`,
+      data: agoraISO,
+      agendamentoId: agendamentoId,
+      createdAt: agoraISO,
+    });
+    
+    console.log(`✅ ${pontosIndicacao} pontos adicionados para o cliente indicado: ${cliente.nome}`);
+    
+    // 🔥 Adicionar pontos para o cliente que indicou
+    await firebaseService.add('pontuacao', {
+      clienteId: indicacao.clienteId,
+      clienteNome: indicacao.clienteNome,
+      quantidade: pontosIndicacao,
+      tipo: 'credito',
+      motivo: `🎁 Bônus por indicação de ${cliente.nome} (primeiro atendimento realizado)`,
+      data: agoraISO,
+      indicacaoId: indicacao.id,
+      agendamentoId: agendamentoId,
+      createdAt: agoraISO,
+    });
+    
+    console.log(`✅ ${pontosIndicacao} pontos adicionados para o cliente indicador: ${indicacao.clienteNome}`);
+    
+    // 🔥 Atualizar cliente
+    await firebaseService.update('clientes', clienteId, {
+      primeiroAtendimentoRealizado: true,
+      pontosIndicacaoLiberados: true,
+      dataPrimeiroAtendimento: agoraISO,
+      updatedAt: agoraISO,
+    });
+    
+    // 🔥 Atualizar indicação
+    await firebaseService.update('indicacoes', indicacao.id, {
+      status: 'confirmada',
+      pontosLiberados: true,
+      pontosGanhos: pontosIndicacao,
+      dataConfirmacao: agoraISO,
+      agendamentoId: agendamentoId,
+      updatedAt: agoraISO,
+    });
+    
+    // 🔥 Registrar auditoria
+    await auditoriaService.registrar('liberar_pontos_indicacao', {
+      entidade: 'pontuacao',
+      detalhes: `Pontos de indicação liberados para ${cliente.nome} e ${indicacao.clienteNome}`,
+      dados: {
+        clienteIndicadoId: clienteId,
+        clienteIndicadoNome: cliente.nome,
+        clienteIndicadorId: indicacao.clienteId,
+        clienteIndicadorNome: indicacao.clienteNome,
+        pontos: pontosIndicacao,
+        agendamentoId: agendamentoId
+      }
+    });
+    
+    toast.success(`🎉 ${pontosIndicacao} pontos creditados para você e quem te indicou!`);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erro ao liberar pontos de indicação:', error);
+    
+    await auditoriaService.registrarErro(error, {
+      acao: 'liberar_pontos_indicacao',
+      clienteId: clienteId,
+      agendamentoId: agendamentoId
+    });
+    
+    return false;
+  }
 };
 
 // ============================================
@@ -179,7 +312,6 @@ const RelatorioAgenda = React.forwardRef(({
   const profissionalNome = profissional === 'all' ? 'Todos os Profissionais' : 
     profissionais?.find(p => p.id === profissional)?.nome || 'Profissional';
 
-  // Calcular estatísticas
   const totalEventos = eventos.length;
   const totalAgendamentos = eventos.filter(e => e.tipo === 'agendamento').length;
   const totalAtendimentos = eventos.filter(e => e.tipo === 'atendimento').length;
@@ -191,7 +323,6 @@ const RelatorioAgenda = React.forwardRef(({
 
   return (
     <Box ref={ref} sx={{ p: 3, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* Cabeçalho com Logo */}
       <Box sx={{ textAlign: 'center', mb: 3, borderBottom: '2px solid #9c27b0', pb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 0.5, fontSize: '1.8rem' }}>
           Relatório de Agenda
@@ -207,7 +338,6 @@ const RelatorioAgenda = React.forwardRef(({
         </Typography>
       </Box>
 
-      {/* Estatísticas */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Resumo do Período
@@ -239,7 +369,6 @@ const RelatorioAgenda = React.forwardRef(({
           </Grid>
         </Grid>
 
-        {/* Estatísticas detalhadas */}
         <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>
           <Chip label={`✅ ${totalConfirmados} confirmados`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#e8f5e9' }} />
           <Chip label={`⏳ ${totalPendentes} pendentes`} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: '#fff3e0' }} />
@@ -248,13 +377,11 @@ const RelatorioAgenda = React.forwardRef(({
         </Box>
       </Box>
 
-      {/* Eventos por Dia */}
       <Box>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Agenda Detalhada
         </Typography>
         
-        {/* Agrupar eventos por data */}
         {Object.entries(
           eventos.reduce((acc, evento) => {
             const data = evento.data;
@@ -322,7 +449,6 @@ const RelatorioAgenda = React.forwardRef(({
         })}
       </Box>
 
-      {/* Rodapé */}
       <Box sx={{ mt: 2, textAlign: 'center', color: 'text.secondary', borderTop: '1px solid #ccc', pt: 1 }}>
         <Typography variant="caption" sx={{ fontSize: '0.5rem' }}>
           Relatório gerado automaticamente • Documento não fiscal
@@ -364,7 +490,7 @@ function ModernAgendamentos() {
   const [ausencias, setAusencias] = useState([]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   
-  // 🔥 ESTADOS PARA ANAMNESE
+  // Estados para anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState({});
   const [verificandoFormularios, setVerificandoFormularios] = useState(false);
   
@@ -428,7 +554,6 @@ function ModernAgendamentos() {
   const [debouncedCpfInput, setDebouncedCpfInput] = useState('');
   const [debouncedDataNascimento, setDebouncedDataNascimento] = useState(null);
   const [clientesCache, setClientesCache] = useState({});
-  const [throttleTimeout, setThrottleTimeout] = useState(null);
   
   // Memoização de dados
   const clientesMemo = useMemo(() => clientes || [], [clientes]);
@@ -468,7 +593,11 @@ function ModernAgendamentos() {
       bairro: cliente.bairro || '',
       cidade: cliente.cidade || '',
       estado: cliente.estado || '',
-      status: cliente.status || 'Ativo'
+      status: cliente.status || 'Ativo',
+      primeiroAtendimentoRealizado: cliente.primeiroAtendimentoRealizado || false,
+      pontosIndicacaoLiberados: cliente.pontosIndicacaoLiberados || false,
+      indicadoPor: cliente.indicadoPor,
+      indicadoPorNome: cliente.indicadoPorNome,
     };
   };
 
@@ -490,28 +619,14 @@ function ModernAgendamentos() {
     };
   };
 
-  const getUsuarioSistemaData = (usuarioId) => {
-    if (!usuarioId || !usuarios) return null;
-    
-    const usuario = usuarios.find(u => 
-      u.id === usuarioId || 
-      u.uid === usuarioId
-    );
-    
-    return usuario || null;
-  };
-
   const formatarTelefone = (telefone) => {
     if (!telefone || telefone === 'Não informado') return telefone;
-    
     const numeros = telefone.replace(/\D/g, '');
-    
     if (numeros.length === 11) {
       return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
     } else if (numeros.length === 10) {
       return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
     }
-    
     return telefone;
   };
 
@@ -635,7 +750,7 @@ function ModernAgendamentos() {
     setClientesCache(prev => ({ ...prev, [cacheKey]: resultados }));
     
     return resultados;
-  }, [clientesMemo, searchClientType, debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, clientesCache, removerMascaraCPF]);
+  }, [clientesMemo, searchClientType, debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, clientesCache]);
   
   // ============================================
   // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
@@ -647,14 +762,12 @@ function ModernAgendamentos() {
     const dataObj = new Date(data + 'T12:00:00');
     const diaSemana = dataObj.getDay();
 
-    // Verificar disponibilidade do profissional para este dia da semana
     const disponibilidade = disponibilidades.find(
       d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
     );
 
     if (!disponibilidade) return false;
 
-    // Verificar se horário está dentro do expediente
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
     const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
     const [horaAtual, minAtual] = horario.split(':').map(Number);
@@ -665,7 +778,6 @@ function ModernAgendamentos() {
 
     if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
 
-    // Verificar intervalo de almoço
     if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
       const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
       const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
@@ -676,7 +788,6 @@ function ModernAgendamentos() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
     }
 
-    // Verificar ausências
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
       data >= a.dataInicio &&
@@ -689,7 +800,6 @@ function ModernAgendamentos() {
 
     if (ausencia) return false;
 
-    // Verificar se já existe agendamento neste horário
     const agendamentoExistente = (agendamentos || []).some(apt => 
       apt.profissionalId === profissionalId &&
       apt.data === data &&
@@ -716,7 +826,6 @@ function ModernAgendamentos() {
     const [horaAtual, minAtual] = horario.split(':').map(Number);
     const minutosAtual = horaAtual * 60 + minAtual;
 
-    // Verificar horário de expediente
     const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
     const minutosInicio = horaInicio * 60 + minInicio;
     
@@ -726,7 +835,6 @@ function ModernAgendamentos() {
     if (minutosAtual < minutosInicio) return 'Antes do horário de início';
     if (minutosAtual >= minutosFim) return 'Após o horário de término';
 
-    // Verificar intervalo
     if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
       const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
       const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
@@ -737,7 +845,6 @@ function ModernAgendamentos() {
       if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
     }
 
-    // Verificar ausência
     const ausencia = ausencias.find(a => 
       a.profissionalId === profissionalId &&
       data >= a.dataInicio &&
@@ -760,7 +867,6 @@ function ModernAgendamentos() {
       return tipos[ausencia.tipo] || 'Profissional ausente';
     }
 
-    // Verificar agendamento existente
     const agendamentoExistente = (agendamentos || []).some(apt => 
       apt.profissionalId === profissionalId &&
       apt.data === data &&
@@ -785,14 +891,77 @@ function ModernAgendamentos() {
   };
 
   // ============================================
-  // 🔥 FUNÇÕES PARA ANAMNESE
+  // 🔥 FUNÇÃO PARA FINALIZAR ATENDIMENTO E LIBERAR PONTOS
+  // ============================================
+
+  const finalizarAtendimento = async (atendimento) => {
+    try {
+      const toastId = toast.loading('Finalizando atendimento...');
+      
+      // Atualizar atendimento
+      await firebaseService.update('atendimentos', atendimento.id, {
+        status: 'finalizado',
+        horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: Timestamp.now(),
+      });
+      
+      // Atualizar agendamento relacionado
+      if (atendimento.agendamentoId) {
+        await firebaseService.update('agendamentos', atendimento.agendamentoId, {
+          status: 'finalizado',
+          updatedAt: Timestamp.now(),
+        });
+      }
+      
+      // 🔥 LIBERAR PONTOS DE INDICAÇÃO (se for o primeiro atendimento)
+      const pontosLiberados = await liberarPontosIndicacao(
+        atendimento.clienteId,
+        atendimento.valorTotal || 0,
+        atendimento.agendamentoId || atendimento.id
+      );
+      
+      // Registrar auditoria
+      await auditoriaService.registrar('finalizar_atendimento', {
+        entidade: 'atendimentos',
+        entidadeId: atendimento.id,
+        detalhes: `Atendimento finalizado${pontosLiberados ? ' e pontos de indicação liberados' : ''}`,
+        dados: {
+          clienteId: atendimento.clienteId,
+          profissionalId: atendimento.profissionalId,
+          valorTotal: atendimento.valorTotal,
+          pontosLiberados: pontosLiberados
+        }
+      });
+      
+      setUpdateTrigger(prev => prev + 1);
+      
+      toast.dismiss(toastId);
+      toast.success(`Atendimento finalizado com sucesso!${pontosLiberados ? ' 🎉 Pontos de indicação creditados!' : ''}`);
+      
+      // Recarregar dados
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Erro ao finalizar atendimento:', error);
+      toast.error('Erro ao finalizar atendimento');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'finalizar_atendimento',
+        atendimentoId: atendimento?.id
+      });
+    }
+  };
+
+  // ============================================
+  // FUNÇÕES PARA ANAMNESE
   // ============================================
 
   const verificarFormulariosPendentes = async (agendamento) => {
     if (!agendamento || !agendamento.servicoId) return false;
     
     try {
-      // Buscar formulários ativos associados ao serviço
       const formularios = await firebaseService.query('formularios_anamnese', [
         { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
         { field: 'ativo', operator: '==', value: true }
@@ -800,7 +969,6 @@ function ModernAgendamentos() {
 
       if (formularios.length === 0) return false;
 
-      // Verificar se já existe resposta para este agendamento
       const respostas = await firebaseService.query('respostas_anamnese', [
         { field: 'agendamentoId', operator: '==', value: agendamento.id }
       ]);
@@ -894,7 +1062,6 @@ function ModernAgendamentos() {
     return eventos;
   };
 
-  // Combinar agendamentos e atendimentos
   const todosEventos = filtrarEventosPorUsuario([
     ...(agendamentos || []).map(apt => ({
       ...apt,
@@ -1388,7 +1555,6 @@ function ModernAgendamentos() {
         return;
       }
 
-      // Validar disponibilidade do profissional
       const disponivel = verificarDisponibilidadeProfissional(
         formData.profissionalId, 
         formData.data, 
@@ -1453,11 +1619,10 @@ function ModernAgendamentos() {
 
       setUpdateTrigger(prev => prev + 1);
 
-      // Notificar profissional
       if (usuario && formData.profissionalId) {
         try {
-          const usuarios = await firebaseService.getAll('usuarios');
-          const profissionalUser = usuarios.find(u => u.profissionalId === formData.profissionalId);
+          const usuariosList = await firebaseService.getAll('usuarios');
+          const profissionalUser = usuariosList.find(u => u.profissionalId === formData.profissionalId);
           
           if (profissionalUser) {
             await notificacoesService.notificarAgendamento(agendamentoCriado, profissionalUser.id);
@@ -1732,616 +1897,307 @@ function ModernAgendamentos() {
     }
   };
 
-const handleExportPDF = async () => {
-  try {
-    mostrarSnackbar('Gerando PDF...', 'info');
-    
-    // 1. Preparar os dados filtrados
-    let eventosFiltrados = filteredEvents;
-    if (periodoRelatorio.tipo === 'dia') {
-      eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
-    } else {
-      eventosFiltrados = eventosFiltrados.filter(e => 
-        e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
-      );
-    }
-
-    eventosFiltrados.sort((a, b) => {
-      if (a.data !== b.data) return a.data.localeCompare(b.data);
-      return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
-    });
-
-    const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
-      profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-    
-    const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
-    const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
-    const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
-    const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
-
-    const totalEventos = eventosFiltrados.length;
-    const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
-    const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
-    const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
-    const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
-    const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
-    const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-
-    const eventosPorData = {};
-    eventosFiltrados.forEach(evento => {
-      if (!eventosPorData[evento.data]) {
-        eventosPorData[evento.data] = [];
-      }
-      eventosPorData[evento.data].push(evento);
-    });
-
-    // 2. Gerar HTML completo
-    const gerarTabelaEventos = () => {
-      let html = '';
+  const handleExportPDF = async () => {
+    try {
+      mostrarSnackbar('Gerando PDF...', 'info');
       
-      Object.keys(eventosPorData).sort().forEach(data => {
-        const eventosDoDia = eventosPorData[data];
-        const dateObj = new Date(data + 'T12:00:00');
-        const diaSemana = format(dateObj, 'EEEE', { locale: ptBR });
-        const diaNumero = format(dateObj, 'dd');
-        const mesAno = format(dateObj, 'MMMM [de] yyyy', { locale: ptBR });
+      let eventosFiltrados = filteredEvents;
+      if (periodoRelatorio.tipo === 'dia') {
+        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
+      } else {
+        eventosFiltrados = eventosFiltrados.filter(e => 
+          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
+        );
+      }
+
+      eventosFiltrados.sort((a, b) => {
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
+        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
+      });
+
+      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
+        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
+      
+      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
+      const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
+      const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
+
+      const totalEventos = eventosFiltrados.length;
+      const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
+      const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
+      const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
+      const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
+      const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
+      const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+
+      const eventosPorData = {};
+      eventosFiltrados.forEach(evento => {
+        if (!eventosPorData[evento.data]) {
+          eventosPorData[evento.data] = [];
+        }
+        eventosPorData[evento.data].push(evento);
+      });
+
+      const gerarTabelaEventos = () => {
+        let html = '';
         
-        html += `
-          <div class="day-card">
-            <div class="day-header">
-              <div class="day-number">${diaNumero}</div>
-              <div class="day-info">
-                <div class="day-name">${diaSemana}</div>
-                <div class="day-date">${mesAno}</div>
-              </div>
-              <div class="day-count">${eventosDoDia.length} evento(s)</div>
-            </div>
-            <table class="events-table">
-              <thead>
-                <tr>
-                  <th>Horário</th>
-                  <th>Cliente</th>
-                  <th>Telefone</th>
-                  <th>Serviços</th>
-                  <th>Profissional</th>
-                  <th>Status</th>
-                  <th>Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-        `;
-        
-        eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
-        
-        eventosDoDia.forEach(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
-          const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
-          const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
-          const valorEvento = evento.valorTotal || 0;
-          
-          let statusClass = '';
-          let statusLabel = '';
-          switch(evento.status) {
-            case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
-            case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
-            case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
-            case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
-            case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
-            default: statusClass = 'status-default'; statusLabel = evento.status;
-          }
-          
-          const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+        Object.keys(eventosPorData).sort().forEach(data => {
+          const eventosDoDia = eventosPorData[data];
+          const dateObj = new Date(data + 'T12:00:00');
+          const diaSemana = format(dateObj, 'EEEE', { locale: ptBR });
+          const diaNumero = format(dateObj, 'dd');
+          const mesAno = format(dateObj, 'MMMM [de] yyyy', { locale: ptBR });
           
           html += `
-            <tr>
-              <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
-              <td><strong>${cliente?.nome || '—'}</strong></td>
-              <td class="phone-cell">${telefone}</td>
-              <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
-              <td>${profissionalItem?.nome || '—'}</td>
-              <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-              <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
-            </tr>
+            <div class="day-card">
+              <div class="day-header">
+                <div class="day-number">${diaNumero}</div>
+                <div class="day-info">
+                  <div class="day-name">${diaSemana}</div>
+                  <div class="day-date">${mesAno}</div>
+                </div>
+                <div class="day-count">${eventosDoDia.length} evento(s)</div>
+              </div>
+              <table class="events-table">
+                <thead>
+                  <tr><th>Horário</th><th>Cliente</th><th>Telefone</th><th>Serviços</th><th>Profissional</th><th>Status</th><th>Valor</th></tr>
+                </thead>
+                <tbody>
+          `;
+          
+          eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
+          
+          eventosDoDia.forEach(evento => {
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
+            const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
+            const valorEvento = evento.valorTotal || 0;
+            
+            let statusClass = '';
+            let statusLabel = '';
+            switch(evento.status) {
+              case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
+              case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
+              case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
+              case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
+              case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
+              default: statusClass = 'status-default'; statusLabel = evento.status;
+            }
+            
+            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+            
+            html += `
+              <tr>
+                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
+                <td><strong>${cliente?.nome || '—'}</strong></td>
+                <td class="phone-cell">${telefone}</td>
+                <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
+                <td>${profissionalItem?.nome || '—'}</td>
+                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
+              </tr>
+            `;
+          });
+          
+          const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
+          html += `
+                </tbody>
+                <tfoot>
+                  <tr class="total-row"><td colspan="6"><strong>Total do Dia</strong></td><td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td></tr>
+                </tfoot>
+              </table>
+            </div>
           `;
         });
         
-        const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-        html += `
-              </tbody>
-              <tfoot>
-                <tr class="total-row">
-                  <td colspan="6"><strong>Total do Dia</strong></td>
-                  <td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td>
-                </tr>
-              </tfoot>
-            </table>
+        return html;
+      };
+
+      const fullHTML = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Relatório de Agenda - ${profissionalNome}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; background: #ffffff; padding: 20px; font-size: 12px; line-height: 1.5; color: #333; }
+            .report-container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; }
+            .header { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); color: white; padding: 30px; text-align: center; position: relative; overflow: hidden; }
+            .header::before { content: ''; position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%; }
+            .header::after { content: ''; position: absolute; bottom: -30px; left: -30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; }
+            .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; position: relative; z-index: 1; }
+            .header h2 { font-size: 18px; font-weight: 500; margin-bottom: 20px; opacity: 0.95; position: relative; z-index: 1; }
+            .header-info { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); position: relative; z-index: 1; }
+            .header-info-item { text-align: center; }
+            .header-info-label { font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px; }
+            .header-info-value { font-size: 13px; font-weight: 600; }
+            .stats-section { padding: 25px 30px; border-bottom: 1px solid #e0e0e0; }
+            .stats-title { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 15px; padding-left: 12px; border-left: 4px solid #9c27b0; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+            .stat-card { padding: 15px; border-radius: 12px; text-align: center; color: white; }
+            .stat-card.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+            .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
+            .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
+            .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
+            .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
+            .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
+            .stat-number { font-size: 28px; font-weight: 800; margin-bottom: 5px; }
+            .stat-label { font-size: 11px; opacity: 0.9; }
+            .financial-summary { background: #f5f5f5; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+            .total-value { font-size: 24px; font-weight: 800; color: #9c27b0; }
+            .average-value { font-size: 14px; font-weight: 600; color: #666; }
+            .day-card { margin-bottom: 25px; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
+            .day-header { background: #faf5ff; padding: 15px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 2px solid #9c27b0; flex-wrap: wrap; }
+            .day-number { background: #9c27b0; color: white; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
+            .day-info { flex: 1; }
+            .day-name { font-size: 16px; font-weight: 700; color: #9c27b0; text-transform: capitalize; }
+            .day-date { font-size: 11px; color: #666; }
+            .day-count { background: #9c27b0; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+            .events-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            .events-table th { background: #f8f9fa; padding: 12px 10px; text-align: left; font-weight: 700; color: #555; border-bottom: 1px solid #e0e0e0; }
+            .events-table td { padding: 10px; border-bottom: 1px solid #f0f0f0; }
+            .events-table tr:hover { background: #faf5ff; }
+            .time-cell { font-weight: 600; color: #9c27b0; width: 70px; }
+            .phone-cell { width: 100px; }
+            .services-cell { min-width: 150px; }
+            .value-cell { text-align: right; font-weight: 600; color: #9c27b0; width: 80px; }
+            .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+            .status-confirmed { background: #e8f5e9; color: #4caf50; }
+            .status-pending { background: #fff3e0; color: #ff9800; }
+            .status-cancelled { background: #ffebee; color: #f44336; }
+            .status-finished { background: #e3f2fd; color: #2196f3; }
+            .status-progress { background: #f3e5f5; color: #9c27b0; }
+            .status-default { background: #f5f5f5; color: #9e9e9e; }
+            .total-row { background: #f5f5f5; font-weight: 700; }
+            .total-row td { border-top: 2px solid #e0e0e0; padding: 12px 10px; }
+            .footer { background: #faf5ff; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0; margin-top: 20px; }
+            .footer p { font-size: 10px; color: #666; margin: 5px 0; }
+            .footer-copyright { color: #9c27b0; font-weight: 500; }
+            @media print { body { background: white; padding: 0; margin: 0; } .day-card { break-inside: avoid; page-break-inside: avoid; } .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .stat-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <div class="header">
+              <h1>📋 RELATÓRIO DE AGENDA</h1>
+              <h2>${profissionalNome}</h2>
+              <div class="header-info">
+                <div class="header-info-item">
+                  <span class="header-info-label">Período</span>
+                  <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
+                </div>
+                <div class="header-info-item">
+                  <span class="header-info-label">Data de Emissão</span>
+                  <span class="header-info-value">${formatDateTime(new Date())}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="stats-section">
+              <div class="stats-title">📊 Resumo do Período</div>
+              <div class="stats-grid">
+                <div class="stat-card total">
+                  <div class="stat-number">${totalEventos}</div>
+                  <div class="stat-label">Total de Eventos</div>
+                </div>
+                <div class="stat-card agendamentos">
+                  <div class="stat-number">${totalAgendamentos}</div>
+                  <div class="stat-label">Agendamentos</div>
+                </div>
+                <div class="stat-card atendimentos">
+                  <div class="stat-number">${totalAtendimentos}</div>
+                  <div class="stat-label">Atendimentos</div>
+                </div>
+                <div class="stat-card confirmados">
+                  <div class="stat-number">${totalConfirmados}</div>
+                  <div class="stat-label">Confirmados</div>
+                </div>
+                <div class="stat-card pendentes">
+                  <div class="stat-number">${totalPendentes}</div>
+                  <div class="stat-label">Pendentes</div>
+                </div>
+                <div class="stat-card cancelados">
+                  <div class="stat-number">${totalCancelados}</div>
+                  <div class="stat-label">Cancelados</div>
+                </div>
+              </div>
+              
+              <div class="financial-summary">
+                <div>
+                  <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
+                  <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
+                </div>
+                <div style="display: flex; gap: 30px;">
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
+                    <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
+                    <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div style="padding: 0 30px 30px 30px;">
+              <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
+              ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
+            </div>
+            
+            <div class="footer">
+              <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
+              <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
+              <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
+            </div>
           </div>
-        `;
+        </body>
+        </html>
+      `;
+
+      const tempElement = document.createElement('div');
+      tempElement.innerHTML = fullHTML;
+      document.body.appendChild(tempElement);
+
+      const html2pdf = (await import('html2pdf.js')).default;
+      
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `relatorio_agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+      
+      await html2pdf().set(opt).from(tempElement).save();
+      
+      document.body.removeChild(tempElement);
+      
+      await auditoriaService.registrar('exportar_pdf_agenda', {
+        entidade: 'agendamentos',
+        detalhes: 'Exportação de relatório de agenda em PDF',
+        dados: {
+          periodo: periodoRelatorio.tipo,
+          profissional: profissionalNome,
+          totalEventos: eventosFiltrados.length
+        }
       });
       
-      return html;
-    };
-
-    // 3. HTML completo com estilos
-    const fullHTML = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Relatório de Agenda - ${profissionalNome}</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          body {
-            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-            background: #ffffff;
-            padding: 20px;
-            font-size: 12px;
-            line-height: 1.5;
-            color: #333;
-          }
-          
-          .report-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-          }
-          
-          /* Cabeçalho */
-          .header {
-            background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-          }
-          
-          .header::before {
-            content: '';
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 150px;
-            height: 150px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 50%;
-          }
-          
-          .header::after {
-            content: '';
-            position: absolute;
-            bottom: -30px;
-            left: -30px;
-            width: 120px;
-            height: 120px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 50%;
-          }
-          
-          .header h1 {
-            font-size: 28px;
-            font-weight: 800;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .header h2 {
-            font-size: 18px;
-            font-weight: 500;
-            margin-bottom: 20px;
-            opacity: 0.95;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .header-info {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255,255,255,0.2);
-            position: relative;
-            z-index: 1;
-          }
-          
-          .header-info-item {
-            text-align: center;
-          }
-          
-          .header-info-label {
-            font-size: 10px;
-            opacity: 0.8;
-            display: block;
-            margin-bottom: 4px;
-          }
-          
-          .header-info-value {
-            font-size: 13px;
-            font-weight: 600;
-          }
-          
-          /* Cards de estatísticas */
-          .stats-section {
-            padding: 25px 30px;
-            border-bottom: 1px solid #e0e0e0;
-          }
-          
-          .stats-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 15px;
-            padding-left: 12px;
-            border-left: 4px solid #9c27b0;
-          }
-          
-          .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-          }
-          
-          .stat-card {
-            padding: 15px;
-            border-radius: 12px;
-            text-align: center;
-            color: white;
-          }
-          
-          .stat-card.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-          .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
-          .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
-          .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
-          .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
-          .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
-          
-          .stat-number {
-            font-size: 28px;
-            font-weight: 800;
-            margin-bottom: 5px;
-          }
-          
-          .stat-label {
-            font-size: 11px;
-            opacity: 0.9;
-          }
-          
-          .financial-summary {
-            background: #f5f5f5;
-            padding: 15px 20px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-          }
-          
-          .total-value {
-            font-size: 24px;
-            font-weight: 800;
-            color: #9c27b0;
-          }
-          
-          .average-value {
-            font-size: 14px;
-            font-weight: 600;
-            color: #666;
-          }
-          
-          /* Cards de dias */
-          .day-card {
-            margin-bottom: 25px;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            overflow: hidden;
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-          
-          .day-header {
-            background: #faf5ff;
-            padding: 15px 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            border-bottom: 2px solid #9c27b0;
-            flex-wrap: wrap;
-          }
-          
-          .day-number {
-            background: #9c27b0;
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 800;
-          }
-          
-          .day-info {
-            flex: 1;
-          }
-          
-          .day-name {
-            font-size: 16px;
-            font-weight: 700;
-            color: #9c27b0;
-            text-transform: capitalize;
-          }
-          
-          .day-date {
-            font-size: 11px;
-            color: #666;
-          }
-          
-          .day-count {
-            background: #9c27b0;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-          }
-          
-          /* Tabelas */
-          .events-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-          }
-          
-          .events-table th {
-            background: #f8f9fa;
-            padding: 12px 10px;
-            text-align: left;
-            font-weight: 700;
-            color: #555;
-            border-bottom: 1px solid #e0e0e0;
-          }
-          
-          .events-table td {
-            padding: 10px;
-            border-bottom: 1px solid #f0f0f0;
-          }
-          
-          .events-table tr:hover {
-            background: #faf5ff;
-          }
-          
-          .time-cell {
-            font-weight: 600;
-            color: #9c27b0;
-            width: 70px;
-          }
-          
-          .phone-cell {
-            width: 100px;
-          }
-          
-          .services-cell {
-            min-width: 150px;
-          }
-          
-          .value-cell {
-            text-align: right;
-            font-weight: 600;
-            color: #9c27b0;
-            width: 80px;
-          }
-          
-          .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: 600;
-          }
-          
-          .status-confirmed { background: #e8f5e9; color: #4caf50; }
-          .status-pending { background: #fff3e0; color: #ff9800; }
-          .status-cancelled { background: #ffebee; color: #f44336; }
-          .status-finished { background: #e3f2fd; color: #2196f3; }
-          .status-progress { background: #f3e5f5; color: #9c27b0; }
-          .status-default { background: #f5f5f5; color: #9e9e9e; }
-          
-          .total-row {
-            background: #f5f5f5;
-            font-weight: 700;
-          }
-          
-          .total-row td {
-            border-top: 2px solid #e0e0e0;
-            padding: 12px 10px;
-          }
-          
-          /* Rodapé */
-          .footer {
-            background: #faf5ff;
-            padding: 20px;
-            text-align: center;
-            border-top: 1px solid #e0e0e0;
-            margin-top: 20px;
-          }
-          
-          .footer p {
-            font-size: 10px;
-            color: #666;
-            margin: 5px 0;
-          }
-          
-          .footer-copyright {
-            color: #9c27b0;
-            font-weight: 500;
-          }
-          
-          @media print {
-            body {
-              background: white;
-              padding: 0;
-              margin: 0;
-            }
-            
-            .day-card {
-              break-inside: avoid;
-              page-break-inside: avoid;
-            }
-            
-            .status-badge {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            
-            .stat-card {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="report-container">
-          <!-- Cabeçalho -->
-          <div class="header">
-            <h1>📋 RELATÓRIO DE AGENDA</h1>
-            <h2>${profissionalNome}</h2>
-            <div class="header-info">
-              <div class="header-info-item">
-                <span class="header-info-label">Período</span>
-                <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
-              </div>
-              <div class="header-info-item">
-                <span class="header-info-label">Data de Emissão</span>
-                <span class="header-info-value">${formatDateTime(new Date())}</span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Estatísticas -->
-          <div class="stats-section">
-            <div class="stats-title">📊 Resumo do Período</div>
-            <div class="stats-grid">
-              <div class="stat-card total">
-                <div class="stat-number">${totalEventos}</div>
-                <div class="stat-label">Total de Eventos</div>
-              </div>
-              <div class="stat-card agendamentos">
-                <div class="stat-number">${totalAgendamentos}</div>
-                <div class="stat-label">Agendamentos</div>
-              </div>
-              <div class="stat-card atendimentos">
-                <div class="stat-number">${totalAtendimentos}</div>
-                <div class="stat-label">Atendimentos</div>
-              </div>
-              <div class="stat-card confirmados">
-                <div class="stat-number">${totalConfirmados}</div>
-                <div class="stat-label">Confirmados</div>
-              </div>
-              <div class="stat-card pendentes">
-                <div class="stat-number">${totalPendentes}</div>
-                <div class="stat-label">Pendentes</div>
-              </div>
-              <div class="stat-card cancelados">
-                <div class="stat-number">${totalCancelados}</div>
-                <div class="stat-label">Cancelados</div>
-              </div>
-            </div>
-            
-            <div class="financial-summary">
-              <div>
-                <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
-                <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
-              </div>
-              <div style="display: flex; gap: 30px;">
-                <div>
-                  <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
-                  <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
-                </div>
-                <div>
-                  <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
-                  <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Agenda Detalhada -->
-          <div style="padding: 0 30px 30px 30px;">
-            <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
-            ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
-          </div>
-          
-          <!-- Rodapé -->
-          <div class="footer">
-            <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
-            <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
-            <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    // 4. Criar um elemento temporário para renderizar o HTML
-    const tempElement = document.createElement('div');
-    tempElement.innerHTML = fullHTML;
-    document.body.appendChild(tempElement);
-
-    // 5. Usar html2pdf
-    const html2pdf = (await import('html2pdf.js')).default;
-    
-    const opt = {
-      margin: [0.5, 0.5, 0.5, 0.5],
-      filename: `relatorio_agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
-    
-    await html2pdf().set(opt).from(tempElement).save();
-    
-    // 6. Remover elemento temporário
-    document.body.removeChild(tempElement);
-    
-    // 7. Registrar auditoria
-    await auditoriaService.registrar('exportar_pdf_agenda', {
-      entidade: 'agendamentos',
-      detalhes: 'Exportação de relatório de agenda em PDF',
-      dados: {
-        periodo: periodoRelatorio.tipo,
-        profissional: profissionalNome,
-        totalEventos: eventosFiltrados.length
-      }
-    });
-    
-    mostrarSnackbar('PDF gerado com sucesso!', 'success');
-    handleCloseRelatorio();
-    
-  } catch (error) {
-    console.error('Erro ao gerar PDF:', error);
-    mostrarSnackbar('Erro ao gerar PDF: ' + error.message, 'error');
-    
-    await auditoriaService.registrarErro(error, { 
-      acao: 'exportar_pdf_agenda'
-    });
-  }
-};
+      mostrarSnackbar('PDF gerado com sucesso!', 'success');
+      handleCloseRelatorio();
+      
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      mostrarSnackbar('Erro ao gerar PDF: ' + error.message, 'error');
+      
+      await auditoriaService.registrarErro(error, { 
+        acao: 'exportar_pdf_agenda'
+      });
+    }
+  };
 
   const handleExportExcel = async () => {
     try {
@@ -2491,7 +2347,6 @@ const handleExportPDF = async () => {
     carregarDisponibilidade();
   }, [updateTrigger]);
 
-  // 🔥 Verificar formulários pendentes quando agendamentos mudar
   useEffect(() => {
     if (agendamentos && agendamentos.length > 0) {
       verificarTodosFormularios();
@@ -2568,7 +2423,6 @@ const handleExportPDF = async () => {
     }
   }, [searchClientTerm, cpfInput, dataNascimentoInput, searchClientType, clientes, showClientSearch, updateTrigger]);
 
-  // Debounce para pesquisa de clientes
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchTerm(searchClientTerm), 300);
     return () => clearTimeout(timer);
@@ -2754,15 +2608,26 @@ const handleExportPDF = async () => {
                         sx={{ mb: 2, height: 6, borderRadius: 3 }}
                       />
                       
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        color="warning"
-                        startIcon={<PlayIcon />}
-                        onClick={() => continuarAtendimento(atendimento)}
-                      >
-                        Continuar
-                      </Button>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="warning"
+                          startIcon={<PlayIcon />}
+                          onClick={() => continuarAtendimento(atendimento)}
+                        >
+                          Continuar
+                        </Button>
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          color="success"
+                          startIcon={<CheckIcon />}
+                          onClick={() => finalizarAtendimento(atendimento)}
+                        >
+                          Finalizar
+                        </Button>
+                      </Box>
                     </Card>
                   </Grid>
                 );
@@ -2930,8 +2795,6 @@ const handleExportPDF = async () => {
                                 const cliente = getClienteData(event.clienteId);
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
-                                
-                                // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                                 const temFormularioPendente = formulariosPendentes[event.id];
 
                                 if (!cliente) return null;
@@ -2945,7 +2808,7 @@ const handleExportPDF = async () => {
                                     >
                                       <Card variant="outlined" sx={{ 
                                         p: 2,
-                                        position: 'relative', // Para o badge
+                                        position: 'relative',
                                         borderLeft: '4px solid',
                                         borderLeftColor: 
                                           event.tipo === 'atendimento' ? '#ff9800' :
@@ -2953,7 +2816,6 @@ const handleExportPDF = async () => {
                                           event.status === 'pendente' ? '#ff9800' :
                                           event.status === 'cancelado' ? '#f44336' : '#9c27b0',
                                       }}>
-                                        {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                                         {temFormularioPendente && (
                                           <Tooltip title="Formulário de anamnese pendente">
                                             <Badge
@@ -2997,6 +2859,14 @@ const handleExportPDF = async () => {
                                                     {formatarTelefone(cliente.telefone)}
                                                   </Typography>
                                                 )}
+                                                {cliente.primeiroAtendimentoRealizado && (
+                                                  <Chip
+                                                    icon={<TrophyIcon />}
+                                                    label="1º atendimento"
+                                                    size="small"
+                                                    sx={{ mt: 0.5, height: 18, fontSize: '0.6rem', bgcolor: '#e8f5e9', color: '#4caf50' }}
+                                                  />
+                                                )}
                                               </Box>
                                             </Box>
                                           </Grid>
@@ -3036,7 +2906,6 @@ const handleExportPDF = async () => {
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                                              {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                                               {temFormularioPendente && (
                                                 <Tooltip title="Preencher formulário">
                                                   <IconButton
@@ -3062,15 +2931,26 @@ const handleExportPDF = async () => {
                                               )}
                                               
                                               {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
-                                                <Button
-                                                  size="small"
-                                                  variant="contained"
-                                                  color="warning"
-                                                  startIcon={<PlayIcon />}
-                                                  onClick={() => continuarAtendimento(event)}
-                                                >
-                                                  Continuar
-                                                </Button>
+                                                <>
+                                                  <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    color="warning"
+                                                    startIcon={<PlayIcon />}
+                                                    onClick={() => continuarAtendimento(event)}
+                                                  >
+                                                    Continuar
+                                                  </Button>
+                                                  <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    color="success"
+                                                    startIcon={<CheckIcon />}
+                                                    onClick={() => finalizarAtendimento(event)}
+                                                  >
+                                                    Finalizar
+                                                  </Button>
+                                                </>
                                               )}
                                               
                                               {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'pendente' && (
@@ -3195,7 +3075,6 @@ const handleExportPDF = async () => {
                           {day.events.slice(0, 3).map(event => {
                             const cliente = getClienteData(event.clienteId);
                             const servicosLista = event.servicos || [];
-                            // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                             const temFormularioPendente = formulariosPendentes[event.id];
                             
                             return (
@@ -3328,7 +3207,6 @@ const handleExportPDF = async () => {
                             {day.events.slice(0, 2).map(event => {
                               const cliente = getClienteData(event.clienteId);
                               const servicosLista = event.servicos || [];
-                              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
                               const temFormularioPendente = formulariosPendentes[event.id];
                               
                               return (
@@ -3390,14 +3268,12 @@ const handleExportPDF = async () => {
               const cliente = getClienteData(event.clienteId);
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
-              // 🔥 VERIFICAR SE TEM FORMULÁRIO PENDENTE
               const temFormularioPendente = formulariosPendentes[event.id];
 
               if (!cliente) return null;
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
-                  {/* 🔥 BADGE DE FORMULÁRIO PENDENTE */}
                   {temFormularioPendente && (
                     <Tooltip title="Formulário de anamnese pendente">
                       <Badge
@@ -3484,7 +3360,6 @@ const handleExportPDF = async () => {
                     )}
                   </Grid>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                    {/* 🔥 BOTÃO PARA FORMULÁRIO */}
                     {temFormularioPendente && (
                       <Button
                         size="small"
@@ -3516,18 +3391,32 @@ const handleExportPDF = async () => {
                       </Button>
                     )}
                     {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="warning"
-                        onClick={() => {
-                          setOpenDayDialog(false);
-                          continuarAtendimento(event);
-                        }}
-                        sx={{ mr: 1 }}
-                      >
-                        Continuar
-                      </Button>
+                      <>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="warning"
+                          onClick={() => {
+                            setOpenDayDialog(false);
+                            continuarAtendimento(event);
+                          }}
+                          sx={{ mr: 1 }}
+                        >
+                          Continuar
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          onClick={() => {
+                            setOpenDayDialog(false);
+                            finalizarAtendimento(event);
+                          }}
+                          sx={{ mr: 1 }}
+                        >
+                          Finalizar
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="small"
@@ -3573,7 +3462,6 @@ const handleExportPDF = async () => {
           <form onSubmit={handleSave}>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
-                {/* Campo de Cliente com Pesquisa */}
                 <Grid item xs={12}>
                   <Box sx={{ mb: 2 }}>
                     {!formData.clienteId ? (
@@ -3595,7 +3483,6 @@ const handleExportPDF = async () => {
                           </Button>
                         </Box>
 
-                        {/* Painel de Pesquisa */}
                         <Collapse in={showClientSearch}>
                           <Card variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#faf5ff' }}>
                             <Typography variant="subtitle2" sx={{ mb: 2, color: '#9c27b0' }}>
@@ -3669,7 +3556,6 @@ const handleExportPDF = async () => {
                               </LocalizationProvider>
                             )}
 
-                            {/* Resultados da Busca */}
                             {searchClientResults.length > 0 && (
                               <Box sx={{ mt: 2 }}>
                                 <Typography variant="caption" color="textSecondary">
@@ -3742,7 +3628,6 @@ const handleExportPDF = async () => {
                         </Collapse>
                       </Box>
                     ) : (
-                      // Cliente Selecionado
                       <Card variant="outlined" sx={{ p: 2, bgcolor: '#f3e5f5' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                           <Avatar 
@@ -3783,13 +3668,11 @@ const handleExportPDF = async () => {
                   </Box>
                 </Grid>
 
-                {/* Seção de Serviços Múltiplos */}
                 <Grid item xs={12}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
                     Serviços do Agendamento
                   </Typography>
 
-                  {/* Lista de Serviços Selecionados */}
                   {servicosSelecionados.length > 0 && (
                     <Card variant="outlined" sx={{ mb: 2, p: 2, bgcolor: '#faf5ff' }}>
                       <TableContainer>
@@ -3839,7 +3722,6 @@ const handleExportPDF = async () => {
                     </Card>
                   )}
 
-                  {/* Adicionar Novo Serviço com Autocomplete */}
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={5}>
                       <Autocomplete
@@ -3933,7 +3815,6 @@ const handleExportPDF = async () => {
                   )}
                 </Grid>
 
-                {/* Data e Hora */}
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
