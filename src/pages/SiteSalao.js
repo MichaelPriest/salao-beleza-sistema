@@ -295,8 +295,8 @@ function SiteSalao() {
           boxShadow: '0 2px 20px rgba(156,39,176,0.1)',
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          {/* Logo e Nome */}
+        <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: '64px', sm: '70px' } }}>
+          {/* Logo e Nome - Tamanho padrão profissional */}
           <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => scrollToSection('home')}>
             {salaoLogo ? (
               <Box
@@ -304,12 +304,14 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  width: 200,
-                  height: 200,
+                  height: { xs: 40, sm: 50 }, // Tamanho padrão: 40px mobile, 50px desktop
+                  width: 'auto',
+                  maxWidth: { xs: 120, sm: 150 },
                   objectFit: 'contain',
                   backgroundColor: 'transparent',
-                  boxShadow: 'none',
-                  border: 'none',
+                  '&:hover': {
+                    opacity: 0.9,
+                  },
                 }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -375,14 +377,13 @@ function SiteSalao() {
                 src={salaoLogo}
                 alt={salaoNome}
                 sx={{
-                  width: 200,
-                  height: 200,
+                  height: 60, // Tamanho um pouco maior no menu mobile
+                  width: 'auto',
+                  maxWidth: 150,
                   objectFit: 'contain',
                   mx: 'auto',
                   mb: 1,
                   backgroundColor: 'transparent',
-                  boxShadow: 'none',
-                  border: 'none',
                 }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -422,7 +423,7 @@ function SiteSalao() {
       {/* Espaçador para o header fixo */}
       <Toolbar id="home" />
 
-      {/* Hero Section */}
+      {/* Hero Section - Logo em destaque 200x200 */}
       <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
         <Grid container spacing={4} alignItems="center">
           <Grid item xs={12} md={6}>
@@ -431,6 +432,23 @@ function SiteSalao() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
             >
+              {/* Logo em destaque - 200x200 */}
+              {salaoLogo && (
+                <Box sx={{ mb: 3, textAlign: { xs: 'center', md: 'left' } }}>
+                  <Box
+                    component="img"
+                    src={salaoLogo}
+                    alt={salaoNome}
+                    sx={{
+                      width: 200,
+                      height: 200,
+                      objectFit: 'contain',
+                      backgroundColor: 'transparent',
+                    }}
+                  />
+                </Box>
+              )}
+              
               <Typography 
                 variant="h2" 
                 sx={{ 
@@ -1261,13 +1279,12 @@ function SiteSalao() {
                     src={salaoLogo}
                     alt={salaoNome}
                     sx={{
-                      width: 200,
-                      height: 200,
+                      height: 35, // Footer - tamanho menor
+                      width: 'auto',
+                      maxWidth: 100,
                       objectFit: 'contain',
                       mr: 1,
                       backgroundColor: 'transparent',
-                      boxShadow: 'none',
-                      border: 'none',
                     }}
                     onError={(e) => {
                       e.target.style.display = 'none';
