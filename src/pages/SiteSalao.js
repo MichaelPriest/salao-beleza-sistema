@@ -67,6 +67,12 @@ import {
   Dashboard as DashboardIcon,
   Info as InfoIcon,
   School as SchoolIcon,
+  Home as HomeIcon,
+  Store as StoreIcon,
+  People as PeopleIcon,
+  Share as ShareIcon,
+  ContactPhone as ContactIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -86,6 +92,16 @@ const nomesDias = {
   domingo: 'Domingo'
 };
 
+// Mapa de ícones para o menu
+const menuItems = [
+  { id: 'home', label: 'Início', icon: <HomeIcon /> },
+  { id: 'servicos', label: 'Serviços', icon: <StoreIcon /> },
+  { id: 'profissionais', label: 'Profissionais', icon: <PeopleIcon /> },
+  { id: 'redes', label: 'Redes Sociais', icon: <ShareIcon /> },
+  { id: 'contato', label: 'Contato', icon: <ContactIcon /> },
+  { id: 'tutorial', label: 'Área Restrita', icon: <LockIcon /> },
+];
+
 // Componente de Loading
 const LoadingSpinner = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -101,6 +117,7 @@ const LoadingSpinner = () => (
 function SiteSalao() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -110,19 +127,6 @@ function SiteSalao() {
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
   
-  const [openAgendamento, setOpenAgendamento] = useState(false);
-  const [openTutorial, setOpenTutorial] = useState(false);
-  const [agendamentoData, setAgendamentoData] = useState({
-    clienteNome: '',
-    clienteEmail: '',
-    clienteTelefone: '',
-    servicoId: '',
-    profissionalId: '',
-    data: '',
-    horario: '',
-    observacoes: ''
-  });
-  const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // Dados das redes sociais
@@ -211,89 +215,15 @@ function SiteSalao() {
     }
   };
 
-  const gerarHorariosDisponiveis = () => {
-    const horarios = [
-      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-      '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-      '16:00', '16:30', '17:00', '17:30', '18:00', '18:30'
-    ];
-    setHorariosDisponiveis(horarios);
-  };
-
-  const handleAgendamentoSubmit = async () => {
-    try {
-      if (!agendamentoData.clienteNome || !agendamentoData.clienteEmail || !agendamentoData.clienteTelefone) {
-        mostrarSnackbar('Preencha todos os dados do cliente', 'error');
-        return;
-      }
-      if (!agendamentoData.servicoId || !agendamentoData.profissionalId || !agendamentoData.data || !agendamentoData.horario) {
-        mostrarSnackbar('Selecione serviço, profissional, data e horário', 'error');
-        return;
-      }
-
-      const servico = servicos.find(s => s.id === agendamentoData.servicoId);
-      const profissional = profissionais.find(p => p.id === agendamentoData.profissionalId);
-
-      // Verificar disponibilidade
-      const disponivel = await siteService.verificarDisponibilidade(
-        agendamentoData.profissionalId,
-        agendamentoData.data,
-        agendamentoData.horario
-      );
-
-      if (!disponivel) {
-        mostrarSnackbar('Horário não disponível. Escolha outro horário.', 'error');
-        return;
-      }
-
-      // Criar agendamento
-      const agendamentoCriado = await siteService.criarAgendamento({
-        clienteNome: agendamentoData.clienteNome,
-        clienteEmail: agendamentoData.clienteEmail,
-        clienteTelefone: agendamentoData.clienteTelefone,
-        profissionalId: agendamentoData.profissionalId,
-        profissionalNome: profissional?.nome,
-        servicoId: agendamentoData.servicoId,
-        servicoNome: servico?.nome,
-        valor: servico?.preco,
-        data: agendamentoData.data,
-        horario: agendamentoData.horario,
-        observacoes: agendamentoData.observacoes
-      });
-
-      // 🔥 NOTIFICAR ADMINISTRADORES SOBRE NOVO AGENDAMENTO
-      try {
-        const usuarios = await firebaseService.getAll('usuarios');
-        const admins = usuarios.filter(u => 
-          u.cargo === 'admin' || u.permissoes?.includes('gerenciar_agendamentos')
-        );
-
-        for (const admin of admins) {
-          await notificacoesService.notificarAgendamentoSite(agendamentoCriado, admin.id);
-        }
-        console.log('✅ Notificações enviadas para administradores');
-      } catch (notifError) {
-        console.error('Erro ao enviar notificações:', notifError);
-        // Não interrompe o fluxo principal
-      }
-
-      mostrarSnackbar('Agendamento realizado com sucesso! Entraremos em contato para confirmar.', 'success');
-      setOpenAgendamento(false);
-      setAgendamentoData({
-        clienteNome: '',
-        clienteEmail: '',
-        clienteTelefone: '',
-        servicoId: '',
-        profissionalId: '',
-        data: '',
-        horario: '',
-        observacoes: ''
-      });
-      
-    } catch (error) {
-      console.error('Erro ao agendar:', error);
-      mostrarSnackbar('Erro ao realizar agendamento', 'error');
-    }
+  // Função para formatar horário de funcionamento
+  const formatarHorarioFuncionamento = () => {
+    if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
+    
+    const diasAbertos = Object.entries(config.horarioFuncionamento)
+      .filter(([_, h]) => h.aberto)
+      .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`);
+    
+    return diasAbertos.join(' | ');
   };
 
   if (loading) {
@@ -315,17 +245,6 @@ function SiteSalao() {
   const salaoEndereco = config?.salao?.endereco;
   const contato = config?.salao?.contato || {};
 
-  // Função para formatar horário de funcionamento
-  const formatarHorarioFuncionamento = () => {
-    if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
-    
-    const diasAbertos = Object.entries(config.horarioFuncionamento)
-      .filter(([_, h]) => h.aberto)
-      .map(([dia, h]) => `${nomesDias[dia]}: ${h.abertura} - ${h.fechamento}`);
-    
-    return diasAbertos.join(' | ');
-  };
-
   return (
     <Box sx={{ bgcolor: '#faf5ff', minHeight: '100vh' }}>
       {/* Header */}
@@ -337,64 +256,57 @@ function SiteSalao() {
           boxShadow: '0 2px 20px rgba(156,39,176,0.1)',
         }}
       >
-        <Toolbar>
-          {salaoLogo ? (
-            <Box
-              component="img"
-              src={salaoLogo}
-              alt={salaoNome}
-              sx={{
-                height: 50,
-                width: 'auto',
-                maxWidth: 150,
-                mr: 2,
-                objectFit: 'contain',
-              }}
-            />
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          {/* Logo e Nome */}
+          <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => scrollToSection('home')}>
+            {salaoLogo ? (
+              <Box
+                component="img"
+                src={salaoLogo}
+                alt={salaoNome}
+                sx={{
+                  height: { xs: 40, sm: 50 },
+                  width: 'auto',
+                  maxWidth: { xs: 120, sm: 150 },
+                  objectFit: 'contain',
+                  mr: 1,
+                }}
+              />
+            ) : (
+              <SpaIcon sx={{ fontSize: { xs: 30, sm: 40 }, mr: 1, color: '#9c27b0' }} />
+            )}
+            
+            {!salaoLogo && (
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                {salaoNome}
+              </Typography>
+            )}
+          </Box>
+          
+          {/* Menu Desktop */}
+          {!isMobile ? (
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              {menuItems.map((item) => (
+                <Button
+                  key={item.id}
+                  onClick={() => scrollToSection(item.id)}
+                  startIcon={item.icon}
+                  sx={{
+                    color: activeSection === item.id ? '#9c27b0' : '#666',
+                    fontWeight: activeSection === item.id ? 600 : 400,
+                    '&:hover': {
+                      backgroundColor: 'rgba(156,39,176,0.1)',
+                    },
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </Box>
           ) : (
-            <SpaIcon sx={{ fontSize: 40, mr: 1, color: '#9c27b0' }} />
-          )}
-          
-          {!salaoLogo && (
-            <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, color: '#9c27b0' }}>
-              {salaoNome}
-            </Typography>
-          )}
-          
-          {isMobile ? (
             <IconButton onClick={() => setMobileMenuOpen(true)} sx={{ color: '#9c27b0' }}>
               <MenuIcon />
             </IconButton>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 3, flexGrow: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
-              {['home', 'servicos', 'profissionais', 'redes', 'contato', 'tutorial'].map((item) => (
-                <Button
-                  key={item}
-                  onClick={() => scrollToSection(item)}
-                  sx={{
-                    color: activeSection === item ? '#9c27b0' : '#666',
-                    fontWeight: activeSection === item ? 600 : 400,
-                  }}
-                >
-                  {item === 'home' ? 'Início' : 
-                   item === 'servicos' ? 'Serviços' : 
-                   item === 'profissionais' ? 'Profissionais' : 
-                   item === 'redes' ? 'Redes Sociais' : 
-                   item === 'tutorial' ? 'Área Restrita' : 'Contato'}
-                </Button>
-              ))}
-              <Button
-                variant="contained"
-                onClick={() => setOpenAgendamento(true)}
-                sx={{
-                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                  color: 'white',
-                  ml: 2,
-                }}
-              >
-                Agendar Agora
-              </Button>
-            </Box>
           )}
         </Toolbar>
       </AppBar>
@@ -414,7 +326,7 @@ function SiteSalao() {
           </Box>
           
           {salaoLogo && (
-            <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
               <Box
                 component="img"
                 src={salaoLogo}
@@ -426,47 +338,42 @@ function SiteSalao() {
                   mb: 1,
                 }}
               />
+              <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
+                {salaoNome}
+              </Typography>
             </Box>
           )}
           
           <List>
-            {['home', 'servicos', 'profissionais', 'redes', 'contato', 'tutorial'].map((item) => (
-              <ListItem key={item} button onClick={() => scrollToSection(item)}>
+            {menuItems.map((item) => (
+              <ListItem 
+                key={item.id} 
+                button 
+                onClick={() => scrollToSection(item.id)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 1,
+                  backgroundColor: activeSection === item.id ? 'rgba(156,39,176,0.1)' : 'transparent',
+                }}
+              >
+                <ListItemIcon sx={{ color: activeSection === item.id ? '#9c27b0' : '#666' }}>
+                  {item.icon}
+                </ListItemIcon>
                 <ListItemText 
-                  primary={item === 'home' ? 'Início' : 
-                          item === 'servicos' ? 'Serviços' : 
-                          item === 'profissionais' ? 'Profissionais' : 
-                          item === 'redes' ? 'Redes Sociais' : 
-                          item === 'tutorial' ? 'Área Restrita' : 'Contato'}
+                  primary={item.label}
+                  sx={{ color: activeSection === item.id ? '#9c27b0' : '#666' }}
                 />
               </ListItem>
             ))}
-            <ListItem>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setOpenAgendamento(true);
-                }}
-                sx={{
-                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                  color: 'white',
-                  mt: 2,
-                }}
-              >
-                Agendar Agora
-              </Button>
-            </ListItem>
           </List>
         </Box>
       </Drawer>
 
-      {/* Espaçador */}
+      {/* Espaçador para o header fixo */}
       <Toolbar id="home" />
 
       {/* Hero Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
         <Grid container spacing={4} alignItems="center">
           <Grid item xs={12} md={6}>
             <motion.div
@@ -474,17 +381,27 @@ function SiteSalao() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Typography variant="h2" sx={{ fontWeight: 800, mb: 2 }}>
+              <Typography 
+                variant="h2" 
+                sx={{ 
+                  fontWeight: 800, 
+                  mb: 2, 
+                  fontSize: { xs: '2rem', sm: '2.5rem', md: '3rem' } 
+                }}
+              >
                 Realce sua{' '}
                 <span style={{ color: '#9c27b0' }}>Beleza</span>
               </Typography>
-              <Typography variant="h5" color="textSecondary" sx={{ mb: 3 }}>
+              <Typography variant="h5" color="textSecondary" sx={{ mb: 3, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.
+              </Typography>
+              <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
+                Para agendar um horário, acesse a Área do Cliente e faça login ou cadastre-se.
               </Typography>
               <Button
                 variant="contained"
                 size="large"
-                onClick={() => setOpenAgendamento(true)}
+                onClick={() => scrollToSection('tutorial')}
                 sx={{
                   background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
                   color: 'white',
@@ -493,7 +410,7 @@ function SiteSalao() {
                   fontSize: '1.1rem',
                 }}
               >
-                Agende seu Horário
+                Área do Cliente
               </Button>
             </motion.div>
           </Grid>
@@ -520,315 +437,368 @@ function SiteSalao() {
       </Container>
 
       {/* Seção de Área Restrita - TUTORIAL */}
-      <Box sx={{ bgcolor: 'white', py: 8 }} id="tutorial">
+      <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="tutorial">
         <Container maxWidth="lg">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+          <Typography 
+            variant="h3" 
+            align="center" 
+            sx={{ 
+              fontWeight: 700, 
+              mb: 2,
+              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
+            }}
+          >
             Área <span style={{ color: '#9c27b0' }}>Restrita</span>
           </Typography>
-          <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
+          <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
             Acesse o sistema administrativo ou a área do cliente
           </Typography>
 
           <Grid container spacing={4}>
             {/* Acesso Administrativo */}
             <Grid item xs={12} md={6}>
-              <Card 
-                sx={{ 
-                  height: '100%',
-                  p: 3,
-                  background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)',
-                  border: '2px solid #9c27b0',
-                  borderRadius: 4,
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                viewport={{ once: true }}
               >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: -20,
-                    right: -20,
-                    width: 150,
-                    height: 150,
-                    borderRadius: '50%',
-                    bgcolor: 'rgba(156,39,176,0.1)',
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    p: 3,
+                    background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)',
+                    border: '2px solid #9c27b0',
+                    borderRadius: 4,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'translateY(-10px)',
+                      boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
+                    }
                   }}
-                />
-                <Box sx={{ position: 'relative', zIndex: 1 }}>
-                  <Avatar
+                >
+                  <Box
                     sx={{
-                      width: 80,
-                      height: 80,
-                      bgcolor: '#9c27b0',
-                      mb: 2,
-                      mx: 'auto',
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 150,
+                      height: 150,
+                      borderRadius: '50%',
+                      bgcolor: 'rgba(156,39,176,0.1)',
                     }}
-                  >
-                    <AdminIcon sx={{ fontSize: 40 }} />
-                  </Avatar>
-                  <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-                    Administração
-                  </Typography>
-                  <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
-                    Acesso exclusivo para administradores, gerentes, atendentes e profissionais do salão.
-                  </Typography>
-
-                  <Accordion sx={{ mb: 2 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <List dense>
-                        <ListItem>
-                          <ListItemIcon><ComputerIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="1. Abra seu navegador"
-                            secondary="Chrome, Firefox, Edge ou Safari"
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><LoginIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="2. Acesse o link:"
-                            secondary={
-                              <Link 
-                                href={`${baseUrl}/login`} 
-                                target="_blank" 
-                                sx={{ fontWeight: 600, color: '#9c27b0' }}
-                              >
-                                {baseUrl}/login
-                              </Link>
-                            }
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><DashboardIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="3. Faça login com seu email e senha"
-                            secondary="Use as credenciais fornecidas pelo administrador"
-                          />
-                        </ListItem>
-                      </List>
-                    </AccordionDetails>
-                  </Accordion>
-
-                  <Accordion>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <List dense>
-                        <ListItem>
-                          <ListItemIcon><PhoneAndroidIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="1. Abra o navegador do celular"
-                            secondary="Chrome, Safari ou navegador padrão"
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><QrCodeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="2. Acesse o mesmo link ou escaneie o QR Code"
-                          />
-                        </ListItem>
-                      </List>
-                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                        <QRCodeSVG
-                          value={`${baseUrl}/login`}
-                          size={120}
-                          bgColor="#ffffff"
-                          fgColor="#9c27b0"
-                          level="H"
-                        />
-                      </Box>
-                    </AccordionDetails>
-                  </Accordion>
-
-                  <Box sx={{ mt: 3, textAlign: 'center' }}>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      href="/login"
-                      startIcon={<AdminIcon />}
+                  />
+                  <Box sx={{ position: 'relative', zIndex: 1 }}>
+                    <Avatar
                       sx={{
-                        background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                        color: 'white',
-                        px: 4,
+                        width: 80,
+                        height: 80,
+                        bgcolor: '#9c27b0',
+                        mb: 2,
+                        mx: 'auto',
                       }}
                     >
-                      Acessar Painel Administrativo
-                    </Button>
+                      <AdminIcon sx={{ fontSize: 40 }} />
+                    </Avatar>
+                    <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+                      Administração
+                    </Typography>
+                    <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
+                      Acesso exclusivo para administradores, gerentes, atendentes e profissionais do salão.
+                    </Typography>
+
+                    <Accordion sx={{ mb: 2 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          <ListItem>
+                            <ListItemIcon><ComputerIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="1. Abra seu navegador"
+                              secondary="Chrome, Firefox, Edge ou Safari"
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><LoginIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="2. Acesse o link:"
+                              secondary={
+                                <Link 
+                                  href={`${baseUrl}/login`} 
+                                  target="_blank" 
+                                  sx={{ fontWeight: 600, color: '#9c27b0' }}
+                                >
+                                  {baseUrl}/login
+                                </Link>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><DashboardIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="3. Faça login com seu email e senha"
+                              secondary="Use as credenciais fornecidas pelo administrador"
+                            />
+                          </ListItem>
+                        </List>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          <ListItem>
+                            <ListItemIcon><PhoneAndroidIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="1. Abra o navegador do celular"
+                              secondary="Chrome, Safari ou navegador padrão"
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><QrCodeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="2. Acesse o mesmo link ou escaneie o QR Code"
+                            />
+                          </ListItem>
+                        </List>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                          <QRCodeSVG
+                            value={`${baseUrl}/login`}
+                            size={120}
+                            bgColor="#ffffff"
+                            fgColor="#9c27b0"
+                            level="H"
+                          />
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        href="/login"
+                        startIcon={<AdminIcon />}
+                        sx={{
+                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                          color: 'white',
+                          px: 4,
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                          },
+                        }}
+                      >
+                        Acessar Painel Administrativo
+                      </Button>
+                    </Box>
                   </Box>
-                </Box>
-              </Card>
+                </Card>
+              </motion.div>
             </Grid>
 
             {/* Área do Cliente */}
             <Grid item xs={12} md={6}>
-              <Card 
-                sx={{ 
-                  height: '100%',
-                  p: 3,
-                  background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)',
-                  border: '2px solid #ff9800',
-                  borderRadius: 4,
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                viewport={{ once: true }}
               >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: -20,
-                    right: -20,
-                    width: 150,
-                    height: 150,
-                    borderRadius: '50%',
-                    bgcolor: 'rgba(255,152,0,0.1)',
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    p: 3,
+                    background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)',
+                    border: '2px solid #ff9800',
+                    borderRadius: 4,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'transform 0.3s',
+                    '&:hover': {
+                      transform: 'translateY(-10px)',
+                      boxShadow: '0 20px 40px rgba(255,152,0,0.2)',
+                    }
                   }}
-                />
-                <Box sx={{ position: 'relative', zIndex: 1 }}>
-                  <Avatar
+                >
+                  <Box
                     sx={{
-                      width: 80,
-                      height: 80,
-                      bgcolor: '#ff9800',
-                      mb: 2,
-                      mx: 'auto',
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 150,
+                      height: 150,
+                      borderRadius: '50%',
+                      bgcolor: 'rgba(255,152,0,0.1)',
                     }}
-                  >
-                    <PersonIcon sx={{ fontSize: 40 }} />
-                  </Avatar>
-                  <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2 }}>
-                    Área do Cliente
-                  </Typography>
-                  <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
-                    Acesse sua área exclusiva para acompanhar agendamentos, histórico e programa de fidelidade.
-                  </Typography>
-
-                  <Accordion sx={{ mb: 2 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <List dense>
-                        <ListItem>
-                          <ListItemIcon><ComputerIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="1. Abra seu navegador"
-                            secondary="Chrome, Firefox, Edge ou Safari"
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="2. Acesse o link:"
-                            secondary={
-                              <Link 
-                                href={`${baseUrl}/cliente/login`} 
-                                target="_blank" 
-                                sx={{ fontWeight: 600, color: '#ff9800' }}
-                              >
-                                {baseUrl}/cliente/login
-                              </Link>
-                            }
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><DashboardIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="3. Faça login com seu email e senha"
-                            secondary="Use as credenciais criadas no cadastro"
-                          />
-                        </ListItem>
-                      </List>
-                    </AccordionDetails>
-                  </Accordion>
-
-                  <Accordion>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <List dense>
-                        <ListItem>
-                          <ListItemIcon><PhoneAndroidIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="1. Abra o navegador do celular"
-                            secondary="Chrome, Safari ou navegador padrão"
-                          />
-                        </ListItem>
-                        <ListItem>
-                          <ListItemIcon><QrCodeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                          <ListItemText 
-                            primary="2. Acesse o mesmo link ou escaneie o QR Code"
-                          />
-                        </ListItem>
-                      </List>
-                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                        <QRCodeSVG
-                          value={`${baseUrl}/cliente/login`}
-                          size={120}
-                          bgColor="#ffffff"
-                          fgColor="#ff9800"
-                          level="H"
-                        />
-                      </Box>
-                    </AccordionDetails>
-                  </Accordion>
-
-                  <Box sx={{ mt: 3, textAlign: 'center' }}>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      href="/cliente/login"
-                      startIcon={<PersonIcon />}
+                  />
+                  <Box sx={{ position: 'relative', zIndex: 1 }}>
+                    <Avatar
                       sx={{
-                        background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)',
-                        color: 'white',
-                        px: 4,
+                        width: 80,
+                        height: 80,
+                        bgcolor: '#ff9800',
+                        mb: 2,
+                        mx: 'auto',
                       }}
                     >
-                      Acessar Área do Cliente
-                    </Button>
+                      <PersonIcon sx={{ fontSize: 40 }} />
+                    </Avatar>
+                    <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+                      Área do Cliente
+                    </Typography>
+                    <Typography variant="body1" align="center" color="textSecondary" sx={{ mb: 3 }}>
+                      Acesse sua área exclusiva para agendar serviços, acompanhar agendamentos, histórico e programa de fidelidade.
+                    </Typography>
+
+                    <Accordion sx={{ mb: 2 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ fontWeight: 600 }}>💻 Como acessar no Computador</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          <ListItem>
+                            <ListItemIcon><ComputerIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="1. Abra seu navegador"
+                              secondary="Chrome, Firefox, Edge ou Safari"
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="2. Acesse o link:"
+                              secondary={
+                                <Link 
+                                  href={`${baseUrl}/cliente/login`} 
+                                  target="_blank" 
+                                  sx={{ fontWeight: 600, color: '#ff9800' }}
+                                >
+                                  {baseUrl}/cliente/login
+                                </Link>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><DashboardIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="3. Faça login com seu email e senha"
+                              secondary="Use as credenciais criadas no cadastro"
+                            />
+                          </ListItem>
+                        </List>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ fontWeight: 600 }}>📱 Como acessar no Celular</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <List dense>
+                          <ListItem>
+                            <ListItemIcon><PhoneAndroidIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="1. Abra o navegador do celular"
+                              secondary="Chrome, Safari ou navegador padrão"
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon><QrCodeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
+                            <ListItemText 
+                              primary="2. Acesse o mesmo link ou escaneie o QR Code"
+                            />
+                          </ListItem>
+                        </List>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                          <QRCodeSVG
+                            value={`${baseUrl}/cliente/login`}
+                            size={120}
+                            bgColor="#ffffff"
+                            fgColor="#ff9800"
+                            level="H"
+                          />
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
+
+                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        href="/cliente/login"
+                        startIcon={<PersonIcon />}
+                        sx={{
+                          background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)',
+                          color: 'white',
+                          px: 4,
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                          },
+                        }}
+                      >
+                        Acessar Área do Cliente
+                      </Button>
+                    </Box>
                   </Box>
-                </Box>
-              </Card>
+                </Card>
+              </motion.div>
             </Grid>
           </Grid>
 
           {/* Informações adicionais */}
-          <Paper sx={{ mt: 4, p: 3, bgcolor: '#f3e5f5', borderRadius: 2 }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={8}>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                  <InfoIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#9c27b0' }} />
-                  Primeiro acesso?
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  • Para a área administrativa, suas credenciais são fornecidas pelo administrador do sistema.
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  • Para a área do cliente, você pode se cadastrar clicando em "Criar conta" na página de login.
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  • O sistema é responsivo e funciona perfeitamente em qualquer dispositivo.
-                </Typography>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            viewport={{ once: true }}
+          >
+            <Paper sx={{ mt: 4, p: 3, bgcolor: '#f3e5f5', borderRadius: 2 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={8}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                    <InfoIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#9c27b0' }} />
+                    Primeiro acesso?
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    • Para a área administrativa, suas credenciais são fornecidas pelo administrador do sistema.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    • Para a área do cliente, você pode se cadastrar clicando em "Criar conta" na página de login.
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    • O sistema é responsivo e funciona perfeitamente em qualquer dispositivo.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
+                  <Badge badgeContent="Novo" color="secondary">
+                    <SchoolIcon sx={{ fontSize: 60, color: '#9c27b0' }} />
+                  </Badge>
+                </Grid>
               </Grid>
-              <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
-                <Badge badgeContent="Novo" color="secondary">
-                  <SchoolIcon sx={{ fontSize: 60, color: '#9c27b0' }} />
-                </Badge>
-              </Grid>
-            </Grid>
-          </Paper>
+            </Paper>
+          </motion.div>
         </Container>
       </Box>
 
       {/* Serviços Section */}
-      <Box sx={{ bgcolor: 'white', py: 8 }} id="servicos">
+      <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="servicos">
         <Container maxWidth="lg">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
+          <Typography 
+            variant="h3" 
+            align="center" 
+            sx={{ 
+              fontWeight: 700, 
+              mb: 6,
+              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
+            }}
+          >
             Nossos <span style={{ color: '#9c27b0' }}>Serviços</span>
           </Typography>
 
@@ -847,7 +817,7 @@ function SiteSalao() {
                     viewport={{ once: true }}
                     whileHover={{ y: -10 }}
                   >
-                    <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
+                    <Card sx={{ height: '100%', position: 'relative', overflow: 'visible', transition: '0.3s' }}>
                       <CardContent>
                         <Avatar
                           sx={{
@@ -857,6 +827,7 @@ function SiteSalao() {
                             position: 'absolute',
                             top: -30,
                             left: 20,
+                            boxShadow: '0 4px 10px rgba(156,39,176,0.3)',
                           }}
                         >
                           {servico.categoria === 'Cabelo' ? <CutIcon /> :
@@ -877,6 +848,7 @@ function SiteSalao() {
                               label={`${servico.duracao} min`}
                               size="small"
                               variant="outlined"
+                              sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
                             />
                             <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
                               R$ {servico.preco?.toFixed(2)}
@@ -894,9 +866,17 @@ function SiteSalao() {
       </Box>
 
       {/* Profissionais Section */}
-      <Box sx={{ py: 8 }} id="profissionais">
+      <Box sx={{ py: { xs: 4, md: 8 } }} id="profissionais">
         <Container maxWidth="lg">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6 }}>
+          <Typography 
+            variant="h3" 
+            align="center" 
+            sx={{ 
+              fontWeight: 700, 
+              mb: 6,
+              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
+            }}
+          >
             Nossa <span style={{ color: '#9c27b0' }}>Equipe</span>
           </Typography>
 
@@ -915,7 +895,7 @@ function SiteSalao() {
                     viewport={{ once: true }}
                     whileHover={{ scale: 1.05 }}
                   >
-                    <Card sx={{ textAlign: 'center', p: 2 }}>
+                    <Card sx={{ textAlign: 'center', p: 3, transition: '0.3s' }}>
                       <Avatar
                         src={prof.foto}
                         sx={{
@@ -934,7 +914,7 @@ function SiteSalao() {
                       <Typography variant="body2" color="textSecondary" gutterBottom>
                         {prof.especialidade}
                       </Typography>
-                      <Rating value={5} readOnly size="small" />
+                      <Rating value={5} readOnly size="small" sx={{ color: '#ff9800' }} />
                     </Card>
                   </motion.div>
                 </Grid>
@@ -946,12 +926,20 @@ function SiteSalao() {
 
       {/* Redes Sociais Section */}
       {(redesAtivas.instagram || redesAtivas.facebook) && (
-        <Box sx={{ bgcolor: 'white', py: 8 }} id="redes">
+        <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="redes">
           <Container maxWidth="lg">
-            <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2 }}>
+            <Typography 
+              variant="h3" 
+              align="center" 
+              sx={{ 
+                fontWeight: 700, 
+                mb: 2,
+                fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
+              }}
+            >
               Siga-nos nas <span style={{ color: '#9c27b0' }}>Redes Sociais</span>
             </Typography>
-            <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6 }}>
+            <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               Acompanhe nosso trabalho e novidades
             </Typography>
 
@@ -959,112 +947,126 @@ function SiteSalao() {
               {/* Instagram Card */}
               {redesAtivas.instagram && instagramUser && (
                 <Grid item xs={12} md={6} lg={redesAtivas.facebook ? 4 : 6}>
-                  <Card 
-                    sx={{ 
-                      textAlign: 'center', 
-                      p: 4,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'transform 0.3s',
-                      '&:hover': {
-                        transform: 'translateY(-10px)',
-                        boxShadow: '0 10px 40px rgba(225,48,108,0.3)',
-                      }
-                    }}
-                    onClick={() => window.open(instagramUrl, '_blank')}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    viewport={{ once: true }}
                   >
-                    <Avatar
-                      sx={{
-                        width: 100,
-                        height: 100,
-                        bgcolor: '#E1306C',
-                        mb: 2,
+                    <Card 
+                      sx={{ 
+                        textAlign: 'center', 
+                        p: 4,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'transform 0.3s',
+                        '&:hover': {
+                          transform: 'translateY(-10px)',
+                          boxShadow: '0 10px 40px rgba(225,48,108,0.3)',
+                        }
                       }}
+                      onClick={() => window.open(instagramUrl, '_blank')}
                     >
-                      <InstagramIcon sx={{ fontSize: 60 }} />
-                    </Avatar>
-                    <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-                      Instagram
-                    </Typography>
-                    <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-                      @{instagramUser}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      startIcon={<InstagramIcon />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(instagramUrl, '_blank');
-                      }}
-                      sx={{
-                        bgcolor: '#E1306C',
-                        '&:hover': { bgcolor: '#C13584' },
-                        mt: 2
-                      }}
-                    >
-                      Seguir no Instagram
-                    </Button>
-                  </Card>
+                      <Avatar
+                        sx={{
+                          width: 100,
+                          height: 100,
+                          bgcolor: '#E1306C',
+                          mb: 2,
+                        }}
+                      >
+                        <InstagramIcon sx={{ fontSize: 60 }} />
+                      </Avatar>
+                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+                        Instagram
+                      </Typography>
+                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                        @{instagramUser}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        startIcon={<InstagramIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(instagramUrl, '_blank');
+                        }}
+                        sx={{
+                          bgcolor: '#E1306C',
+                          '&:hover': { bgcolor: '#C13584' },
+                          mt: 2
+                        }}
+                      >
+                        Seguir no Instagram
+                      </Button>
+                    </Card>
+                  </motion.div>
                 </Grid>
               )}
 
               {/* Facebook Card */}
               {redesAtivas.facebook && facebookUrl && (
                 <Grid item xs={12} md={6} lg={redesAtivas.instagram ? 4 : 6}>
-                  <Card 
-                    sx={{ 
-                      textAlign: 'center', 
-                      p: 4,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'transform 0.3s',
-                      '&:hover': {
-                        transform: 'translateY(-10px)',
-                        boxShadow: '0 10px 40px rgba(66,103,178,0.3)',
-                      }
-                    }}
-                    onClick={() => window.open(facebookUrl, '_blank')}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    viewport={{ once: true }}
                   >
-                    <Avatar
-                      sx={{
-                        width: 100,
-                        height: 100,
-                        bgcolor: '#4267B2',
-                        mb: 2,
+                    <Card 
+                      sx={{ 
+                        textAlign: 'center', 
+                        p: 4,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'transform 0.3s',
+                        '&:hover': {
+                          transform: 'translateY(-10px)',
+                          boxShadow: '0 10px 40px rgba(66,103,178,0.3)',
+                        }
                       }}
+                      onClick={() => window.open(facebookUrl, '_blank')}
                     >
-                      <FacebookIcon sx={{ fontSize: 60 }} />
-                    </Avatar>
-                    <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-                      Facebook
-                    </Typography>
-                    <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-                      {contato.facebook}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      startIcon={<FacebookIcon />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(facebookUrl, '_blank');
-                      }}
-                      sx={{
-                        bgcolor: '#4267B2',
-                        '&:hover': { bgcolor: '#365899' },
-                        mt: 2
-                      }}
-                    >
-                      Curtir no Facebook
-                    </Button>
-                  </Card>
+                      <Avatar
+                        sx={{
+                          width: 100,
+                          height: 100,
+                          bgcolor: '#4267B2',
+                          mb: 2,
+                        }}
+                      >
+                        <FacebookIcon sx={{ fontSize: 60 }} />
+                      </Avatar>
+                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+                        Facebook
+                      </Typography>
+                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+                        {contato.facebook}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        startIcon={<FacebookIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(facebookUrl, '_blank');
+                        }}
+                        sx={{
+                          bgcolor: '#4267B2',
+                          '&:hover': { bgcolor: '#365899' },
+                          mt: 2
+                        }}
+                      >
+                        Curtir no Facebook
+                      </Button>
+                    </Card>
+                  </motion.div>
                 </Grid>
               )}
             </Grid>
@@ -1073,11 +1075,18 @@ function SiteSalao() {
       )}
 
       {/* Contato Section */}
-      <Box sx={{ py: 8 }} id="contato">
+      <Box sx={{ py: { xs: 4, md: 8 } }} id="contato">
         <Container maxWidth="lg">
           <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
-              <Typography variant="h3" sx={{ fontWeight: 700, mb: 3 }}>
+              <Typography 
+                variant="h3" 
+                sx={{ 
+                  fontWeight: 700, 
+                  mb: 3,
+                  fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
+                }}
+              >
                 Entre em <span style={{ color: '#9c27b0' }}>Contato</span>
               </Typography>
               
@@ -1164,51 +1173,23 @@ function SiteSalao() {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, bgcolor: '#f3e5f5' }}>
+              <Paper sx={{ p: 3, bgcolor: '#f3e5f5', borderRadius: 3 }}>
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                  Faça seu Agendamento
+                  Precisa de ajuda?
                 </Typography>
                 <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                  Preencha o formulário abaixo e entraremos em contato para confirmar seu horário.
+                  Entre em contato conosco através dos canais acima ou acesse a Área do Cliente para agendar seus serviços.
                 </Typography>
                 
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Seu Nome"
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Telefone"
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Melhor horário"
-                      size="small"
-                      placeholder="Ex: Manhã"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      onClick={() => setOpenAgendamento(true)}
-                      sx={{
-                        background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                        color: 'white',
-                      }}
-                    >
-                      Solicitar Agendamento
-                    </Button>
-                  </Grid>
-                </Grid>
+                <Divider sx={{ my: 2 }} />
+                
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                  <strong>💡 Dica:</strong> Para agendar, cancelar ou reagendar horários, acesse a{" "}
+                  <Link href="/cliente/login" sx={{ color: '#9c27b0', fontWeight: 600 }}>
+                    Área do Cliente
+                  </Link>{" "}
+                  com seu login e senha.
+                </Typography>
               </Paper>
             </Grid>
           </Grid>
@@ -1218,9 +1199,9 @@ function SiteSalao() {
       {/* Footer */}
       <Box sx={{ bgcolor: '#9c27b0', color: 'white', py: 3, mt: 8 }}>
         <Container maxWidth="lg">
-          <Grid container alignItems="center" justifyContent="space-between">
-            <Grid item>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Grid container alignItems="center" justifyContent="space-between" spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' } }}>
                 {salaoLogo ? (
                   <Box
                     component="img"
@@ -1243,8 +1224,8 @@ function SiteSalao() {
                 )}
               </Box>
             </Grid>
-            <Grid item>
-              <Typography variant="body2">
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body2" align={{ xs: 'center', sm: 'right' }}>
                 © {new Date().getFullYear()} - Todos os direitos reservados
               </Typography>
             </Grid>
@@ -1256,140 +1237,20 @@ function SiteSalao() {
       {redesAtivas.whatsapp && contato.whatsapp && (
         <Fab
           color="success"
-          sx={{ position: 'fixed', bottom: 20, right: 20 }}
+          sx={{ 
+            position: 'fixed', 
+            bottom: 20, 
+            right: 20,
+            '&:hover': {
+              transform: 'scale(1.1)',
+            }
+          }}
           href={`https://wa.me/${contato.whatsapp.replace(/\D/g, '')}`}
           target="_blank"
         >
           <WhatsAppIcon />
         </Fab>
       )}
-
-      {/* Dialog de Agendamento */}
-      <Dialog open={openAgendamento} onClose={() => setOpenAgendamento(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          Agendar Horário
-        </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Seu Nome"
-                value={agendamentoData.clienteNome}
-                onChange={(e) => setAgendamentoData({ ...agendamentoData, clienteNome: e.target.value })}
-                size="small"
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Seu Email"
-                type="email"
-                value={agendamentoData.clienteEmail}
-                onChange={(e) => setAgendamentoData({ ...agendamentoData, clienteEmail: e.target.value })}
-                size="small"
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Telefone"
-                value={agendamentoData.clienteTelefone}
-                onChange={(e) => setAgendamentoData({ ...agendamentoData, clienteTelefone: e.target.value })}
-                size="small"
-                required
-                placeholder="(11) 99999-9999"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Serviço</InputLabel>
-                <Select
-                  value={agendamentoData.servicoId}
-                  label="Serviço"
-                  onChange={(e) => setAgendamentoData({ ...agendamentoData, servicoId: e.target.value })}
-                >
-                  {servicos.map(s => (
-                    <MenuItem key={s.id} value={s.id}>
-                      {s.nome} - R$ {s.preco?.toFixed(2)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Profissional</InputLabel>
-                <Select
-                  value={agendamentoData.profissionalId}
-                  label="Profissional"
-                  onChange={(e) => {
-                    setAgendamentoData({ ...agendamentoData, profissionalId: e.target.value });
-                    gerarHorariosDisponiveis();
-                  }}
-                >
-                  {profissionais.map(p => (
-                    <MenuItem key={p.id} value={p.id}>{p.nome}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Data"
-                value={agendamentoData.data}
-                onChange={(e) => {
-                  setAgendamentoData({ ...agendamentoData, data: e.target.value });
-                  gerarHorariosDisponiveis();
-                }}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Horário</InputLabel>
-                <Select
-                  value={agendamentoData.horario}
-                  label="Horário"
-                  onChange={(e) => setAgendamentoData({ ...agendamentoData, horario: e.target.value })}
-                >
-                  {horariosDisponiveis.map(h => (
-                    <MenuItem key={h} value={h}>{h}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Observações"
-                multiline
-                rows={2}
-                value={agendamentoData.observacoes}
-                onChange={(e) => setAgendamentoData({ ...agendamentoData, observacoes: e.target.value })}
-                size="small"
-                placeholder="Alguma observação especial?"
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenAgendamento(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            onClick={handleAgendamentoSubmit}
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
-          >
-            Confirmar Agendamento
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
