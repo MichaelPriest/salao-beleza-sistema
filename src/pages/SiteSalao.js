@@ -40,6 +40,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Badge,
+  Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -72,6 +74,7 @@ import {
   ContactPhone as ContactIcon,
   Lock as LockIcon,
   Cached as CachedIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -103,7 +106,7 @@ const menuItems = [
 class DataCache {
   constructor(ttlMinutes = 30) {
     this.cache = new Map();
-    this.ttl = ttlMinutes * 60 * 1000; // Converte para milissegundos
+    this.ttl = ttlMinutes * 60 * 1000;
   }
 
   set(key, data) {
@@ -112,7 +115,6 @@ class DataCache {
       timestamp: Date.now(),
     });
     
-    // Salva no localStorage para persistência
     try {
       localStorage.setItem(`cache_${key}`, JSON.stringify({
         data: data,
@@ -134,7 +136,6 @@ class DataCache {
       this.cache.delete(key);
     }
     
-    // Tenta recuperar do localStorage
     try {
       const stored = localStorage.getItem(`cache_${key}`);
       if (stored) {
@@ -159,7 +160,6 @@ class DataCache {
       localStorage.removeItem(`cache_${key}`);
     } else {
       this.cache.clear();
-      // Limpa todos os itens de cache do localStorage
       Object.keys(localStorage).forEach(key => {
         if (key.startsWith('cache_')) {
           localStorage.removeItem(key);
@@ -235,29 +235,24 @@ function SiteSalao() {
   
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // Inicializar cache com TTL de 30 minutos
   const cacheRef = useRef(new DataCache(30));
 
-  // Dados das redes sociais
   const [redesAtivas, setRedesAtivas] = useState({
     instagram: false,
     facebook: false,
     whatsapp: false
   });
 
-  // URLs das redes sociais
   const [instagramUrl, setInstagramUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [instagramUser, setInstagramUser] = useState('');
 
-  // URL base para o sistema
   const baseUrl = window.location.origin;
 
   useEffect(() => {
     carregarDados();
   }, []);
 
-  // Função para carregar dados com cache
   const carregarDados = async (forceRefresh = false) => {
     try {
       if (forceRefresh) {
@@ -269,12 +264,10 @@ function SiteSalao() {
       
       const cache = cacheRef.current;
       
-      // Tentar carregar do cache
       let configData = forceRefresh ? null : cache.get('config');
       let servicosData = forceRefresh ? null : cache.get('servicos');
       let profissionaisData = forceRefresh ? null : cache.get('profissionais');
       
-      // Carregar configurações
       if (!configData) {
         console.log('🔄 Carregando configurações do servidor...');
         configData = await siteService.buscarConfiguracoes();
@@ -283,7 +276,6 @@ function SiteSalao() {
         console.log('✅ Configurações carregadas do cache');
       }
       
-      // Carregar serviços
       if (!servicosData) {
         console.log('🔄 Carregando serviços do servidor...');
         servicosData = await siteService.buscarServicos();
@@ -292,7 +284,6 @@ function SiteSalao() {
         console.log('✅ Serviços carregados do cache');
       }
       
-      // Carregar profissionais
       if (!profissionaisData) {
         console.log('🔄 Carregando profissionais do servidor...');
         profissionaisData = await siteService.buscarProfissionais();
@@ -306,7 +297,6 @@ function SiteSalao() {
       setProfissionais(sanitizarProfissionais(profissionaisData));
       setLastUpdate(new Date());
       
-      // Verificar quais redes sociais estão configuradas
       const contato = configData?.salao?.contato || {};
       const instagramAtivo = !!contato.instagram;
       const facebookAtivo = !!contato.facebook;
@@ -317,7 +307,6 @@ function SiteSalao() {
         whatsapp: !!contato.whatsapp
       });
 
-      // Configurar URLs das redes
       if (instagramAtivo && contato.instagram) {
         const user = String(contato.instagram).replace('@', '').trim();
         setInstagramUser(user);
@@ -346,7 +335,6 @@ function SiteSalao() {
     }
   };
 
-  // Função para limpar cache
   const limparCache = () => {
     cacheRef.current.clear();
     mostrarSnackbar('Cache limpo com sucesso!', 'info');
@@ -370,7 +358,6 @@ function SiteSalao() {
     }
   };
 
-  // Função para formatar horário de funcionamento
   const formatarHorarioFuncionamento = () => {
     if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
     
@@ -386,7 +373,6 @@ function SiteSalao() {
     return diasAbertos.length > 0 ? diasAbertos.join(' | ') : 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
   };
 
-  // Função para obter ícone do serviço
   const getServicoIcon = (categoria) => {
     const cat = sanitizarString(categoria).toLowerCase();
     if (cat.includes('cabelo')) return <CutIcon />;
@@ -395,7 +381,6 @@ function SiteSalao() {
     return <SpaIcon />;
   };
 
-  // Formatar data da última atualização
   const formatarUltimaAtualizacao = () => {
     if (!lastUpdate) return 'Nunca';
     return lastUpdate.toLocaleString('pt-BR');
@@ -440,7 +425,6 @@ function SiteSalao() {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: '64px', sm: '70px' } }}>
-          {/* Logo e Nome - Tamanho padrão profissional */}
           <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => scrollToSection('home')}>
             {salaoLogo ? (
               <Box
@@ -472,7 +456,6 @@ function SiteSalao() {
             )}
           </Box>
           
-          {/* Indicador de Cache e Botão Refresh */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Tooltip title={`Última atualização: ${formatarUltimaAtualizacao()}`}>
               <Chip
@@ -498,7 +481,6 @@ function SiteSalao() {
               </IconButton>
             </Tooltip>
             
-            {/* Menu Desktop */}
             {!isMobile ? (
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 {menuItems.map((item) => (
@@ -607,10 +589,9 @@ function SiteSalao() {
         </Box>
       </Drawer>
 
-      {/* Espaçador para o header fixo */}
       <Toolbar id="home" />
 
-      {/* Hero Section - Logo em destaque 200x200 */}
+      {/* Hero Section */}
       <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
         <Grid container spacing={4} alignItems="center">
           <Grid item xs={12} md={6}>
@@ -619,7 +600,6 @@ function SiteSalao() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
             >
-              {/* Logo em destaque - 200x200 */}
               {salaoLogo && (
                 <Box sx={{ mb: 3, textAlign: { xs: 'center', md: 'left' } }}>
                   <Box
@@ -691,7 +671,7 @@ function SiteSalao() {
         </Grid>
       </Container>
 
-      {/* Seção de Área Restrita - TUTORIAL */}
+      {/* Área Restrita Section */}
       <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="tutorial">
         <Container maxWidth="lg">
           <Typography 
@@ -734,27 +714,9 @@ function SiteSalao() {
                     }
                   }}
                 >
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -20,
-                      right: -20,
-                      width: 150,
-                      height: 150,
-                      borderRadius: '50%',
-                      bgcolor: 'rgba(156,39,176,0.1)',
-                    }}
-                  />
+                  <Box sx={{ position: 'absolute', top: -20, right: -20, width: 150, height: 150, borderRadius: '50%', bgcolor: 'rgba(156,39,176,0.1)' }} />
                   <Box sx={{ position: 'relative', zIndex: 1 }}>
-                    <Avatar
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        bgcolor: '#9c27b0',
-                        mb: 2,
-                        mx: 'auto',
-                      }}
-                    >
+                    <Avatar sx={{ width: 80, height: 80, bgcolor: '#9c27b0', mb: 2, mx: 'auto' }}>
                       <AdminIcon sx={{ fontSize: 40 }} />
                     </Avatar>
                     <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
@@ -772,32 +734,18 @@ function SiteSalao() {
                         <List dense>
                           <ListItem>
                             <ListItemIcon><ComputerIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="1. Abra seu navegador"
-                              secondary="Chrome, Firefox, Edge ou Safari"
-                            />
+                            <ListItemText primary="1. Abra seu navegador" secondary="Chrome, Firefox, Edge ou Safari" />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><LoginIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
                             <ListItemText 
                               primary="2. Acesse o link:"
-                              secondary={
-                                <Link 
-                                  href={`${baseUrl}/login`} 
-                                  target="_blank" 
-                                  sx={{ fontWeight: 600, color: '#9c27b0' }}
-                                >
-                                  {baseUrl}/login
-                                </Link>
-                              }
+                              secondary={<Link href={`${baseUrl}/login`} target="_blank" sx={{ fontWeight: 600, color: '#9c27b0' }}>{baseUrl}/login</Link>}
                             />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><DashboardIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="3. Faça login com seu email e senha"
-                              secondary="Use as credenciais fornecidas pelo administrador"
-                            />
+                            <ListItemText primary="3. Faça login com seu email e senha" secondary="Use as credenciais fornecidas pelo administrador" />
                           </ListItem>
                         </List>
                       </AccordionDetails>
@@ -811,45 +759,21 @@ function SiteSalao() {
                         <List dense>
                           <ListItem>
                             <ListItemIcon><PhoneAndroidIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="1. Abra o navegador do celular"
-                              secondary="Chrome, Safari ou navegador padrão"
-                            />
+                            <ListItemText primary="1. Abra o navegador do celular" secondary="Chrome, Safari ou navegador padrão" />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><QrCodeIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="2. Acesse o mesmo link ou escaneie o QR Code"
-                            />
+                            <ListItemText primary="2. Acesse o mesmo link ou escaneie o QR Code" />
                           </ListItem>
                         </List>
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                          <QRCodeSVG
-                            value={`${baseUrl}/login`}
-                            size={120}
-                            bgColor="#ffffff"
-                            fgColor="#9c27b0"
-                            level="H"
-                          />
+                          <QRCodeSVG value={`${baseUrl}/login`} size={120} bgColor="#ffffff" fgColor="#9c27b0" level="H" />
                         </Box>
                       </AccordionDetails>
                     </Accordion>
 
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        href="/login"
-                        startIcon={<AdminIcon />}
-                        sx={{
-                          background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                          color: 'white',
-                          px: 4,
-                          '&:hover': {
-                            transform: 'scale(1.05)',
-                          },
-                        }}
-                      >
+                      <Button variant="contained" size="large" href="/login" startIcon={<AdminIcon />} sx={{ background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)', color: 'white', px: 4 }}>
                         Acessar Painel Administrativo
                       </Button>
                     </Box>
@@ -882,27 +806,9 @@ function SiteSalao() {
                     }
                   }}
                 >
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -20,
-                      right: -20,
-                      width: 150,
-                      height: 150,
-                      borderRadius: '50%',
-                      bgcolor: 'rgba(255,152,0,0.1)',
-                    }}
-                  />
+                  <Box sx={{ position: 'absolute', top: -20, right: -20, width: 150, height: 150, borderRadius: '50%', bgcolor: 'rgba(255,152,0,0.1)' }} />
                   <Box sx={{ position: 'relative', zIndex: 1 }}>
-                    <Avatar
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        bgcolor: '#ff9800',
-                        mb: 2,
-                        mx: 'auto',
-                      }}
-                    >
+                    <Avatar sx={{ width: 80, height: 80, bgcolor: '#ff9800', mb: 2, mx: 'auto' }}>
                       <PersonIcon sx={{ fontSize: 40 }} />
                     </Avatar>
                     <Typography variant="h4" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
@@ -920,32 +826,18 @@ function SiteSalao() {
                         <List dense>
                           <ListItem>
                             <ListItemIcon><ComputerIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="1. Abra seu navegador"
-                              secondary="Chrome, Firefox, Edge ou Safari"
-                            />
+                            <ListItemText primary="1. Abra seu navegador" secondary="Chrome, Firefox, Edge ou Safari" />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
                             <ListItemText 
                               primary="2. Acesse o link:"
-                              secondary={
-                                <Link 
-                                  href={`${baseUrl}/cliente/login`} 
-                                  target="_blank" 
-                                  sx={{ fontWeight: 600, color: '#ff9800' }}
-                                >
-                                  {baseUrl}/cliente/login
-                                </Link>
-                              }
+                              secondary={<Link href={`${baseUrl}/cliente/login`} target="_blank" sx={{ fontWeight: 600, color: '#ff9800' }}>{baseUrl}/cliente/login</Link>}
                             />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><DashboardIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="3. Faça login com seu email e senha"
-                              secondary="Use as credenciais criadas no cadastro"
-                            />
+                            <ListItemText primary="3. Faça login com seu email e senha" secondary="Use as credenciais criadas no cadastro" />
                           </ListItem>
                         </List>
                       </AccordionDetails>
@@ -959,45 +851,21 @@ function SiteSalao() {
                         <List dense>
                           <ListItem>
                             <ListItemIcon><PhoneAndroidIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="1. Abra o navegador do celular"
-                              secondary="Chrome, Safari ou navegador padrão"
-                            />
+                            <ListItemText primary="1. Abra o navegador do celular" secondary="Chrome, Safari ou navegador padrão" />
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><QrCodeIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                            <ListItemText 
-                              primary="2. Acesse o mesmo link ou escaneie o QR Code"
-                            />
+                            <ListItemText primary="2. Acesse o mesmo link ou escaneie o QR Code" />
                           </ListItem>
                         </List>
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                          <QRCodeSVG
-                            value={`${baseUrl}/cliente/login`}
-                            size={120}
-                            bgColor="#ffffff"
-                            fgColor="#ff9800"
-                            level="H"
-                          />
+                          <QRCodeSVG value={`${baseUrl}/cliente/login`} size={120} bgColor="#ffffff" fgColor="#ff9800" level="H" />
                         </Box>
                       </AccordionDetails>
                     </Accordion>
 
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        href="/cliente/login"
-                        startIcon={<PersonIcon />}
-                        sx={{
-                          background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)',
-                          color: 'white',
-                          px: 4,
-                          '&:hover': {
-                            transform: 'scale(1.05)',
-                          },
-                        }}
-                      >
+                      <Button variant="contained" size="large" href="/cliente/login" startIcon={<PersonIcon />} sx={{ background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)', color: 'white', px: 4 }}>
                         Acessar Área do Cliente
                       </Button>
                     </Box>
@@ -1007,13 +875,7 @@ function SiteSalao() {
             </Grid>
           </Grid>
 
-          {/* Informações adicionais */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            viewport={{ once: true }}
-          >
+          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} viewport={{ once: true }}>
             <Paper sx={{ mt: 4, p: 3, bgcolor: '#f3e5f5', borderRadius: 2 }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={8}>
@@ -1021,15 +883,9 @@ function SiteSalao() {
                     <InfoIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#9c27b0' }} />
                     Primeiro acesso?
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    • Para a área administrativa, suas credenciais são fornecidas pelo administrador do sistema.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    • Para a área do cliente, você pode se cadastrar clicando em "Criar conta" na página de login.
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    • O sistema é responsivo e funciona perfeitamente em qualquer dispositivo.
-                  </Typography>
+                  <Typography variant="body2" color="textSecondary">• Para a área administrativa, suas credenciais são fornecidas pelo administrador do sistema.</Typography>
+                  <Typography variant="body2" color="textSecondary">• Para a área do cliente, você pode se cadastrar clicando em "Criar conta" na página de login.</Typography>
+                  <Typography variant="body2" color="textSecondary">• O sistema é responsivo e funciona perfeitamente em qualquer dispositivo.</Typography>
                 </Grid>
                 <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
                   <Badge badgeContent="Novo" color="secondary">
@@ -1045,66 +901,28 @@ function SiteSalao() {
       {/* Serviços Section */}
       <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="servicos">
         <Container maxWidth="lg">
-          <Typography 
-            variant="h3" 
-            align="center" 
-            sx={{ 
-              fontWeight: 700, 
-              mb: 6,
-              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
-            }}
-          >
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
             Nossos <span style={{ color: '#9c27b0' }}>Serviços</span>
           </Typography>
 
           {servicos.length === 0 ? (
-            <Typography align="center" color="textSecondary">
-              Em breve novos serviços serão disponibilizados.
-            </Typography>
+            <Typography align="center" color="textSecondary">Em breve novos serviços serão disponibilizados.</Typography>
           ) : (
             <Grid container spacing={3}>
               {servicos.map((servico, index) => (
                 <Grid item xs={12} sm={6} md={4} key={servico.id}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    viewport={{ once: true }}
-                    whileHover={{ y: -10 }}
-                  >
+                  <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: index * 0.1 }} viewport={{ once: true }} whileHover={{ y: -10 }}>
                     <Card sx={{ height: '100%', position: 'relative', overflow: 'visible', transition: '0.3s' }}>
                       <CardContent>
-                        <Avatar
-                          sx={{
-                            width: 60,
-                            height: 60,
-                            bgcolor: '#9c27b0',
-                            position: 'absolute',
-                            top: -30,
-                            left: 20,
-                            boxShadow: '0 4px 10px rgba(156,39,176,0.3)',
-                          }}
-                        >
+                        <Avatar sx={{ width: 60, height: 60, bgcolor: '#9c27b0', position: 'absolute', top: -30, left: 20, boxShadow: '0 4px 10px rgba(156,39,176,0.3)' }}>
                           {getServicoIcon(servico.categoria)}
                         </Avatar>
-                        
                         <Box sx={{ mt: 4 }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                            {servico.nome}
-                          </Typography>
-                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                            {servico.descricao}
-                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>{servico.nome}</Typography>
+                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>{servico.descricao}</Typography>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Chip
-                              label={`${servico.duracao} min`}
-                              size="small"
-                              variant="outlined"
-                              sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
-                            />
-                            <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>
-                              R$ {servico.preco.toFixed(2)}
-                            </Typography>
+                            <Chip label={`${servico.duracao} min`} size="small" variant="outlined" sx={{ borderColor: '#9c27b0', color: '#9c27b0' }} />
+                            <Typography variant="h6" sx={{ color: '#9c27b0', fontWeight: 600 }}>R$ {servico.preco.toFixed(2)}</Typography>
                           </Box>
                         </Box>
                       </CardContent>
@@ -1120,52 +938,23 @@ function SiteSalao() {
       {/* Profissionais Section */}
       <Box sx={{ py: { xs: 4, md: 8 } }} id="profissionais">
         <Container maxWidth="lg">
-          <Typography 
-            variant="h3" 
-            align="center" 
-            sx={{ 
-              fontWeight: 700, 
-              mb: 6,
-              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
-            }}
-          >
+          <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
             Nossa <span style={{ color: '#9c27b0' }}>Equipe</span>
           </Typography>
 
           {profissionais.length === 0 ? (
-            <Typography align="center" color="textSecondary">
-              Em breve nossa equipe será apresentada.
-            </Typography>
+            <Typography align="center" color="textSecondary">Em breve nossa equipe será apresentada.</Typography>
           ) : (
             <Grid container spacing={4}>
               {profissionais.map((prof, index) => (
                 <Grid item xs={12} sm={6} md={4} key={prof.id}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    viewport={{ once: true }}
-                    whileHover={{ scale: 1.05 }}
-                  >
+                  <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: index * 0.1 }} viewport={{ once: true }} whileHover={{ scale: 1.05 }}>
                     <Card sx={{ textAlign: 'center', p: 3, transition: '0.3s' }}>
-                      <Avatar
-                        src={prof.foto || undefined}
-                        sx={{
-                          width: 120,
-                          height: 120,
-                          mx: 'auto',
-                          mb: 2,
-                          border: '4px solid #9c27b0',
-                        }}
-                      >
+                      <Avatar src={prof.foto || undefined} sx={{ width: 120, height: 120, mx: 'auto', mb: 2, border: '4px solid #9c27b0' }}>
                         {prof.nome.charAt(0).toUpperCase()}
                       </Avatar>
-                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {prof.nome}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary" gutterBottom>
-                        {prof.especialidade}
-                      </Typography>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>{prof.nome}</Typography>
+                      <Typography variant="body2" color="textSecondary" gutterBottom>{prof.especialidade}</Typography>
                       <Rating value={prof.avaliacao} readOnly size="small" sx={{ color: '#ff9800' }} />
                     </Card>
                   </motion.div>
@@ -1180,15 +969,7 @@ function SiteSalao() {
       {(redesAtivas.instagram || redesAtivas.facebook) && (
         <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="redes">
           <Container maxWidth="lg">
-            <Typography 
-              variant="h3" 
-              align="center" 
-              sx={{ 
-                fontWeight: 700, 
-                mb: 2,
-                fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
-              }}
-            >
+            <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
               Siga-nos nas <span style={{ color: '#9c27b0' }}>Redes Sociais</span>
             </Typography>
             <Typography variant="h6" align="center" color="textSecondary" sx={{ mb: 6, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
@@ -1196,127 +977,27 @@ function SiteSalao() {
             </Typography>
 
             <Grid container spacing={4} justifyContent="center">
-              {/* Instagram Card */}
               {redesAtivas.instagram && instagramUser && (
                 <Grid item xs={12} md={6} lg={redesAtivas.facebook ? 4 : 6}>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5 }}
-                    viewport={{ once: true }}
-                  >
-                    <Card 
-                      sx={{ 
-                        textAlign: 'center', 
-                        p: 4,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'transform 0.3s',
-                        '&:hover': {
-                          transform: 'translateY(-10px)',
-                          boxShadow: '0 10px 40px rgba(225,48,108,0.3)',
-                        }
-                      }}
-                      onClick={() => window.open(instagramUrl, '_blank')}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 100,
-                          height: 100,
-                          bgcolor: '#E1306C',
-                          mb: 2,
-                        }}
-                      >
-                        <InstagramIcon sx={{ fontSize: 60 }} />
-                      </Avatar>
-                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-                        Instagram
-                      </Typography>
-                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-                        @{instagramUser}
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        startIcon={<InstagramIcon />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(instagramUrl, '_blank');
-                        }}
-                        sx={{
-                          bgcolor: '#E1306C',
-                          '&:hover': { bgcolor: '#C13584' },
-                          mt: 2
-                        }}
-                      >
-                        Seguir no Instagram
-                      </Button>
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} viewport={{ once: true }}>
+                    <Card sx={{ textAlign: 'center', p: 4, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-10px)', boxShadow: '0 10px 40px rgba(225,48,108,0.3)' } }} onClick={() => window.open(instagramUrl, '_blank')}>
+                      <Avatar sx={{ width: 100, height: 100, bgcolor: '#E1306C', mb: 2 }}><InstagramIcon sx={{ fontSize: 60 }} /></Avatar>
+                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>Instagram</Typography>
+                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>@{instagramUser}</Typography>
+                      <Button variant="contained" startIcon={<InstagramIcon />} onClick={(e) => { e.stopPropagation(); window.open(instagramUrl, '_blank'); }} sx={{ bgcolor: '#E1306C', '&:hover': { bgcolor: '#C13584' }, mt: 2 }}>Seguir no Instagram</Button>
                     </Card>
                   </motion.div>
                 </Grid>
               )}
 
-              {/* Facebook Card */}
               {redesAtivas.facebook && facebookUrl && (
                 <Grid item xs={12} md={6} lg={redesAtivas.instagram ? 4 : 6}>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    viewport={{ once: true }}
-                  >
-                    <Card 
-                      sx={{ 
-                        textAlign: 'center', 
-                        p: 4,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'transform 0.3s',
-                        '&:hover': {
-                          transform: 'translateY(-10px)',
-                          boxShadow: '0 10px 40px rgba(66,103,178,0.3)',
-                        }
-                      }}
-                      onClick={() => window.open(facebookUrl, '_blank')}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 100,
-                          height: 100,
-                          bgcolor: '#4267B2',
-                          mb: 2,
-                        }}
-                      >
-                        <FacebookIcon sx={{ fontSize: 60 }} />
-                      </Avatar>
-                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-                        Facebook
-                      </Typography>
-                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-                        {contato.facebook}
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        startIcon={<FacebookIcon />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(facebookUrl, '_blank');
-                        }}
-                        sx={{
-                          bgcolor: '#4267B2',
-                          '&:hover': { bgcolor: '#365899' },
-                          mt: 2
-                        }}
-                      >
-                        Curtir no Facebook
-                      </Button>
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.2 }} viewport={{ once: true }}>
+                    <Card sx={{ textAlign: 'center', p: 4, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-10px)', boxShadow: '0 10px 40px rgba(66,103,178,0.3)' } }} onClick={() => window.open(facebookUrl, '_blank')}>
+                      <Avatar sx={{ width: 100, height: 100, bgcolor: '#4267B2', mb: 2 }}><FacebookIcon sx={{ fontSize: 60 }} /></Avatar>
+                      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>Facebook</Typography>
+                      <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>{contato.facebook}</Typography>
+                      <Button variant="contained" startIcon={<FacebookIcon />} onClick={(e) => { e.stopPropagation(); window.open(facebookUrl, '_blank'); }} sx={{ bgcolor: '#4267B2', '&:hover': { bgcolor: '#365899' }, mt: 2 }}>Curtir no Facebook</Button>
                     </Card>
                   </motion.div>
                 </Grid>
@@ -1331,123 +1012,35 @@ function SiteSalao() {
         <Container maxWidth="lg">
           <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
-              <Typography 
-                variant="h3" 
-                sx={{ 
-                  fontWeight: 700, 
-                  mb: 3,
-                  fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
-                }}
-              >
+              <Typography variant="h3" sx={{ fontWeight: 700, mb: 3, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
                 Entre em <span style={{ color: '#9c27b0' }}>Contato</span>
               </Typography>
               
               <List>
                 {(salaoEndereco.logradouro || salaoEndereco.cidade) && (
                   <ListItem>
-                    <ListItemIcon>
-                      <LocationIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Endereço"
-                      secondary={[
-                        salaoEndereco.logradouro || '',
-                        salaoEndereco.numero ? `, ${salaoEndereco.numero}` : '',
-                        salaoEndereco.bairro ? ` - ${salaoEndereco.bairro}` : '',
-                        salaoEndereco.cidade ? `, ${salaoEndereco.cidade}` : '',
-                        salaoEndereco.estado ? `/${salaoEndereco.estado}` : ''
-                      ].filter(Boolean).join('') || 'Endereço não informado'}
-                    />
+                    <ListItemIcon><LocationIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
+                    <ListItemText primary="Endereço" secondary={[salaoEndereco.logradouro || '', salaoEndereco.numero ? `, ${salaoEndereco.numero}` : '', salaoEndereco.bairro ? ` - ${salaoEndereco.bairro}` : '', salaoEndereco.cidade ? `, ${salaoEndereco.cidade}` : '', salaoEndereco.estado ? `/${salaoEndereco.estado}` : ''].filter(Boolean).join('') || 'Endereço não informado'} />
                   </ListItem>
                 )}
-                
-                {contato.telefone && (
-                  <ListItem>
-                    <ListItemIcon>
-                      <PhoneIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Telefone"
-                      secondary={contato.telefone}
-                    />
-                  </ListItem>
-                )}
-                
-                {contato.email && (
-                  <ListItem>
-                    <ListItemIcon>
-                      <EmailIcon sx={{ color: '#9c27b0' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary="Email"
-                      secondary={contato.email}
-                    />
-                  </ListItem>
-                )}
-
-                <ListItem>
-                  <ListItemIcon>
-                    <ScheduleIcon sx={{ color: '#9c27b0' }} />
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary="Horário de Funcionamento"
-                    secondary={formatarHorarioFuncionamento()}
-                  />
-                </ListItem>
+                {contato.telefone && (<ListItem><ListItemIcon><PhoneIcon sx={{ color: '#9c27b0' }} /></ListItemIcon><ListItemText primary="Telefone" secondary={contato.telefone} /></ListItem>)}
+                {contato.email && (<ListItem><ListItemIcon><EmailIcon sx={{ color: '#9c27b0' }} /></ListItemIcon><ListItemText primary="Email" secondary={contato.email} /></ListItem>)}
+                <ListItem><ListItemIcon><ScheduleIcon sx={{ color: '#9c27b0' }} /></ListItemIcon><ListItemText primary="Horário de Funcionamento" secondary={formatarHorarioFuncionamento()} /></ListItem>
               </List>
 
-              {/* Ícones das redes no contato */}
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                {redesAtivas.whatsapp && contato.whatsapp && (
-                  <IconButton 
-                    href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`} 
-                    target="_blank" 
-                    sx={{ color: '#25D366' }}
-                  >
-                    <WhatsAppIcon />
-                  </IconButton>
-                )}
-                
-                {redesAtivas.instagram && instagramUser && (
-                  <IconButton 
-                    href={instagramUrl} 
-                    target="_blank" 
-                    sx={{ color: '#E1306C' }}
-                  >
-                    <InstagramIcon />
-                  </IconButton>
-                )}
-                
-                {redesAtivas.facebook && facebookUrl && (
-                  <IconButton 
-                    href={facebookUrl} 
-                    target="_blank" 
-                    sx={{ color: '#4267B2' }}
-                  >
-                    <FacebookIcon />
-                  </IconButton>
-                )}
+                {redesAtivas.whatsapp && contato.whatsapp && (<IconButton href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`} target="_blank" sx={{ color: '#25D366' }}><WhatsAppIcon /></IconButton>)}
+                {redesAtivas.instagram && instagramUser && (<IconButton href={instagramUrl} target="_blank" sx={{ color: '#E1306C' }}><InstagramIcon /></IconButton>)}
+                {redesAtivas.facebook && facebookUrl && (<IconButton href={facebookUrl} target="_blank" sx={{ color: '#4267B2' }}><FacebookIcon /></IconButton>)}
               </Box>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: 3, bgcolor: '#f3e5f5', borderRadius: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                  Precisa de ajuda?
-                </Typography>
-                <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                  Entre em contato conosco através dos canais acima ou acesse a Área do Cliente para agendar seus serviços.
-                </Typography>
-                
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>Precisa de ajuda?</Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>Entre em contato conosco através dos canais acima ou acesse a Área do Cliente para agendar seus serviços.</Typography>
                 <Divider sx={{ my: 2 }} />
-                
-                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
-                  <strong>💡 Dica:</strong> Para agendar, cancelar ou reagendar horários, acesse a{" "}
-                  <Link href="/cliente/login" sx={{ color: '#9c27b0', fontWeight: 600 }}>
-                    Área do Cliente
-                  </Link>{" "}
-                  com seu login e senha.
-                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}><strong>💡 Dica:</strong> Para agendar, cancelar ou reagendar horários, acesse a <Link href="/cliente/login" sx={{ color: '#9c27b0', fontWeight: 600 }}>Área do Cliente</Link> com seu login e senha.</Typography>
               </Paper>
             </Grid>
           </Grid>
@@ -1460,33 +1053,12 @@ function SiteSalao() {
           <Grid container alignItems="center" justifyContent="space-between" spacing={2}>
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' } }}>
-                {salaoLogo && (
-                  <Box
-                    component="img"
-                    src={salaoLogo}
-                    alt={salaoNome}
-                    sx={{
-                      height: 35,
-                      width: 'auto',
-                      maxWidth: 100,
-                      objectFit: 'contain',
-                      mr: 1,
-                      backgroundColor: 'transparent',
-                    }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                )}
-                <Typography variant="body2">
-                  © {new Date().getFullYear()} - {salaoNome} - Todos os direitos reservados
-                </Typography>
+                {salaoLogo && (<Box component="img" src={salaoLogo} alt={salaoNome} sx={{ height: 35, width: 'auto', maxWidth: 100, objectFit: 'contain', mr: 1, backgroundColor: 'transparent' }} onError={(e) => { e.target.style.display = 'none'; }} />)}
+                <Typography variant="body2">© {new Date().getFullYear()} - {salaoNome} - Todos os direitos reservados</Typography>
               </Box>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <Typography variant="caption" align="right" sx={{ display: 'block' }}>
-                Cache ativo | Última atualização: {formatarUltimaAtualizacao()}
-              </Typography>
+              <Typography variant="caption" align="right" sx={{ display: 'block' }}>Cache ativo | Última atualização: {formatarUltimaAtualizacao()}</Typography>
             </Grid>
           </Grid>
         </Container>
@@ -1494,34 +1066,16 @@ function SiteSalao() {
 
       {/* Botão flutuante do WhatsApp */}
       {redesAtivas.whatsapp && contato.whatsapp && (
-        <Fab
-          color="success"
-          sx={{ 
-            position: 'fixed', 
-            bottom: 20, 
-            right: 20,
-            '&:hover': {
-              transform: 'scale(1.1)',
-            }
-          }}
-          href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`}
-          target="_blank"
-        >
+        <Fab color="success" sx={{ position: 'fixed', bottom: 20, right: 20, '&:hover': { transform: 'scale(1.1)' } }} href={`https://wa.me/${String(contato.whatsapp).replace(/\D/g, '')}`} target="_blank">
           <WhatsAppIcon />
         </Fab>
       )}
 
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
   );
 }
-
-// Import CircularProgress e RefreshIcon
-import { CircularProgress } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
 
 export default SiteSalao;
