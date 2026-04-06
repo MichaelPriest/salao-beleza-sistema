@@ -108,7 +108,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 import { format, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO, differenceInMinutes } from 'date-fns';
 
 // Importações para PDF e Excel

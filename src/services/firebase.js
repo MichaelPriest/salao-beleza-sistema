@@ -1,183 +1,195 @@
 // src/services/firebase.js
 import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  getDocs, 
-  getDoc,
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  setDoc
-} from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { Timestamp } from './timestamp';
 
-// Suas configurações do Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA",
-  authDomain: "fluted-sentry-305001.firebaseapp.com",
-  projectId: "fluted-sentry-305001",
-  storageBucket: "fluted-sentry-305001.firebasestorage.app",
-  messagingSenderId: "386333037191",
-  appId: "1:386333037191:web:3b944b250bf676e1901e22"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA',
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || 'fluted-sentry-305001.firebaseapp.com',
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'fluted-sentry-305001',
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'fluted-sentry-305001.firebasestorage.app',
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '386333037191',
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || '1:386333037191:web:3b944b250bf676e1901e22'
 };
 
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+const firebaseApp = initializeApp(firebaseConfig);
 
-// Funções genéricas CRUD
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://egfxmxezuzzttgqjdlef.supabase.co';
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_O626uQ_eaF6kgXzbJhyFBQ_kARzsZNi';
+const supabaseMode = process.env.REACT_APP_SUPABASE_MODE || 'preview';
+
+export const db = getFirestore(firebaseApp);
+export const auth = getAuth(firebaseApp);
+
+console.info(`🟢 Supabase conectado em modo: ${supabaseMode}`);
+
+const baseHeaders = {
+  apikey: supabaseAnonKey,
+  Authorization: `Bearer ${supabaseAnonKey}`,
+  'Content-Type': 'application/json',
+  Prefer: 'return=representation'
+};
+
+const normalizeRow = (row) => {
+  if (!row || typeof row !== 'object') return row;
+
+  const normalized = { ...row };
+
+  Object.entries(normalized).forEach(([key, value]) => {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+      normalized[key] = Timestamp.fromDate(new Date(value));
+    }
+  });
+
+  return normalized;
+};
+
+const preparePayload = (data = {}) => {
+  const payload = { ...data };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value instanceof Timestamp) {
+      payload[key] = value.toDate().toISOString();
+    } else if (value && typeof value?.toDate === 'function') {
+      payload[key] = value.toDate().toISOString();
+    }
+  });
+
+  return payload;
+};
+
+const opMap = {
+  '==': 'eq',
+  '!=': 'neq',
+  '>': 'gt',
+  '>=': 'gte',
+  '<': 'lt',
+  '<=': 'lte'
+};
+
+const buildQueryString = (conditions = [], orderByField = null, singleId = null) => {
+  const params = new URLSearchParams();
+  params.set('select', '*');
+
+  if (singleId !== null && singleId !== undefined) {
+    params.set('id', `eq.${singleId}`);
+  }
+
+  conditions
+    .filter(({ value }) => value !== undefined && value !== null)
+    .forEach(({ field, operator = '==', value }) => {
+      if (operator === 'in') {
+        const values = Array.isArray(value) ? value : [value];
+        params.set(field, `in.(${values.join(',')})`);
+        return;
+      }
+
+      if (operator === 'contains') {
+        params.set(field, `cs.${JSON.stringify(value)}`);
+        return;
+      }
+
+      const op = opMap[operator] || 'eq';
+      params.set(field, `${op}.${value}`);
+    });
+
+  if (orderByField) {
+    params.set('order', `${orderByField}.asc`);
+  }
+
+  return params.toString();
+};
+
+const request = async (path, options = {}) => {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      ...baseHeaders,
+      ...(options.headers || {})
+    }
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch (_e) {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(body?.message || 'Erro ao comunicar com Supabase');
+    error.details = body;
+    throw error;
+  }
+
+  return body;
+};
+
 export const firebaseService = {
-  // Buscar todos os documentos de uma coleção
   getAll: async (collectionName) => {
-    try {
-      const querySnapshot = await getDocs(collection(db, collectionName));
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error(`Erro ao buscar ${collectionName}:`, error);
-      throw error;
-    }
+    const query = buildQueryString();
+    const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+    return (data || []).map(normalizeRow);
   },
 
-  // Buscar um documento por ID
   getById: async (collectionName, id) => {
-    try {
-      const docRef = doc(db, collectionName, id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
-      }
-      return null;
-    } catch (error) {
-      console.error(`Erro ao buscar ${collectionName} por ID:`, error);
-      throw error;
-    }
+    const query = buildQueryString([], null, id);
+    const data = await request(`${collectionName}?${query}`, {
+      method: 'GET',
+      headers: { Accept: 'application/vnd.pgrst.object+json' }
+    }).catch(() => null);
+
+    return data ? normalizeRow(data) : null;
   },
 
-  // Adicionar um documento (ID automático)
   add: async (collectionName, data) => {
-    try {
-      const dataWithTimestamps = {
-        ...data,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      };
-      
-      const docRef = await addDoc(collection(db, collectionName), dataWithTimestamps);
-      return { id: docRef.id, ...dataWithTimestamps };
-    } catch (error) {
-      console.error(`Erro ao adicionar em ${collectionName}:`, error);
-      throw error;
-    }
+    const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    const inserted = await request(collectionName, { method: 'POST', body: JSON.stringify(payload) });
+    return inserted?.[0]?.id;
   },
 
-  // Adicionar/atualizar documento com ID específico
   set: async (collectionName, id, data) => {
-    try {
-      const docRef = doc(db, collectionName, id);
-      const dataWithTimestamps = {
-        ...data,
-        updatedAt: Timestamp.now()
-      };
-      
-      if (!data.createdAt) {
-        dataWithTimestamps.createdAt = Timestamp.now();
-      }
-      
-      await setDoc(docRef, dataWithTimestamps, { merge: true });
-      console.log(`✅ Documento ${collectionName}/${id} salvo com sucesso`);
-      return { id, ...dataWithTimestamps };
-    } catch (error) {
-      console.error(`❌ Erro ao salvar em ${collectionName}:`, error);
-      throw error;
-    }
+    const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
+    const upserted = await request(collectionName, {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(payload)
+    });
+    return upserted?.[0]?.id || id;
   },
 
-  // Atualizar um documento
   update: async (collectionName, id, data) => {
-    try {
-      const docRef = doc(db, collectionName, id);
-      const dataWithTimestamp = {
-        ...data,
-        updatedAt: Timestamp.now()
-      };
-      await updateDoc(docRef, dataWithTimestamp);
-      return { id, ...dataWithTimestamp };
-    } catch (error) {
-      console.error(`Erro ao atualizar ${collectionName}:`, error);
-      throw error;
-    }
+    const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
+    await request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return id;
   },
 
-  // Excluir um documento
   delete: async (collectionName, id) => {
-    try {
-      const docRef = doc(db, collectionName, id);
-      await deleteDoc(docRef);
-      return id;
-    } catch (error) {
-      console.error(`Erro ao excluir de ${collectionName}:`, error);
-      throw error;
-    }
+    await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
+    return id;
   },
 
-  // Buscar com filtros
   query: async (collectionName, conditions = [], orderByField = null) => {
-    try {
-      let q = collection(db, collectionName);
-      
-      if (conditions.length > 0) {
-        const constraints = conditions
-          .filter(({ value }) => value !== undefined && value !== null)
-          .map(({ field, operator, value }) => where(field, operator, value));
-        
-        if (constraints.length > 0) {
-          q = query(q, ...constraints);
-        }
-      }
-      
-      if (orderByField) {
-        q = query(q, orderBy(orderByField));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error(`Erro na query de ${collectionName}:`, error);
-      throw error;
-    }
+    const query = buildQueryString(conditions, orderByField);
+    const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+    return (data || []).map(normalizeRow);
   },
 
-  // Gerar ID único
-  generateId: (collectionName) => {
-    return doc(collection(db, collectionName)).id;
-  },
+  generateId: () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
 
-  // 🔥 NOVA FUNÇÃO: Registrar log técnico
   log: async (nivel, mensagem, dados = {}) => {
     try {
       const usuarioStr = localStorage.getItem('usuario');
       let usuario = null;
       try {
         usuario = usuarioStr ? JSON.parse(usuarioStr) : null;
-      } catch (e) {
-        // Ignora erro de parsing
+      } catch (_e) {
+        usuario = null;
       }
 
       const logData = {
-        nivel, // 'info', 'warning', 'error', 'success', 'debug'
+        nivel,
         mensagem,
         ...dados,
         usuarioId: usuario?.id || null,
@@ -185,23 +197,13 @@ export const firebaseService = {
         timestamp: new Date().toISOString(),
         data: Timestamp.now()
       };
-      
-      // Salvar no Firestore (opcional - pode desativar se quiser só console)
-      await firebaseService.add('logs', logData).catch(err => {
-        console.warn('Erro ao salvar log no Firestore:', err);
+
+      await firebaseService.add('logs', logData).catch((err) => {
+        console.warn('Erro ao salvar log no Supabase:', err);
       });
-      
-      // Também mostrar no console
-      const cor = {
-        info: '#2196f3',
-        success: '#4caf50',
-        warning: '#ff9800',
-        error: '#f44336',
-        debug: '#9c27b0'
-      }[nivel] || '#666';
-      
+
+      const cor = { info: '#2196f3', success: '#4caf50', warning: '#ff9800', error: '#f44336', debug: '#9c27b0' }[nivel] || '#666';
       console.log(`%c[${nivel.toUpperCase()}] ${mensagem}`, `color: ${cor}; font-weight: bold;`, dados);
-      
       return true;
     } catch (error) {
       console.error('Erro ao registrar log:', error);
@@ -209,30 +211,11 @@ export const firebaseService = {
     }
   },
 
-  // 🔥 Função helper para log de info
-  info: (mensagem, dados = {}) => {
-    return firebaseService.log('info', mensagem, dados);
-  },
-
-  // 🔥 Função helper para log de sucesso
-  success: (mensagem, dados = {}) => {
-    return firebaseService.log('success', mensagem, dados);
-  },
-
-  // 🔥 Função helper para log de warning
-  warning: (mensagem, dados = {}) => {
-    return firebaseService.log('warning', mensagem, dados);
-  },
-
-  // 🔥 Função helper para log de erro
-  error: (mensagem, dados = {}) => {
-    return firebaseService.log('error', mensagem, dados);
-  },
-
-  // 🔥 Função helper para log de debug
-  debug: (mensagem, dados = {}) => {
-    return firebaseService.log('debug', mensagem, dados);
-  }
+  info: (mensagem, dados = {}) => firebaseService.log('info', mensagem, dados),
+  success: (mensagem, dados = {}) => firebaseService.log('success', mensagem, dados),
+  warning: (mensagem, dados = {}) => firebaseService.log('warning', mensagem, dados),
+  error: (mensagem, dados = {}) => firebaseService.log('error', mensagem, dados),
+  debug: (mensagem, dados = {}) => firebaseService.log('debug', mensagem, dados)
 };
 
 export default firebaseService;

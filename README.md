@@ -68,3 +68,13 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Configuração Supabase (modo preview)
+
+1. Copie o arquivo de ambiente de preview:
+   ```bash
+   cp .env.preview .env.local
+   ```
+2. Inicie o projeto normalmente com `npm start`.
+
+A camada de dados em `src/services/firebase.js` foi adaptada para usar o REST API do Supabase mantendo a interface do serviço legado.

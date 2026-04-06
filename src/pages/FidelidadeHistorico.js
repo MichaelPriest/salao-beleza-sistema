@@ -76,7 +76,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { auditoriaService } from '../services/auditoriaService';
