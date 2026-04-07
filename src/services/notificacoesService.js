@@ -141,14 +141,14 @@ export const notificacoesService = {
       
       console.log('📝 Criando notificação:', novaNotificacao);
       
-      const result = await firebaseService.add('notificacoes', novaNotificacao);
-      console.log('✅ Notificação criada com ID:', result.id);
+      const novoId = await firebaseService.add('notificacoes', novaNotificacao);
+      console.log('✅ Notificação criada com ID:', novoId);
       
       // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
-      return { ...novaNotificacao, id: result.id };
+      return { ...novaNotificacao, id: novoId };
     } catch (error) {
       console.error('❌ Erro ao criar notificação:', error);
       throw error;

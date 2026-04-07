@@ -87,6 +87,12 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
   return params.toString();
 };
 
+
+const isMissingTableError = (error) => {
+  const msg = String(error?.details?.message || error?.message || '');
+  return msg.includes('Could not find the table') || msg.includes('schema cache');
+};
+
 const request = async (path, options = {}) => {
   const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
     ...options,
@@ -114,19 +120,35 @@ const request = async (path, options = {}) => {
 
 export const firebaseService = {
   getAll: async (collectionName) => {
-    const query = buildQueryString();
-    const data = await request(`${collectionName}?${query}`, { method: 'GET' });
-    return (data || []).map(normalizeRow);
+    try {
+      const query = buildQueryString();
+      const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+      return (data || []).map(normalizeRow);
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando lista vazia.`);
+        return [];
+      }
+      throw error;
+    }
   },
 
   getById: async (collectionName, id) => {
-    const query = buildQueryString([], null, id);
-    const data = await request(`${collectionName}?${query}`, {
-      method: 'GET',
-      headers: { Accept: 'application/vnd.pgrst.object+json' }
-    }).catch(() => null);
+    try {
+      const query = buildQueryString([], null, id);
+      const data = await request(`${collectionName}?${query}`, {
+        method: 'GET',
+        headers: { Accept: 'application/vnd.pgrst.object+json' }
+      }).catch(() => null);
 
-    return data ? normalizeRow(data) : null;
+      return data ? normalizeRow(data) : null;
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando null.`);
+        return null;
+      }
+      throw error;
+    }
   },
 
   add: async (collectionName, data) => {
@@ -157,9 +179,17 @@ export const firebaseService = {
   },
 
   query: async (collectionName, conditions = [], orderByField = null) => {
-    const query = buildQueryString(conditions, orderByField);
-    const data = await request(`${collectionName}?${query}`, { method: 'GET' });
-    return (data || []).map(normalizeRow);
+    try {
+      const query = buildQueryString(conditions, orderByField);
+      const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+      return (data || []).map(normalizeRow);
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando lista vazia.`);
+        return [];
+      }
+      throw error;
+    }
   },
 
   generateId: () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
