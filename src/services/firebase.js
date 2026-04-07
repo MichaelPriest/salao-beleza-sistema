@@ -112,17 +112,32 @@ const sqlEnsureCache = new Set();
 const tryExecuteSql = async (sql) => {
   if (!sqlRpcAvailable) return false;
 
-  try {
-    await request('rpc/execute_sql', {
-      method: 'POST',
-      body: JSON.stringify({ sql })
-    });
-    return true;
-  } catch (error) {
-    sqlRpcAvailable = false;
-    console.warn('⚠️ RPC execute_sql indisponível para auto-criação de schema.', error);
-    return false;
+  const rpcAttempts = [
+    { path: 'rpc/execute_sql', body: { sql } },
+    { path: 'rpc/exec_sql', body: { sql } },
+    { path: 'rpc/run_sql', body: { sql } },
+    { path: 'rpc/execute_sql', body: { query: sql } },
+    { path: 'rpc/exec_sql', body: { query: sql } },
+    { path: 'rpc/run_sql', body: { query: sql } }
+  ];
+
+  let lastError = null;
+
+  for (const attempt of rpcAttempts) {
+    try {
+      await request(attempt.path, {
+        method: 'POST',
+        body: JSON.stringify(attempt.body)
+      });
+      return true;
+    } catch (error) {
+      lastError = error;
+    }
   }
+
+  sqlRpcAvailable = false;
+  console.warn('⚠️ Nenhuma RPC SQL compatível encontrada (execute_sql/exec_sql/run_sql).', lastError);
+  return false;
 };
 
 const ensureTableAndColumn = async (tableName, columnName = null) => {

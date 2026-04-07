@@ -83,3 +83,18 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
    > Se o projeto não tiver RPC `execute_sql`, execute o SQL manualmente no Supabase SQL Editor.
 
 A camada de dados e autenticação foi migrada para Supabase (`src/services/firebase.js` + `src/services/supabaseAuth.js`), removendo dependência de Firebase no código-fonte.
+
+
+### RPC para criação automática de tabelas
+Se quiser auto-criação de tabelas/campos pela aplicação, crie uma RPC SQL (exemplo):
+```sql
+create or replace function public.execute_sql(sql text)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  execute sql;
+end;
+$$;
+```
