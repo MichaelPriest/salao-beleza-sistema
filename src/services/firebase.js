@@ -202,6 +202,7 @@ export const firebaseService = {
   },
 
   add: async (collectionName, data) => {
+    const fallbackId = data?.id || firebaseService.generateId();
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
 
     try {
@@ -210,21 +211,21 @@ export const firebaseService = {
         (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
         payload
       );
-      return inserted?.[0]?.id;
+      return inserted?.[0]?.id || fallbackId;
     } catch (error) {
       if (isMissingTableError(error)) {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Insert ignorado.`);
-        return null;
+        return fallbackId;
       }
 
       if (isNullIdConstraint(error)) {
-        const payloadComId = { ...payload, id: data?.id || firebaseService.generateId() };
+        const payloadComId = { ...payload, id: fallbackId };
         const inserted = await requestWithColumnFallback(
           collectionName,
           (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
           payloadComId
         );
-        return inserted?.[0]?.id;
+        return inserted?.[0]?.id || fallbackId;
       }
 
       throw error;
