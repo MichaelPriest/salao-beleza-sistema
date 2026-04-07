@@ -102,21 +102,29 @@ const extractMissingColumn = (error) => {
 
 const requestWithColumnFallback = async (makeCall, initialPayload) => {
   let payload = { ...initialPayload };
+  const removedColumns = new Set();
 
-  for (let i = 0; i < 3; i += 1) {
+  while (true) {
     try {
       return await makeCall(payload);
     } catch (error) {
       const missingColumn = extractMissingColumn(error);
-      if (!missingColumn || !(missingColumn in payload)) throw error;
 
+      if (!missingColumn || !(missingColumn in payload) || removedColumns.has(missingColumn)) {
+        throw error;
+      }
+
+      removedColumns.add(missingColumn);
       const { [missingColumn]: _removed, ...nextPayload } = payload;
       payload = nextPayload;
+
+      if (Object.keys(payload).length === 0) {
+        throw error;
+      }
+
       console.warn(`⚠️ Coluna ausente no schema (${missingColumn}). Repetindo requisição sem esse campo.`);
     }
   }
-
-  return makeCall(payload);
 };
 
 const request = async (path, options = {}) => {
