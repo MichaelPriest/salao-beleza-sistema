@@ -26,7 +26,9 @@ export const AuthClienteProvider = ({ children }) => {
 
     console.log('✅ AuthClienteProvider - Inicializando na área do cliente');
     
-    supabaseAuthService.handleOAuthCallbackFromUrl().catch(() => {});
+    supabaseAuthService.handleOAuthCallbackFromUrl().catch((error) => {
+      console.warn('OAuth callback com erro:', error.message);
+    });
 
     const unsubscribe = supabaseAuthService.onAuthStateChanged(async ({ user }) => {
       console.log('📢 AuthClienteProvider - onAuthStateChanged:', user?.id);
@@ -172,7 +174,7 @@ export const AuthClienteProvider = ({ children }) => {
   const loginComGoogle = async () => {
     try {
       setLoading(true);
-      supabaseAuthService.signInWithGoogle('/cliente/login');
+      await supabaseAuthService.signInWithGoogle('/cliente/login');
       return { success: true };
     } catch (error) {
       console.error('❌ AuthClienteProvider - Erro no login com Google:', error);

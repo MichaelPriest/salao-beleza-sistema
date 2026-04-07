@@ -44,7 +44,9 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    supabaseAuthService.handleOAuthCallbackFromUrl().catch(() => {});
+    supabaseAuthService.handleOAuthCallbackFromUrl().catch((error) => {
+      console.warn('OAuth callback com erro:', error.message);
+    });
 
     const unsubscribe = supabaseAuthService.onAuthStateChanged(async ({ user: authUser }) => {
       if (window.location.pathname.startsWith('/cliente')) {

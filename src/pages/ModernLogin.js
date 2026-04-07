@@ -105,7 +105,7 @@ function ModernLogin() {
     try {
       setErrorType('info');
       setError('Redirecionando para login Google...');
-      supabaseAuthService.signInWithGoogle();
+      await supabaseAuthService.signInWithGoogle();
     } catch (error) {
       console.error('Erro no login com Google:', error);
       setErrorType('error');

@@ -160,13 +160,40 @@ export const supabaseAuthService = {
     };
   },
 
-  signInWithGoogle(redirectPath = '/login') {
+  async signInWithGoogle(redirectPath = '/login') {
     const redirectTo = `${window.location.origin}${redirectPath}`;
     const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
-    window.location.href = authUrl;
+
+    try {
+      const response = await fetch(authUrl, {
+        method: 'GET',
+        headers: { apikey: supabaseAnonKey },
+        redirect: 'manual'
+      });
+
+      if (response.status >= 400) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.msg || 'Não foi possível iniciar login Google no Supabase');
+      }
+
+      const redirectLocation = response.headers.get('location') || authUrl;
+      window.location.href = redirectLocation;
+    } catch (error) {
+      if (String(error.message || '').includes('Unsupported provider')) {
+        throw new Error('Google Auth não está habilitado no projeto Supabase. Ative em Authentication > Providers > Google.');
+      }
+      throw error;
+    }
   },
 
   async handleOAuthCallbackFromUrl() {
+    const queryParams = new URLSearchParams(window.location.search);
+    const queryError = queryParams.get('error_description') || queryParams.get('error');
+
+    if (queryError) {
+      throw new Error(decodeURIComponent(queryError));
+    }
+
     const hash = window.location.hash?.replace(/^#/, '');
     if (!hash) return null;
 
