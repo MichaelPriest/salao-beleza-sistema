@@ -90,7 +90,7 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
 
 const isMissingTableError = (error) => {
   const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
-  return msg.includes('Could not find the table') || msg.includes('schema cache');
+  return error?.status === 404 || msg.includes('Could not find the table') || msg.includes('schema cache');
 };
 
 
@@ -231,6 +231,7 @@ const request = async (path, options = {}) => {
   if (!response.ok) {
     const error = new Error(body?.message || body?.msg || 'Erro ao comunicar com Supabase');
     error.details = body;
+    error.status = response.status;
     throw error;
   }
 
