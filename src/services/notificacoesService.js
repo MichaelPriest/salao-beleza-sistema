@@ -9,14 +9,14 @@ export const notificacoesService = {
       
       const notificacoes = await firebaseService.query('notificacoes', [
         { field: 'usuarioId', operator: '==', value: usuarioId }
-      ], 'data');
+      ]);
       
       console.log('✅ Notificações encontradas:', notificacoes.length);
       
       // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoes.sort((a, b) => {
-        const dateA = a.data ? new Date(a.data) : new Date(0);
-        const dateB = b.data ? new Date(b.data) : new Date(0);
+        const dateA = new Date(a.data || a.createdAt || 0);
+        const dateB = new Date(b.data || b.createdAt || 0);
         return dateB - dateA;
       });
       
@@ -141,14 +141,14 @@ export const notificacoesService = {
       
       console.log('📝 Criando notificação:', novaNotificacao);
       
-      const result = await firebaseService.add('notificacoes', novaNotificacao);
-      console.log('✅ Notificação criada com ID:', result.id);
+      const novoId = await firebaseService.add('notificacoes', novaNotificacao);
+      console.log('✅ Notificação criada com ID:', novoId);
       
       // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
       
-      return { ...novaNotificacao, id: result.id };
+      return { ...novaNotificacao, id: novoId };
     } catch (error) {
       console.error('❌ Erro ao criar notificação:', error);
       throw error;

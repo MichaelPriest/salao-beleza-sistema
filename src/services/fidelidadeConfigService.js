@@ -1,6 +1,6 @@
 // src/services/fidelidadeConfigService.js
 import { firebaseService } from './firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from './timestamp';
 
 export const fidelidadeConfigService = {
   // Buscar configurações ativas

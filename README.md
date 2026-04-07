@@ -68,3 +68,33 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Configuração Supabase (modo preview)
+
+1. Copie o arquivo de ambiente de preview:
+   ```bash
+   cp .env.preview .env.local
+   ```
+2. Inicie o projeto normalmente com `npm start`.
+3. (Opcional) tente criar as tabelas base automaticamente:
+   ```bash
+   npm run criar-tabelas-supabase
+   ```
+   > Se o projeto não tiver RPC `execute_sql`, execute o SQL manualmente no Supabase SQL Editor.
+
+A camada de dados e autenticação foi migrada para Supabase (`src/services/firebase.js` + `src/services/supabaseAuth.js`), removendo dependência de Firebase no código-fonte.
+
+
+### RPC para criação automática de tabelas
+Se quiser auto-criação de tabelas/campos pela aplicação, crie uma RPC SQL (exemplo):
+```sql
+create or replace function public.execute_sql(sql text)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  execute sql;
+end;
+$$;
+```

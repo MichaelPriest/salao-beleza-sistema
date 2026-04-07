@@ -1,4 +1,6 @@
 // src/pages/Disponibilidade.js
+// 🔥 VERSÃO CONVERTIDA PARA SUPABASE
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -93,7 +95,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
+import { supabaseService } from '../services/supabase';
 import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -121,6 +123,12 @@ import {
   isBefore,
 } from 'date-fns';
 import { pt } from 'date-fns/locale';
+
+// Importar ícones adicionais
+import BeachAccessIcon from '@mui/icons-material/BeachAccess';
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import SchoolIcon from '@mui/icons-material/School';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 const diasSemana = [
   { value: 0, label: 'Domingo', abreviado: 'DOM', cor: '#f44336' },
@@ -174,7 +182,7 @@ function Disponibilidade() {
   const [ausenciaEditando, setAusenciaEditando] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [horarios, setHorarios] = useState([]);
-  const [modoSelecao, setModoSelecao] = useState('simples'); // 'simples', 'multi', 'copiar'
+  const [modoSelecao, setModoSelecao] = useState('simples');
   const [diasSelecionados, setDiasSelecionados] = useState([]);
   const [openSpeedDial, setOpenSpeedDial] = useState(false);
   const [usuario, setUsuario] = useState(null);
@@ -183,12 +191,12 @@ function Disponibilidade() {
 
   // Estado do formulário de disponibilidade
   const [formData, setFormData] = useState({
-    profissionalId: '',
-    diasSemana: [1], // Agora suporta múltiplos dias
-    horarioInicio: '09:00',
-    horarioFim: '18:00',
-    intervaloInicio: '12:00',
-    intervaloFim: '13:00',
+    profissional_id: '',
+    dias_semana: [1],
+    horario_inicio: '09:00',
+    horario_fim: '18:00',
+    intervalo_inicio: '12:00',
+    intervalo_fim: '13:00',
     usarIntervalo: true,
     ativo: true,
     observacoes: '',
@@ -196,15 +204,27 @@ function Disponibilidade() {
 
   // Estado do formulário de ausência
   const [ausenciaForm, setAusenciaForm] = useState({
-    profissionalId: '',
+    profissional_id: '',
     tipo: 'folga',
-    dataInicio: new Date().toISOString().split('T')[0],
-    dataFim: new Date().toISOString().split('T')[0],
-    horarioInicio: '00:00',
-    horarioFim: '23:59',
+    data_inicio: new Date().toISOString().split('T')[0],
+    data_fim: new Date().toISOString().split('T')[0],
+    horario_inicio: '00:00',
+    horario_fim: '23:59',
     repetir: 'nao',
     observacoes: '',
   });
+
+  // 🔥 FUNÇÃO DE LOG
+  const registrarLog = async (nivel, mensagem, dados = {}) => {
+    try {
+      await supabaseService.log(nivel, mensagem, {
+        ...dados,
+        modulo: 'disponibilidade'
+      });
+    } catch (error) {
+      console.error('Erro ao registrar log:', error);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -243,13 +263,13 @@ function Disponibilidade() {
     try {
       setLoading(true);
       
-      await firebaseService.log('info', 'Carregando dados de disponibilidade');
+      await registrarLog('info', 'Carregando dados de disponibilidade');
       
       const [profissionaisData, disponibilidadesData, ausenciasData, agendamentosData] = await Promise.all([
-        firebaseService.getAll('profissionais').catch(() => []),
-        firebaseService.getAll('disponibilidades').catch(() => []),
-        firebaseService.getAll('ausencias').catch(() => []),
-        firebaseService.query('agendamentos', [
+        supabaseService.getAll('profissionais').catch(() => []),
+        supabaseService.getAll('disponibilidades').catch(() => []),
+        supabaseService.getAll('ausencias').catch(() => []),
+        supabaseService.query('agendamentos', [
           { field: 'status', operator: '!=', value: 'cancelado' }
         ]).catch(() => [])
       ]);
@@ -272,7 +292,7 @@ function Disponibilidade() {
       
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      await firebaseService.log('error', 'Erro ao carregar dados de disponibilidade', {
+      await registrarLog('error', 'Erro ao carregar dados de disponibilidade', {
         error: error.message
       });
       toast.error('Erro ao carregar dados');
@@ -290,7 +310,7 @@ function Disponibilidade() {
   };
 
   const handleRefresh = async () => {
-    await firebaseService.log('info', 'Atualização manual da página de disponibilidade');
+    await registrarLog('info', 'Atualização manual da página de disponibilidade');
     await carregarDados();
   };
 
@@ -298,25 +318,25 @@ function Disponibilidade() {
     if (disponibilidade) {
       setDisponibilidadeEditando(disponibilidade);
       setFormData({
-        profissionalId: disponibilidade.profissionalId,
-        diasSemana: disponibilidade.diasSemana || [disponibilidade.diaSemana || 1],
-        horarioInicio: disponibilidade.horarioInicio || '09:00',
-        horarioFim: disponibilidade.horarioFim || '18:00',
-        intervaloInicio: disponibilidade.intervaloInicio || '12:00',
-        intervaloFim: disponibilidade.intervaloFim || '13:00',
-        usarIntervalo: !!disponibilidade.intervaloInicio,
+        profissional_id: disponibilidade.profissional_id || disponibilidade.profissionalId,
+        dias_semana: disponibilidade.dias_semana || [disponibilidade.dia_semana || 1],
+        horario_inicio: disponibilidade.horario_inicio || disponibilidade.horarioInicio || '09:00',
+        horario_fim: disponibilidade.horario_fim || disponibilidade.horarioFim || '18:00',
+        intervalo_inicio: disponibilidade.intervalo_inicio || disponibilidade.intervaloInicio || '12:00',
+        intervalo_fim: disponibilidade.intervalo_fim || disponibilidade.intervaloFim || '13:00',
+        usarIntervalo: !!(disponibilidade.intervalo_inicio || disponibilidade.intervaloInicio),
         ativo: disponibilidade.ativo !== false,
         observacoes: disponibilidade.observacoes || '',
       });
     } else {
       setDisponibilidadeEditando(null);
       setFormData({
-        profissionalId: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
-        diasSemana: [1],
-        horarioInicio: '09:00',
-        horarioFim: '18:00',
-        intervaloInicio: '12:00',
-        intervaloFim: '13:00',
+        profissional_id: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
+        dias_semana: [1],
+        horario_inicio: '09:00',
+        horario_fim: '18:00',
+        intervalo_inicio: '12:00',
+        intervalo_fim: '13:00',
         usarIntervalo: true,
         ativo: true,
         observacoes: '',
@@ -330,24 +350,24 @@ function Disponibilidade() {
     if (ausencia) {
       setAusenciaEditando(ausencia);
       setAusenciaForm({
-        profissionalId: ausencia.profissionalId || '',
+        profissional_id: ausencia.profissional_id || ausencia.profissionalId,
         tipo: ausencia.tipo || 'folga',
-        dataInicio: ausencia.dataInicio || new Date().toISOString().split('T')[0],
-        dataFim: ausencia.dataFim || new Date().toISOString().split('T')[0],
-        horarioInicio: ausencia.horarioInicio || '00:00',
-        horarioFim: ausencia.horarioFim || '23:59',
+        data_inicio: ausencia.data_inicio || ausencia.dataInicio || new Date().toISOString().split('T')[0],
+        data_fim: ausencia.data_fim || ausencia.dataFim || new Date().toISOString().split('T')[0],
+        horario_inicio: ausencia.horario_inicio || ausencia.horarioInicio || '00:00',
+        horario_fim: ausencia.horario_fim || ausencia.horarioFim || '23:59',
         repetir: ausencia.repetir || 'nao',
         observacoes: ausencia.observacoes || '',
       });
     } else {
       setAusenciaEditando(null);
       setAusenciaForm({
-        profissionalId: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
+        profissional_id: profissionalSelecionado !== 'todos' ? profissionalSelecionado : '',
         tipo: 'folga',
-        dataInicio: new Date().toISOString().split('T')[0],
-        dataFim: new Date().toISOString().split('T')[0],
-        horarioInicio: '00:00',
-        horarioFim: '23:59',
+        data_inicio: new Date().toISOString().split('T')[0],
+        data_fim: new Date().toISOString().split('T')[0],
+        horario_inicio: '00:00',
+        horario_fim: '23:59',
         repetir: 'nao',
         observacoes: '',
       });
@@ -377,7 +397,7 @@ function Disponibilidade() {
   const handleDiasSemanaChange = (dias) => {
     setFormData(prev => ({
       ...prev,
-      diasSemana: dias
+      dias_semana: dias
     }));
   };
 
@@ -392,79 +412,75 @@ function Disponibilidade() {
   const aplicarModeloHorario = (modelo) => {
     setFormData(prev => ({
       ...prev,
-      horarioInicio: modelo.inicio,
-      horarioFim: modelo.fim,
+      horario_inicio: modelo.inicio,
+      horario_fim: modelo.fim,
       usarIntervalo: modelo.intervalo || false,
-      intervaloInicio: modelo.intervaloInicio || '12:00',
-      intervaloFim: modelo.intervaloFim || '13:00',
+      intervalo_inicio: modelo.intervaloInicio || '12:00',
+      intervalo_fim: modelo.intervaloFim || '13:00',
     }));
   };
 
   const handleSalvarDisponibilidade = async () => {
     try {
-      if (!formData.profissionalId) {
+      if (!formData.profissional_id) {
         mostrarSnackbar('Selecione um profissional', 'error');
         return;
       }
 
-      if (formData.diasSemana.length === 0) {
+      if (formData.dias_semana.length === 0) {
         mostrarSnackbar('Selecione pelo menos um dia da semana', 'error');
         return;
       }
 
-      await firebaseService.log('info', 'Salvando configuração de disponibilidade');
+      await registrarLog('info', 'Salvando configuração de disponibilidade');
 
-      // Para cada dia selecionado, criar/atualizar uma disponibilidade
-      const promises = formData.diasSemana.map(async (diaSemana) => {
+      const promises = formData.dias_semana.map(async (diaSemana) => {
         const disponibilidadeExistente = disponibilidades.find(
-          d => d.profissionalId === formData.profissionalId && 
-               d.diaSemana === diaSemana &&
+          d => (d.profissional_id || d.profissionalId) === formData.profissional_id && 
+               (d.dia_semana || d.diaSemana) === diaSemana &&
                (!disponibilidadeEditando || d.id === disponibilidadeEditando.id)
         );
 
         const dadosParaSalvar = {
-          profissionalId: formData.profissionalId,
-          diaSemana: diaSemana,
-          horarioInicio: formData.horarioInicio,
-          horarioFim: formData.horarioFim,
-          intervaloInicio: formData.usarIntervalo ? formData.intervaloInicio : null,
-          intervaloFim: formData.usarIntervalo ? formData.intervaloFim : null,
+          profissional_id: formData.profissional_id,
+          dia_semana: diaSemana,
+          horario_inicio: formData.horario_inicio,
+          horario_fim: formData.horario_fim,
+          intervalo_inicio: formData.usarIntervalo ? formData.intervalo_inicio : null,
+          intervalo_fim: formData.usarIntervalo ? formData.intervalo_fim : null,
           ativo: formData.ativo,
           observacoes: formData.observacoes,
-          atualizadoEm: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
 
         if (disponibilidadeExistente && !disponibilidadeEditando) {
-          // Atualizar existente
-          await firebaseService.update('disponibilidades', disponibilidadeExistente.id, dadosParaSalvar);
+          await supabaseService.update('disponibilidades', disponibilidadeExistente.id, dadosParaSalvar);
           await registrarAuditoria(
             'atualizar_disponibilidade',
             disponibilidadeExistente.id,
             `Disponibilidade atualizada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
-            { profissionalId: formData.profissionalId, diaSemana }
+            { profissional_id: formData.profissional_id, dia_semana: diaSemana }
           );
           return disponibilidadeExistente.id;
-        } else if (disponibilidadeEditando && disponibilidadeEditando.diaSemana === diaSemana) {
-          // Editando existente
-          await firebaseService.update('disponibilidades', disponibilidadeEditando.id, dadosParaSalvar);
+        } else if (disponibilidadeEditando && (disponibilidadeEditando.dia_semana || disponibilidadeEditando.diaSemana) === diaSemana) {
+          await supabaseService.update('disponibilidades', disponibilidadeEditando.id, dadosParaSalvar);
           await registrarAuditoria(
             'atualizar_disponibilidade',
             disponibilidadeEditando.id,
             `Disponibilidade atualizada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
-            { profissionalId: formData.profissionalId, diaSemana }
+            { profissional_id: formData.profissional_id, dia_semana: diaSemana }
           );
           return disponibilidadeEditando.id;
         } else {
-          // Criar nova
-          const nova = await firebaseService.add('disponibilidades', {
+          const nova = await supabaseService.add('disponibilidades', {
             ...dadosParaSalvar,
-            criadoEm: new Date().toISOString(),
+            created_at: new Date().toISOString(),
           });
           await registrarAuditoria(
             'criar_disponibilidade',
             nova.id,
             `Nova disponibilidade criada para ${diasSemana.find(d => d.value === diaSemana)?.label}`,
-            { profissionalId: formData.profissionalId, diaSemana }
+            { profissional_id: formData.profissional_id, dia_semana: diaSemana }
           );
           return nova.id;
         }
@@ -472,25 +488,24 @@ function Disponibilidade() {
 
       await Promise.all(promises);
 
-      // Se estava editando e removeu algum dia, deletar os que não estão mais selecionados
-      if (disponibilidadeEditando && !formData.diasSemana.includes(disponibilidadeEditando.diaSemana)) {
-        await firebaseService.delete('disponibilidades', disponibilidadeEditando.id);
+      if (disponibilidadeEditando && !formData.dias_semana.includes(disponibilidadeEditando.dia_semana || disponibilidadeEditando.diaSemana)) {
+        await supabaseService.delete('disponibilidades', disponibilidadeEditando.id);
         await registrarAuditoria(
           'remover_disponibilidade',
           disponibilidadeEditando.id,
           `Disponibilidade removida`,
-          { profissionalId: formData.profissionalId }
+          { profissional_id: formData.profissional_id }
         );
       }
 
-      await firebaseService.log('success', 'Disponibilidade salva com sucesso');
+      await registrarLog('success', 'Disponibilidade salva com sucesso');
 
       mostrarSnackbar('Disponibilidade(s) salva(s) com sucesso!');
       handleCloseDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar disponibilidade:', error);
-      await firebaseService.log('error', 'Erro ao salvar disponibilidade', {
+      await registrarLog('error', 'Erro ao salvar disponibilidade', {
         error: error.message
       });
       mostrarSnackbar(error.message || 'Erro ao salvar disponibilidade', 'error');
@@ -498,15 +513,15 @@ function Disponibilidade() {
   };
 
   const handleRemoverDisponibilidade = async (id, disponibilidade) => {
-    if (window.confirm(`Deseja remover a disponibilidade de ${diasSemana.find(d => d.value === disponibilidade.diaSemana)?.label}?`)) {
+    if (window.confirm(`Deseja remover a disponibilidade de ${diasSemana.find(d => d.value === (disponibilidade.dia_semana || disponibilidade.diaSemana))?.label}?`)) {
       try {
-        await firebaseService.log('warning', 'Removendo disponibilidade', { disponibilidadeId: id });
-        await firebaseService.delete('disponibilidades', id);
+        await registrarLog('warning', 'Removendo disponibilidade', { disponibilidadeId: id });
+        await supabaseService.delete('disponibilidades', id);
         await registrarAuditoria(
           'remover_disponibilidade',
           id,
           `Disponibilidade removida`,
-          { profissionalId: disponibilidade.profissionalId, diaSemana: disponibilidade.diaSemana }
+          { profissional_id: disponibilidade.profissional_id || disponibilidade.profissionalId, dia_semana: disponibilidade.dia_semana || disponibilidade.diaSemana }
         );
         mostrarSnackbar('Disponibilidade removida com sucesso!');
         carregarDados();
@@ -519,46 +534,55 @@ function Disponibilidade() {
 
   const handleSalvarAusencia = async () => {
     try {
-      if (!ausenciaForm.profissionalId) {
+      if (!ausenciaForm.profissional_id) {
         mostrarSnackbar('Selecione um profissional', 'error');
         return;
       }
 
-      await firebaseService.log('info', 'Salvando ausência de profissional');
+      await registrarLog('info', 'Salvando ausência de profissional');
 
       const dadosParaSalvar = {
-        ...ausenciaForm,
-        criadoEm: ausenciaEditando ? ausenciaEditando.criadoEm : new Date().toISOString(),
-        atualizadoEm: new Date().toISOString(),
+        profissional_id: ausenciaForm.profissional_id,
+        tipo: ausenciaForm.tipo,
+        data_inicio: ausenciaForm.data_inicio,
+        data_fim: ausenciaForm.data_fim,
+        horario_inicio: ausenciaForm.horario_inicio,
+        horario_fim: ausenciaForm.horario_fim,
+        repetir: ausenciaForm.repetir,
+        observacoes: ausenciaForm.observacoes,
+        updated_at: new Date().toISOString(),
       };
 
       if (ausenciaEditando) {
-        await firebaseService.update('ausencias', ausenciaEditando.id, dadosParaSalvar);
+        await supabaseService.update('ausencias', ausenciaEditando.id, dadosParaSalvar);
         await registrarAuditoria(
           'atualizar_ausencia',
           ausenciaEditando.id,
           `Ausência atualizada para ${ausenciaForm.tipo}`,
-          { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
+          { profissional_id: ausenciaForm.profissional_id, tipo: ausenciaForm.tipo }
         );
         mostrarSnackbar('Ausência atualizada com sucesso!');
       } else {
-        const novaAusencia = await firebaseService.add('ausencias', dadosParaSalvar);
+        const novaAusencia = await supabaseService.add('ausencias', {
+          ...dadosParaSalvar,
+          created_at: new Date().toISOString(),
+        });
         await registrarAuditoria(
           'criar_ausencia',
           novaAusencia.id,
           `Nova ausência criada: ${ausenciaForm.tipo}`,
-          { profissionalId: ausenciaForm.profissionalId, tipo: ausenciaForm.tipo }
+          { profissional_id: ausenciaForm.profissional_id, tipo: ausenciaForm.tipo }
         );
         mostrarSnackbar('Ausência cadastrada com sucesso!');
       }
 
-      await firebaseService.log('success', 'Ausência salva com sucesso');
+      await registrarLog('success', 'Ausência salva com sucesso');
 
       handleCloseAusenciaDialog();
       carregarDados();
     } catch (error) {
       console.error('Erro ao salvar ausência:', error);
-      await firebaseService.log('error', 'Erro ao salvar ausência', {
+      await registrarLog('error', 'Erro ao salvar ausência', {
         error: error.message
       });
       mostrarSnackbar(error.message || 'Erro ao salvar ausência', 'error');
@@ -568,13 +592,13 @@ function Disponibilidade() {
   const handleRemoverAusencia = async (id, ausencia) => {
     if (window.confirm('Deseja realmente remover esta ausência?')) {
       try {
-        await firebaseService.log('warning', 'Removendo ausência', { ausenciaId: id });
-        await firebaseService.delete('ausencias', id);
+        await registrarLog('warning', 'Removendo ausência', { ausenciaId: id });
+        await supabaseService.delete('ausencias', id);
         await registrarAuditoria(
           'remover_ausencia',
           id,
           `Ausência removida`,
-          { profissionalId: ausencia.profissionalId, tipo: ausencia.tipo }
+          { profissional_id: ausencia.profissional_id || ausencia.profissionalId, tipo: ausencia.tipo }
         );
         mostrarSnackbar('Ausência removida com sucesso!');
         carregarDados();
@@ -592,23 +616,23 @@ function Disponibilidade() {
     }
 
     try {
-      const disponibilidadesOrigem = disponibilidades.filter(d => d.profissionalId === profissionalOrigemId);
+      const disponibilidadesOrigem = disponibilidades.filter(d => (d.profissional_id || d.profissionalId) === profissionalOrigemId);
       
       for (const disp of disponibilidadesOrigem) {
         const novaDisponibilidade = {
-          profissionalId: profissionalDestinoId,
-          diaSemana: disp.diaSemana,
-          horarioInicio: disp.horarioInicio,
-          horarioFim: disp.horarioFim,
-          intervaloInicio: disp.intervaloInicio,
-          intervaloFim: disp.intervaloFim,
+          profissional_id: profissionalDestinoId,
+          dia_semana: disp.dia_semana || disp.diaSemana,
+          horario_inicio: disp.horario_inicio || disp.horarioInicio,
+          horario_fim: disp.horario_fim || disp.horarioFim,
+          intervalo_inicio: disp.intervalo_inicio || disp.intervaloInicio,
+          intervalo_fim: disp.intervalo_fim || disp.intervaloFim,
           ativo: disp.ativo,
           observacoes: `Copiado de ${profissionais.find(p => p.id === profissionalOrigemId)?.nome}`,
-          criadoEm: new Date().toISOString(),
-          atualizadoEm: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
         
-        await firebaseService.add('disponibilidades', novaDisponibilidade);
+        await supabaseService.add('disponibilidades', novaDisponibilidade);
       }
       
       await registrarAuditoria(
@@ -629,7 +653,7 @@ function Disponibilidade() {
   const handleMudarVisao = (event, novaVisao) => {
     if (novaVisao !== null) {
       setVisao(novaVisao);
-      firebaseService.log('debug', 'Mudança de visualização', { novaVisao });
+      registrarLog('debug', 'Mudança de visualização', { novaVisao });
     }
   };
 
@@ -652,13 +676,20 @@ function Disponibilidade() {
   const verificarDisponivel = (profissionalId, data, hora) => {
     const diaSemana = data.getDay();
     const disponibilidade = disponibilidades.find(
-      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo
+      d => (d.profissional_id || d.profissionalId) === profissionalId && 
+           (d.dia_semana || d.diaSemana) === diaSemana && 
+           d.ativo
     );
 
     if (!disponibilidade) return false;
 
-    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
-    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
+    const horarioInicio = disponibilidade.horario_inicio || disponibilidade.horarioInicio;
+    const horarioFim = disponibilidade.horario_fim || disponibilidade.horarioFim;
+    const intervaloInicio = disponibilidade.intervalo_inicio || disponibilidade.intervaloInicio;
+    const intervaloFim = disponibilidade.intervalo_fim || disponibilidade.intervaloFim;
+
+    const [horaInicio, minInicio] = horarioInicio.split(':').map(Number);
+    const [horaFim, minFim] = horarioFim.split(':').map(Number);
     const [horaAtual, minAtual] = hora.split(':').map(Number);
     
     const minutosInicio = horaInicio * 60 + minInicio;
@@ -667,9 +698,9 @@ function Disponibilidade() {
 
     if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
 
-    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
-      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
-      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
+    if (intervaloInicio && intervaloFim) {
+      const [horaIntInicio, minIntInicio] = intervaloInicio.split(':').map(Number);
+      const [horaIntFim, minIntFim] = intervaloFim.split(':').map(Number);
       
       const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
       const minutosIntFim = horaIntFim * 60 + minIntFim;
@@ -679,19 +710,19 @@ function Disponibilidade() {
 
     const dataStr = format(data, 'yyyy-MM-dd');
     const ausencia = ausencias.find(a => 
-      a.profissionalId === profissionalId &&
-      dataStr >= a.dataInicio &&
-      dataStr <= a.dataFim &&
+      (a.profissional_id || a.profissionalId) === profissionalId &&
+      dataStr >= (a.data_inicio || a.dataInicio) &&
+      dataStr <= (a.data_fim || a.dataFim) &&
       (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
-        (hora >= a.horarioInicio && hora < a.horarioFim)
+        ((a.horario_inicio || a.horarioInicio) === '00:00' && (a.horario_fim || a.horarioFim) === '23:59') ||
+        (hora >= (a.horario_inicio || a.horarioInicio) && hora < (a.horario_fim || a.horarioFim))
       )
     );
 
     if (ausencia) return false;
 
     const agendamento = agendamentos.find(a =>
-      a.profissionalId === profissionalId &&
+      (a.profissional_id || a.profissionalId) === profissionalId &&
       a.data === dataStr &&
       a.horario === hora &&
       a.status !== 'cancelado'
@@ -744,7 +775,7 @@ function Disponibilidade() {
   const horariosDia = gerarHorarios(dataReferencia);
 
   const getDisponibilidadesPorProfissional = (profissionalId) => {
-    return disponibilidades.filter(d => d.profissionalId === profissionalId && d.ativo);
+    return disponibilidades.filter(d => (d.profissional_id || d.profissionalId) === profissionalId && d.ativo);
   };
 
   const formatarHorario = (hora) => {
@@ -955,15 +986,16 @@ function Disponibilidade() {
                               </Box>
                             </Grid>
                             
-                            {/* Resumo rápido dos horários */}
                             <Grid item xs={10}>
                               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                                 {disponibilidadesProf.map(disp => {
-                                  const diaInfo = diasSemana.find(d => d.value === disp.diaSemana);
+                                  const diaInfo = diasSemana.find(d => d.value === (disp.dia_semana || disp.diaSemana));
+                                  const horarioInicio = disp.horario_inicio || disp.horarioInicio;
+                                  const horarioFim = disp.horario_fim || disp.horarioFim;
                                   return (
                                     <Chip
                                       key={disp.id}
-                                      label={`${diaInfo?.abreviado}: ${formatarHorario(disp.horarioInicio)} - ${formatarHorario(disp.horarioFim)}`}
+                                      label={`${diaInfo?.abreviado}: ${formatarHorario(horarioInicio)} - ${formatarHorario(horarioFim)}`}
                                       size="small"
                                       sx={{ 
                                         bgcolor: diaInfo?.cor || '#9c27b0',
@@ -984,7 +1016,6 @@ function Disponibilidade() {
                         </AccordionSummary>
                         
                         <AccordionDetails sx={{ p: 0 }}>
-                          {/* Detalhes dos horários por dia */}
                           <Grid container>
                             <Grid item xs={2} sx={{ p: 1, borderRight: '1px solid #ddd', bgcolor: '#faf5ff' }}>
                               <Typography variant="caption" color="textSecondary">
@@ -994,11 +1025,11 @@ function Disponibilidade() {
                             
                             {diasVisao.map((dia, index) => {
                               const diaSemana = dia.getDay();
-                              const disponibilidade = disponibilidadesProf.find(d => d.diaSemana === diaSemana);
+                              const disponibilidade = disponibilidadesProf.find(d => (d.dia_semana || d.diaSemana) === diaSemana);
                               const temAusencia = ausencias.some(a => 
-                                a.profissionalId === profissional.id &&
-                                format(dia, 'yyyy-MM-dd') >= a.dataInicio &&
-                                format(dia, 'yyyy-MM-dd') <= a.dataFim
+                                (a.profissional_id || a.profissionalId) === profissional.id &&
+                                format(dia, 'yyyy-MM-dd') >= (a.data_inicio || a.dataInicio) &&
+                                format(dia, 'yyyy-MM-dd') <= (a.data_fim || a.dataFim)
                               );
                               
                               let status = 'indisponivel';
@@ -1011,7 +1042,9 @@ function Disponibilidade() {
                                 bgcolor = alpha('#f44336', 0.1);
                               } else if (disponibilidade) {
                                 status = 'disponivel';
-                                tooltipText = `Disponível: ${formatarHorario(disponibilidade.horarioInicio)} - ${formatarHorario(disponibilidade.horarioFim)}`;
+                                const horarioInicio = disponibilidade.horario_inicio || disponibilidade.horarioInicio;
+                                const horarioFim = disponibilidade.horario_fim || disponibilidade.horarioFim;
+                                tooltipText = `Disponível: ${formatarHorario(horarioInicio)} - ${formatarHorario(horarioFim)}`;
                                 bgcolor = alpha('#4caf50', 0.1);
                               }
                               
@@ -1035,9 +1068,9 @@ function Disponibilidade() {
                                   onClick={() => {
                                     if (status === 'ausente') {
                                       const aus = ausencias.find(a => 
-                                        a.profissionalId === profissional.id &&
-                                        format(dia, 'yyyy-MM-dd') >= a.dataInicio &&
-                                        format(dia, 'yyyy-MM-dd') <= a.dataFim
+                                        (a.profissional_id || a.profissionalId) === profissional.id &&
+                                        format(dia, 'yyyy-MM-dd') >= (a.data_inicio || a.dataInicio) &&
+                                        format(dia, 'yyyy-MM-dd') <= (a.data_fim || a.dataFim)
                                       );
                                       if (aus) handleOpenAusenciaDialog(aus);
                                     } else if (status === 'disponivel' && disponibilidade) {
@@ -1059,7 +1092,7 @@ function Disponibilidade() {
                                       
                                       {disponibilidade && (
                                         <Typography variant="caption" display="block" sx={{ fontSize: '0.65rem', mt: 0.5 }}>
-                                          {formatarHorario(disponibilidade.horarioInicio)} - {formatarHorario(disponibilidade.horarioFim)}
+                                          {formatarHorario(disponibilidade.horario_inicio || disponibilidade.horarioInicio)} - {formatarHorario(disponibilidade.horario_fim || disponibilidade.horarioFim)}
                                         </Typography>
                                       )}
                                       
@@ -1075,7 +1108,6 @@ function Disponibilidade() {
                             })}
                           </Grid>
                           
-                          {/* Botões de ação rápida */}
                           <Box sx={{ p: 1, borderTop: '1px solid #e0e0e0', bgcolor: '#faf5ff', display: 'flex', gap: 1 }}>
                             <Button
                               size="small"
@@ -1132,11 +1164,15 @@ function Disponibilidade() {
                 </TableHead>
                 <TableBody>
                   {ausencias
-                    .filter(a => new Date(a.dataFim) >= new Date())
-                    .sort((a, b) => new Date(a.dataInicio) - new Date(b.dataInicio))
+                    .filter(a => new Date(a.data_fim || a.dataFim) >= new Date())
+                    .sort((a, b) => new Date(a.data_inicio || a.dataInicio) - new Date(b.data_inicio || b.dataInicio))
                     .map((ausencia, index) => {
-                      const profissional = profissionais.find(p => p.id === ausencia.profissionalId);
+                      const profissional = profissionais.find(p => p.id === (ausencia.profissional_id || ausencia.profissionalId));
                       const tipo = tiposAusencia.find(t => t.value === ausencia.tipo);
+                      const dataInicio = ausencia.data_inicio || ausencia.dataInicio;
+                      const dataFim = ausencia.data_fim || ausencia.dataFim;
+                      const horarioInicio = ausencia.horario_inicio || ausencia.horarioInicio;
+                      const horarioFim = ausencia.horario_fim || ausencia.horarioFim;
 
                       return (
                         <TableRow key={ausencia.id || index} hover>
@@ -1160,12 +1196,12 @@ function Disponibilidade() {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {new Date(ausencia.dataInicio).toLocaleDateString('pt-BR')}
-                              {ausencia.dataInicio !== ausencia.dataFim && 
-                                ` a ${new Date(ausencia.dataFim).toLocaleDateString('pt-BR')}`}
+                              {new Date(dataInicio).toLocaleDateString('pt-BR')}
+                              {dataInicio !== dataFim && 
+                                ` a ${new Date(dataFim).toLocaleDateString('pt-BR')}`}
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
-                              {ausencia.horarioInicio} - {ausencia.horarioFim}
+                              {horarioInicio} - {horarioFim}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -1219,8 +1255,8 @@ function Disponibilidade() {
                 <FormControl fullWidth size="small">
                   <InputLabel>Profissional</InputLabel>
                   <Select
-                    name="profissionalId"
-                    value={formData.profissionalId}
+                    name="profissional_id"
+                    value={formData.profissional_id}
                     label="Profissional"
                     onChange={handleInputChange}
                     required
@@ -1232,7 +1268,6 @@ function Disponibilidade() {
                 </FormControl>
               </Grid>
 
-              {/* Seleção de Múltiplos Dias */}
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
                   Dias da Semana
@@ -1243,31 +1278,30 @@ function Disponibilidade() {
                       key={dia.value}
                       label={dia.abreviado}
                       onClick={() => {
-                        const novosDias = formData.diasSemana.includes(dia.value)
-                          ? formData.diasSemana.filter(d => d !== dia.value)
-                          : [...formData.diasSemana, dia.value];
+                        const novosDias = formData.dias_semana.includes(dia.value)
+                          ? formData.dias_semana.filter(d => d !== dia.value)
+                          : [...formData.dias_semana, dia.value];
                         handleDiasSemanaChange(novosDias);
                       }}
-                      color={formData.diasSemana.includes(dia.value) ? 'primary' : 'default'}
+                      color={formData.dias_semana.includes(dia.value) ? 'primary' : 'default'}
                       sx={{
-                        bgcolor: formData.diasSemana.includes(dia.value) ? dia.cor : undefined,
-                        color: formData.diasSemana.includes(dia.value) ? 'white' : undefined,
+                        bgcolor: formData.dias_semana.includes(dia.value) ? dia.cor : undefined,
+                        color: formData.dias_semana.includes(dia.value) ? 'white' : undefined,
                         '&:hover': {
-                          bgcolor: formData.diasSemana.includes(dia.value) ? dia.cor : undefined,
+                          bgcolor: formData.dias_semana.includes(dia.value) ? dia.cor : undefined,
                           opacity: 0.9,
                         }
                       }}
                     />
                   ))}
                 </Box>
-                {formData.diasSemana.length === 0 && (
+                {formData.dias_semana.length === 0 && (
                   <Typography variant="caption" color="error">
                     Selecione pelo menos um dia
                   </Typography>
                 )}
               </Grid>
 
-              {/* Modelos de Horário */}
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
                   Modelos de Horário
@@ -1289,9 +1323,9 @@ function Disponibilidade() {
                 <TextField
                   fullWidth
                   label="Horário Início"
-                  name="horarioInicio"
+                  name="horario_inicio"
                   type="time"
-                  value={formData.horarioInicio}
+                  value={formData.horario_inicio}
                   onChange={handleInputChange}
                   InputLabelProps={{ shrink: true }}
                   size="small"
@@ -1302,9 +1336,9 @@ function Disponibilidade() {
                 <TextField
                   fullWidth
                   label="Horário Fim"
-                  name="horarioFim"
+                  name="horario_fim"
                   type="time"
-                  value={formData.horarioFim}
+                  value={formData.horario_fim}
                   onChange={handleInputChange}
                   InputLabelProps={{ shrink: true }}
                   size="small"
@@ -1330,9 +1364,9 @@ function Disponibilidade() {
                     <TextField
                       fullWidth
                       label="Início do Intervalo"
-                      name="intervaloInicio"
+                      name="intervalo_inicio"
                       type="time"
-                      value={formData.intervaloInicio}
+                      value={formData.intervalo_inicio}
                       onChange={handleInputChange}
                       InputLabelProps={{ shrink: true }}
                       size="small"
@@ -1343,9 +1377,9 @@ function Disponibilidade() {
                     <TextField
                       fullWidth
                       label="Fim do Intervalo"
-                      name="intervaloFim"
+                      name="intervalo_fim"
                       type="time"
-                      value={formData.intervaloFim}
+                      value={formData.intervalo_fim}
                       onChange={handleInputChange}
                       InputLabelProps={{ shrink: true }}
                       size="small"
@@ -1405,8 +1439,8 @@ function Disponibilidade() {
                 <FormControl fullWidth size="small">
                   <InputLabel>Profissional</InputLabel>
                   <Select
-                    name="profissionalId"
-                    value={ausenciaForm.profissionalId}
+                    name="profissional_id"
+                    value={ausenciaForm.profissional_id}
                     label="Profissional"
                     onChange={handleAusenciaInputChange}
                     required
@@ -1440,52 +1474,44 @@ function Disponibilidade() {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                  <DatePicker
-                    label="Data Início"
-                    value={ausenciaForm.dataInicio ? new Date(ausenciaForm.dataInicio + 'T12:00:00') : null}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        setAusenciaForm({ 
-                          ...ausenciaForm, 
-                          dataInicio: format(newValue, 'yyyy-MM-dd') 
-                        });
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField {...params} fullWidth size="small" />
-                    )}
-                  />
-                </LocalizationProvider>
+                <DatePicker
+                  label="Data Início"
+                  value={ausenciaForm.data_inicio ? new Date(ausenciaForm.data_inicio + 'T12:00:00') : null}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      setAusenciaForm({ 
+                        ...ausenciaForm, 
+                        data_inicio: format(newValue, 'yyyy-MM-dd') 
+                      });
+                    }
+                  }}
+                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                />
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-                  <DatePicker
-                    label="Data Fim"
-                    value={ausenciaForm.dataFim ? new Date(ausenciaForm.dataFim + 'T12:00:00') : null}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        setAusenciaForm({ 
-                          ...ausenciaForm, 
-                          dataFim: format(newValue, 'yyyy-MM-dd') 
-                        });
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField {...params} fullWidth size="small" />
-                    )}
-                  />
-                </LocalizationProvider>
+                <DatePicker
+                  label="Data Fim"
+                  value={ausenciaForm.data_fim ? new Date(ausenciaForm.data_fim + 'T12:00:00') : null}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      setAusenciaForm({ 
+                        ...ausenciaForm, 
+                        data_fim: format(newValue, 'yyyy-MM-dd') 
+                      });
+                    }
+                  }}
+                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                />
               </Grid>
 
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   label="Horário Início"
-                  name="horarioInicio"
+                  name="horario_inicio"
                   type="time"
-                  value={ausenciaForm.horarioInicio}
+                  value={ausenciaForm.horario_inicio}
                   onChange={handleAusenciaInputChange}
                   InputLabelProps={{ shrink: true }}
                   size="small"
@@ -1496,9 +1522,9 @@ function Disponibilidade() {
                 <TextField
                   fullWidth
                   label="Horário Fim"
-                  name="horarioFim"
+                  name="horario_fim"
                   type="time"
-                  value={ausenciaForm.horarioFim}
+                  value={ausenciaForm.horario_fim}
                   onChange={handleAusenciaInputChange}
                   InputLabelProps={{ shrink: true }}
                   size="small"
@@ -1589,11 +1615,5 @@ function Disponibilidade() {
     </LocalizationProvider>
   );
 }
-
-// Importar ícones adicionais
-import BeachAccessIcon from '@mui/icons-material/BeachAccess';
-import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
-import SchoolIcon from '@mui/icons-material/School';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 export default Disponibilidade;

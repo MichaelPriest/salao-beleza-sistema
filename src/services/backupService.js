@@ -1,8 +1,6 @@
 // src/services/backupService.js
 import { firebaseService } from './firebase';
 import { toast } from 'react-hot-toast';
-import { db } from './firebase';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
 
 export const backupService = {
   // Listar histórico de backups
@@ -138,10 +136,6 @@ export const backupService = {
           let restaurados = 0;
           let erros = 0;
           
-          // Usar batch para melhor performance
-          let batch = writeBatch(db);
-          let operations = 0;
-          const MAX_BATCH_SIZE = 500;
 
           // Restaurar cada coleção
           for (const [collection, dados] of Object.entries(backupData.dados)) {
@@ -180,21 +174,11 @@ export const backupService = {
                   }
 
                   if (deveRestaurar) {
-                    // 🔥 USAR setDoc com o ID ORIGINAL para preservá-lo
-                    const docRef = doc(db, collection, item.id);
-                    batch.set(docRef, itemParaSalvar);
-                    operations++;
+                    // Preserva o ID original usando upsert no Supabase
+                    await firebaseService.set(collection, item.id, itemParaSalvar);
                     restaurados++;
-                    
-                    console.log(`✅ Restaurado ${collection}/${item.id} com ID original preservado`);
-                  }
 
-                  // Commit quando atingir o limite
-                  if (operations >= MAX_BATCH_SIZE) {
-                    await batch.commit();
-                    console.log(`📦 Lote de ${operations} operações commitado`);
-                    batch = writeBatch(db);
-                    operations = 0;
+                    console.log(`✅ Restaurado ${collection}/${item.id} com ID original preservado`);
                   }
                   
                 } catch (itemError) {
@@ -209,12 +193,6 @@ export const backupService = {
               console.warn(`⚠️ Erro ao processar coleção ${collection}:`, error);
               erros += dados.length;
             }
-          }
-
-          // Commit das operações restantes
-          if (operations > 0) {
-            await batch.commit();
-            console.log(`📦 Lote final de ${operations} operações commitado`);
           }
 
           if (erros === 0) {
