@@ -93,6 +93,32 @@ const isMissingTableError = (error) => {
   return msg.includes('Could not find the table') || msg.includes('schema cache');
 };
 
+
+const extractMissingColumn = (error) => {
+  const msg = String(error?.details?.message || error?.message || '');
+  const match = msg.match(/Could not find the '([^']+)' column/);
+  return match ? match[1] : null;
+};
+
+const requestWithColumnFallback = async (makeCall, initialPayload) => {
+  let payload = { ...initialPayload };
+
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      return await makeCall(payload);
+    } catch (error) {
+      const missingColumn = extractMissingColumn(error);
+      if (!missingColumn || !(missingColumn in payload)) throw error;
+
+      const { [missingColumn]: _removed, ...nextPayload } = payload;
+      payload = nextPayload;
+      console.warn(`⚠️ Coluna ausente no schema (${missingColumn}). Repetindo requisição sem esse campo.`);
+    }
+  }
+
+  return makeCall(payload);
+};
+
 const request = async (path, options = {}) => {
   const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
     ...options,
@@ -153,23 +179,32 @@ export const firebaseService = {
 
   add: async (collectionName, data) => {
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
-    const inserted = await request(collectionName, { method: 'POST', body: JSON.stringify(payload) });
+    const inserted = await requestWithColumnFallback(
+      (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+      payload
+    );
     return inserted?.[0]?.id;
   },
 
   set: async (collectionName, id, data) => {
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
-    const upserted = await request(collectionName, {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(payload)
-    });
+    const upserted = await requestWithColumnFallback(
+      (safePayload) => request(collectionName, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify(safePayload)
+      }),
+      payload
+    );
     return upserted?.[0]?.id || id;
   },
 
   update: async (collectionName, id, data) => {
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
-    await request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    await requestWithColumnFallback(
+      (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+      payload
+    );
     return id;
   },
 
