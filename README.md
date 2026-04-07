@@ -77,4 +77,4 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
    ```
 2. Inicie o projeto normalmente com `npm start`.
 
-A camada de dados em `src/services/firebase.js` foi adaptada para usar o REST API do Supabase mantendo a interface do serviço legado.
+A camada de dados e autenticação foi migrada para Supabase (`src/services/firebase.js` + `src/services/supabaseAuth.js`), removendo dependência de Firebase no código-fonte.

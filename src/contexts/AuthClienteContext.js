@@ -2,32 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut,
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
-} from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
-import { removerMascaraCPF } from '../utils/cpfUtils';
-
-// Configuração do Firebase (use as mesmas do seu projeto)
-const firebaseConfig = {
-  apiKey: "AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA",
-  authDomain: "fluted-sentry-305001.firebaseapp.com",
-  projectId: "fluted-sentry-305001",
-  storageBucket: "fluted-sentry-305001.firebasestorage.app",
-  messagingSenderId: "386333037191",
-  appId: "1:386333037191:web:3b944b250bf676e1901e22"
-};
-
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+import { supabaseAuthService } from '../services/supabaseAuth';
 
 const AuthClienteContext = createContext({});
 
@@ -51,13 +26,15 @@ export const AuthClienteProvider = ({ children }) => {
 
     console.log('✅ AuthClienteProvider - Inicializando na área do cliente');
     
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('📢 AuthClienteProvider - onAuthStateChanged:', user?.uid);
+    supabaseAuthService.handleOAuthCallbackFromUrl().catch(() => {});
+
+    const unsubscribe = supabaseAuthService.onAuthStateChanged(async ({ user }) => {
+      console.log('📢 AuthClienteProvider - onAuthStateChanged:', user?.id);
       setFirebaseUser(user);
       
       if (user) {
-        // Usuário está logado no Firebase Auth
-        await carregarClientePorUid(user.uid, user.email);
+        // Usuário está logado no Supabase Auth
+        await carregarClientePorUid(user.id, user.email);
       } else {
         // Usuário não está logado no Firebase Auth
         console.log('👤 AuthClienteProvider - Nenhum usuário no Firebase Auth');
@@ -152,18 +129,18 @@ export const AuthClienteProvider = ({ children }) => {
       
       console.log('🔐 AuthClienteProvider - Tentando login com email:', email);
       
-      // 1. Autenticar no Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, senha);
-      const user = userCredential.user;
-      console.log('✅ AuthClienteProvider - Usuário autenticado:', user.uid);
+      // 1. Autenticar no Supabase Auth
+      const result = await supabaseAuthService.signInWithPassword(email, senha);
+      const user = result.user;
+      console.log('✅ AuthClienteProvider - Usuário autenticado:', user.id);
       
-      // 2. Buscar dados do cliente no Firestore usando o UID
-      const clienteData = await firebaseService.getById('clientes', user.uid);
+      // 2. Buscar dados do cliente usando o UID
+      const clienteData = await firebaseService.getById('clientes', user.id);
       
       if (!clienteData) {
-        console.error('❌ AuthClienteProvider - Dados do cliente não encontrados para UID:', user.uid);
+        console.error('❌ AuthClienteProvider - Dados do cliente não encontrados para UID:', user.id);
         toast.error('Dados do cliente não encontrados');
-        await signOut(auth);
+        await supabaseAuthService.signOut();
         return false;
       }
 
@@ -180,11 +157,7 @@ export const AuthClienteProvider = ({ children }) => {
     } catch (error) {
       console.error('❌ AuthClienteProvider - Erro no login:', error);
       
-      if (error.code === 'auth/user-not-found') {
-        toast.error('Usuário não encontrado');
-      } else if (error.code === 'auth/wrong-password') {
-        toast.error('Senha incorreta');
-      } else if (error.code === 'auth/invalid-credential') {
+      if (error.message?.toLowerCase().includes('invalid login credentials')) {
         toast.error('Email ou senha inválidos');
       } else {
         toast.error('Erro ao fazer login');
@@ -199,68 +172,12 @@ export const AuthClienteProvider = ({ children }) => {
   const loginComGoogle = async () => {
     try {
       setLoading(true);
-      
-      console.log('🔐 AuthClienteProvider - Tentando login com Google');
-      
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      console.log('✅ AuthClienteProvider - Usuário Google autenticado:', user.uid);
-      
-      // Verificar se o cliente já existe no Firestore (pelo UID ou googleUid)
-      let clienteData = await firebaseService.getById('clientes', user.uid);
-
-      if (!clienteData) {
-        // Se não encontrar por UID, buscar por googleUid
-        const clientesPorGoogleUid = await firebaseService.query('clientes', [
-          { field: 'googleUid', operator: '==', value: user.uid }
-        ]);
-        
-        if (clientesPorGoogleUid && clientesPorGoogleUid.length > 0) {
-          clienteData = clientesPorGoogleUid[0];
-        }
-      }
-
-      if (clienteData) {
-        console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
-        setCliente(clienteData);
-        setIsAuthenticated(true);
-        localStorage.setItem('cliente', JSON.stringify(clienteData));
-        toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-        return { success: true, data: clienteData };
-      } else {
-        console.log('⚠️ AuthClienteProvider - Cliente não encontrado, precisa completar cadastro');
-        
-        // Cliente não existe - precisa completar cadastro
-        const userData = {
-          uid: user.uid,
-          nome: user.displayName || 'Cliente Google',
-          email: user.email,
-          foto: user.photoURL || null,
-        };
-        
-        // Guardar dados do usuário pendente
-        setPendingGoogleUser(userData);
-        
-        // Retornar indicando que precisa completar cadastro
-        return { 
-          success: false, 
-          needCompletion: true, 
-          userData 
-        };
-      }
-      
+      supabaseAuthService.signInWithGoogle('/cliente/login');
+      return { success: true };
     } catch (error) {
       console.error('❌ AuthClienteProvider - Erro no login com Google:', error);
-      
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Login cancelado');
-      } else if (error.code === 'auth/popup-blocked') {
-        toast.error('Popup bloqueado. Permita popups para este site.');
-      } else {
-        toast.error('Erro ao fazer login com Google');
-      }
+      toast.error('Erro ao fazer login com Google');
       return { success: false, error: error.message };
-      
     } finally {
       setLoading(false);
     }
@@ -397,35 +314,29 @@ export const AuthClienteProvider = ({ children }) => {
         return false;
       }
 
-      // 1. Verificar se email já existe no Firebase Auth (tentando criar)
-      let userCredential;
+      // 1. Criar usuário no Supabase Auth
+      let user;
       try {
-        userCredential = await createUserWithEmailAndPassword(
-          auth, 
-          dadosCliente.email, 
-          dadosCliente.senha
-        );
+        const signUpResult = await supabaseAuthService.signUp(dadosCliente.email, dadosCliente.senha, { nome: dadosCliente.nome });
+        user = signUpResult.user;
       } catch (error) {
-        if (error.code === 'auth/email-already-in-use') {
+        if (error.message?.toLowerCase().includes('already registered')) {
           toast.error('Este email já está em uso');
-        } else if (error.code === 'auth/weak-password') {
-          toast.error('Senha muito fraca. Use pelo menos 6 caracteres');
         } else {
           toast.error('Erro ao criar conta');
         }
         return false;
       }
 
-      const user = userCredential.user;
-      console.log('✅ AuthClienteProvider - Usuário criado no Firebase Auth:', user.uid);
+      console.log('✅ AuthClienteProvider - Usuário criado no Supabase Auth:', user.id);
 
-      // 2. Criar documento do cliente com o UID do Firebase Auth
+      // 2. Criar documento do cliente com o UID do Auth
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {
-        id: user.uid,
+        id: user.id,
         nome: dadosCliente.nome,
         email: dadosCliente.email,
         telefone: dadosCliente.telefone,
@@ -456,10 +367,10 @@ export const AuthClienteProvider = ({ children }) => {
         updatedAt: agora
       };
 
-      // 3. Salvar no Firestore usando o UID como ID do documento
-      await firebaseService.set('clientes', user.uid, novoCliente);
+      // 3. Salvar no base de dados usando o UID como ID do documento
+      await firebaseService.set('clientes', user.id, novoCliente);
       
-      console.log('✅ AuthClienteProvider - Cliente salvo no Firestore com CPF:', cpfFormatado);
+      console.log('✅ AuthClienteProvider - Cliente salvo no base de dados com CPF:', cpfFormatado);
       
       toast.success('Cadastro realizado com sucesso! Faça o login.');
       return true;
@@ -476,7 +387,7 @@ export const AuthClienteProvider = ({ children }) => {
   const logout = async () => {
     try {
       console.log('👋 AuthClienteProvider - Fazendo logout');
-      await signOut(auth);
+      await supabaseAuthService.signOut();
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     } finally {

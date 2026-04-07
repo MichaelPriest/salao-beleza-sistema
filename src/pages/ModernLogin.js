@@ -24,13 +24,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { supabaseAuthService } from '../services/supabaseAuth';
 
 function ModernLogin() {
   const navigate = useNavigate();
@@ -47,9 +41,6 @@ function ModernLogin() {
     email: '',
     senha: ''
   });
-
-  const auth = getAuth();
-  const googleProvider = new GoogleAuthProvider();
 
   const validarCampos = () => {
     const errors = {
@@ -78,94 +69,7 @@ function ModernLogin() {
     return isValid;
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA - Agora identifica pelo cargo
-  const verificarUsuarioFirestore = async (user) => {
-    try {
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        console.log('⚠️ Usuário não encontrado no Firestore, tentando buscar por email...');
-        
-        // Buscar por email como fallback
-        import('../services/firebase').then(({ firebaseService }) => {
-          firebaseService.query('usuarios', [
-            { field: 'email', operator: '==', value: user.email }
-          ]).then(usuarios => {
-            if (usuarios && usuarios.length > 0) {
-              const usuarioData = usuarios[0];
-              console.log('✅ Usuário encontrado por email:', usuarioData);
-              
-              // Criar documento com o UID correto
-              setDoc(doc(db, 'usuarios', user.uid), {
-                ...usuarioData,
-                uid: user.uid,
-                migrado: true,
-                migradoEm: new Date().toISOString()
-              }).then(() => {
-                console.log('✅ Documento migrado com sucesso');
-              });
-            }
-          });
-        });
-        
-        // 🔥 NÃO RETORNAR ERRO! Deixar o AuthContext cuidar disso
-        return { 
-          success: true, 
-          data: { 
-            id: user.uid, 
-            email: user.email,
-            nome: user.email.split('@')[0],
-            cargo: 'cliente', // Cargo padrão
-            status: 'ativo'
-          } 
-        };
-      }
 
-      const usuarioData = userSnap.data();
-      console.log('✅ Usuário encontrado no Firestore:', usuarioData);
-      
-      // Verificar se está ativo
-      if (usuarioData.status !== 'ativo') {
-        console.log('❌ Usuário inativo:', user.uid);
-        return { 
-          error: true, 
-          type: 'inactive',
-          message: 'Usuário inativo. Contate o administrador para reativar seu acesso.' 
-        };
-      }
-
-      // 🔥 IMPORTANTE: Verificar o cargo para decidir o que fazer
-      const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
-      
-      if (cargosFuncionario.includes(usuarioData.cargo)) {
-        console.log('✅ Usuário é funcionário (cargo:', usuarioData.cargo, ') - permitindo acesso');
-      } else {
-        console.log('✅ Usuário é cliente - permitindo acesso');
-      }
-
-      // Atualizar último acesso
-      await setDoc(userRef, { 
-        ...usuarioData,
-        ultimoAcesso: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      return { success: true, data: { id: user.uid, ...usuarioData } };
-    } catch (error) {
-      console.error('Erro ao verificar usuário no Firestore:', error);
-      return { 
-        success: true, // 🔥 MUDADO PARA true para não bloquear login
-        data: { 
-          id: user.uid, 
-          email: user.email,
-          nome: user.email.split('@')[0],
-          cargo: 'cliente',
-          status: 'ativo'
-        }
-      };
-    }
-  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -197,56 +101,16 @@ function ModernLogin() {
   const handleGoogleLogin = async () => {
     setError('');
     setErrorDetails('');
-    setLoading(true);
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      // Verificar se usuário existe no Firestore
-      const resultado = await verificarUsuarioFirestore(user);
-      
-      if (resultado.error) {
-        // Usuário não autorizado - fazer logout
-        await auth.signOut();
-        
-        setErrorType(resultado.type === 'not_found' ? 'error' : 'warning');
-        setError(resultado.message);
-        
-        if (resultado.type === 'not_found') {
-          setErrorDetails('Seu email está autenticado no Google, mas não possui cadastro no sistema. Entre em contato com o administrador para solicitar acesso.');
-        } else if (resultado.type === 'inactive') {
-          setErrorDetails('Seu acesso foi desativado. Entre em contato com o administrador para reativar sua conta.');
-        }
-        
-        setLoading(false);
-        return;
-      }
-      
-      // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(resultado.data));
-      
-      toast.success(`Bem-vindo, ${resultado.data.nome}!`);
-      // 🔥 REDIRECIONAR PARA DASHBOARD
-      navigate('/dashboard');
+      setErrorType('info');
+      setError('Redirecionando para login Google...');
+      supabaseAuthService.signInWithGoogle();
     } catch (error) {
       console.error('Erro no login com Google:', error);
-      
-      if (error.code === 'auth/popup-closed-by-user') {
-        setErrorType('info');
-        setError('Login cancelado');
-        setErrorDetails('Você fechou a janela de login do Google.');
-      } else if (error.code === 'auth/popup-blocked') {
-        setErrorType('warning');
-        setError('Popup bloqueado');
-        setErrorDetails('Permita popups para este site ou tente novamente.');
-      } else {
-        setErrorType('error');
-        setError('Erro no login com Google');
-        setErrorDetails('Não foi possível fazer login com Google. Tente novamente mais tarde.');
-      }
-    } finally {
-      setLoading(false);
+      setErrorType('error');
+      setError('Erro no login com Google');
+      setErrorDetails('Não foi possível iniciar o login com Google. Tente novamente mais tarde.');
     }
   };
 

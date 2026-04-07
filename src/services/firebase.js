@@ -1,26 +1,12 @@
 // src/services/firebase.js
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 import { Timestamp } from './timestamp';
-
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA',
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || 'fluted-sentry-305001.firebaseapp.com',
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'fluted-sentry-305001',
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'fluted-sentry-305001.firebasestorage.app',
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '386333037191',
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || '1:386333037191:web:3b944b250bf676e1901e22'
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://egfxmxezuzzttgqjdlef.supabase.co';
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_O626uQ_eaF6kgXzbJhyFBQ_kARzsZNi';
 const supabaseMode = process.env.REACT_APP_SUPABASE_MODE || 'preview';
 
-export const db = getFirestore(firebaseApp);
-export const auth = getAuth(firebaseApp);
+export const db = { provider: 'supabase', url: supabaseUrl };
+export const auth = { provider: 'supabase' };
 
 console.info(`🟢 Supabase conectado em modo: ${supabaseMode}`);
 
