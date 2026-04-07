@@ -106,6 +106,54 @@ const isNullIdConstraint = (error) => {
   return msg.includes('null value in column "id"');
 };
 
+let sqlRpcAvailable = true;
+const sqlEnsureCache = new Set();
+
+const tryExecuteSql = async (sql) => {
+  if (!sqlRpcAvailable) return false;
+
+  try {
+    await request('rpc/execute_sql', {
+      method: 'POST',
+      body: JSON.stringify({ sql })
+    });
+    return true;
+  } catch (error) {
+    sqlRpcAvailable = false;
+    console.warn('⚠️ RPC execute_sql indisponível para auto-criação de schema.', error);
+    return false;
+  }
+};
+
+const ensureTableAndColumn = async (tableName, columnName = null) => {
+  const cacheKey = `${tableName}:${columnName || '*'}`;
+  if (sqlEnsureCache.has(cacheKey)) return true;
+
+  const tableSql = `
+    create extension if not exists "pgcrypto";
+    create table if not exists public."${tableName}" (
+      "id" text primary key,
+      "createdAt" timestamptz default now(),
+      "updatedAt" timestamptz default now()
+    );
+  `;
+
+  const tableOk = await tryExecuteSql(tableSql);
+  if (!tableOk) return false;
+
+  if (columnName) {
+    const columnSql = `
+      alter table public."${tableName}"
+      add column if not exists "${columnName}" text;
+    `;
+    const columnOk = await tryExecuteSql(columnSql);
+    if (!columnOk) return false;
+  }
+
+  sqlEnsureCache.add(cacheKey);
+  return true;
+};
+
 const missingColumnsCache = new Map();
 
 const requestWithColumnFallback = async (tableName, makeCall, initialPayload) => {
@@ -126,6 +174,12 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
 
       if (!missingColumn || !(missingColumn in payload) || removedColumns.has(missingColumn)) {
         throw error;
+      }
+
+      const ensured = await ensureTableAndColumn(tableName, missingColumn);
+      if (ensured) {
+        console.log(`🛠️ Campo ${tableName}.${missingColumn} criado automaticamente.`);
+        continue;
       }
 
       removedColumns.add(missingColumn);
@@ -214,6 +268,15 @@ export const firebaseService = {
       return inserted?.[0]?.id || fallbackId;
     } catch (error) {
       if (isMissingTableError(error)) {
+        const ensured = await ensureTableAndColumn(collectionName);
+        if (ensured) {
+          const inserted = await requestWithColumnFallback(
+            collectionName,
+            (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+            { ...payload, id: payload.id || fallbackId }
+          );
+          return inserted?.[0]?.id || fallbackId;
+        }
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Insert ignorado.`);
         return fallbackId;
       }
@@ -248,6 +311,19 @@ export const firebaseService = {
       return upserted?.[0]?.id || id;
     } catch (error) {
       if (isMissingTableError(error)) {
+        const ensured = await ensureTableAndColumn(collectionName);
+        if (ensured) {
+          const upserted = await requestWithColumnFallback(
+            collectionName,
+            (safePayload) => request(collectionName, {
+              method: 'POST',
+              headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+              body: JSON.stringify(safePayload)
+            }),
+            payload
+          );
+          return upserted?.[0]?.id || id;
+        }
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Upsert ignorado.`);
         return id;
       }
@@ -267,6 +343,15 @@ export const firebaseService = {
       return id;
     } catch (error) {
       if (isMissingTableError(error)) {
+        const ensured = await ensureTableAndColumn(collectionName);
+        if (ensured) {
+          await requestWithColumnFallback(
+            collectionName,
+            (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+            payload
+          );
+          return id;
+        }
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Update ignorado.`);
         return id;
       }
@@ -280,6 +365,11 @@ export const firebaseService = {
       return id;
     } catch (error) {
       if (isMissingTableError(error)) {
+        const ensured = await ensureTableAndColumn(collectionName);
+        if (ensured) {
+          await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
+          return id;
+        }
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Delete ignorado.`);
         return id;
       }
