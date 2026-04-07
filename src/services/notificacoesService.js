@@ -9,14 +9,14 @@ export const notificacoesService = {
       
       const notificacoes = await firebaseService.query('notificacoes', [
         { field: 'usuarioId', operator: '==', value: usuarioId }
-      ], 'data');
+      ]);
       
       console.log('✅ Notificações encontradas:', notificacoes.length);
       
       // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoes.sort((a, b) => {
-        const dateA = a.data ? new Date(a.data) : new Date(0);
-        const dateB = b.data ? new Date(b.data) : new Date(0);
+        const dateA = new Date(a.data || a.createdAt || 0);
+        const dateB = new Date(b.data || b.createdAt || 0);
         return dateB - dateA;
       });
       
