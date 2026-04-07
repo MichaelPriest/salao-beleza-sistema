@@ -302,6 +302,80 @@ export const firebaseService = {
 
   generateId: () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
 
+
+  ensureTables: async () => {
+    const createTablesSql = `
+      create extension if not exists "pgcrypto";
+
+      create table if not exists public.clientes (
+        id text primary key,
+        nome text,
+        email text,
+        telefone text,
+        cpf text,
+        status text,
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.auditoria (
+        id uuid primary key default gen_random_uuid(),
+        acao text,
+        usuario text,
+        usuarioid text,
+        detalhes text,
+        data timestamptz default now(),
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.logs (
+        id uuid primary key default gen_random_uuid(),
+        nivel text,
+        mensagem text,
+        usuarioid text,
+        usuarionome text,
+        timestamp timestamptz default now(),
+        data timestamptz default now(),
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.notificacoes (
+        id uuid primary key default gen_random_uuid(),
+        usuarioid text,
+        titulo text,
+        mensagem text,
+        lida boolean default false,
+        data timestamptz default now(),
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.disponibilidades (
+        id uuid primary key default gen_random_uuid(),
+        profissionalid text,
+        data date,
+        horario text,
+        status text,
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+    `;
+
+    try {
+      await request('rpc/execute_sql', {
+        method: 'POST',
+        body: JSON.stringify({ sql: createTablesSql })
+      });
+      console.log('✅ Tabelas base garantidas no Supabase');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Não foi possível criar tabelas automaticamente (rpc/execute_sql indisponível). Execute o SQL manualmente no Supabase.', error);
+      return false;
+    }
+  },
+
   log: async (nivel, mensagem, dados = {}) => {
     try {
       const usuarioStr = localStorage.getItem('usuario');

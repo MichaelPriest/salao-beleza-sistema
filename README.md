@@ -76,5 +76,10 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
    cp .env.preview .env.local
    ```
 2. Inicie o projeto normalmente com `npm start`.
+3. (Opcional) tente criar as tabelas base automaticamente:
+   ```bash
+   npm run criar-tabelas-supabase
+   ```
+   > Se o projeto não tiver RPC `execute_sql`, execute o SQL manualmente no Supabase SQL Editor.
 
 A camada de dados e autenticação foi migrada para Supabase (`src/services/firebase.js` + `src/services/supabaseAuth.js`), removendo dependência de Firebase no código-fonte.
