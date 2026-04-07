@@ -100,6 +100,12 @@ const extractMissingColumn = (error) => {
   return match ? match[1] : null;
 };
 
+
+const isNullIdConstraint = (error) => {
+  const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
+  return msg.includes('null value in column "id"');
+};
+
 const requestWithColumnFallback = async (makeCall, initialPayload) => {
   let payload = { ...initialPayload };
   const removedColumns = new Set();
@@ -187,11 +193,25 @@ export const firebaseService = {
 
   add: async (collectionName, data) => {
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
-    const inserted = await requestWithColumnFallback(
-      (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
-      payload
-    );
-    return inserted?.[0]?.id;
+
+    try {
+      const inserted = await requestWithColumnFallback(
+        (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+        payload
+      );
+      return inserted?.[0]?.id;
+    } catch (error) {
+      if (isNullIdConstraint(error)) {
+        const payloadComId = { ...payload, id: data?.id || firebaseService.generateId() };
+        const inserted = await requestWithColumnFallback(
+          (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+          payloadComId
+        );
+        return inserted?.[0]?.id;
+      }
+
+      throw error;
+    }
   },
 
   set: async (collectionName, id, data) => {
