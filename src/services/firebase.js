@@ -106,8 +106,16 @@ const isNullIdConstraint = (error) => {
   return msg.includes('null value in column "id"');
 };
 
-const requestWithColumnFallback = async (makeCall, initialPayload) => {
+const missingColumnsCache = new Map();
+
+const requestWithColumnFallback = async (tableName, makeCall, initialPayload) => {
+  const cachedColumns = missingColumnsCache.get(tableName) || new Set();
   let payload = { ...initialPayload };
+
+  cachedColumns.forEach((column) => {
+    if (column in payload) delete payload[column];
+  });
+
   const removedColumns = new Set();
 
   while (true) {
@@ -121,6 +129,8 @@ const requestWithColumnFallback = async (makeCall, initialPayload) => {
       }
 
       removedColumns.add(missingColumn);
+      cachedColumns.add(missingColumn);
+      missingColumnsCache.set(tableName, cachedColumns);
       const { [missingColumn]: _removed, ...nextPayload } = payload;
       payload = nextPayload;
 
@@ -196,6 +206,7 @@ export const firebaseService = {
 
     try {
       const inserted = await requestWithColumnFallback(
+        collectionName,
         (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
         payload
       );
@@ -204,6 +215,7 @@ export const firebaseService = {
       if (isNullIdConstraint(error)) {
         const payloadComId = { ...payload, id: data?.id || firebaseService.generateId() };
         const inserted = await requestWithColumnFallback(
+          collectionName,
           (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
           payloadComId
         );
@@ -217,6 +229,7 @@ export const firebaseService = {
   set: async (collectionName, id, data) => {
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
     const upserted = await requestWithColumnFallback(
+      collectionName,
       (safePayload) => request(collectionName, {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -230,6 +243,7 @@ export const firebaseService = {
   update: async (collectionName, id, data) => {
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
     await requestWithColumnFallback(
+      collectionName,
       (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
       payload
     );
