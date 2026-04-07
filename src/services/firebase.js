@@ -89,13 +89,13 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
 
 
 const isMissingTableError = (error) => {
-  const msg = String(error?.details?.message || error?.message || '');
+  const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
   return msg.includes('Could not find the table') || msg.includes('schema cache');
 };
 
 
 const extractMissingColumn = (error) => {
-  const msg = String(error?.details?.message || error?.message || '');
+  const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
   const match = msg.match(/Could not find the '([^']+)' column/);
   return match ? match[1] : null;
 };
@@ -144,7 +144,7 @@ const request = async (path, options = {}) => {
   }
 
   if (!response.ok) {
-    const error = new Error(body?.message || 'Erro ao comunicar com Supabase');
+    const error = new Error(body?.message || body?.msg || 'Erro ao comunicar com Supabase');
     error.details = body;
     throw error;
   }
