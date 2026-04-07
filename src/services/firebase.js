@@ -212,6 +212,11 @@ export const firebaseService = {
       );
       return inserted?.[0]?.id;
     } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Insert ignorado.`);
+        return null;
+      }
+
       if (isNullIdConstraint(error)) {
         const payloadComId = { ...payload, id: data?.id || firebaseService.generateId() };
         const inserted = await requestWithColumnFallback(
@@ -228,31 +233,57 @@ export const firebaseService = {
 
   set: async (collectionName, id, data) => {
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
-    const upserted = await requestWithColumnFallback(
-      collectionName,
-      (safePayload) => request(collectionName, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify(safePayload)
-      }),
-      payload
-    );
-    return upserted?.[0]?.id || id;
+
+    try {
+      const upserted = await requestWithColumnFallback(
+        collectionName,
+        (safePayload) => request(collectionName, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(safePayload)
+        }),
+        payload
+      );
+      return upserted?.[0]?.id || id;
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Upsert ignorado.`);
+        return id;
+      }
+      throw error;
+    }
   },
 
   update: async (collectionName, id, data) => {
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
-    await requestWithColumnFallback(
-      collectionName,
-      (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
-      payload
-    );
-    return id;
+
+    try {
+      await requestWithColumnFallback(
+        collectionName,
+        (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+        payload
+      );
+      return id;
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Update ignorado.`);
+        return id;
+      }
+      throw error;
+    }
   },
 
   delete: async (collectionName, id) => {
-    await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
-    return id;
+    try {
+      await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
+      return id;
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Delete ignorado.`);
+        return id;
+      }
+      throw error;
+    }
   },
 
   query: async (collectionName, conditions = [], orderByField = null) => {
