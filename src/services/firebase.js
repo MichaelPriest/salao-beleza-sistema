@@ -191,6 +191,7 @@ const ensureTableAndColumn = async (tableName, columnName = null) => {
 const missingColumnsCache = new Map();
 const writeErrorCount = new Map();
 const writeDisabledTables = new Set();
+const immediateDisableTables = new Set(['logs', 'auditoria']);
 
 const shouldDisableWrite = (error) => [400, 401, 403].includes(error?.status);
 
@@ -199,8 +200,9 @@ const registerWriteError = (tableName, error) => {
 
   const next = (writeErrorCount.get(tableName) || 0) + 1;
   writeErrorCount.set(tableName, next);
+  const disableAfter = immediateDisableTables.has(tableName) ? 1 : 3;
 
-  if (next >= 3) {
+  if (next >= disableAfter) {
     writeDisabledTables.add(tableName);
     console.warn(`⚠️ Escritas desativadas para tabela ${tableName} após ${next} erros HTTP ${error.status}.`);
     return true;
@@ -227,6 +229,15 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
 
       if (!missingColumn || !(missingColumn in payload) || removedColumns.has(missingColumn)) {
         throw error;
+      }
+
+      const remapCandidates = toFieldCandidates(missingColumn);
+      const remapTarget = remapCandidates.find((candidate) => candidate !== missingColumn && !(candidate in payload));
+      if (remapTarget) {
+        const { [missingColumn]: remapValue, ...nextPayload } = payload;
+        payload = { ...nextPayload, [remapTarget]: remapValue };
+        console.warn(`⚠️ Campo ajustado automaticamente no payload: ${missingColumn} -> ${remapTarget}.`);
+        continue;
       }
 
       const ensured = await ensureTableAndColumn(tableName, missingColumn);
@@ -259,6 +270,12 @@ const remapQueryField = (conditions = [], orderByField = null, sourceField, targ
 };
 
 const normalizeFieldName = (field = '') => String(field).replace(/_/g, '').toLowerCase();
+const toSnakeCase = (field = '') => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+const toFieldCandidates = (field = '') => {
+  const lower = String(field).toLowerCase();
+  const snake = toSnakeCase(field).toLowerCase();
+  return [...new Set([lower, snake])].filter(Boolean);
+};
 
 const request = async (path, options = {}) => {
   const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
@@ -532,12 +549,22 @@ export const firebaseService = {
         const sourceField = sourceCondition?.field
           || (orderByField && normalizeFieldName(orderByField) === normalizedMissing ? orderByField : null);
 
-        if (sourceField && sourceField !== missingColumn) {
-          const { nextConditions, nextOrderByField } = remapQueryField(conditions, orderByField, sourceField, missingColumn);
-          const retriedQuery = buildQueryString(nextConditions, nextOrderByField);
-          const retriedData = await request(`${collectionName}?${retriedQuery}`, { method: 'GET' });
-          console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${missingColumn}.`);
-          return (retriedData || []).map(normalizeRow);
+        if (sourceField) {
+          const retryTargets = sourceField === missingColumn ? toFieldCandidates(sourceField) : [missingColumn];
+
+          for (const retryField of retryTargets) {
+            if (!retryField || retryField === sourceField) continue;
+
+            try {
+              const { nextConditions, nextOrderByField } = remapQueryField(conditions, orderByField, sourceField, retryField);
+              const retriedQuery = buildQueryString(nextConditions, nextOrderByField);
+              const retriedData = await request(`${collectionName}?${retriedQuery}`, { method: 'GET' });
+              console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${retryField}.`);
+              return (retriedData || []).map(normalizeRow);
+            } catch (_retryError) {
+              // tenta próximo alias
+            }
+          }
         }
       }
 
