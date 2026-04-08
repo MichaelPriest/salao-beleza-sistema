@@ -29,10 +29,34 @@ const normalizeRow = (row) => {
   if (!row || typeof row !== 'object') return row;
 
   const normalized = { ...row };
+  const legacyAliases = {
+    profissionalid: 'profissionalId',
+    createdat: 'createdAt',
+    updatedat: 'updatedAt',
+    usuarioid: 'usuarioId',
+    usuarionome: 'usuarioNome'
+  };
+
+  Object.entries(legacyAliases).forEach(([source, target]) => {
+    if (normalized[source] !== undefined && normalized[target] === undefined) {
+      normalized[target] = normalized[source];
+    }
+  });
 
   Object.entries(normalized).forEach(([key, value]) => {
+    if (key.includes('_')) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (normalized[camelKey] === undefined) {
+        normalized[camelKey] = value;
+      }
+    }
+
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
       normalized[key] = Timestamp.fromDate(new Date(value));
+      if (key.includes('_')) {
+        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+        normalized[camelKey] = normalized[key];
+      }
     }
   });
 
