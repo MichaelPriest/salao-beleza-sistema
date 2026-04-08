@@ -220,6 +220,28 @@ create table if not exists public.configuracoes (
   data jsonb default '{}'::jsonb
 );
 
+create table if not exists public.campanhas (
+  id text primary key,
+  nome text,
+  descricao text,
+  status text,
+  "dataInicio" date,
+  "dataFim" date,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now(),
+  data jsonb default '{}'::jsonb
+);
+
+create table if not exists public.modelos_anamnese (
+  id text primary key,
+  titulo text,
+  descricao text,
+  ativo boolean default true,
+  "createdAt" timestamptz default now(),
+  "updatedAt" timestamptz default now(),
+  data jsonb default '{}'::jsonb
+);
+
 -- Trigger updatedAt para todas tabelas criadas
 DO $$
 DECLARE
@@ -233,7 +255,8 @@ BEGIN
         'clientes','usuarios','profissionais','servicos','agendamentos','atendimentos','disponibilidades','ausencias',
         'comissoes','pagamentos','produtos','categorias_produtos','entradas','fornecedores','compras','movimentacoes_estoque',
         'transacoes','caixa','contas_pagar','contas_receber','pontuacao','resgates_fidelidade','config_fidelidade','recompensas',
-        'indicacoes','cupons','usos_cupons','auditoria','logs','notificacoes','notificacoes_cliente','backups','configuracoes'
+        'indicacoes','cupons','usos_cupons','auditoria','logs','notificacoes','notificacoes_cliente','backups','configuracoes',
+        'campanhas','modelos_anamnese'
       )
   LOOP
     EXECUTE format('drop trigger if exists trg_touch_updated_at on public.%I;', t.tablename);

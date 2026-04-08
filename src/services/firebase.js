@@ -170,6 +170,25 @@ const ensureTableAndColumn = async (tableName, columnName = null) => {
 };
 
 const missingColumnsCache = new Map();
+const writeErrorCount = new Map();
+const writeDisabledTables = new Set();
+
+const shouldDisableWrite = (error) => [400, 401, 403].includes(error?.status);
+
+const registerWriteError = (tableName, error) => {
+  if (!shouldDisableWrite(error)) return false;
+
+  const next = (writeErrorCount.get(tableName) || 0) + 1;
+  writeErrorCount.set(tableName, next);
+
+  if (next >= 3) {
+    writeDisabledTables.add(tableName);
+    console.warn(`⚠️ Escritas desativadas para tabela ${tableName} após ${next} erros HTTP ${error.status}.`);
+    return true;
+  }
+
+  return false;
+};
 
 const requestWithColumnFallback = async (tableName, makeCall, initialPayload) => {
   const cachedColumns = missingColumnsCache.get(tableName) || new Set();
@@ -275,6 +294,10 @@ export const firebaseService = {
     const fallbackId = data?.id || firebaseService.generateId();
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
 
+    if (writeDisabledTables.has(collectionName)) {
+      return fallbackId;
+    }
+
     try {
       const inserted = await requestWithColumnFallback(
         collectionName,
@@ -307,12 +330,17 @@ export const firebaseService = {
         return inserted?.[0]?.id || fallbackId;
       }
 
+      registerWriteError(collectionName, error);
       throw error;
     }
   },
 
   set: async (collectionName, id, data) => {
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
+
+    if (writeDisabledTables.has(collectionName)) {
+      return id;
+    }
 
     try {
       const upserted = await requestWithColumnFallback(
@@ -343,12 +371,17 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Upsert ignorado.`);
         return id;
       }
+      registerWriteError(collectionName, error);
       throw error;
     }
   },
 
   update: async (collectionName, id, data) => {
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
+
+    if (writeDisabledTables.has(collectionName)) {
+      return id;
+    }
 
     try {
       await requestWithColumnFallback(
@@ -371,11 +404,16 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Update ignorado.`);
         return id;
       }
+      registerWriteError(collectionName, error);
       throw error;
     }
   },
 
   delete: async (collectionName, id) => {
+    if (writeDisabledTables.has(collectionName)) {
+      return id;
+    }
+
     try {
       await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
       return id;
@@ -389,6 +427,7 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Delete ignorado.`);
         return id;
       }
+      registerWriteError(collectionName, error);
       throw error;
     }
   },
@@ -465,6 +504,26 @@ export const firebaseService = {
         data date,
         horario text,
         status text,
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.campanhas (
+        id uuid primary key default gen_random_uuid(),
+        nome text,
+        descricao text,
+        status text,
+        data_inicio date,
+        data_fim date,
+        createdat timestamptz default now(),
+        updatedat timestamptz default now()
+      );
+
+      create table if not exists public.modelos_anamnese (
+        id uuid primary key default gen_random_uuid(),
+        titulo text,
+        descricao text,
+        ativo boolean default true,
         createdat timestamptz default now(),
         updatedat timestamptz default now()
       );
