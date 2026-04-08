@@ -371,7 +371,11 @@ export const firebaseService = {
         return inserted?.[0]?.id || fallbackId;
       }
 
-      registerWriteError(collectionName, error);
+      const disabled = registerWriteError(collectionName, error);
+      if (disabled || writeDisabledTables.has(collectionName)) {
+        console.warn(`⚠️ Insert ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+        return fallbackId;
+      }
       throw error;
     }
   },
@@ -429,7 +433,11 @@ export const firebaseService = {
         return upserted?.[0]?.id || id;
       }
 
-      registerWriteError(collectionName, error);
+      const disabled = registerWriteError(collectionName, error);
+      if (disabled || writeDisabledTables.has(collectionName)) {
+        console.warn(`⚠️ Upsert ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+        return id;
+      }
       throw error;
     }
   },
@@ -475,7 +483,11 @@ export const firebaseService = {
         return id;
       }
 
-      registerWriteError(collectionName, error);
+      const disabled = registerWriteError(collectionName, error);
+      if (disabled || writeDisabledTables.has(collectionName)) {
+        console.warn(`⚠️ Update ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+        return id;
+      }
       throw error;
     }
   },
@@ -498,7 +510,11 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Delete ignorado.`);
         return id;
       }
-      registerWriteError(collectionName, error);
+      const disabled = registerWriteError(collectionName, error);
+      if (disabled || writeDisabledTables.has(collectionName)) {
+        console.warn(`⚠️ Delete ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+        return id;
+      }
       throw error;
     }
   },
