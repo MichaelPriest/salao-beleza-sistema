@@ -75,7 +75,10 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
     .forEach(({ field, operator = '==', value }) => {
       if (operator === 'in') {
         const values = Array.isArray(value) ? value : [value];
-        params.set(field, `in.(${values.join(',')})`);
+        const formattedValues = values
+          .map((item) => (typeof item === 'string' ? `"${item.replace(/"/g, '\\"')}"` : item))
+          .join(',');
+        params.set(field, `in.(${formattedValues})`);
         return;
       }
 
@@ -96,6 +99,11 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
 };
 
 const normalizeCollectionName = (collectionName = '') => String(collectionName || '').trim().toLowerCase();
+const assertCollectionName = (collectionName = '') => {
+  if (!collectionName) {
+    throw new Error('Nome da coleção/tabela inválido.');
+  }
+};
 
 
 const isMissingTableError = (error) => {
@@ -287,13 +295,21 @@ const toFieldCandidates = (field = '') => {
 };
 
 const request = async (path, options = {}) => {
-  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      ...baseHeaders,
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+      ...options,
+      headers: {
+        ...baseHeaders,
+        ...(options.headers || {})
+      }
+    });
+  } catch (networkError) {
+    const error = new Error(`Falha de rede ao comunicar com Supabase: ${networkError?.message || 'erro desconhecido'}`);
+    error.status = 0;
+    error.details = networkError;
+    throw error;
+  }
 
   let body = null;
   try {
@@ -315,6 +331,7 @@ const request = async (path, options = {}) => {
 export const firebaseService = {
   getAll: async (collectionName) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     try {
       const query = buildQueryString();
       const data = await request(`${tableName}?${query}`, { method: 'GET' });
@@ -330,6 +347,7 @@ export const firebaseService = {
 
   getById: async (collectionName, id) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     try {
       const query = buildQueryString([], null, id);
       const data = await request(`${tableName}?${query}`, {
@@ -349,6 +367,7 @@ export const firebaseService = {
 
   add: async (collectionName, data) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     const fallbackId = data?.id || firebaseService.generateId();
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
 
@@ -415,6 +434,7 @@ export const firebaseService = {
 
   set: async (collectionName, id, data) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
 
     if (writeDisabledTables.has(tableName)) {
@@ -478,6 +498,7 @@ export const firebaseService = {
 
   update: async (collectionName, id, data) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
 
     if (writeDisabledTables.has(tableName)) {
@@ -529,6 +550,7 @@ export const firebaseService = {
 
   delete: async (collectionName, id) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     if (writeDisabledTables.has(tableName)) {
       return id;
     }
@@ -557,6 +579,7 @@ export const firebaseService = {
 
   query: async (collectionName, conditions = [], orderByField = null) => {
     const tableName = normalizeCollectionName(collectionName);
+    assertCollectionName(tableName);
     try {
       const query = buildQueryString(conditions, orderByField);
       const data = await request(`${tableName}?${query}`, { method: 'GET' });
