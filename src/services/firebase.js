@@ -4,6 +4,7 @@ import { Timestamp } from './timestamp';
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://egfxmxezuzzttgqjdlef.supabase.co';
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_O626uQ_eaF6kgXzbJhyFBQ_kARzsZNi';
 const supabaseMode = process.env.REACT_APP_SUPABASE_MODE || 'preview';
+const enableRpcSchemaBootstrap = process.env.REACT_APP_SUPABASE_ENABLE_RPC_SCHEMA === 'true';
 
 export const db = { provider: 'supabase', url: supabaseUrl };
 export const auth = { provider: 'supabase' };
@@ -96,8 +97,16 @@ const isMissingTableError = (error) => {
 
 const extractMissingColumn = (error) => {
   const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
-  const match = msg.match(/Could not find the '([^']+)' column/);
-  return match ? match[1] : null;
+  const postgrestMatch = msg.match(/Could not find the '([^']+)' column/);
+  if (postgrestMatch) return postgrestMatch[1];
+
+  const pgColumnMatch = msg.match(/column "([^"]+)" does not exist/i);
+  if (pgColumnMatch) return pgColumnMatch[1];
+
+  const triggerMatch = msg.match(/record "new" has no field "([^"]+)"/i);
+  if (triggerMatch) return triggerMatch[1];
+
+  return null;
 };
 
 
@@ -106,7 +115,17 @@ const isNullIdConstraint = (error) => {
   return msg.includes('null value in column "id"');
 };
 
-let sqlRpcAvailable = true;
+const extractNullConstraintColumn = (error) => {
+  const msg = String(error?.details?.message || error?.details?.msg || error?.message || '');
+  const match = msg.match(/null value in column "([^"]+)"/i);
+  return match ? match[1] : null;
+};
+
+const requiredColumnDefaults = {
+  pontos_necessarios: 0
+};
+
+let sqlRpcAvailable = enableRpcSchemaBootstrap;
 const sqlEnsureCache = new Set();
 
 const tryExecuteSql = async (sql) => {
@@ -231,6 +250,16 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
   }
 };
 
+const remapQueryField = (conditions = [], orderByField = null, sourceField, targetField) => {
+  const nextConditions = conditions.map((condition) => (
+    condition.field === sourceField ? { ...condition, field: targetField } : condition
+  ));
+  const nextOrderByField = orderByField === sourceField ? targetField : orderByField;
+  return { nextConditions, nextOrderByField };
+};
+
+const normalizeFieldName = (field = '') => String(field).replace(/_/g, '').toLowerCase();
+
 const request = async (path, options = {}) => {
   const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
     ...options,
@@ -330,6 +359,18 @@ export const firebaseService = {
         return inserted?.[0]?.id || fallbackId;
       }
 
+      const nullColumn = extractNullConstraintColumn(error);
+      if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
+        const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
+        const inserted = await requestWithColumnFallback(
+          collectionName,
+          (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+          payloadWithDefault
+        );
+        console.warn(`⚠️ Constraint tratada automaticamente: preenchido ${nullColumn} com valor padrão.`);
+        return inserted?.[0]?.id || fallbackId;
+      }
+
       registerWriteError(collectionName, error);
       throw error;
     }
@@ -371,6 +412,23 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Upsert ignorado.`);
         return id;
       }
+
+      const nullColumn = extractNullConstraintColumn(error);
+      if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
+        const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
+        const upserted = await requestWithColumnFallback(
+          collectionName,
+          (safePayload) => request(collectionName, {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+            body: JSON.stringify(safePayload)
+          }),
+          payloadWithDefault
+        );
+        console.warn(`⚠️ Constraint tratada automaticamente: preenchido ${nullColumn} com valor padrão.`);
+        return upserted?.[0]?.id || id;
+      }
+
       registerWriteError(collectionName, error);
       throw error;
     }
@@ -404,6 +462,19 @@ export const firebaseService = {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Update ignorado.`);
         return id;
       }
+
+      const nullColumn = extractNullConstraintColumn(error);
+      if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
+        const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
+        await requestWithColumnFallback(
+          collectionName,
+          (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+          payloadWithDefault
+        );
+        console.warn(`⚠️ Constraint tratada automaticamente: preenchido ${nullColumn} com valor padrão.`);
+        return id;
+      }
+
       registerWriteError(collectionName, error);
       throw error;
     }
@@ -438,6 +509,22 @@ export const firebaseService = {
       const data = await request(`${collectionName}?${query}`, { method: 'GET' });
       return (data || []).map(normalizeRow);
     } catch (error) {
+      const missingColumn = extractMissingColumn(error);
+      if (missingColumn) {
+        const normalizedMissing = normalizeFieldName(missingColumn);
+        const sourceCondition = conditions.find((c) => normalizeFieldName(c.field) === normalizedMissing);
+        const sourceField = sourceCondition?.field
+          || (orderByField && normalizeFieldName(orderByField) === normalizedMissing ? orderByField : null);
+
+        if (sourceField && sourceField !== missingColumn) {
+          const { nextConditions, nextOrderByField } = remapQueryField(conditions, orderByField, sourceField, missingColumn);
+          const retriedQuery = buildQueryString(nextConditions, nextOrderByField);
+          const retriedData = await request(`${collectionName}?${retriedQuery}`, { method: 'GET' });
+          console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${missingColumn}.`);
+          return (retriedData || []).map(normalizeRow);
+        }
+      }
+
       if (isMissingTableError(error)) {
         console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando lista vazia.`);
         return [];
@@ -530,10 +617,11 @@ export const firebaseService = {
     `;
 
     try {
-      await request('rpc/execute_sql', {
-        method: 'POST',
-        body: JSON.stringify({ sql: createTablesSql })
-      });
+      const ok = await tryExecuteSql(createTablesSql);
+      if (!ok) {
+        console.warn('⚠️ Bootstrap de schema via RPC desativado/indisponível. Execute o SQL manualmente no Supabase.');
+        return false;
+      }
       console.log('✅ Tabelas base garantidas no Supabase');
       return true;
     } catch (error) {
