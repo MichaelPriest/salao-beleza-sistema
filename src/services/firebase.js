@@ -111,6 +111,12 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
         return;
       }
 
+      if (operator === 'array-contains') {
+        const arrayValue = Array.isArray(value) ? value : [value];
+        params.set(field, `cs.${JSON.stringify(arrayValue)}`);
+        return;
+      }
+
       const op = opMap[operator] || 'eq';
       params.set(field, `${op}.${value}`);
     });
@@ -264,6 +270,7 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
   });
 
   const removedColumns = new Set();
+  const ensuredMissingColumns = new Set();
 
   while (true) {
     try {
@@ -271,7 +278,23 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
     } catch (error) {
       const missingColumn = extractMissingColumn(error);
 
-      if (!missingColumn || !(missingColumn in payload) || removedColumns.has(missingColumn)) {
+      if (!missingColumn) {
+        throw error;
+      }
+
+      if (!(missingColumn in payload)) {
+        if (!ensuredMissingColumns.has(missingColumn)) {
+          ensuredMissingColumns.add(missingColumn);
+          const ensured = await ensureTableAndColumn(tableName, missingColumn);
+          if (ensured) {
+            console.warn(`⚠️ Coluna ${tableName}.${missingColumn} criada para compatibilidade de trigger/query.`);
+            continue;
+          }
+        }
+        throw error;
+      }
+
+      if (removedColumns.has(missingColumn)) {
         throw error;
       }
 
