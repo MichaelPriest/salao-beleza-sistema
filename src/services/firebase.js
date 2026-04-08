@@ -1,12 +1,17 @@
 // src/services/firebase.js
 import { Timestamp } from './timestamp';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://egfxmxezuzzttgqjdlef.supabase.co';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_O626uQ_eaF6kgXzbJhyFBQ_kARzsZNi';
 const supabaseMode = process.env.REACT_APP_SUPABASE_MODE || 'preview';
+const isProductionMode = supabaseMode === 'production';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || (isProductionMode ? '' : 'https://egfxmxezuzzttgqjdlef.supabase.co');
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || (isProductionMode ? '' : 'sb_publishable_O626uQ_eaF6kgXzbJhyFBQ_kARzsZNi');
 const enableRpcSchemaBootstrap = process.env.REACT_APP_SUPABASE_ENABLE_RPC_SCHEMA === 'true';
 const enableTelemetryWrites = process.env.REACT_APP_SUPABASE_ENABLE_TELEMETRY_WRITES === 'true';
 const shouldSkipTelemetryWrites = supabaseMode === 'preview' && !enableTelemetryWrites;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Configuração Supabase inválida: defina REACT_APP_SUPABASE_URL e REACT_APP_SUPABASE_ANON_KEY.');
+}
 
 export const db = { provider: 'supabase', url: supabaseUrl };
 export const auth = { provider: 'supabase' };
@@ -89,6 +94,8 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
 
   return params.toString();
 };
+
+const normalizeCollectionName = (collectionName = '') => String(collectionName || '').trim().toLowerCase();
 
 
 const isMissingTableError = (error) => {
@@ -307,13 +314,14 @@ const request = async (path, options = {}) => {
 
 export const firebaseService = {
   getAll: async (collectionName) => {
+    const tableName = normalizeCollectionName(collectionName);
     try {
       const query = buildQueryString();
-      const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+      const data = await request(`${tableName}?${query}`, { method: 'GET' });
       return (data || []).map(normalizeRow);
     } catch (error) {
       if (isMissingTableError(error)) {
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando lista vazia.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Retornando lista vazia.`);
         return [];
       }
       throw error;
@@ -321,9 +329,10 @@ export const firebaseService = {
   },
 
   getById: async (collectionName, id) => {
+    const tableName = normalizeCollectionName(collectionName);
     try {
       const query = buildQueryString([], null, id);
-      const data = await request(`${collectionName}?${query}`, {
+      const data = await request(`${tableName}?${query}`, {
         method: 'GET',
         headers: { Accept: 'application/vnd.pgrst.object+json' }
       }).catch(() => null);
@@ -331,7 +340,7 @@ export const firebaseService = {
       return data ? normalizeRow(data) : null;
     } catch (error) {
       if (isMissingTableError(error)) {
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando null.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Retornando null.`);
         return null;
       }
       throw error;
@@ -339,44 +348,45 @@ export const firebaseService = {
   },
 
   add: async (collectionName, data) => {
+    const tableName = normalizeCollectionName(collectionName);
     const fallbackId = data?.id || firebaseService.generateId();
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
 
-    if (shouldSkipTelemetryWrites && immediateDisableTables.has(collectionName)) {
+    if (shouldSkipTelemetryWrites && immediateDisableTables.has(tableName)) {
       return fallbackId;
     }
 
-    if (writeDisabledTables.has(collectionName)) {
+    if (writeDisabledTables.has(tableName)) {
       return fallbackId;
     }
 
     try {
       const inserted = await requestWithColumnFallback(
-        collectionName,
-        (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+        tableName,
+        (safePayload) => request(tableName, { method: 'POST', body: JSON.stringify(safePayload) }),
         payload
       );
       return inserted?.[0]?.id || fallbackId;
     } catch (error) {
       if (isMissingTableError(error)) {
-        const ensured = await ensureTableAndColumn(collectionName);
+        const ensured = await ensureTableAndColumn(tableName);
         if (ensured) {
           const inserted = await requestWithColumnFallback(
-            collectionName,
-            (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+            tableName,
+            (safePayload) => request(tableName, { method: 'POST', body: JSON.stringify(safePayload) }),
             { ...payload, id: payload.id || fallbackId }
           );
           return inserted?.[0]?.id || fallbackId;
         }
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Insert ignorado.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Insert ignorado.`);
         return fallbackId;
       }
 
       if (isNullIdConstraint(error)) {
         const payloadComId = { ...payload, id: fallbackId };
         const inserted = await requestWithColumnFallback(
-          collectionName,
-          (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+          tableName,
+          (safePayload) => request(tableName, { method: 'POST', body: JSON.stringify(safePayload) }),
           payloadComId
         );
         return inserted?.[0]?.id || fallbackId;
@@ -386,17 +396,17 @@ export const firebaseService = {
       if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
         const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
         const inserted = await requestWithColumnFallback(
-          collectionName,
-          (safePayload) => request(collectionName, { method: 'POST', body: JSON.stringify(safePayload) }),
+          tableName,
+          (safePayload) => request(tableName, { method: 'POST', body: JSON.stringify(safePayload) }),
           payloadWithDefault
         );
         console.warn(`⚠️ Constraint tratada automaticamente: preenchido ${nullColumn} com valor padrão.`);
         return inserted?.[0]?.id || fallbackId;
       }
 
-      const disabled = registerWriteError(collectionName, error);
-      if (disabled || writeDisabledTables.has(collectionName)) {
-        console.warn(`⚠️ Insert ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+      const disabled = registerWriteError(tableName, error);
+      if (disabled || writeDisabledTables.has(tableName)) {
+        console.warn(`⚠️ Insert ignorado para ${tableName} após falhas recorrentes de escrita.`);
         return fallbackId;
       }
       throw error;
@@ -404,16 +414,17 @@ export const firebaseService = {
   },
 
   set: async (collectionName, id, data) => {
+    const tableName = normalizeCollectionName(collectionName);
     const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
 
-    if (writeDisabledTables.has(collectionName)) {
+    if (writeDisabledTables.has(tableName)) {
       return id;
     }
 
     try {
       const upserted = await requestWithColumnFallback(
-        collectionName,
-        (safePayload) => request(collectionName, {
+        tableName,
+        (safePayload) => request(tableName, {
           method: 'POST',
           headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
           body: JSON.stringify(safePayload)
@@ -423,11 +434,11 @@ export const firebaseService = {
       return upserted?.[0]?.id || id;
     } catch (error) {
       if (isMissingTableError(error)) {
-        const ensured = await ensureTableAndColumn(collectionName);
+        const ensured = await ensureTableAndColumn(tableName);
         if (ensured) {
           const upserted = await requestWithColumnFallback(
-            collectionName,
-            (safePayload) => request(collectionName, {
+            tableName,
+            (safePayload) => request(tableName, {
               method: 'POST',
               headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
               body: JSON.stringify(safePayload)
@@ -436,7 +447,7 @@ export const firebaseService = {
           );
           return upserted?.[0]?.id || id;
         }
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Upsert ignorado.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Upsert ignorado.`);
         return id;
       }
 
@@ -444,8 +455,8 @@ export const firebaseService = {
       if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
         const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
         const upserted = await requestWithColumnFallback(
-          collectionName,
-          (safePayload) => request(collectionName, {
+          tableName,
+          (safePayload) => request(tableName, {
             method: 'POST',
             headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
             body: JSON.stringify(safePayload)
@@ -456,9 +467,9 @@ export const firebaseService = {
         return upserted?.[0]?.id || id;
       }
 
-      const disabled = registerWriteError(collectionName, error);
-      if (disabled || writeDisabledTables.has(collectionName)) {
-        console.warn(`⚠️ Upsert ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+      const disabled = registerWriteError(tableName, error);
+      if (disabled || writeDisabledTables.has(tableName)) {
+        console.warn(`⚠️ Upsert ignorado para ${tableName} após falhas recorrentes de escrita.`);
         return id;
       }
       throw error;
@@ -466,31 +477,32 @@ export const firebaseService = {
   },
 
   update: async (collectionName, id, data) => {
+    const tableName = normalizeCollectionName(collectionName);
     const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
 
-    if (writeDisabledTables.has(collectionName)) {
+    if (writeDisabledTables.has(tableName)) {
       return id;
     }
 
     try {
       await requestWithColumnFallback(
-        collectionName,
-        (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+        tableName,
+        (safePayload) => request(`${tableName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
         payload
       );
       return id;
     } catch (error) {
       if (isMissingTableError(error)) {
-        const ensured = await ensureTableAndColumn(collectionName);
+        const ensured = await ensureTableAndColumn(tableName);
         if (ensured) {
           await requestWithColumnFallback(
-            collectionName,
-            (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+            tableName,
+            (safePayload) => request(`${tableName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
             payload
           );
           return id;
         }
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Update ignorado.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Update ignorado.`);
         return id;
       }
 
@@ -498,17 +510,17 @@ export const firebaseService = {
       if (nullColumn && requiredColumnDefaults[nullColumn] !== undefined) {
         const payloadWithDefault = { ...payload, [nullColumn]: requiredColumnDefaults[nullColumn] };
         await requestWithColumnFallback(
-          collectionName,
-          (safePayload) => request(`${collectionName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+          tableName,
+          (safePayload) => request(`${tableName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
           payloadWithDefault
         );
         console.warn(`⚠️ Constraint tratada automaticamente: preenchido ${nullColumn} com valor padrão.`);
         return id;
       }
 
-      const disabled = registerWriteError(collectionName, error);
-      if (disabled || writeDisabledTables.has(collectionName)) {
-        console.warn(`⚠️ Update ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+      const disabled = registerWriteError(tableName, error);
+      if (disabled || writeDisabledTables.has(tableName)) {
+        console.warn(`⚠️ Update ignorado para ${tableName} após falhas recorrentes de escrita.`);
         return id;
       }
       throw error;
@@ -516,26 +528,27 @@ export const firebaseService = {
   },
 
   delete: async (collectionName, id) => {
-    if (writeDisabledTables.has(collectionName)) {
+    const tableName = normalizeCollectionName(collectionName);
+    if (writeDisabledTables.has(tableName)) {
       return id;
     }
 
     try {
-      await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
+      await request(`${tableName}?id=eq.${id}`, { method: 'DELETE' });
       return id;
     } catch (error) {
       if (isMissingTableError(error)) {
-        const ensured = await ensureTableAndColumn(collectionName);
+        const ensured = await ensureTableAndColumn(tableName);
         if (ensured) {
-          await request(`${collectionName}?id=eq.${id}`, { method: 'DELETE' });
+          await request(`${tableName}?id=eq.${id}`, { method: 'DELETE' });
           return id;
         }
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Delete ignorado.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Delete ignorado.`);
         return id;
       }
-      const disabled = registerWriteError(collectionName, error);
-      if (disabled || writeDisabledTables.has(collectionName)) {
-        console.warn(`⚠️ Delete ignorado para ${collectionName} após falhas recorrentes de escrita.`);
+      const disabled = registerWriteError(tableName, error);
+      if (disabled || writeDisabledTables.has(tableName)) {
+        console.warn(`⚠️ Delete ignorado para ${tableName} após falhas recorrentes de escrita.`);
         return id;
       }
       throw error;
@@ -543,9 +556,10 @@ export const firebaseService = {
   },
 
   query: async (collectionName, conditions = [], orderByField = null) => {
+    const tableName = normalizeCollectionName(collectionName);
     try {
       const query = buildQueryString(conditions, orderByField);
-      const data = await request(`${collectionName}?${query}`, { method: 'GET' });
+      const data = await request(`${tableName}?${query}`, { method: 'GET' });
       return (data || []).map(normalizeRow);
     } catch (error) {
       const missingColumn = extractMissingColumn(error);
@@ -564,7 +578,7 @@ export const firebaseService = {
             try {
               const { nextConditions, nextOrderByField } = remapQueryField(conditions, orderByField, sourceField, retryField);
               const retriedQuery = buildQueryString(nextConditions, nextOrderByField);
-              const retriedData = await request(`${collectionName}?${retriedQuery}`, { method: 'GET' });
+              const retriedData = await request(`${tableName}?${retriedQuery}`, { method: 'GET' });
               console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${retryField}.`);
               return (retriedData || []).map(normalizeRow);
             } catch (_retryError) {
@@ -575,7 +589,7 @@ export const firebaseService = {
       }
 
       if (isMissingTableError(error)) {
-        console.warn(`⚠️ Tabela ausente no Supabase: ${collectionName}. Retornando lista vazia.`);
+        console.warn(`⚠️ Tabela ausente no Supabase: ${tableName}. Retornando lista vazia.`);
         return [];
       }
       throw error;
