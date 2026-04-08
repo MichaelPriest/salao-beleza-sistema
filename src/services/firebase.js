@@ -6,6 +6,7 @@ const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishab
 const supabaseMode = process.env.REACT_APP_SUPABASE_MODE || 'preview';
 const enableRpcSchemaBootstrap = process.env.REACT_APP_SUPABASE_ENABLE_RPC_SCHEMA === 'true';
 const enableTelemetryWrites = process.env.REACT_APP_SUPABASE_ENABLE_TELEMETRY_WRITES === 'true';
+const shouldSkipTelemetryWrites = supabaseMode === 'preview' && !enableTelemetryWrites;
 
 export const db = { provider: 'supabase', url: supabaseUrl };
 export const auth = { provider: 'supabase' };
@@ -341,7 +342,7 @@ export const firebaseService = {
     const fallbackId = data?.id || firebaseService.generateId();
     const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
 
-    if (!enableTelemetryWrites && immediateDisableTables.has(collectionName)) {
+    if (shouldSkipTelemetryWrites && immediateDisableTables.has(collectionName)) {
       return fallbackId;
     }
 
