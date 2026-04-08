@@ -1,6 +1,6 @@
 // src/services/cupomService.js
 import { firebaseService } from './firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from './timestamp';
 
 class CupomService {
   

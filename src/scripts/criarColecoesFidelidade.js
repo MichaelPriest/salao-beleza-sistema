@@ -1,6 +1,6 @@
 // src/scripts/criarColecoesFidelidade.js
 import { firebaseService } from '../services/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 
 /**
  * Este script deve ser executado UMA VEZ para criar as coleções necessárias
