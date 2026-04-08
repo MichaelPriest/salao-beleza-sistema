@@ -289,9 +289,30 @@ const remapQueryField = (conditions = [], orderByField = null, sourceField, targ
 const normalizeFieldName = (field = '') => String(field).replace(/_/g, '').toLowerCase();
 const toSnakeCase = (field = '') => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 const toFieldCandidates = (field = '') => {
-  const lower = String(field).toLowerCase();
   const snake = toSnakeCase(field).toLowerCase();
-  return [...new Set([lower, snake])].filter(Boolean);
+  const lower = String(field).toLowerCase();
+  return [...new Set([snake, lower])].filter(Boolean);
+};
+
+const tablePayloadAliases = {
+  disponibilidades: {
+    profissionalId: 'profissional_id'
+  }
+};
+
+const normalizePayloadForTable = (tableName, payload = {}) => {
+  const aliases = tablePayloadAliases[tableName];
+  if (!aliases) return payload;
+
+  const normalized = { ...payload };
+  Object.entries(aliases).forEach(([source, target]) => {
+    if (normalized[source] !== undefined && normalized[target] === undefined) {
+      normalized[target] = normalized[source];
+      delete normalized[source];
+    }
+  });
+
+  return normalized;
 };
 
 const request = async (path, options = {}) => {
@@ -369,7 +390,10 @@ export const firebaseService = {
     const tableName = normalizeCollectionName(collectionName);
     assertCollectionName(tableName);
     const fallbackId = data?.id || firebaseService.generateId();
-    const payload = preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    const payload = normalizePayloadForTable(
+      tableName,
+      preparePayload({ ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() })
+    );
 
     if (shouldSkipTelemetryWrites && immediateDisableTables.has(tableName)) {
       return fallbackId;
@@ -435,7 +459,10 @@ export const firebaseService = {
   set: async (collectionName, id, data) => {
     const tableName = normalizeCollectionName(collectionName);
     assertCollectionName(tableName);
-    const payload = preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() });
+    const payload = normalizePayloadForTable(
+      tableName,
+      preparePayload({ id, ...data, updatedAt: Timestamp.now(), createdAt: data?.createdAt || Timestamp.now() })
+    );
 
     if (writeDisabledTables.has(tableName)) {
       return id;
@@ -499,7 +526,7 @@ export const firebaseService = {
   update: async (collectionName, id, data) => {
     const tableName = normalizeCollectionName(collectionName);
     assertCollectionName(tableName);
-    const payload = preparePayload({ ...data, updatedAt: Timestamp.now() });
+    const payload = normalizePayloadForTable(tableName, preparePayload({ ...data, updatedAt: Timestamp.now() }));
 
     if (writeDisabledTables.has(tableName)) {
       return id;
