@@ -217,9 +217,12 @@ const ensureTableAndColumn = async (tableName, columnName = null) => {
   if (!tableOk) return false;
 
   if (columnName) {
+    const isTimestampColumn = ['createdAt', 'updatedAt', 'createdat', 'updatedat', 'timestamp', 'data']
+      .includes(String(columnName));
+    const columnType = isTimestampColumn ? 'timestamptz' : 'text';
     const columnSql = `
       alter table public."${tableName}"
-      add column if not exists "${columnName}" text;
+      add column if not exists "${columnName}" ${columnType};
     `;
     const columnOk = await tryExecuteSql(columnSql);
     if (!columnOk) return false;
@@ -655,8 +658,11 @@ export const firebaseService = {
               const retriedData = await request(`${tableName}?${retriedQuery}`, { method: 'GET' });
               console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${retryField}.`);
               return (retriedData || []).map(normalizeRow);
-            } catch (_retryError) {
-              // tenta próximo alias
+            } catch (retryError) {
+              const retryMissingColumn = extractMissingColumn(retryError);
+              if (!retryMissingColumn) {
+                throw retryError;
+              }
             }
           }
         }
