@@ -87,6 +87,7 @@ const opMap = {
 };
 
 const buildQueryString = (conditions = [], orderByField = null, singleId = null) => {
+  const asSnakeField = (rawField) => String(rawField || '').trim().replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
   const params = new URLSearchParams();
   params.set('select', '*');
 
@@ -97,32 +98,34 @@ const buildQueryString = (conditions = [], orderByField = null, singleId = null)
   conditions
     .filter(({ value }) => value !== undefined && value !== null)
     .forEach(({ field, operator = '==', value }) => {
+      const normalizedField = typeof field === 'string' ? asSnakeField(field) : field;
+
       if (operator === 'in') {
         const values = Array.isArray(value) ? value : [value];
         const formattedValues = values
           .map((item) => (typeof item === 'string' ? `"${item.replace(/"/g, '\\"')}"` : item))
           .join(',');
-        params.set(field, `in.(${formattedValues})`);
+        params.set(normalizedField, `in.(${formattedValues})`);
         return;
       }
 
       if (operator === 'contains') {
-        params.set(field, `cs.${JSON.stringify(value)}`);
+        params.set(normalizedField, `cs.${JSON.stringify(value)}`);
         return;
       }
 
       if (operator === 'array-contains') {
         const arrayValue = Array.isArray(value) ? value : [value];
-        params.set(field, `cs.${JSON.stringify(arrayValue)}`);
+        params.set(normalizedField, `cs.${JSON.stringify(arrayValue)}`);
         return;
       }
 
       const op = opMap[operator] || 'eq';
-      params.set(field, `${op}.${value}`);
+      params.set(normalizedField, `${op}.${value}`);
     });
 
   if (orderByField) {
-    params.set('order', `${orderByField}.asc`);
+    params.set('order', `${asSnakeField(orderByField)}.asc`);
   }
 
   return params.toString();
@@ -608,6 +611,20 @@ export const firebaseService = {
       );
       return id;
     } catch (error) {
+      const errorMessage = String(error?.details?.message || error?.details?.msg || error?.message || '');
+      if (tableName === 'agendamentos' && errorMessage.includes('record "new" has no field "updatedAt"')) {
+        const ensured = await ensureTableAndColumn(tableName, 'updatedAt', { force: true });
+        if (ensured) {
+          const retryPayload = { ...payload, updatedAt: new Date().toISOString() };
+          await requestWithColumnFallback(
+            tableName,
+            (safePayload) => request(`${tableName}?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(safePayload) }),
+            retryPayload
+          );
+          return id;
+        }
+      }
+
       if (isMissingTableError(error)) {
         const ensured = await ensureTableAndColumn(tableName);
         if (ensured) {
