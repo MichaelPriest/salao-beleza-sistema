@@ -175,8 +175,8 @@ const requiredColumnDefaults = {
 let sqlRpcAvailable = enableRpcSchemaBootstrap;
 const sqlEnsureCache = new Set();
 
-const tryExecuteSql = async (sql) => {
-  if (!sqlRpcAvailable) return false;
+const tryExecuteSql = async (sql, { force = false } = {}) => {
+  if (!sqlRpcAvailable && !force) return false;
 
   const rpcAttempts = [
     { path: 'rpc/execute_sql', body: { sql } },
@@ -206,7 +206,7 @@ const tryExecuteSql = async (sql) => {
   return false;
 };
 
-const ensureTableAndColumn = async (tableName, columnName = null) => {
+const ensureTableAndColumn = async (tableName, columnName = null, options = {}) => {
   const cacheKey = `${tableName}:${columnName || '*'}`;
   if (sqlEnsureCache.has(cacheKey)) return true;
 
@@ -219,7 +219,7 @@ const ensureTableAndColumn = async (tableName, columnName = null) => {
     );
   `;
 
-  const tableOk = await tryExecuteSql(tableSql);
+  const tableOk = await tryExecuteSql(tableSql, options);
   if (!tableOk) return false;
 
   if (columnName) {
@@ -230,7 +230,7 @@ const ensureTableAndColumn = async (tableName, columnName = null) => {
       alter table public."${tableName}"
       add column if not exists "${columnName}" ${columnType};
     `;
-    const columnOk = await tryExecuteSql(columnSql);
+    const columnOk = await tryExecuteSql(columnSql, options);
     if (!columnOk) return false;
   }
 
@@ -285,7 +285,8 @@ const requestWithColumnFallback = async (tableName, makeCall, initialPayload) =>
       if (!(missingColumn in payload)) {
         if (!ensuredMissingColumns.has(missingColumn)) {
           ensuredMissingColumns.add(missingColumn);
-          const ensured = await ensureTableAndColumn(tableName, missingColumn);
+          const forceRpc = ['updatedAt', 'createdAt', 'updatedat', 'createdat'].includes(missingColumn);
+          const ensured = await ensureTableAndColumn(tableName, missingColumn, { force: forceRpc });
           if (ensured) {
             console.warn(`⚠️ Coluna ${tableName}.${missingColumn} criada para compatibilidade de trigger/query.`);
             continue;
@@ -347,6 +348,14 @@ const toFieldCandidates = (field = '') => {
 const tablePayloadAliases = {
   disponibilidades: {
     profissionalId: 'profissional_id'
+  },
+  agendamentos: {
+    updatedAt: 'updatedat',
+    createdAt: 'createdat',
+    servicoId: 'servicoid'
+  },
+  formularios_anamnese: {
+    servicoIds: 'servico_ids'
   }
 };
 
@@ -363,6 +372,15 @@ const normalizePayloadForTable = (tableName, payload = {}) => {
   });
 
   return normalized;
+};
+
+const normalizeConditionsForTable = (tableName, conditions = []) => {
+  const aliases = tablePayloadAliases[tableName];
+  if (!aliases) return conditions;
+  return conditions.map((condition) => {
+    const mappedField = aliases[condition.field] || condition.field;
+    return mappedField === condition.field ? condition : { ...condition, field: mappedField };
+  });
 };
 
 const request = async (path, options = {}) => {
@@ -657,17 +675,21 @@ export const firebaseService = {
   query: async (collectionName, conditions = [], orderByField = null) => {
     const tableName = normalizeCollectionName(collectionName);
     assertCollectionName(tableName);
+    const normalizedConditions = normalizeConditionsForTable(tableName, conditions);
+    const normalizedOrderBy = (tablePayloadAliases[tableName] && tablePayloadAliases[tableName][orderByField])
+      ? tablePayloadAliases[tableName][orderByField]
+      : orderByField;
     try {
-      const query = buildQueryString(conditions, orderByField);
+      const query = buildQueryString(normalizedConditions, normalizedOrderBy);
       const data = await request(`${tableName}?${query}`, { method: 'GET' });
       return (data || []).map(normalizeRow);
     } catch (error) {
       const missingColumn = extractMissingColumn(error);
       if (missingColumn) {
         const normalizedMissing = normalizeFieldName(missingColumn);
-        const sourceCondition = conditions.find((c) => normalizeFieldName(c.field) === normalizedMissing);
+        const sourceCondition = normalizedConditions.find((c) => normalizeFieldName(c.field) === normalizedMissing);
         const sourceField = sourceCondition?.field
-          || (orderByField && normalizeFieldName(orderByField) === normalizedMissing ? orderByField : null);
+          || (normalizedOrderBy && normalizeFieldName(normalizedOrderBy) === normalizedMissing ? normalizedOrderBy : null);
 
         if (sourceField) {
           const retryTargets = sourceField === missingColumn ? toFieldCandidates(sourceField) : [missingColumn];
@@ -676,7 +698,7 @@ export const firebaseService = {
             if (!retryField || retryField === sourceField) continue;
 
             try {
-              const { nextConditions, nextOrderByField } = remapQueryField(conditions, orderByField, sourceField, retryField);
+              const { nextConditions, nextOrderByField } = remapQueryField(normalizedConditions, normalizedOrderBy, sourceField, retryField);
               const retriedQuery = buildQueryString(nextConditions, nextOrderByField);
               const retriedData = await request(`${tableName}?${retriedQuery}`, { method: 'GET' });
               console.warn(`⚠️ Campo de query ajustado automaticamente: ${sourceField} -> ${retryField}.`);
