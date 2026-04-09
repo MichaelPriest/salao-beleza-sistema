@@ -91,7 +91,7 @@ import {
   Legend,
 } from 'recharts';
 import { useFirebase } from '../hooks/useFirebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';

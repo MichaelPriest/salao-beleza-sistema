@@ -100,7 +100,7 @@ import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
 import { usuariosService } from '../services/usuariosService';
 import { auditoriaService } from '../services/auditoriaService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 
 // Importações para PDF e Excel
 import jsPDF from 'jspdf';

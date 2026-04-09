@@ -15,7 +15,7 @@ import {
 import { Email as EmailIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
+import { supabaseAuthService } from '../services/supabaseAuth';
 
 function ClienteRecuperarSenha() {
   const navigate = useNavigate();
@@ -30,12 +30,11 @@ function ClienteRecuperarSenha() {
     setLoading(true);
 
     try {
-      const auth = getAuth();
-      await sendPasswordResetEmail(auth, email);
+      await supabaseAuthService.resetPasswordForEmail(email);
       setEnviado(true);
     } catch (error) {
       console.error('Erro ao enviar email:', error);
-      if (error.code === 'auth/user-not-found') {
+      if (error.message?.toLowerCase().includes('not found')) {
         setError('Email não encontrado');
       } else {
         setError('Erro ao enviar email. Tente novamente.');

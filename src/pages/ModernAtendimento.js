@@ -94,7 +94,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { cupomService } from '../services/cupomService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 
 // Lista de unidades de medida
 const UNIDADES_MEDIDA = [

@@ -127,7 +127,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/timestamp';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'react-hot-toast';
