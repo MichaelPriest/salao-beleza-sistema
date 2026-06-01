@@ -9,6 +9,7 @@ const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || proc
 const AUTH_STORAGE_KEY = 'supabase.auth.session';
 const ACCESS_TOKEN_KEY = 'supabase.access_token';
 const SUPABASE_DOCUMENTS_TABLE = process.env.REACT_APP_SUPABASE_DOCUMENTS_TABLE || 'registros';
+const SUPABASE_USE_COLLECTION_TABLES = process.env.REACT_APP_SUPABASE_USE_COLLECTION_TABLES !== 'false';
 const DEFAULT_CONFIRM_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_CONFIRM_REDIRECT_PATH || '/cliente/login';
 const DEFAULT_RESET_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_RESET_REDIRECT_PATH || '/cliente/recuperar-senha';
 
@@ -147,7 +148,9 @@ const operatorMap = {
 
 const buildQueryString = (collectionName, conditions = [], orderByField = null) => {
   const params = new URLSearchParams({ select: '*' });
-  params.append('collection', `eq.${collectionName}`);
+  if (!SUPABASE_USE_COLLECTION_TABLES) {
+    params.append('collection', `eq.${collectionName}`);
+  }
 
   conditions
     .filter(({ field, value }) => field && value !== undefined && value !== null)
@@ -170,6 +173,29 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
   return params.toString();
 };
 
+const getRestTableName = (collectionName) => SUPABASE_USE_COLLECTION_TABLES ? collectionName : SUPABASE_DOCUMENTS_TABLE;
+
+const getDocumentFilter = (collectionName, id) => {
+  const documentFilter = `document_id=eq.${encodeURIComponent(id)}`;
+  if (SUPABASE_USE_COLLECTION_TABLES) return documentFilter;
+  return `collection=eq.${encodeURIComponent(collectionName)}&${documentFilter}`;
+};
+
+const getUpsertConflict = () => SUPABASE_USE_COLLECTION_TABLES ? 'document_id' : 'collection,document_id';
+
+const buildDocumentPayload = (collectionName, documentId, documentData) => {
+  const payload = {
+    document_id: documentId,
+    data: documentData
+  };
+
+  if (!SUPABASE_USE_COLLECTION_TABLES) {
+    payload.collection = collectionName;
+  }
+
+  return payload;
+};
+
 const toDocument = (row) => row ? { id: row.document_id, ...(row.data || {}) } : null;
 const toDocuments = (rows = []) => rows.map(toDocument).filter(Boolean);
 
@@ -189,7 +215,8 @@ const toAuthUser = (user) => user ? {
 export const supabaseConfig = {
   url: SUPABASE_URL,
   hasPublishableKey: Boolean(SUPABASE_ANON_KEY),
-  documentsTable: SUPABASE_DOCUMENTS_TABLE
+  documentsTable: SUPABASE_DOCUMENTS_TABLE,
+  useCollectionTables: SUPABASE_USE_COLLECTION_TABLES
 };
 
 export const supabase = {
@@ -423,7 +450,7 @@ export const writeBatch = () => {
 export const firebaseService = {
   getAll: async (collectionName) => {
     try {
-      return toDocuments(await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?collection=eq.${encodeURIComponent(collectionName)}&select=*`));
+      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName)}`));
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} no Supabase:`, error);
       throw error;
@@ -432,7 +459,7 @@ export const firebaseService = {
 
   getById: async (collectionName, id) => {
     try {
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?collection=eq.${encodeURIComponent(collectionName)}&document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+      const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${getDocumentFilter(collectionName, id)}&select=*&limit=1`);
       return toDocument(rows?.[0]) || null;
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} por ID no Supabase:`, error);
@@ -449,12 +476,8 @@ export const firebaseService = {
         createdAt: data?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const payload = {
-        collection: collectionName,
-        document_id: documentId,
-        data: documentData
-      };
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}`, {
+      const payload = buildDocumentPayload(collectionName, documentId, documentData);
+      const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}`, {
         method: 'POST',
         body: JSON.stringify(payload)
       });
@@ -475,14 +498,10 @@ export const firebaseService = {
         createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?on_conflict=collection,document_id`, {
+      const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?on_conflict=${getUpsertConflict()}`, {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          collection: collectionName,
-          document_id: id,
-          data: documentData
-        })
+        body: JSON.stringify(buildDocumentPayload(collectionName, id, documentData))
       });
       return toDocument(rows?.[0]) || { id, ...documentData };
     } catch (error) {
@@ -501,14 +520,10 @@ export const firebaseService = {
         createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?on_conflict=collection,document_id`, {
+      const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?on_conflict=${getUpsertConflict()}`, {
         method: 'POST',
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          collection: collectionName,
-          document_id: id,
-          data: documentData
-        })
+        body: JSON.stringify(buildDocumentPayload(collectionName, id, documentData))
       });
       return toDocument(rows?.[0]) || { id, ...documentData };
     } catch (error) {
@@ -519,7 +534,7 @@ export const firebaseService = {
 
   delete: async (collectionName, id) => {
     try {
-      await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?collection=eq.${encodeURIComponent(collectionName)}&document_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${getDocumentFilter(collectionName, id)}`, { method: 'DELETE' });
       return id;
     } catch (error) {
       console.error(`Erro ao excluir de ${collectionName} no Supabase:`, error);
@@ -529,7 +544,7 @@ export const firebaseService = {
 
   query: async (collectionName, conditions = [], orderByField = null) => {
     try {
-      return toDocuments(await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?${buildQueryString(collectionName, conditions, orderByField)}`));
+      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName, conditions, orderByField)}`));
     } catch (error) {
       console.error(`Erro na query de ${collectionName} no Supabase:`, error);
       throw error;

@@ -4,6 +4,7 @@
 const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL || 'https://kvjrerxqwtrxttiiqkgf.supabase.co').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const DOCUMENTS_TABLE = process.env.REACT_APP_SUPABASE_DOCUMENTS_TABLE || process.env.SUPABASE_DOCUMENTS_TABLE || 'registros';
+const USE_COLLECTION_TABLES = process.env.REACT_APP_SUPABASE_USE_COLLECTION_TABLES !== 'false' && process.env.SUPABASE_USE_COLLECTION_TABLES !== 'false';
 
 if (!SUPABASE_KEY) {
   console.error('❌ Configure SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY antes de executar este script.');
@@ -42,9 +43,14 @@ const addDocument = async (collection, document) => {
     updatedAt: now
   };
 
-  const rows = await supabaseFetch(`/rest/v1/${DOCUMENTS_TABLE}`, {
+  const tableName = USE_COLLECTION_TABLES ? collection : DOCUMENTS_TABLE;
+  const payload = USE_COLLECTION_TABLES
+    ? { document_id: documentId, data }
+    : { collection, document_id: documentId, data };
+
+  const rows = await supabaseFetch(`/rest/v1/${tableName}`, {
     method: 'POST',
-    body: JSON.stringify({ collection, document_id: documentId, data })
+    body: JSON.stringify(payload)
   });
 
   return { id: documentId, ...(rows?.[0]?.data || data) };

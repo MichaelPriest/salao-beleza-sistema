@@ -17,15 +17,26 @@ REACT_APP_SUPABASE_URL=https://kvjrerxqwtrxttiiqkgf.supabase.co
 REACT_APP_SUPABASE_PUBLISHABLE_KEY=sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW
 REACT_APP_SUPABASE_CONFIRM_REDIRECT_PATH=/cliente/login
 REACT_APP_SUPABASE_RESET_REDIRECT_PATH=/cliente/recuperar-senha
+REACT_APP_SUPABASE_USE_COLLECTION_TABLES=true
 ```
 
-A camada de dados usa a tabela documental `public.registros`, em que cada antiga coleção do Firebase é armazenada com os campos:
+A camada de dados usa tabelas documentais por coleção no Supabase. Cada tabela possui:
 
-- `collection`: nome da antiga coleção;
 - `document_id`: ID lógico do documento;
-- `data`: JSONB com todos os dados do documento.
+- `data`: JSONB com todos os dados do documento;
+- `created_at` e `updated_at`: auditoria técnica da linha.
 
-Execute a migration `supabase/migrations/20260601143000_create_registros_table.sql` no SQL Editor do Supabase ou pelo Supabase CLI antes de usar o sistema. A chave `sb_secret_...` deve ficar somente em variáveis de ambiente de scripts/servidor, como `SUPABASE_SERVICE_ROLE_KEY`, e nunca deve ser adicionada ao bundle React.
+Execute primeiro `supabase/migrations/20260601143000_create_registros_table.sql` se você já tiver dados no formato genérico antigo. Depois execute `supabase/migrations/20260601170000_create_collection_tables.sql`, que cria todas as tabelas necessárias (`clientes`, `agendamentos`, `servicos`, `usuarios`, etc.) e copia dados existentes de `registros` para as tabelas específicas.
+
+Se quiser manter o modo legado em uma única tabela, configure `REACT_APP_SUPABASE_USE_COLLECTION_TABLES=false`; nesse caso a aplicação volta a usar `public.registros`. A chave `sb_secret_...` deve ficar somente em variáveis de ambiente de scripts/servidor, como `SUPABASE_SERVICE_ROLE_KEY`, e nunca deve ser adicionada ao bundle React.
+
+### SQL das tabelas do sistema
+
+O arquivo `supabase/migrations/20260601170000_create_collection_tables.sql` cria as 43 tabelas usadas pela aplicação:
+
+`agendamentos`, `atendimentos`, `auditoria`, `ausencias`, `avaliacoes`, `backups`, `caixa`, `campanhas`, `categorias_produtos`, `clientes`, `cloud_config`, `comissoes`, `compras`, `conciliacoes`, `config_fidelidade`, `configuracoes`, `contas_pagar`, `contas_receber`, `cupons`, `disponibilidades`, `entradas`, `formularios_anamnese`, `fornecedores`, `indicacoes`, `itens_venda`, `logs`, `logs_anamnese`, `modelos_anamnese`, `movimentacoes_estoque`, `notificacoes`, `notificacoes_cliente`, `orcamentos`, `pagamentos`, `pontuacao`, `produtos`, `profissionais`, `recompensas`, `resgates_fidelidade`, `respostas_anamnese`, `servicos`, `transacoes`, `usos_cupons` e `usuarios`.
+
+Cada tabela recebe índices, trigger de `updated_at`, grants para `anon`/`authenticated` e políticas RLS compatíveis com os fluxos atuais do frontend.
 
 ### Confirmação de email e reset de senha
 
