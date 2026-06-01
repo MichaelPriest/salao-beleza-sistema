@@ -1,5 +1,5 @@
 // src/pages/ClienteRecuperarSenha.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Card,
@@ -12,17 +12,34 @@ import {
   Link,
   InputAdornment,
 } from '@mui/material';
-import { Email as EmailIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Email as EmailIcon, ArrowBack as ArrowBackIcon, Lock as LockIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { getAuth, sendPasswordResetEmail } from '../services/firebase';
+import { Link as RouterLink } from 'react-router-dom';
+import { consumeSupabaseAuthRedirect, getAuth, sendPasswordResetEmail, updatePassword } from '../services/firebase';
 
 function ClienteRecuperarSenha() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const [modoRedefinicao, setModoRedefinicao] = useState(false);
+  const [senhaAlterada, setSenhaAlterada] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const tipo = params.get('type');
+    const token = params.get('access_token');
+
+    if (tipo === 'recovery' && token) {
+      setModoRedefinicao(true);
+      consumeSupabaseAuthRedirect().catch((error) => {
+        console.error('Erro ao validar link de recuperação:', error);
+        setError('Link de recuperação inválido ou expirado. Solicite um novo email.');
+      });
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,11 +52,35 @@ function ClienteRecuperarSenha() {
       setEnviado(true);
     } catch (error) {
       console.error('Erro ao enviar email:', error);
-      if (error.code === 'auth/user-not-found') {
-        setError('Email não encontrado');
-      } else {
-        setError('Erro ao enviar email. Tente novamente.');
-      }
+      setError(error.message || 'Erro ao enviar email. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRedefinirSenha = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (novaSenha.length < 6) {
+      setError('A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (novaSenha !== confirmarSenha) {
+      setError('As senhas não conferem.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updatePassword(getAuth(), novaSenha);
+      setSenhaAlterada(true);
+      setNovaSenha('');
+      setConfirmarSenha('');
+    } catch (error) {
+      console.error('Erro ao redefinir senha:', error);
+      setError(error.message || 'Erro ao redefinir senha. Solicite um novo link e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -76,10 +117,12 @@ function ClienteRecuperarSenha() {
             </Box>
 
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 1, textAlign: 'center' }}>
-              Recuperar Senha
+              {modoRedefinicao ? 'Criar nova senha' : 'Recuperar Senha'}
             </Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mb: 4, textAlign: 'center' }}>
-              Enviaremos um link para redefinir sua senha
+              {modoRedefinicao
+                ? 'Digite uma nova senha para concluir a recuperação'
+                : 'Enviaremos um link para redefinir sua senha'}
             </Typography>
 
             {error && (
@@ -88,9 +131,64 @@ function ClienteRecuperarSenha() {
               </Alert>
             )}
 
-            {enviado ? (
+            {senhaAlterada ? (
               <Alert severity="success" sx={{ mb: 3 }}>
-                Email enviado! Verifique sua caixa de entrada.
+                Senha redefinida com sucesso! Você já pode fazer login com a nova senha.
+              </Alert>
+            ) : modoRedefinicao ? (
+              <form onSubmit={handleRedefinirSenha}>
+                <TextField
+                  fullWidth
+                  label="Nova senha"
+                  type="password"
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  required
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon color="action" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+
+                <TextField
+                  fullWidth
+                  label="Confirmar nova senha"
+                  type="password"
+                  value={confirmarSenha}
+                  onChange={(e) => setConfirmarSenha(e.target.value)}
+                  required
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon color="action" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  size="large"
+                  disabled={loading}
+                  sx={{
+                    mt: 3,
+                    py: 1.5,
+                    background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                  }}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Redefinir senha'}
+                </Button>
+              </form>
+            ) : enviado ? (
+              <Alert severity="success" sx={{ mb: 3 }}>
+                Email enviado! Verifique sua caixa de entrada e clique no link para criar uma nova senha.
               </Alert>
             ) : (
               <form onSubmit={handleSubmit}>

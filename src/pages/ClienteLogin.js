@@ -60,6 +60,7 @@ function ClienteLogin() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
   // 🔥 ESTADOS PARA CADASTRO COMPLEMENTAR APÓS LOGIN GOOGLE
   const [openCadastroComplementar, setOpenCadastroComplementar] = useState(false);
@@ -80,6 +81,15 @@ function ClienteLogin() {
   const [loadingComplementar, setLoadingComplementar] = useState(false);
   const [cpfError, setCpfError] = useState('');
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const redirectType = params.get('type') || window.sessionStorage.getItem('supabase.auth.redirect_type');
+    if (redirectType === 'signup') {
+      setSuccess('Email confirmado com sucesso! Você já pode acessar sua área do cliente.');
+      window.sessionStorage.removeItem('supabase.auth.redirect_type');
+    }
+  }, []);
+
   // 🔥 REDIRECIONAR SE JÁ ESTIVER AUTENTICADO
   useEffect(() => {
     if (isAuthenticated) {
@@ -92,11 +102,13 @@ function ClienteLogin() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
+    setSuccess('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!formData.email || !formData.senha) {
       setError('Preencha todos os campos');
@@ -273,6 +285,12 @@ function ClienteLogin() {
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
                 Login
               </Typography>
+
+              {success && (
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  {success}
+                </Alert>
+              )}
 
               {error && (
                 <Alert severity="error" sx={{ mb: 3 }}>

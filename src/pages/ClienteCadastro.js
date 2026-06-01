@@ -475,7 +475,7 @@ function ClienteCadastro() {
                   Cadastro realizado com sucesso!
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  Você será redirecionado para a página de login em instantes...
+                  Enviamos um email de confirmação. Confirme sua conta e depois faça login.
                 </Typography>
               </>
             ) : (

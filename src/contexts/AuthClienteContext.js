@@ -441,7 +441,7 @@ export const AuthClienteProvider = ({ children }) => {
       
       console.log('✅ AuthClienteProvider - Cliente salvo no Firestore com CPF:', cpfFormatado);
       
-      toast.success('Cadastro realizado com sucesso! Faça o login.');
+      toast.success('Cadastro realizado! Verifique seu email para confirmar a conta.');
       return true;
 
     } catch (error) {

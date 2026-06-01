@@ -9,6 +9,8 @@ const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || proc
 const AUTH_STORAGE_KEY = 'supabase.auth.session';
 const ACCESS_TOKEN_KEY = 'supabase.access_token';
 const SUPABASE_DOCUMENTS_TABLE = process.env.REACT_APP_SUPABASE_DOCUMENTS_TABLE || 'registros';
+const DEFAULT_CONFIRM_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_CONFIRM_REDIRECT_PATH || '/cliente/login';
+const DEFAULT_RESET_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_RESET_REDIRECT_PATH || '/cliente/recuperar-senha';
 
 const ensureSupabaseConfig = () => {
   if (!SUPABASE_URL) {
@@ -45,6 +47,43 @@ const notifyAuthListeners = (user) => {
 };
 
 const getAccessToken = () => getStoredSession()?.access_token || localStorage.getItem(ACCESS_TOKEN_KEY) || SUPABASE_ANON_KEY;
+
+const getRedirectUrl = (path) => {
+  if (typeof window === 'undefined') return undefined;
+  return new URL(path, window.location.origin).toString();
+};
+
+const appendRedirectTo = (endpoint, redirectTo) => {
+  if (!redirectTo) return endpoint;
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return `${endpoint}${separator}redirect_to=${encodeURIComponent(redirectTo)}`;
+};
+
+const buildSessionFromUrl = () => {
+  if (typeof window === 'undefined') return null;
+
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const searchParams = new URLSearchParams(window.location.search);
+  const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+
+  if (!accessToken) return null;
+
+  return {
+    access_token: accessToken,
+    refresh_token: hashParams.get('refresh_token') || searchParams.get('refresh_token'),
+    token_type: hashParams.get('token_type') || searchParams.get('token_type') || 'bearer',
+    expires_in: Number(hashParams.get('expires_in') || searchParams.get('expires_in') || 3600),
+    expires_at: Math.floor(Date.now() / 1000) + Number(hashParams.get('expires_in') || searchParams.get('expires_in') || 3600),
+    type: hashParams.get('type') || searchParams.get('type'),
+    user: null
+  };
+};
+
+const clearAuthParamsFromUrl = () => {
+  if (typeof window === 'undefined') return;
+  const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.search.replace(/[?&](access_token|refresh_token|token_type|expires_in|type)=[^&]*/g, '').replace(/^&/, '?')}`;
+  window.history.replaceState({}, document.title, cleanUrl.replace(/[?&]$/, ''));
+};
 
 const supabaseFetch = async (path, options = {}) => {
   ensureSupabaseConfig();
@@ -134,10 +173,11 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
 const toDocument = (row) => row ? { id: row.document_id, ...(row.data || {}) } : null;
 const toDocuments = (rows = []) => rows.map(toDocument).filter(Boolean);
 
-const authRequest = (endpoint, body) => supabaseFetch(`/auth/v1/${endpoint}`, {
+const authRequest = (endpoint, body, options = {}) => supabaseFetch(`/auth/v1/${endpoint}`, {
   method: 'POST',
   body: JSON.stringify(body),
-  useAnonOnly: true
+  useAnonOnly: true,
+  ...options
 });
 
 const toAuthUser = (user) => user ? {
@@ -187,7 +227,8 @@ export const supabase = {
     resetPasswordForEmail: async (email) => {
       await sendPasswordResetEmail(auth, email);
       return { error: null };
-    }
+    },
+    updateUser: async ({ password }) => ({ data: { user: await updatePassword(auth, password) }, error: null })
   }
 };
 
@@ -240,8 +281,11 @@ export const signInWithEmailAndPassword = async (_auth, email, password) => {
 };
 
 export const createUserWithEmailAndPassword = async (_auth, email, password, metadata = {}) => {
-  const session = await authRequest('signup', { email, password, data: metadata });
-  setStoredSession(session);
+  const redirectTo = getRedirectUrl(DEFAULT_CONFIRM_REDIRECT_PATH);
+  const session = await authRequest(appendRedirectTo('signup', redirectTo), { email, password, data: metadata });
+  if (session?.access_token) {
+    setStoredSession(session);
+  }
   return { user: toAuthUser(session.user) };
 };
 
@@ -258,15 +302,67 @@ export const signOut = async () => {
   }
 };
 
+export const getCurrentAuthUser = async () => {
+  const token = getStoredSession()?.access_token;
+  if (!token) return null;
+  const user = await supabaseFetch('/auth/v1/user', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const session = getStoredSession();
+  if (session) {
+    setStoredSession({ ...session, user });
+  }
+  return toAuthUser(user);
+};
+
+export const consumeSupabaseAuthRedirect = async () => {
+  const sessionFromUrl = buildSessionFromUrl();
+  if (!sessionFromUrl) return getStoredSession();
+
+  setStoredSession(sessionFromUrl);
+  try {
+    if (sessionFromUrl.type && typeof window !== 'undefined') {
+      window.sessionStorage.setItem('supabase.auth.redirect_type', sessionFromUrl.type);
+    }
+    const user = await getCurrentAuthUser();
+    const hydratedSession = { ...getStoredSession(), user };
+    setStoredSession(hydratedSession);
+    return hydratedSession;
+  } finally {
+    clearAuthParamsFromUrl();
+  }
+};
+
 export const onAuthStateChanged = (_auth, callback) => {
   const listener = (user) => callback(toAuthUser(user));
   authListeners.add(listener);
-  setTimeout(() => listener(getStoredSession()?.user || null), 0);
+  setTimeout(async () => {
+    const session = await consumeSupabaseAuthRedirect().catch((error) => {
+      console.error('Erro ao processar retorno de autenticação Supabase:', error);
+      return getStoredSession();
+    });
+    listener(session?.user || null);
+  }, 0);
   return () => authListeners.delete(listener);
 };
 
-export const sendPasswordResetEmail = async (_auth, email) => {
-  await authRequest('recover', { email });
+export const sendPasswordResetEmail = async (_auth, email, actionCodeSettings = {}) => {
+  const redirectTo = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
+  await authRequest(appendRedirectTo('recover', redirectTo), { email });
+};
+
+export const updatePassword = async (_auth, novaSenha) => {
+  const token = getStoredSession()?.access_token;
+  if (!token) throw new Error('Link de redefinição inválido ou expirado. Solicite um novo email de recuperação.');
+  const user = await supabaseFetch('/auth/v1/user', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ password: novaSenha })
+  });
+  const session = getStoredSession();
+  if (session) setStoredSession({ ...session, user });
+  return toAuthUser(user);
 };
 
 export class GoogleAuthProvider {
