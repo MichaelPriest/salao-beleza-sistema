@@ -1,6 +1,6 @@
 // src/services/auditoriaService.js
 import { firebaseService } from './firebase';
-import { Timestamp } from '../services/firebase';
+import { Timestamp } from './firebase';
 
 class AuditoriaService {
   

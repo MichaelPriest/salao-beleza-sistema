@@ -34,28 +34,29 @@ for each row execute function public.set_registros_updated_at();
 alter table public.registros enable row level security;
 
 -- Ajuste estas políticas conforme o nível de segurança desejado do salão.
--- Por padrão, qualquer usuário autenticado pode operar documentos do sistema.
+-- O frontend usa a chave publishable/anon; por isso liberamos anon + authenticated
+-- para manter os fluxos públicos já existentes (cadastro/login de cliente, agenda etc.).
 drop policy if exists "registros_select_authenticated" on public.registros;
 create policy "registros_select_authenticated"
 on public.registros for select
-to authenticated
+to anon, authenticated
 using (true);
 
 drop policy if exists "registros_insert_authenticated" on public.registros;
 create policy "registros_insert_authenticated"
 on public.registros for insert
-to authenticated
+to anon, authenticated
 with check (true);
 
 drop policy if exists "registros_update_authenticated" on public.registros;
 create policy "registros_update_authenticated"
 on public.registros for update
-to authenticated
+to anon, authenticated
 using (true)
 with check (true);
 
 drop policy if exists "registros_delete_authenticated" on public.registros;
 create policy "registros_delete_authenticated"
 on public.registros for delete
-to authenticated
+to anon, authenticated
 using (true);

@@ -1,6 +1,6 @@
 // src/services/resgateFidelidadeService.js
 import { firebaseService } from './firebase';
-import { Timestamp } from '../services/firebase';
+import { Timestamp } from './firebase';
 import { pontuacaoService } from './pontuacaoService';
 
 export const resgateFidelidadeService = {

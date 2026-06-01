@@ -3,7 +3,8 @@
 // mas todas as operações agora usam Supabase (REST + Auth REST API).
 
 const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || 'https://kvjrerxqwtrxttiiqkgf.supabase.co').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_KEY || '';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_KEY || SUPABASE_PUBLISHABLE_KEY;
 
 const AUTH_STORAGE_KEY = 'supabase.auth.session';
 const ACCESS_TOKEN_KEY = 'supabase.access_token';
@@ -14,7 +15,7 @@ const ensureSupabaseConfig = () => {
     throw new Error('REACT_APP_SUPABASE_URL não configurado.');
   }
   if (!SUPABASE_ANON_KEY) {
-    throw new Error('REACT_APP_SUPABASE_ANON_KEY não configurado. Configure a chave anon/public do projeto Supabase.');
+    throw new Error('REACT_APP_SUPABASE_PUBLISHABLE_KEY não configurado. Configure a chave publishable/anon do projeto Supabase.');
   }
 };
 
@@ -147,7 +148,8 @@ const toAuthUser = (user) => user ? {
 
 export const supabaseConfig = {
   url: SUPABASE_URL,
-  hasAnonKey: Boolean(SUPABASE_ANON_KEY)
+  hasPublishableKey: Boolean(SUPABASE_ANON_KEY),
+  documentsTable: SUPABASE_DOCUMENTS_TABLE
 };
 
 export const supabase = {
@@ -273,8 +275,10 @@ export class GoogleAuthProvider {
   }
 }
 
-export const signInWithPopup = async () => {
-  throw new Error('Login com Google deve ser configurado no Supabase OAuth com redirecionamento. Use email e senha ou habilite OAuth no fluxo dedicado.');
+export const signInWithPopup = async (_auth, provider) => {
+  const redirectTo = encodeURIComponent(window.location.href);
+  window.location.assign(`${SUPABASE_URL}/auth/v1/authorize?provider=${provider?.providerId || 'google'}&redirect_to=${redirectTo}`);
+  return new Promise(() => {});
 };
 
 export const collection = (_db, collectionName) => ({ collectionName });
@@ -367,18 +371,24 @@ export const firebaseService = {
 
   set: async (collectionName, id, data) => {
     try {
+      const current = await firebaseService.getById(collectionName, id).catch(() => null);
       const documentData = sanitizeForSupabase({
-        id,
+        ...(current || {}),
         ...data,
-        updatedAt: Timestamp.now(),
-        createdAt: data?.createdAt || Timestamp.now()
+        id,
+        createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?collection=eq.${encodeURIComponent(collectionName)}&document_id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ data: documentData })
+      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?on_conflict=collection,document_id`, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify({
+          collection: collectionName,
+          document_id: id,
+          data: documentData
+        })
       });
-      if (rows?.length) return toDocument(rows[0]);
-      return firebaseService.add(collectionName, documentData);
+      return toDocument(rows?.[0]) || { id, ...documentData };
     } catch (error) {
       console.error(`Erro ao salvar em ${collectionName} no Supabase:`, error);
       throw error;
@@ -392,11 +402,17 @@ export const firebaseService = {
         ...(current || {}),
         ...data,
         id,
+        createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?collection=eq.${encodeURIComponent(collectionName)}&document_id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ data: documentData })
+      const rows = await supabaseFetch(`/rest/v1/${SUPABASE_DOCUMENTS_TABLE}?on_conflict=collection,document_id`, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify({
+          collection: collectionName,
+          document_id: id,
+          data: documentData
+        })
       });
       return toDocument(rows?.[0]) || { id, ...documentData };
     } catch (error) {

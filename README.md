@@ -14,7 +14,7 @@ Antes de iniciar a aplicação, configure a chave pública anon do Supabase no a
 
 ```bash
 REACT_APP_SUPABASE_URL=https://kvjrerxqwtrxttiiqkgf.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=sua-chave-anon-public
+REACT_APP_SUPABASE_PUBLISHABLE_KEY=sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW
 ```
 
 A camada de dados usa a tabela documental `public.registros`, em que cada antiga coleção do Firebase é armazenada com os campos:
@@ -23,7 +23,7 @@ A camada de dados usa a tabela documental `public.registros`, em que cada antiga
 - `document_id`: ID lógico do documento;
 - `data`: JSONB com todos os dados do documento.
 
-Execute a migration `supabase/migrations/20260601143000_create_registros_table.sql` no SQL Editor do Supabase ou pelo Supabase CLI antes de usar o sistema.
+Execute a migration `supabase/migrations/20260601143000_create_registros_table.sql` no SQL Editor do Supabase ou pelo Supabase CLI antes de usar o sistema. A chave `sb_secret_...` deve ficar somente em variáveis de ambiente de scripts/servidor, como `SUPABASE_SERVICE_ROLE_KEY`, e nunca deve ser adicionada ao bundle React.
 
 ## Scripts disponíveis
 
