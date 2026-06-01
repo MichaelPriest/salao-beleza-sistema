@@ -1,70 +1,47 @@
-# Getting Started with Create React App
+# Sistema Salão de Beleza
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplicação React para gestão de salão de beleza. O backend de dados e autenticação foi migrado para Supabase.
 
-## Available Scripts
+## Supabase
 
-In the project directory, you can run:
+O projeto está configurado para usar o projeto Supabase:
+
+```txt
+https://kvjrerxqwtrxttiiqkgf.supabase.co
+```
+
+Antes de iniciar a aplicação, configure a chave pública anon do Supabase no ambiente:
+
+```bash
+REACT_APP_SUPABASE_URL=https://kvjrerxqwtrxttiiqkgf.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=sua-chave-anon-public
+```
+
+A camada de dados usa a tabela documental `public.registros`, em que cada antiga coleção do Firebase é armazenada com os campos:
+
+- `collection`: nome da antiga coleção;
+- `document_id`: ID lógico do documento;
+- `data`: JSONB com todos os dados do documento.
+
+Execute a migration `supabase/migrations/20260601143000_create_registros_table.sql` no SQL Editor do Supabase ou pelo Supabase CLI antes de usar o sistema.
+
+## Scripts disponíveis
+
+No diretório do projeto, você pode executar:
 
 ### `npm start`
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Inicia a aplicação em modo de desenvolvimento.
+Abra [http://localhost:3000](http://localhost:3000) para visualizar no navegador.
 
 ### `npm test`
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Executa a suíte de testes em modo watch.
 
 ### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Gera a build de produção na pasta `build`.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### `npm run dev`
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Inicia o servidor local e o cliente React em paralelo.

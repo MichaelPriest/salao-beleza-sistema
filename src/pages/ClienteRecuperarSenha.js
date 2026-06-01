@@ -15,7 +15,7 @@ import {
 import { Email as EmailIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, sendPasswordResetEmail } from '../services/firebase';
 
 function ClienteRecuperarSenha() {
   const navigate = useNavigate();

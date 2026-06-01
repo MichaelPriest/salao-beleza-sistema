@@ -2,14 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, db } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
 
 const AuthContext = createContext({});

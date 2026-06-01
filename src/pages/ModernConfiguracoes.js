@@ -100,8 +100,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { masks, MaskedInput } from '../utils/plugins';
 import { backupService } from '../services/backupService';
-import { collection, getDocs, deleteDoc, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { collection, getDocs, deleteDoc, doc, writeBatch, db } from '../services/firebase';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (

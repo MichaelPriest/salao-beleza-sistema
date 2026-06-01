@@ -1,6 +1,6 @@
 // src/services/pontuacaoService.js
 import { firebaseService } from './firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/firebase';
 
 export const pontuacaoService = {
   // Buscar pontuações de um cliente

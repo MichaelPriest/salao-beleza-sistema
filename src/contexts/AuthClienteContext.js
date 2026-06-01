@@ -2,31 +2,11 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut,
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
-} from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '../services/firebase';
 import { removerMascaraCPF } from '../utils/cpfUtils';
 
-// Configuração do Firebase (use as mesmas do seu projeto)
-const firebaseConfig = {
-  apiKey: "AIzaSyD7z7IjeHAa1BZayqyb4-ExmYz8xOYd5dA",
-  authDomain: "fluted-sentry-305001.firebaseapp.com",
-  projectId: "fluted-sentry-305001",
-  storageBucket: "fluted-sentry-305001.firebasestorage.app",
-  messagingSenderId: "386333037191",
-  appId: "1:386333037191:web:3b944b250bf676e1901e22"
-};
-
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// Autenticação Supabase
+const auth = getAuth();
 const googleProvider = new GoogleAuthProvider();
 
 const AuthClienteContext = createContext({});

@@ -83,7 +83,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

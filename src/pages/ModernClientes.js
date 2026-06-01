@@ -80,7 +80,7 @@ import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/firebase';
 import { 
   masks, 
   MaskedInput, 
