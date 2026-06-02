@@ -49,6 +49,79 @@ const notifyAuthListeners = (user) => {
 
 const getAccessToken = () => getStoredSession()?.access_token || localStorage.getItem(ACCESS_TOKEN_KEY) || SUPABASE_ANON_KEY;
 
+const decodeJwtPayload = (token) => {
+  try {
+    if (!token || token.split('.').length < 2) return null;
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload));
+  } catch (error) {
+    return null;
+  }
+};
+
+const isJwtExpiredOrExpiring = (token, skewSeconds = 60) => {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false;
+  return payload.exp <= Math.floor(Date.now() / 1000) + skewSeconds;
+};
+
+const refreshStoredSession = async () => {
+  const session = getStoredSession();
+  const refreshToken = session?.refresh_token;
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+
+    const text = await response.text();
+    const refreshedSession = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      throw new Error(refreshedSession?.message || refreshedSession?.error_description || refreshedSession?.error || response.statusText);
+    }
+
+    const mergedSession = {
+      ...session,
+      ...refreshedSession,
+      user: refreshedSession?.user || session.user || null
+    };
+
+    setStoredSession(mergedSession);
+    return mergedSession;
+  } catch (error) {
+    console.warn('Sessão Supabase expirada e refresh falhou. Limpando sessão local:', error);
+    setStoredSession(null);
+    return null;
+  }
+};
+
+const getValidAccessToken = async () => {
+  const session = getStoredSession();
+  const token = session?.access_token || localStorage.getItem(ACCESS_TOKEN_KEY);
+
+  if (!token || token === SUPABASE_ANON_KEY) {
+    return SUPABASE_ANON_KEY;
+  }
+
+  if (!isJwtExpiredOrExpiring(token)) {
+    return token;
+  }
+
+  const refreshedSession = await refreshStoredSession();
+  return refreshedSession?.access_token || SUPABASE_ANON_KEY;
+};
+
 const getRedirectUrl = (path) => {
   if (typeof window === 'undefined') return undefined;
   return new URL(path, window.location.origin).toString();
@@ -88,23 +161,43 @@ const clearAuthParamsFromUrl = () => {
 
 const supabaseFetch = async (path, options = {}) => {
   ensureSupabaseConfig();
-  const response = await fetch(`${SUPABASE_URL}${path}`, {
-    ...options,
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${options.useAnonOnly ? SUPABASE_ANON_KEY : getAccessToken()}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-      ...(options.headers || {})
-    }
-  });
 
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  const request = async (authorizationToken) => {
+    const response = await fetch(`${SUPABASE_URL}${path}`, {
+      ...options,
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${authorizationToken}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+        ...(options.headers || {})
+      }
+    });
+
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    return { response, data };
+  };
+
+  const explicitAuthorization = options.headers?.Authorization;
+  const initialToken = options.useAnonOnly || explicitAuthorization
+    ? SUPABASE_ANON_KEY
+    : await getValidAccessToken();
+
+  let { response, data } = await request(initialToken);
+
+  const message = data?.message || data?.msg || data?.error_description || data?.error || response.statusText;
+  const jwtExpired = response.status === 401 && String(message || '').toLowerCase().includes('jwt expired');
+
+  if (jwtExpired && !options.useAnonOnly && !explicitAuthorization) {
+    const refreshedSession = await refreshStoredSession();
+    const retryToken = refreshedSession?.access_token || SUPABASE_ANON_KEY;
+    ({ response, data } = await request(retryToken));
+  }
 
   if (!response.ok) {
-    const message = data?.message || data?.msg || data?.error_description || data?.error || response.statusText;
-    const error = new Error(message);
+    const retryMessage = data?.message || data?.msg || data?.error_description || data?.error || response.statusText;
+    const error = new Error(retryMessage);
     error.status = response.status;
     error.details = data;
     throw error;
@@ -330,11 +423,10 @@ export const signOut = async () => {
 };
 
 export const getCurrentAuthUser = async () => {
-  const token = getStoredSession()?.access_token;
-  if (!token) return null;
+  const token = await getValidAccessToken();
+  if (!token || token === SUPABASE_ANON_KEY) return null;
   const user = await supabaseFetch('/auth/v1/user', {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}` }
+    method: 'GET'
   });
   const session = getStoredSession();
   if (session) {
@@ -380,11 +472,10 @@ export const sendPasswordResetEmail = async (_auth, email, actionCodeSettings = 
 };
 
 export const updatePassword = async (_auth, novaSenha) => {
-  const token = getStoredSession()?.access_token;
-  if (!token) throw new Error('Link de redefinição inválido ou expirado. Solicite um novo email de recuperação.');
+  const token = await getValidAccessToken();
+  if (!token || token === SUPABASE_ANON_KEY) throw new Error('Link de redefinição inválido ou expirado. Solicite um novo email de recuperação.');
   const user = await supabaseFetch('/auth/v1/user', {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ password: novaSenha })
   });
   const session = getStoredSession();
