@@ -79,6 +79,29 @@ Em **Authentication > Email Templates**, mantenha os templates de **Confirm sign
 
 Quando o cliente abre o link de recuperação, a página `/cliente/recuperar-senha` consome o token `type=recovery` do Supabase e exibe o formulário de nova senha. Quando abre o link de confirmação, `/cliente/login` reconhece `type=signup` e mostra a confirmação de email.
 
+
+## Estrutura SaaS e cobrança
+
+A base SaaS foi adicionada para atender empresas individuais e redes multiunidades. Execute também a migration:
+
+```txt
+supabase/migrations/20260602120000_create_saas_structure.sql
+```
+
+Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assinaturas`, `faturas_saas`, `pagamentos_saas`, `convites_saas`, `uso_saas` e `eventos_cobranca_saas`, além de semear os planos `individual` e `multiunidades`.
+
+O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseService` adiciona/faz filtro automático por `empresaId` e, quando aplicável, por `unidadeId` nas coleções operacionais. Isso permite separar os dados de cada contratante sem reescrever todas as telas.
+
+### Cobrança
+
+O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado:
+
+- `BILLING_PROVIDER=manual`: retorna instruções de cobrança manual.
+- `BILLING_PROVIDER=stripe`: cria uma sessão Stripe Checkout usando `STRIPE_SECRET_KEY`.
+- `BILLING_PROVIDER=mercadopago`: cria uma preferência Mercado Pago usando `MERCADOPAGO_ACCESS_TOKEN`.
+
+Nunca exponha `STRIPE_SECRET_KEY`, `MERCADOPAGO_ACCESS_TOKEN` ou `SUPABASE_SERVICE_ROLE_KEY` no frontend. Configure essas variáveis apenas no ambiente servidor/Vercel.
+
 ## Scripts disponíveis
 
 No diretório do projeto, você pode executar:

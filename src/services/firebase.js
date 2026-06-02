@@ -12,6 +12,8 @@ const SUPABASE_DOCUMENTS_TABLE = process.env.REACT_APP_SUPABASE_DOCUMENTS_TABLE 
 const SUPABASE_USE_COLLECTION_TABLES = process.env.REACT_APP_SUPABASE_USE_COLLECTION_TABLES !== 'false';
 const DEFAULT_CONFIRM_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_CONFIRM_REDIRECT_PATH || '/cliente/login';
 const DEFAULT_RESET_REDIRECT_PATH = process.env.REACT_APP_SUPABASE_RESET_REDIRECT_PATH || '/cliente/recuperar-senha';
+const TENANT_STORAGE_KEY = 'saas.empresaAtual';
+const UNIT_STORAGE_KEY = 'saas.unidadeAtual';
 
 const ensureSupabaseConfig = () => {
   if (!SUPABASE_URL) {
@@ -22,9 +24,82 @@ const ensureSupabaseConfig = () => {
   }
 };
 
+const TENANT_SCOPED_COLLECTIONS = new Set([
+  'agendamentos',
+  'atendimentos',
+  'auditoria',
+  'ausencias',
+  'avaliacoes',
+  'backups',
+  'caixa',
+  'campanhas',
+  'categorias_produtos',
+  'clientes',
+  'cloud_config',
+  'comissoes',
+  'compras',
+  'conciliacoes',
+  'config_fidelidade',
+  'configuracoes',
+  'contas_pagar',
+  'contas_receber',
+  'cupons',
+  'disponibilidades',
+  'entradas',
+  'formularios_anamnese',
+  'fornecedores',
+  'indicacoes',
+  'itens_venda',
+  'logs',
+  'logs_anamnese',
+  'modelos_anamnese',
+  'movimentacoes_estoque',
+  'notificacoes',
+  'notificacoes_cliente',
+  'orcamentos',
+  'pagamentos',
+  'pontuacao',
+  'produtos',
+  'profissionais',
+  'recompensas',
+  'resgates_fidelidade',
+  'respostas_anamnese',
+  'servicos',
+  'transacoes',
+  'usos_cupons'
+]);
+
+const UNIT_SCOPED_COLLECTIONS = new Set([
+  'agendamentos',
+  'atendimentos',
+  'ausencias',
+  'caixa',
+  'compras',
+  'contas_pagar',
+  'contas_receber',
+  'disponibilidades',
+  'entradas',
+  'itens_venda',
+  'movimentacoes_estoque',
+  'orcamentos',
+  'pagamentos',
+  'produtos',
+  'transacoes'
+]);
+
+const safeLocalStorage = {
+  getItem: (key) => (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)),
+  setItem: (key, value) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+  },
+  removeItem: (key) => {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+  }
+};
+
 const getStoredSession = () => {
   try {
-    return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
+    return JSON.parse(safeLocalStorage.getItem(AUTH_STORAGE_KEY) || 'null');
   } catch (error) {
     console.warn('Sessão Supabase inválida no localStorage:', error);
     return null;
@@ -33,11 +108,11 @@ const getStoredSession = () => {
 
 const setStoredSession = (session) => {
   if (session) {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
-    localStorage.setItem(ACCESS_TOKEN_KEY, session.access_token || '');
+    safeLocalStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    safeLocalStorage.setItem(ACCESS_TOKEN_KEY, session.access_token || '');
   } else {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    safeLocalStorage.removeItem(AUTH_STORAGE_KEY);
+    safeLocalStorage.removeItem(ACCESS_TOKEN_KEY);
   }
   notifyAuthListeners(session?.user || null);
 };
@@ -47,13 +122,16 @@ const notifyAuthListeners = (user) => {
   authListeners.forEach((callback) => callback(user));
 };
 
-const getAccessToken = () => getStoredSession()?.access_token || localStorage.getItem(ACCESS_TOKEN_KEY) || SUPABASE_ANON_KEY;
+const getAccessToken = () => getStoredSession()?.access_token || safeLocalStorage.getItem(ACCESS_TOKEN_KEY) || SUPABASE_ANON_KEY;
 
 const decodeJwtPayload = (token) => {
   try {
     if (!token || token.split('.').length < 2) return null;
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(payload));
+    const decoded = typeof atob === 'function'
+      ? atob(payload)
+      : Buffer.from(payload, 'base64').toString('utf8');
+    return JSON.parse(decoded);
   } catch (error) {
     return null;
   }
@@ -108,7 +186,7 @@ const refreshStoredSession = async () => {
 
 const getValidAccessToken = async () => {
   const session = getStoredSession();
-  const token = session?.access_token || localStorage.getItem(ACCESS_TOKEN_KEY);
+  const token = session?.access_token || safeLocalStorage.getItem(ACCESS_TOKEN_KEY);
 
   if (!token || token === SUPABASE_ANON_KEY) {
     return SUPABASE_ANON_KEY;
@@ -219,6 +297,105 @@ const sanitizeForSupabase = (value) => {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeForSupabase(item)]));
   }
   return value;
+};
+
+
+export const getTenantContext = () => {
+  try {
+    const empresa = JSON.parse(safeLocalStorage.getItem(TENANT_STORAGE_KEY) || 'null');
+    const unidade = JSON.parse(safeLocalStorage.getItem(UNIT_STORAGE_KEY) || 'null');
+    return {
+      empresaId: empresa?.id || empresa?.empresaId || null,
+      empresa,
+      unidadeId: unidade?.id || unidade?.unidadeId || null,
+      unidade
+    };
+  } catch (error) {
+    return { empresaId: null, empresa: null, unidadeId: null, unidade: null };
+  }
+};
+
+export const setTenantContext = ({ empresaId, empresa, unidadeId, unidade } = {}) => {
+  const empresaContext = empresa || (empresaId ? { id: empresaId } : null);
+  const unidadeContext = unidade || (unidadeId ? { id: unidadeId, empresaId: empresaContext?.id || empresaId } : null);
+
+  if (empresaContext) {
+    safeLocalStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(empresaContext));
+  }
+
+  if (unidadeContext) {
+    safeLocalStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unidadeContext));
+  }
+
+  return getTenantContext();
+};
+
+export const clearTenantContext = () => {
+  safeLocalStorage.removeItem(TENANT_STORAGE_KEY);
+  safeLocalStorage.removeItem(UNIT_STORAGE_KEY);
+};
+
+export const setTenantContextFromUser = (usuario = {}) => {
+  if (!usuario?.empresaId && !usuario?.empresa?.id) return getTenantContext();
+  return setTenantContext({
+    empresaId: usuario.empresaId || usuario.empresa?.id,
+    empresa: usuario.empresa || (usuario.empresaId ? { id: usuario.empresaId, nome: usuario.empresaNome } : null),
+    unidadeId: usuario.unidadeId || usuario.unidade?.id,
+    unidade: usuario.unidade || (usuario.unidadeId ? { id: usuario.unidadeId, nome: usuario.unidadeNome, empresaId: usuario.empresaId } : null)
+  });
+};
+
+const isTenantScopedCollection = (collectionName) => TENANT_SCOPED_COLLECTIONS.has(collectionName);
+const isUnitScopedCollection = (collectionName) => UNIT_SCOPED_COLLECTIONS.has(collectionName);
+
+const getTenantConditions = (collectionName) => {
+  if (!isTenantScopedCollection(collectionName)) return [];
+
+  const { empresaId, unidadeId } = getTenantContext();
+  const conditions = [];
+
+  if (empresaId) {
+    conditions.push({ field: 'empresaId', operator: '==', value: empresaId });
+  }
+
+  if (empresaId && unidadeId && isUnitScopedCollection(collectionName)) {
+    conditions.push({ field: 'unidadeId', operator: '==', value: unidadeId });
+  }
+
+  return conditions;
+};
+
+const mergeTenantConditions = (collectionName, conditions = []) => {
+  const fields = new Set(conditions.map((condition) => condition.field));
+  const tenantConditions = getTenantConditions(collectionName).filter((condition) => !fields.has(condition.field));
+  return [...conditions, ...tenantConditions];
+};
+
+const applyTenantMetadata = (collectionName, data = {}) => {
+  if (!isTenantScopedCollection(collectionName)) return data;
+
+  const { empresaId, unidadeId } = getTenantContext();
+  const scopedData = { ...data };
+
+  if (empresaId && !scopedData.empresaId) {
+    scopedData.empresaId = empresaId;
+  }
+
+  if (empresaId && unidadeId && isUnitScopedCollection(collectionName) && !scopedData.unidadeId) {
+    scopedData.unidadeId = unidadeId;
+  }
+
+  return scopedData;
+};
+
+const isDocumentVisibleInTenant = (collectionName, data) => {
+  if (!data || !isTenantScopedCollection(collectionName)) return true;
+  const { empresaId, unidadeId } = getTenantContext();
+
+  if (empresaId && data.empresaId && data.empresaId !== empresaId) return false;
+  if (empresaId && unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
+
+  return true;
 };
 
 const encodeFilterValue = (value) => encodeURIComponent(value instanceof Date ? value.toISOString() : value);
@@ -541,7 +718,7 @@ export const writeBatch = () => {
 export const firebaseService = {
   getAll: async (collectionName) => {
     try {
-      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName)}`));
+      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName, getTenantConditions(collectionName))}`));
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} no Supabase:`, error);
       throw error;
@@ -551,7 +728,8 @@ export const firebaseService = {
   getById: async (collectionName, id) => {
     try {
       const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${getDocumentFilter(collectionName, id)}&select=*&limit=1`);
-      return toDocument(rows?.[0]) || null;
+      const documentData = toDocument(rows?.[0]) || null;
+      return isDocumentVisibleInTenant(collectionName, documentData) ? documentData : null;
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} por ID no Supabase:`, error);
       throw error;
@@ -561,10 +739,11 @@ export const firebaseService = {
   add: async (collectionName, data) => {
     try {
       const documentId = data?.id || crypto.randomUUID();
+      const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
-        ...data,
+        ...tenantData,
         id: documentId,
-        createdAt: data?.createdAt || Timestamp.now(),
+        createdAt: tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
       const payload = buildDocumentPayload(collectionName, documentId, documentData);
@@ -582,11 +761,12 @@ export const firebaseService = {
   set: async (collectionName, id, data) => {
     try {
       const current = await firebaseService.getById(collectionName, id).catch(() => null);
+      const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
         ...(current || {}),
-        ...data,
+        ...tenantData,
         id,
-        createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
+        createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
       const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?on_conflict=${getUpsertConflict()}`, {
@@ -604,11 +784,12 @@ export const firebaseService = {
   update: async (collectionName, id, data) => {
     try {
       const current = await firebaseService.getById(collectionName, id).catch(() => null);
+      const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
         ...(current || {}),
-        ...data,
+        ...tenantData,
         id,
-        createdAt: current?.createdAt || data?.createdAt || Timestamp.now(),
+        createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
       const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?on_conflict=${getUpsertConflict()}`, {
@@ -635,7 +816,8 @@ export const firebaseService = {
 
   query: async (collectionName, conditions = [], orderByField = null) => {
     try {
-      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName, conditions, orderByField)}`));
+      const scopedConditions = mergeTenantConditions(collectionName, conditions);
+      return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName, scopedConditions, orderByField)}`));
     } catch (error) {
       console.error(`Erro na query de ${collectionName} no Supabase:`, error);
       throw error;

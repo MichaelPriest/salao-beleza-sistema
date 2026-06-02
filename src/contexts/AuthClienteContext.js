@@ -2,7 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '../services/firebase';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, setTenantContextFromUser, clearTenantContext } from '../services/firebase';
 import { removerMascaraCPF } from '../utils/cpfUtils';
 
 // Autenticação Supabase
@@ -50,9 +50,11 @@ export const AuthClienteProvider = ({ children }) => {
             console.log('✅ AuthClienteProvider - Cliente carregado do localStorage:', clienteData);
             setCliente(clienteData);
             setIsAuthenticated(true);
+            setTenantContextFromUser(clienteData);
           } catch (error) {
             console.error('Erro ao carregar cliente do localStorage:', error);
             localStorage.removeItem('cliente');
+            clearTenantContext();
           }
         }
         setLoading(false);
@@ -111,12 +113,14 @@ export const AuthClienteProvider = ({ children }) => {
         console.log('✅ AuthClienteProvider - Cliente encontrado:', clienteData);
         setCliente(clienteData);
         setIsAuthenticated(true);
+        setTenantContextFromUser(clienteData);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
         console.log('❌ AuthClienteProvider - Cliente não encontrado para o UID:', uid);
         setCliente(null);
         setIsAuthenticated(false);
         localStorage.removeItem('cliente');
+        clearTenantContext();
       }
     } catch (error) {
       console.error('❌ AuthClienteProvider - Erro ao carregar cliente:', error);
@@ -152,6 +156,7 @@ export const AuthClienteProvider = ({ children }) => {
       // 3. Salvar no estado e localStorage
       setCliente(clienteData);
       setIsAuthenticated(true);
+      setTenantContextFromUser(clienteData);
       localStorage.setItem('cliente', JSON.stringify(clienteData));
       
       toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
@@ -291,6 +296,7 @@ export const AuthClienteProvider = ({ children }) => {
         
         setCliente(clienteCompleto);
         setIsAuthenticated(true);
+        setTenantContextFromUser(clienteCompleto);
         localStorage.setItem('cliente', JSON.stringify(clienteCompleto));
         setPendingGoogleUser(null);
         
@@ -342,6 +348,7 @@ export const AuthClienteProvider = ({ children }) => {
       
       setCliente(novoCliente);
       setIsAuthenticated(true);
+      setTenantContextFromUser(novoCliente);
       localStorage.setItem('cliente', JSON.stringify(novoCliente));
       setPendingGoogleUser(null);
       
@@ -464,6 +471,7 @@ export const AuthClienteProvider = ({ children }) => {
       setIsAuthenticated(false);
       setPendingGoogleUser(null);
       localStorage.removeItem('cliente');
+      clearTenantContext();
       toast.success('Logout realizado com sucesso!');
     }
   };
