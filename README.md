@@ -54,6 +54,16 @@ O script cria ou atualiza o usuário no **Supabase Auth** com email confirmado e
 
 Depois disso, acesse a rota administrativa de login com `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
 
+#### Criar admin pelo SQL Editor
+
+Se o usuário já existe no **Supabase Auth**, você também pode configurar o acesso administrativo diretamente pelo SQL Editor. Para o usuário `michael.rodrigoraimundo@gmail.com` (`a420ce6a-c852-48e2-ad49-7bd050f854d1`), copie e execute o arquivo:
+
+```txt
+supabase/sql/criar_admin_sql_editor.sql
+```
+
+Esse SQL cria/atualiza o documento em `public.usuarios`, mantém compatibilidade com `public.registros` quando existir e atualiza os metadados do usuário em `auth.users`. Ele **não grava senha**; a senha deve ser definida no painel do Supabase em **Authentication > Users** ou via Admin API/service role.
+
 ### Confirmação de email e reset de senha
 
 No painel do Supabase, acesse **Authentication > URL Configuration** e configure:
