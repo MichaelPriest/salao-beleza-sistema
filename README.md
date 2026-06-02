@@ -38,6 +38,22 @@ O arquivo `supabase/migrations/20260601170000_create_collection_tables.sql` cria
 
 Cada tabela recebe índices, trigger de `updated_at`, grants para `anon`/`authenticated` e políticas RLS compatíveis com os fluxos atuais do frontend.
 
+### Criar usuário administrador
+
+Para criar o primeiro usuário da parte administrativa, execute o script abaixo depois de aplicar as migrations do Supabase:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_sua_chave_servidor \
+ADMIN_EMAIL=admin@seudominio.com \
+ADMIN_PASSWORD='SenhaForte123!' \
+ADMIN_NAME='Administrador' \
+npm run criar-admin
+```
+
+O script cria ou atualiza o usuário no **Supabase Auth** com email confirmado e grava o documento correspondente em `usuarios` com `cargo: 'admin'`, `status: 'ativo'` e permissões administrativas. A variável `SUPABASE_SERVICE_ROLE_KEY` deve ser usada somente localmente ou em ambiente de servidor; nunca coloque a chave secret no frontend.
+
+Depois disso, acesse a rota administrativa de login com `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
+
 ### Confirmação de email e reset de senha
 
 No painel do Supabase, acesse **Authentication > URL Configuration** e configure:
