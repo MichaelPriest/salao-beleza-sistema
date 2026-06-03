@@ -4,8 +4,6 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { 
   getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged, 
   createUserWithEmailAndPassword, 
@@ -15,6 +13,9 @@ import {
   getTenantContext, 
   clearTenantContext 
 } from '../services/firebase';
+
+const SUPABASE_URL = 'https://kvjrerxqwtrxttiiqkgf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
 
 const AuthClienteContext = createContext({});
 
@@ -48,6 +49,122 @@ export const AuthClienteProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
+
+  // Efeito para processar callback do Google
+  useEffect(() => {
+    const processGoogleCallback = async () => {
+      // Verificar se estamos no callback
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const accessToken = hashParams.get('access_token');
+      
+      if (!accessToken) return;
+      
+      console.log('🔄 Processando callback do Google...');
+      setLoading(true);
+      
+      try {
+        // Buscar usuário no Supabase
+        const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        
+        if (!userResponse.ok) throw new Error('Erro ao buscar usuário');
+        
+        const supabaseUser = await userResponse.json();
+        console.log('✅ Usuário Google autenticado:', supabaseUser.email);
+        
+        const empresaId = sessionStorage.getItem('empresa_publica_id');
+        const empresaNome = sessionStorage.getItem('empresa_publica_nome');
+        
+        if (!empresaId) {
+          throw new Error('Empresa não identificada. Use o link correto do salão.');
+        }
+        
+        // Buscar cliente no Supabase
+        const url = `${SUPABASE_URL}/rest/v1/clientes?data->>email=eq.${encodeURIComponent(supabaseUser.email)}&data->>empresaId=eq.${empresaId}&select=*`;
+        const clientesResponse = await fetch(url, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        const clientes = await clientesResponse.json();
+        
+        if (clientes && clientes.length > 0) {
+          // Cliente encontrado
+          const clienteData = clientes[0].data;
+          console.log('✅ Cliente encontrado:', clienteData.nome);
+          
+          // Atualizar authUid se necessário
+          if (!clienteData.authUid || clienteData.authUid !== supabaseUser.id) {
+            await fetch(`${SUPABASE_URL}/rest/v1/clientes?document_id=eq.${clientes[0].document_id}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                data: {
+                  ...clienteData,
+                  authUid: supabaseUser.id,
+                  googleUid: supabaseUser.id,
+                  updatedAt: new Date().toISOString()
+                }
+              })
+            });
+            clienteData.authUid = supabaseUser.id;
+            clienteData.googleUid = supabaseUser.id;
+          }
+          
+          setCliente(clienteData);
+          setIsAuthenticated(true);
+          setTenantContextFromUser(clienteData);
+          localStorage.setItem('cliente', JSON.stringify(clienteData));
+          localStorage.setItem('supabase.auth.session', JSON.stringify({
+            access_token: accessToken,
+            user: supabaseUser
+          }));
+          
+          toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
+          
+          // Limpar hash da URL e redirecionar
+          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate('/cliente/dashboard');
+        } else {
+          // Cliente não encontrado - precisa completar cadastro
+          console.log('⚠️ Cliente não encontrado, redirecionando para cadastro complementar');
+          
+          const pendingUser = {
+            uid: supabaseUser.id,
+            email: supabaseUser.email,
+            nome: supabaseUser.user_metadata?.full_name || supabaseUser.email.split('@')[0],
+            foto: supabaseUser.user_metadata?.avatar_url || null,
+            empresaId,
+            empresaNome
+          };
+          
+          sessionStorage.setItem('pending_google_user', JSON.stringify(pendingUser));
+          window.location.href = `/cliente/cadastro-complementar?empresa=${sessionStorage.getItem('empresa_publica_slug')}`;
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro no callback:', error);
+        toast.error(error.message || 'Erro ao processar login');
+        setTimeout(() => {
+          window.location.href = '/cliente/login';
+        }, 2000);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    processGoogleCallback();
+  }, []);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -93,7 +210,6 @@ export const AuthClienteProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 FUNÇÃO CORRIGIDA PARA BUSCAR CLIENTE NO SUPABASE
   const buscarClienteNoTenant = async (uid, email, empresaId = getTenantContext().empresaId) => {
     if (!empresaId) {
       console.log('❌ Nenhum empresaId fornecido para busca');
@@ -103,7 +219,33 @@ export const AuthClienteProvider = ({ children }) => {
     console.log('🔍 Buscando cliente por:', { uid, email, empresaId });
     
     try {
-      // 1. Buscar pelo authUid (UID do Firebase/Supabase Auth)
+      // Buscar por email (mais confiável)
+      if (email) {
+        const clientes = await firebaseService.query('clientes', [
+          { field: 'email', operator: '==', value: email },
+          { field: 'empresaId', operator: '==', value: empresaId }
+        ]);
+        
+        if (clientes && clientes.length > 0) {
+          console.log('✅ Cliente encontrado por email:', clientes[0].nome);
+          
+          // Atualizar authUid se necessário
+          const cliente = clientes[0];
+          if (!cliente.authUid || cliente.authUid !== uid) {
+            await firebaseService.update('clientes', cliente.id, {
+              authUid: uid,
+              googleUid: uid,
+              updatedAt: new Date().toISOString()
+            });
+            cliente.authUid = uid;
+            cliente.googleUid = uid;
+          }
+          
+          return cliente;
+        }
+      }
+      
+      // Buscar por authUid
       let clientes = await firebaseService.query('clientes', [
         { field: 'authUid', operator: '==', value: uid },
         { field: 'empresaId', operator: '==', value: empresaId }
@@ -114,7 +256,7 @@ export const AuthClienteProvider = ({ children }) => {
         return clientes[0];
       }
       
-      // 2. Buscar pelo googleUid (para login com Google)
+      // Buscar por googleUid
       clientes = await firebaseService.query('clientes', [
         { field: 'googleUid', operator: '==', value: uid },
         { field: 'empresaId', operator: '==', value: empresaId }
@@ -122,65 +264,14 @@ export const AuthClienteProvider = ({ children }) => {
       
       if (clientes && clientes.length > 0) {
         console.log('✅ Cliente encontrado por googleUid:', clientes[0].nome);
-        
-        // Atualizar authUid se estiver vazio
-        if (!clientes[0].authUid) {
-          await firebaseService.update('clientes', clientes[0].id, {
-            authUid: uid,
-            updatedAt: new Date().toISOString()
-          });
-          clientes[0].authUid = uid;
-        }
-        
         return clientes[0];
       }
       
-      // 3. Buscar pelo ID direto (se o UID for o ID do documento)
-      if (uid) {
-        const clientePorId = await firebaseService.getById('clientes', uid);
-        if (clientePorId && isClienteDoTenant(clientePorId, empresaId)) {
-          console.log('✅ Cliente encontrado por ID direto:', clientePorId.nome);
-          return clientePorId;
-        }
-      }
-      
-      // 4. Buscar por ID composto (empresaId_uid)
-      const compoundId = getClienteTenantDocumentId(empresaId, uid);
-      const clientePorCompoundId = await firebaseService.getById('clientes', compoundId);
-      if (clientePorCompoundId && isClienteDoTenant(clientePorCompoundId, empresaId)) {
-        console.log('✅ Cliente encontrado por ID composto:', clientePorCompoundId.nome);
-        return clientePorCompoundId;
-      }
-      
-      // 5. Buscar por email (último recurso)
-      if (email) {
-        clientes = await firebaseService.query('clientes', [
-          { field: 'email', operator: '==', value: email },
-          { field: 'empresaId', operator: '==', value: empresaId }
-        ]);
-        
-        if (clientes && clientes.length > 0) {
-          console.log('✅ Cliente encontrado por email:', clientes[0].nome);
-          
-          // Atualiza o authUid para futuras buscas
-          const clienteEncontrado = clientes[0];
-          if (!clienteEncontrado.authUid || clienteEncontrado.authUid !== uid) {
-            await firebaseService.update('clientes', clienteEncontrado.id, {
-              authUid: uid,
-              updatedAt: new Date().toISOString()
-            });
-            clienteEncontrado.authUid = uid;
-          }
-          
-          return clienteEncontrado;
-        }
-      }
-      
-      console.log('❌ Nenhum cliente encontrado para:', { uid, email, empresaId });
+      console.log('❌ Nenhum cliente encontrado');
       return null;
       
     } catch (error) {
-      console.error('Erro ao buscar cliente no Supabase:', error);
+      console.error('Erro ao buscar cliente:', error);
       return null;
     }
   };
@@ -188,24 +279,24 @@ export const AuthClienteProvider = ({ children }) => {
   const carregarClientePorUid = async (uid, email) => {
     try {
       const { empresaId } = getTenantContext();
-      console.log('🔍 AuthClienteProvider - Buscando cliente para UID no tenant:', uid, empresaId);
+      console.log('🔍 AuthClienteProvider - Buscando cliente:', { uid, email, empresaId });
       
       const clienteData = await buscarClienteNoTenant(uid, email, empresaId);
 
       if (clienteData) {
-        console.log('✅ AuthClienteProvider - Cliente encontrado:', clienteData.nome);
+        console.log('✅ Cliente encontrado:', clienteData.nome);
         setCliente(clienteData);
         setIsAuthenticated(true);
         setTenantContextFromUser(clienteData);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
-        console.log('❌ AuthClienteProvider - Cliente não encontrado no tenant atual para o UID:', uid);
+        console.log('❌ Cliente não encontrado');
         setCliente(null);
         setIsAuthenticated(false);
         localStorage.removeItem('cliente');
       }
     } catch (error) {
-      console.error('❌ AuthClienteProvider - Erro ao carregar cliente:', error);
+      console.error('❌ Erro ao carregar cliente:', error);
     } finally {
       setLoading(false);
     }
@@ -216,22 +307,19 @@ export const AuthClienteProvider = ({ children }) => {
       setLoading(true);
       const { empresaId } = ensureClienteTenantContext(dadosTenant);
       
-      console.log('🔐 AuthClienteProvider - Tentando login com email:', email);
+      console.log('🔐 Login com email:', email);
       
       const userCredential = await signInWithEmailAndPassword(getAuth(), email, senha);
       const user = userCredential.user;
-      console.log('✅ AuthClienteProvider - Usuário autenticado:', user.uid);
       
       const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId);
       
-      if (!isClienteDoTenant(clienteData, empresaId)) {
-        console.error('❌ AuthClienteProvider - Cliente não pertence ao tenant atual:', user.uid);
-        toast.error('Conta não encontrada para esta empresa. Use o link correto do salão.');
+      if (!clienteData) {
+        toast.error('Conta não encontrada para esta empresa');
         await signOut(getAuth());
         return { success: false, error: 'cliente_fora_do_tenant' };
       }
 
-      console.log('✅ AuthClienteProvider - Dados do cliente carregados:', clienteData.nome);
       setCliente(clienteData);
       setIsAuthenticated(true);
       setTenantContextFromUser(clienteData);
@@ -241,19 +329,8 @@ export const AuthClienteProvider = ({ children }) => {
       return { success: true, data: clienteData };
       
     } catch (error) {
-      console.error('❌ AuthClienteProvider - Erro no login:', error);
-      
-      if (error.code === 'auth/user-not-found') {
-        toast.error('Usuário não encontrado');
-      } else if (error.code === 'auth/wrong-password') {
-        toast.error('Senha incorreta');
-      } else if (error.code === 'auth/invalid-credential') {
-        toast.error('Email ou senha inválidos');
-      } else if (error.message?.includes('link da empresa')) {
-        toast.error(error.message);
-      } else {
-        toast.error('Erro ao fazer login');
-      }
+      console.error('❌ Erro no login:', error);
+      toast.error('Email ou senha inválidos');
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -263,63 +340,34 @@ export const AuthClienteProvider = ({ children }) => {
   const loginComGoogle = async (dadosTenant = {}) => {
     try {
       setLoading(true);
-      const { empresaId, empresaNome } = ensureClienteTenantContext(dadosTenant);
+      const { empresaId, empresaNome, empresaSlug } = ensureClienteTenantContext(dadosTenant);
       
-      console.log('🔐 AuthClienteProvider - Tentando login com Google para empresa:', empresaId);
+      console.log('🔐 Login com Google - Empresa:', empresaId);
       
-      const auth = getAuth();
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      console.log('✅ AuthClienteProvider - Usuário Google autenticado:', user.uid, user.email);
+      // Salvar dados da empresa para usar depois do callback
+      sessionStorage.setItem('empresa_publica_id', empresaId);
+      sessionStorage.setItem('empresa_publica_nome', empresaNome || '');
+      sessionStorage.setItem('empresa_publica_slug', empresaSlug || '');
       
-      const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId);
-
-      if (clienteData) {
-        console.log('✅ AuthClienteProvider - Cliente encontrado no Supabase:', clienteData.nome);
-        setCliente(clienteData);
-        setIsAuthenticated(true);
-        setTenantContextFromUser(clienteData);
-        localStorage.setItem('cliente', JSON.stringify(clienteData));
-        toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-        return { success: true, data: clienteData };
-      } else {
-        console.log('⚠️ AuthClienteProvider - Cliente não encontrado, precisa completar cadastro');
-        
-        const userData = {
-          uid: user.uid,
-          nome: user.displayName || user.email.split('@')[0],
-          email: user.email,
-          foto: user.photoURL || null,
-          empresaId,
-          empresaNome,
-        };
-        
-        setPendingGoogleUser(userData);
-        
-        return { 
-          success: false, 
-          needCompletion: true, 
-          userData 
-        };
-      }
+      // Construir URL de callback
+      const callbackUrl = `${window.location.origin}/cliente/auth/callback`;
+      const redirectTo = encodeURIComponent(callbackUrl);
+      
+      // URL do Supabase OAuth
+      const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+      
+      console.log('🚀 Redirecionando para Google OAuth');
+      
+      // Redirecionar para o Supabase
+      window.location.href = authUrl;
+      
+      return { success: false, redirecting: true };
       
     } catch (error) {
-      console.error('❌ AuthClienteProvider - Erro no login com Google:', error);
-      
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Login cancelado');
-      } else if (error.code === 'auth/popup-blocked') {
-        toast.error('Popup bloqueado. Permita popups para este site.');
-      } else if (error.message?.includes('link da empresa')) {
-        toast.error(error.message);
-      } else {
-        toast.error('Erro ao fazer login com Google');
-      }
-      return { success: false, error: error.message };
-      
-    } finally {
+      console.error('❌ Erro no login com Google:', error);
+      toast.error('Erro ao iniciar login com Google');
       setLoading(false);
+      return { success: false, error: error.message };
     }
   };
 
@@ -327,69 +375,61 @@ export const AuthClienteProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      if (!pendingGoogleUser) {
-        console.error('❌ AuthClienteProvider - Nenhum usuário pendente');
-        toast.error('Nenhum usuário pendente para completar cadastro');
+      const pendingUserStr = sessionStorage.getItem('pending_google_user');
+      if (!pendingUserStr) {
+        console.error('❌ Nenhum usuário pendente');
+        toast.error('Sessão expirada. Tente novamente.');
         return { success: false };
       }
+      
+      const pendingGoogleUser = JSON.parse(pendingUserStr);
+      console.log('📝 Completando cadastro para:', pendingGoogleUser.email);
 
-      console.log('📝 AuthClienteProvider - Completando cadastro para:', pendingGoogleUser.email);
-
-      const { empresaId: empresaPublicaId, empresaNome: empresaPublicaNome } = ensureClienteTenantContext(dadosComplementares);
+      const { empresaId, empresaNome } = ensureClienteTenantContext(dadosComplementares);
 
       const cpfFormatado = dadosComplementares.cpf;
       
-      console.log('🔍 Verificando se CPF já existe:', cpfFormatado);
-      
-      // Buscar por CPF
+      // Verificar se CPF já existe
       const clientesPorCpf = await firebaseService.query('clientes', [
         { field: 'cpf', operator: '==', value: cpfFormatado },
-        { field: 'empresaId', operator: '==', value: empresaPublicaId }
+        { field: 'empresaId', operator: '==', value: empresaId }
       ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
-        console.log('🔄 AuthClienteProvider - CPF já cadastrado, vinculando conta Google');
+        console.log('🔄 CPF já cadastrado, vinculando conta Google');
         
         const clienteExistente = clientesPorCpf[0];
         
         await firebaseService.update('clientes', clienteExistente.id, {
           googleUid: pendingGoogleUser.uid,
           authUid: pendingGoogleUser.uid,
-          foto: pendingGoogleUser.foto || clienteExistente.foto,
+          foto: pendingGoogleUser.foto,
           ultimoAcesso: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
 
-        const clienteCompleto = {
-          ...clienteExistente,
-          googleUid: pendingGoogleUser.uid,
-          authUid: pendingGoogleUser.uid,
-          foto: pendingGoogleUser.foto || clienteExistente.foto
-        };
-        
-        console.log('✅ AuthClienteProvider - Cliente atualizado com Google UID:', clienteCompleto.nome);
+        const clienteCompleto = { ...clienteExistente, authUid: pendingGoogleUser.uid, googleUid: pendingGoogleUser.uid };
         
         setCliente(clienteCompleto);
         setIsAuthenticated(true);
-        setTenantContextFromUser(clienteCompleto);
         localStorage.setItem('cliente', JSON.stringify(clienteCompleto));
-        setPendingGoogleUser(null);
+        sessionStorage.removeItem('pending_google_user');
         
         toast.success(`Bem-vindo(a) de volta, ${clienteCompleto.nome}!`);
         return { success: true, data: clienteCompleto };
       }
 
-      console.log('🆕 AuthClienteProvider - Criando novo cliente');
+      console.log('🆕 Criando novo cliente');
       
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
       const novoCliente = {
-        id: getClienteTenantDocumentId(empresaPublicaId, pendingGoogleUser.uid),
+        id: getClienteTenantDocumentId(empresaId, pendingGoogleUser.uid),
         authUid: pendingGoogleUser.uid,
         googleUid: pendingGoogleUser.uid,
-        empresaId: empresaPublicaId,
-        empresaNome: empresaPublicaNome,
+        empresaId: empresaId,
+        empresaNome: empresaNome,
         nome: pendingGoogleUser.nome,
         email: pendingGoogleUser.email,
         foto: pendingGoogleUser.foto,
@@ -421,20 +461,17 @@ export const AuthClienteProvider = ({ children }) => {
 
       await firebaseService.set('clientes', novoCliente.id, novoCliente);
       
-      console.log('✅ AuthClienteProvider - Novo cliente criado:', novoCliente.nome);
-      
       setCliente(novoCliente);
       setIsAuthenticated(true);
-      setTenantContextFromUser(novoCliente);
       localStorage.setItem('cliente', JSON.stringify(novoCliente));
-      setPendingGoogleUser(null);
+      sessionStorage.removeItem('pending_google_user');
       
       toast.success(`Bem-vindo(a), ${novoCliente.nome}!`);
       return { success: true, data: novoCliente };
       
     } catch (error) {
-      console.error('❌ AuthClienteProvider - Erro ao completar cadastro:', error);
-      toast.error('Erro ao completar cadastro: ' + error.message);
+      console.error('❌ Erro ao completar cadastro:', error);
+      toast.error('Erro ao completar cadastro');
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -444,38 +481,27 @@ export const AuthClienteProvider = ({ children }) => {
   const cadastrar = async (dadosCliente) => {
     try {
       setLoading(true);
-
-      console.log('📝 AuthClienteProvider - Cadastrando novo cliente:', dadosCliente.email);
-
-      const { empresaId: empresaPublicaId, empresaNome: empresaPublicaNome } = ensureClienteTenantContext(dadosCliente);
+      const { empresaId, empresaNome } = ensureClienteTenantContext(dadosCliente);
 
       const cpfFormatado = dadosCliente.cpf;
       
-      const cpfConditions = [
+      const clientesPorCpf = await firebaseService.query('clientes', [
         { field: 'cpf', operator: '==', value: cpfFormatado },
-        { field: 'empresaId', operator: '==', value: empresaPublicaId }
-      ];
-      
-      const clientesPorCpf = await firebaseService.query('clientes', cpfConditions);
+        { field: 'empresaId', operator: '==', value: empresaId }
+      ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
-        toast.error('Este CPF já está cadastrado no sistema');
+        toast.error('Este CPF já está cadastrado');
         return false;
       }
 
       let userCredential;
       try {
         const auth = getAuth();
-        userCredential = await createUserWithEmailAndPassword(
-          auth, 
-          dadosCliente.email, 
-          dadosCliente.senha
-        );
+        userCredential = await createUserWithEmailAndPassword(auth, dadosCliente.email, dadosCliente.senha);
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
           toast.error('Este email já está em uso');
-        } else if (error.code === 'auth/weak-password') {
-          toast.error('Senha muito fraca. Use pelo menos 6 caracteres');
         } else {
           toast.error('Erro ao criar conta');
         }
@@ -483,40 +509,28 @@ export const AuthClienteProvider = ({ children }) => {
       }
 
       const user = userCredential.user;
-      console.log('✅ AuthClienteProvider - Usuário criado no Firebase Auth:', user.uid);
-
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
       const novoCliente = {
-        id: getClienteTenantDocumentId(empresaPublicaId, user.uid),
+        id: getClienteTenantDocumentId(empresaId, user.uid),
         authUid: user.uid,
-        empresaId: empresaPublicaId,
-        empresaNome: empresaPublicaNome,
+        empresaId: empresaId,
+        empresaNome: empresaNome,
         nome: dadosCliente.nome,
         email: dadosCliente.email,
         telefone: dadosCliente.telefone,
         cpf: cpfFormatado,
         dataNascimento: dadosCliente.dataNascimento || null,
-        genero: dadosCliente.genero || null,
-        cep: dadosCliente.cep || null,
-        logradouro: dadosCliente.logradouro || null,
-        numero: dadosCliente.numero || null,
-        complemento: dadosCliente.complemento || null,
-        bairro: dadosCliente.bairro || null,
-        cidade: dadosCliente.cidade || null,
-        estado: dadosCliente.estado || null,
-        foto: dadosCliente.foto || null,
         dataCadastro: hoje,
-        ultimaVisita: null,
         totalGasto: 0,
         totalPontos: 0,
         nivelFidelidade: 'bronze',
         status: 'Regular',
         preferencias: {
           notificacoes: true,
-          profissionalPreferido: dadosCliente.profissionalPreferido || '',
-          servicosPreferidos: dadosCliente.servicosPreferidos || []
+          profissionalPreferido: '',
+          servicosPreferidos: []
         },
         createdAt: agora,
         updatedAt: agora
@@ -524,13 +538,11 @@ export const AuthClienteProvider = ({ children }) => {
 
       await firebaseService.set('clientes', novoCliente.id, novoCliente);
       
-      console.log('✅ AuthClienteProvider - Cliente salvo no Supabase com CPF:', cpfFormatado);
-      
-      toast.success('Cadastro realizado! Verifique seu email para confirmar a conta.');
+      toast.success('Cadastro realizado!');
       return true;
 
     } catch (error) {
-      console.error('❌ AuthClienteProvider - Erro no cadastro:', error);
+      console.error('❌ Erro no cadastro:', error);
       toast.error('Erro ao realizar cadastro');
       return false;
     } finally {
@@ -540,7 +552,6 @@ export const AuthClienteProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      console.log('👋 AuthClienteProvider - Fazendo logout');
       await signOut(getAuth());
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
@@ -550,30 +561,21 @@ export const AuthClienteProvider = ({ children }) => {
       setPendingGoogleUser(null);
       localStorage.removeItem('cliente');
       clearTenantContext();
-      toast.success('Logout realizado com sucesso!');
+      toast.success('Logout realizado!');
     }
   };
 
   const atualizarCliente = async (dadosAtualizados) => {
     try {
       if (!cliente?.id) return false;
-
-      console.log('📝 AuthClienteProvider - Atualizando cliente:', cliente.id);
-
-      await firebaseService.update('clientes', cliente.id, {
-        ...dadosAtualizados,
-        updatedAt: new Date().toISOString()
-      });
-
+      await firebaseService.update('clientes', cliente.id, dadosAtualizados);
       const clienteAtualizado = { ...cliente, ...dadosAtualizados };
       setCliente(clienteAtualizado);
       localStorage.setItem('cliente', JSON.stringify(clienteAtualizado));
-      
-      toast.success('Dados atualizados com sucesso!');
+      toast.success('Dados atualizados!');
       return true;
-
     } catch (error) {
-      console.error('Erro ao atualizar cliente:', error);
+      console.error('Erro ao atualizar:', error);
       toast.error('Erro ao atualizar dados');
       return false;
     }
