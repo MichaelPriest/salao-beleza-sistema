@@ -530,47 +530,6 @@ const menuGroups = [
     ],
   },
   {
-    title: 'MINHA EMPRESA',
-    icon: <BusinessIcon />,
-    items: [
-      {
-        text: 'Empresa',
-        icon: <BusinessIcon />,
-        path: '/empresa',
-        permission: 'configurar_sistema',
-        cargos: ['admin']
-      },
-      {
-        text: 'Unidades',
-        icon: <ApartmentIcon />,
-        path: '/empresa/unidades',
-        permission: 'configurar_sistema',
-        cargos: ['admin', 'gerente']
-      },
-      {
-        text: 'Assinatura',
-        icon: <WorkspacePremiumIcon />,
-        path: '/empresa/assinatura',
-        permission: 'configurar_sistema',
-        cargos: ['admin']
-      },
-      {
-        text: 'Cobrança SaaS',
-        icon: <PaymentsIcon />,
-        path: '/empresa/cobranca',
-        permission: 'financeiro',
-        cargos: ['admin', 'gerente']
-      },
-      {
-        text: 'Página inicial',
-        icon: <LanguageIcon />,
-        path: '/empresa/site',
-        permission: 'configurar_sistema',
-        cargos: ['admin', 'gerente']
-      },
-    ],
-  },
-  {
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
@@ -781,8 +740,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         <Collapse in={isOpen} timeout="auto" unmountOnExit>
           <List component="div" disablePadding>
             {group.items.map((item) => {
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/' && location.pathname.startsWith(item.path));
+              const itemPath = item.path?.split('?')[0] || '';
+              const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+              const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
               return (
                 <motion.div
@@ -1087,8 +1048,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {group.items.map((item) => {
-                        const isActive = location.pathname === item.path ||
-                          (item.path !== '/' && location.pathname.startsWith(item.path));
+                        const itemPath = item.path?.split('?')[0] || '';
+                        const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                        const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                          (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
                         return (
                           <motion.div
@@ -1159,7 +1122,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   </Tooltip>
 
                   {group.items.slice(0, 2).map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const itemPath = item.path?.split('?')[0] || '';
+                    const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                    const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
                     return (
                       <Tooltip key={item.text} title={item.text} placement="right">
                         <IconButton
@@ -1331,8 +1296,8 @@ function ModernSidebar() {
     if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
     if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
     if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
-    if (path.includes('/empresa/unidades')) return 'multiunidades';
-    if (path.includes('/empresa/site')) return 'site_publico';
+    if (path.includes('/empresa/unidades') || path.includes('empresaTab=unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site') || path.includes('empresaTab=site')) return 'site_publico';
     return null;
   };
 
@@ -1388,10 +1353,12 @@ function ModernSidebar() {
   };
 
   const isGroupActive = (group) => {
-    return group.items.some(item =>
-      location.pathname === item.path ||
-      (item.path !== '/' && location.pathname.startsWith(item.path))
-    );
+    return group.items.some(item => {
+      const itemPath = item.path?.split('?')[0] || '';
+      const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+      return (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+        (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
+    });
   };
 
   // Abrir grupo automaticamente se um item estiver ativo
@@ -1410,7 +1377,7 @@ function ModernSidebar() {
     if (changed) {
       setOpenGroups(newOpenGroups);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups
