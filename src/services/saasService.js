@@ -380,23 +380,50 @@ export const saasService = {
     const configCobranca = await saasService.buscarConfigCobranca();
     const gateway = provider || configCobranca.provider || 'manual';
 
+    const registrar = async (payload) => {
+      await saasService.registrarEventoCobranca({
+        empresaId,
+        tipo: 'checkout_iniciado',
+        gateway: payload.provider || gateway,
+        payload
+      }).catch(() => {});
+      return payload;
+    };
+
+    if (gateway === 'manual') {
+      return registrar({
+        provider: 'manual',
+        checkoutUrl: null,
+        instrucoes: configCobranca.instrucoesManual || 'Cobrança manual habilitada. Envie as instruções de pagamento para a empresa.',
+        metodoPreferencial: dadosPagamento?.metodoPreferencial || null
+      });
+    }
+
     const response = await fetch('/api/saas-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca, metodosPagamento: metodosPagamento || configCobranca.metodosPagamento, dadosPagamento })
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Erro ao iniciar cobrança.');
+    const rawBody = await response.text();
+    let data = null;
+    if (rawBody) {
+      try {
+        data = JSON.parse(rawBody);
+      } catch (error) {
+        throw new Error(`Resposta inválida do endpoint /api/saas-checkout (${response.status}). Verifique se a API server-side está publicada.`);
+      }
+    }
 
-    await saasService.registrarEventoCobranca({
-      empresaId,
-      tipo: 'checkout_iniciado',
-      gateway: data.provider || gateway,
-      payload: data
-    }).catch(() => {});
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `Erro ao iniciar cobrança (${response.status}).`);
+    }
 
-    return data;
+    if (!data) {
+      throw new Error('Endpoint /api/saas-checkout retornou resposta vazia. Verifique a publicação da função server-side.');
+    }
+
+    return registrar(data);
   },
 
   criarFatura: async ({ empresaId = getTenantContext().empresaId, assinaturaId, valor, vencimentoEm, descricao }) => {
