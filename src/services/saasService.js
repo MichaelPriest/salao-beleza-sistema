@@ -71,10 +71,43 @@ const getUsuarioAtual = () => {
   }
 };
 
+const slugifyEmpresa = (value = '') => String(value)
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 60) || 'empresa';
+
+const getPublicBaseUrl = () => {
+  if (typeof window === 'undefined') return process.env.REACT_APP_PUBLIC_APP_URL || '';
+  return window.location.origin;
+};
+
+const buildEmpresaLink = (slug) => `${getPublicBaseUrl()}/e/${slug}`;
+
+const gerarSlugEmpresa = async (nome, empresaId = null) => {
+  const base = slugifyEmpresa(nome);
+  let slug = base;
+  let tentativa = 1;
+
+  while (tentativa <= 10) {
+    const existentes = await firebaseService.query('empresas', [{ field: 'slug', operator: '==', value: slug }]).catch(() => []);
+    const conflito = existentes.find((empresa) => empresa.id !== empresaId);
+    if (!conflito) return slug;
+    tentativa += 1;
+    slug = `${base}-${tentativa}`;
+  }
+
+  return `${base}-${Date.now()}`;
+};
+
 export const saasService = {
   getContextoAtual: getTenantContext,
   setContextoAtual: setTenantContext,
   limparContexto: clearTenantContext,
+  slugifyEmpresa,
+  buildEmpresaLink,
 
   listarPlanos: async () => {
     const planos = await firebaseService.getAll('planos_saas').catch(() => []);
@@ -129,6 +162,7 @@ export const saasService = {
     const empresaId = firebaseService.generateId('empresas');
     const unidadeId = firebaseService.generateId('unidades');
     const usuario = proprietario || getUsuarioAtual();
+    const slug = await gerarSlugEmpresa(nome, empresaId);
 
     const empresa = {
       id: empresaId,
@@ -139,6 +173,17 @@ export const saasService = {
       tipo: plano.tipo,
       planoId: plano.id,
       status: 'ativa',
+      slug,
+      linkPublico: buildEmpresaLink(slug),
+      sitePublico: {
+        ativo: true,
+        titulo: nome,
+        subtitulo: 'Agende seus serviços online com facilidade.',
+        corPrimaria: '#9c27b0',
+        mostrarServicos: true,
+        mostrarProfissionais: true,
+        mostrarContato: true
+      },
       proprietarioId: usuario?.id || usuario?.uid || null,
       createdAt: agora,
       updatedAt: agora
@@ -187,6 +232,35 @@ export const saasService = {
 
     setTenantContext({ empresa, unidade });
     return { empresa, unidade, assinatura };
+  },
+
+  salvarPortalEmpresa: async (empresaId, dadosPortal = {}) => {
+    if (!empresaId) throw new Error('Empresa não selecionada.');
+    const empresa = await firebaseService.getById('empresas', empresaId);
+    if (!empresa) throw new Error('Empresa não encontrada.');
+
+    const slugInformado = dadosPortal.slug || empresa.slug || empresa.nome;
+    const slug = empresa.slug === slugInformado ? empresa.slug : await gerarSlugEmpresa(slugInformado, empresaId);
+    const sitePublico = {
+      ...(empresa.sitePublico || {}),
+      ...dadosPortal.sitePublico,
+      ativo: dadosPortal.sitePublico?.ativo !== false
+    };
+    const payload = {
+      slug,
+      linkPublico: buildEmpresaLink(slug),
+      sitePublico,
+      updatedAt: new Date().toISOString()
+    };
+
+    await firebaseService.update('empresas', empresaId, payload);
+    return { ...empresa, ...payload };
+  },
+
+  buscarEmpresaPorSlug: async (slug) => {
+    if (!slug) return null;
+    const empresas = await firebaseService.query('empresas', [{ field: 'slug', operator: '==', value: slug }]).catch(() => []);
+    return empresas.find((empresa) => empresa.sitePublico?.ativo !== false && empresa.status !== 'inativa') || null;
   },
 
   listarUnidades: async (empresaId = getTenantContext().empresaId) => {

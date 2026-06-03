@@ -1,11 +1,14 @@
 // src/services/siteService.js
 import { firebaseService } from './firebase';
+import { saasService } from './saasService';
 
 export const siteService = {
   // Buscar configurações do salão
-  buscarConfiguracoes: async () => {
+  buscarConfiguracoes: async (empresaId = null) => {
     try {
-      const configs = await firebaseService.getAll('configuracoes');
+      const configs = empresaId
+        ? await firebaseService.query('configuracoes', [{ field: 'empresaId', operator: '==', value: empresaId }])
+        : await firebaseService.getAll('configuracoes');
       return configs[0] || null;
     } catch (error) {
       console.error('Erro ao buscar configurações:', error);
@@ -14,9 +17,11 @@ export const siteService = {
   },
 
   // Buscar serviços ativos
-  buscarServicos: async () => {
+  buscarServicos: async (empresaId = null) => {
     try {
-      const servicos = await firebaseService.getAll('servicos');
+      const servicos = empresaId
+        ? await firebaseService.query('servicos', [{ field: 'empresaId', operator: '==', value: empresaId }])
+        : await firebaseService.getAll('servicos');
       return servicos.filter(s => s.ativo !== false);
     } catch (error) {
       console.error('Erro ao buscar serviços:', error);
@@ -25,14 +30,32 @@ export const siteService = {
   },
 
   // Buscar profissionais ativos
-  buscarProfissionais: async () => {
+  buscarProfissionais: async (empresaId = null) => {
     try {
-      const profissionais = await firebaseService.getAll('profissionais');
+      const profissionais = empresaId
+        ? await firebaseService.query('profissionais', [{ field: 'empresaId', operator: '==', value: empresaId }])
+        : await firebaseService.getAll('profissionais');
       return profissionais.filter(p => p.status === 'ativo');
     } catch (error) {
       console.error('Erro ao buscar profissionais:', error);
       return [];
     }
+  },
+
+
+
+  // Buscar dados públicos de uma empresa por slug para a landing page
+  buscarLandingEmpresa: async (slug) => {
+    const empresa = await saasService.buscarEmpresaPorSlug(slug);
+    if (!empresa) return null;
+
+    const [configuracoes, servicos, profissionais] = await Promise.all([
+      siteService.buscarConfiguracoes(empresa.id),
+      siteService.buscarServicos(empresa.id),
+      siteService.buscarProfissionais(empresa.id)
+    ]);
+
+    return { empresa, configuracoes, servicos, profissionais };
   },
 
   // Criar agendamento público

@@ -117,6 +117,7 @@ import {
   Apartment as ApartmentIcon,
   WorkspacePremium as WorkspacePremiumIcon,
   Payments as PaymentsIcon,
+  Language as LanguageIcon,
   
   // Ícones de navegação
   ChevronLeft as ChevronLeftIcon,
@@ -519,6 +520,13 @@ const menuGroups = [
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
+      {
+        text: 'Página inicial',
+        icon: <LanguageIcon />,
+        path: '/empresa/site',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
     ],
   },
   {
@@ -597,6 +605,7 @@ export const extraIcons = {
   apartment: <ApartmentIcon />,
   workspacePremium: <WorkspacePremiumIcon />,
   payments: <PaymentsIcon />,
+  language: <LanguageIcon />,
 };
 
 // Componente Mobile Sidebar (mantido igual)

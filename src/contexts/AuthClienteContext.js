@@ -410,9 +410,14 @@ export const AuthClienteProvider = ({ children }) => {
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
+      const empresaPublicaId = dadosCliente.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
+      const empresaPublicaNome = dadosCliente.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
+
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {
         id: user.uid,
+        empresaId: empresaPublicaId,
+        empresaNome: empresaPublicaNome,
         nome: dadosCliente.nome,
         email: dadosCliente.email,
         telefone: dadosCliente.telefone,

@@ -28,8 +28,10 @@ import {
   Apartment as ApartmentIcon,
   Business as BusinessIcon,
   CheckCircle as CheckCircleIcon,
+  ContentCopy as ContentCopyIcon,
   CreditCard as CreditCardIcon,
   DomainAdd as DomainAddIcon,
+  Language as LanguageIcon,
   Launch as LaunchIcon,
   ReceiptLong as ReceiptLongIcon,
   WorkspacePremium as WorkspacePremiumIcon,
@@ -78,6 +80,15 @@ function SaasGestao({ initialTab = 0 }) {
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', email: '', telefone: '', planoId: 'individual' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
   const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
+  const [portalForm, setPortalForm] = useState({
+    slug: '',
+    titulo: '',
+    subtitulo: 'Agende seus serviços online com facilidade.',
+    corPrimaria: '#9c27b0',
+    ativo: true,
+    mostrarServicos: true,
+    mostrarProfissionais: true,
+  });
 
   const planoAtual = useMemo(() => {
     const planoId = assinatura?.planoId || empresa?.planoId || empresaForm.planoId;
@@ -98,6 +109,7 @@ function SaasGestao({ initialTab = 0 }) {
         setFaturas([]);
         setPagamentos([]);
         setEmpresaForm((current) => ({ ...current, planoId: planosData[0]?.id || 'individual' }));
+        setPortalForm((current) => ({ ...current, slug: '', titulo: '' }));
         return;
       }
 
@@ -120,6 +132,15 @@ function SaasGestao({ initialTab = 0 }) {
         email: empresaData?.email || '',
         telefone: empresaData?.telefone || '',
         planoId: empresaData?.planoId || assinaturaData?.planoId || planosData[0]?.id || 'individual',
+      });
+      setPortalForm({
+        slug: empresaData?.slug || '',
+        titulo: empresaData?.sitePublico?.titulo || empresaData?.nome || '',
+        subtitulo: empresaData?.sitePublico?.subtitulo || 'Agende seus serviços online com facilidade.',
+        corPrimaria: empresaData?.sitePublico?.corPrimaria || '#9c27b0',
+        ativo: empresaData?.sitePublico?.ativo !== false,
+        mostrarServicos: empresaData?.sitePublico?.mostrarServicos !== false,
+        mostrarProfissionais: empresaData?.sitePublico?.mostrarProfissionais !== false,
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -179,6 +200,56 @@ function SaasGestao({ initialTab = 0 }) {
       toast.error(error.message || 'Erro ao salvar empresa.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const salvarPortalEmpresa = async (event) => {
+    event.preventDefault();
+    if (!empresa?.id) {
+      toast.error('Cadastre a empresa antes de configurar o link público.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const atualizada = await saasService.salvarPortalEmpresa(empresa.id, {
+        slug: portalForm.slug,
+        sitePublico: {
+          titulo: portalForm.titulo,
+          subtitulo: portalForm.subtitulo,
+          corPrimaria: portalForm.corPrimaria,
+          ativo: portalForm.ativo,
+          mostrarServicos: portalForm.mostrarServicos,
+          mostrarProfissionais: portalForm.mostrarProfissionais,
+        }
+      });
+      setEmpresa(atualizada);
+      setPortalForm({
+        slug: atualizada.slug || '',
+        titulo: atualizada.sitePublico?.titulo || atualizada.nome || '',
+        subtitulo: atualizada.sitePublico?.subtitulo || 'Agende seus serviços online com facilidade.',
+        corPrimaria: atualizada.sitePublico?.corPrimaria || '#9c27b0',
+        ativo: atualizada.sitePublico?.ativo !== false,
+        mostrarServicos: atualizada.sitePublico?.mostrarServicos !== false,
+        mostrarProfissionais: atualizada.sitePublico?.mostrarProfissionais !== false,
+      });
+      toast.success('Página inicial da empresa atualizada.');
+    } catch (error) {
+      console.error('Erro ao salvar página da empresa:', error);
+      toast.error(error.message || 'Erro ao salvar página inicial.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copiarLinkEmpresa = async () => {
+    const link = empresa?.linkPublico || (portalForm.slug ? saasService.buildEmpresaLink(portalForm.slug) : '');
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('Link copiado.');
+    } catch (error) {
+      toast.error(link);
     }
   };
 
@@ -306,6 +377,7 @@ function SaasGestao({ initialTab = 0 }) {
           <Tab icon={<WorkspacePremiumIcon />} iconPosition="start" label="Planos" />
           <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="Assinatura" disabled={!empresa} />
           <Tab icon={<CreditCardIcon />} iconPosition="start" label="Cobrança" disabled={!empresa} />
+          <Tab icon={<LanguageIcon />} iconPosition="start" label="Página inicial" disabled={!empresa} />
         </Tabs>
       </Paper>
 
@@ -475,6 +547,59 @@ function SaasGestao({ initialTab = 0 }) {
             </Stack>
           </Grid>
         </Grid>
+      </TabPanel>
+
+      <TabPanel value={tab} index={5}>
+        <Card>
+          <CardContent component="form" onSubmit={salvarPortalEmpresa}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Página inicial própria da empresa</Typography>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Este é o link que os clientes desta empresa usarão para entrar, criar conta e ver serviços publicados.
+            </Alert>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={5}>
+                <TextField fullWidth required label="Slug do link" value={portalForm.slug} onChange={(e) => setPortalForm({ ...portalForm, slug: saasService.slugifyEmpresa(e.target.value) })} helperText="Exemplo: minha-empresa" />
+              </Grid>
+              <Grid item xs={12} md={7}>
+                <TextField fullWidth label="Link público" value={empresa?.linkPublico || (portalForm.slug ? saasService.buildEmpresaLink(portalForm.slug) : '')} InputProps={{ readOnly: true }} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Título da página" value={portalForm.titulo} onChange={(e) => setPortalForm({ ...portalForm, titulo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth type="color" label="Cor principal" value={portalForm.corPrimaria} onChange={(e) => setPortalForm({ ...portalForm, corPrimaria: e.target.value })} InputLabelProps={{ shrink: true }} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Página ativa" value={portalForm.ativo ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, ativo: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar serviços" value={portalForm.mostrarServicos ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarServicos: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar equipe" value={portalForm.mostrarProfissionais ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarProfissionais: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <Button type="submit" variant="contained" disabled={saving} startIcon={<LanguageIcon />}>Salvar página inicial</Button>
+                  <Button type="button" variant="outlined" onClick={copiarLinkEmpresa} startIcon={<ContentCopyIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Copiar link</Button>
+                  <Button type="button" variant="outlined" href={empresa?.linkPublico || saasService.buildEmpresaLink(portalForm.slug)} target="_blank" rel="noreferrer" startIcon={<LaunchIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Abrir página</Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       </TabPanel>
     </Box>
   );

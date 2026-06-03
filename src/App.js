@@ -194,6 +194,7 @@ import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
 import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
+import EmpresaLanding from './pages/EmpresaLanding';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import SaasGestao from './pages/SaasGestao';
@@ -394,6 +395,11 @@ function App() {
                 <Route path="/promocoes/:id" element={
                   <SimpleLayout>
                     <PromocaoVisualizar />
+                  </SimpleLayout>
+                } />
+                <Route path="/e/:slug" element={
+                  <SimpleLayout>
+                    <EmpresaLanding />
                   </SimpleLayout>
                 } />
                 <Route path="/login" element={
@@ -665,6 +671,13 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasGestao initialTab={4} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/site" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={5} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />

@@ -87,11 +87,16 @@ A base SaaS foi adicionada para atender empresas individuais e redes multiunidad
 ```txt
 supabase/migrations/20260602120000_create_saas_structure.sql
 supabase/migrations/20260603100000_create_saas_billing_config.sql
+supabase/migrations/20260603120000_add_empresa_public_portal.sql
 ```
 
-Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assinaturas`, `faturas_saas`, `pagamentos_saas`, `convites_saas`, `uso_saas` e `eventos_cobranca_saas`, `configuracoes_saas` e `webhooks_cobranca_saas`, além de semear os planos `individual` e `multiunidades`.
+Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assinaturas`, `faturas_saas`, `pagamentos_saas`, `convites_saas`, `uso_saas` e `eventos_cobranca_saas`, `configuracoes_saas` e `webhooks_cobranca_saas`, além de campos `slug`, `linkPublico` e `sitePublico` em cada empresa, além de semear os planos `individual` e `multiunidades`.
 
 O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseService` adiciona/faz filtro automático por `empresaId` e, quando aplicável, por `unidadeId` nas coleções operacionais. Isso permite separar os dados de cada contratante sem reescrever todas as telas.
+
+### Página pública por empresa
+
+Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). A tela define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.
 
 ### Cobrança
 

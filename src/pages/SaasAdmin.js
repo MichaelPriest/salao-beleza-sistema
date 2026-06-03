@@ -28,6 +28,7 @@ import {
   Apartment as ApartmentIcon,
   Business as BusinessIcon,
   CreditCard as CreditCardIcon,
+  OpenInNew as OpenInNewIcon,
   ReceiptLong as ReceiptLongIcon,
   Refresh as RefreshIcon,
   WorkspacePremium as WorkspacePremiumIcon,
@@ -324,6 +325,7 @@ function SaasAdmin() {
                       <TableCell>Plano</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Unidades</TableCell>
+                      <TableCell>Link</TableCell>
                       <TableCell>Próx. cobrança</TableCell>
                       <TableCell align="right">Ações</TableCell>
                     </TableRow>
@@ -343,6 +345,9 @@ function SaasAdmin() {
                           <TableCell>{plano.nome}</TableCell>
                           <TableCell><Chip size="small" label={assinatura?.status || 'sem assinatura'} color={getStatusColor(assinatura?.status)} /></TableCell>
                           <TableCell>{totalUnidades}</TableCell>
+                          <TableCell>
+                            {empresa.slug ? <Button size="small" href={empresa.linkPublico || `/e/${empresa.slug}`} target="_blank" rel="noreferrer" startIcon={<OpenInNewIcon />}>Abrir</Button> : '-'}
+                          </TableCell>
                           <TableCell>{formatDate(assinatura?.proximaCobrancaEm)}</TableCell>
                           <TableCell align="right">
                             <Stack direction="row" spacing={1} justifyContent="flex-end">

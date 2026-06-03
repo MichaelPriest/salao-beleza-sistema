@@ -46,6 +46,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { firebaseService } from '../services/firebase';
+import { saasService } from '../services/saasService';
 import { formatarCPF, removerMascaraCPF, validarCPF } from '../utils/cpfUtils';
 
 function ClienteLogin() {
@@ -88,6 +89,22 @@ function ClienteLogin() {
       setSuccess('Email confirmado com sucesso! Você já pode acessar sua área do cliente.');
       window.sessionStorage.removeItem('supabase.auth.redirect_type');
     }
+  }, []);
+
+
+  useEffect(() => {
+    const carregarEmpresaPublica = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+      if (!slug) return;
+      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
+      if (!empresa) return;
+      window.sessionStorage.setItem('empresa_publica_slug', slug);
+      window.sessionStorage.setItem('empresa_publica_id', empresa.id);
+      window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
+    };
+
+    carregarEmpresaPublica();
   }, []);
 
   // 🔥 REDIRECIONAR SE JÁ ESTIVER AUTENTICADO

@@ -1,5 +1,5 @@
 // src/pages/ClienteCadastro.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Card,
@@ -41,6 +41,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { masks, MaskedInput } from '../utils/plugins';
+import { saasService } from '../services/saasService';
 
 const steps = ['Dados Pessoais', 'Login', 'Preferências', 'Confirmação'];
 
@@ -52,6 +53,8 @@ function ClienteCadastro() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const [empresaPublica, setEmpresaPublica] = useState(null);
 
   const [formData, setFormData] = useState({
     // Dados Pessoais
@@ -80,6 +83,22 @@ function ClienteCadastro() {
     cidade: '',
     estado: '',
   });
+
+  useEffect(() => {
+    const carregarEmpresaPublica = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+      if (!slug) return;
+      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
+      if (!empresa) return;
+      setEmpresaPublica(empresa);
+      window.sessionStorage.setItem('empresa_publica_slug', slug);
+      window.sessionStorage.setItem('empresa_publica_id', empresa.id);
+      window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
+    };
+
+    carregarEmpresaPublica();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -128,7 +147,7 @@ function ClienteCadastro() {
     setError('');
 
     try {
-      const success = await cadastrar(formData);
+      const success = await cadastrar({ ...formData, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       if (success) {
         setSuccess(true);
         setTimeout(() => {
