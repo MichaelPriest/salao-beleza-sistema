@@ -3,12 +3,25 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { toast } from 'react-hot-toast';
+import { saasService } from '../services/saasService';
 import {
   consumeSupabaseAuthRedirect,
   firebaseService,
   setTenantContext,
   setTenantContextFromUser,
 } from '../services/firebase';
+
+const getAuthErrorFromUrl = () => {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const searchParams = new URLSearchParams(window.location.search);
+  const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+  const errorDescription = searchParams.get('error_description') || hashParams.get('error_description');
+  const errorMessage = searchParams.get('error') || hashParams.get('error');
+
+  if (!errorCode && !errorDescription && !errorMessage) return null;
+
+  return decodeURIComponent(errorDescription || errorMessage || errorCode || 'Erro desconhecido no login com Google');
+};
 
 function ClienteAuthCallback() {
   const navigate = useNavigate();
@@ -17,6 +30,11 @@ function ClienteAuthCallback() {
   useEffect(() => {
     const processCallback = async () => {
       try {
+        const authError = getAuthErrorFromUrl();
+        if (authError) {
+          throw new Error(`Google não concluiu a autenticação: ${authError}`);
+        }
+
         const session = await consumeSupabaseAuthRedirect();
         const user = session?.user;
 
@@ -24,9 +42,20 @@ function ClienteAuthCallback() {
           throw new Error('Sessão do Google não encontrada. Tente entrar novamente.');
         }
 
-        const empresaId = window.sessionStorage.getItem('empresa_publica_id');
-        const empresaNome = window.sessionStorage.getItem('empresa_publica_nome');
-        const empresaSlug = window.sessionStorage.getItem('empresa_publica_slug');
+        const empresaSlug = new URLSearchParams(window.location.search).get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+        let empresaId = window.sessionStorage.getItem('empresa_publica_id');
+        let empresaNome = window.sessionStorage.getItem('empresa_publica_nome');
+
+        if (!empresaId && empresaSlug) {
+          const empresa = await saasService.buscarEmpresaPorSlug(empresaSlug).catch(() => null);
+          if (empresa?.id) {
+            empresaId = empresa.id;
+            empresaNome = empresa.nome || '';
+            window.sessionStorage.setItem('empresa_publica_slug', empresaSlug);
+            window.sessionStorage.setItem('empresa_publica_id', empresaId);
+            window.sessionStorage.setItem('empresa_publica_nome', empresaNome);
+          }
+        }
 
         if (!empresaId) {
           throw new Error('Empresa não identificada. Acesse pelo link público do salão.');

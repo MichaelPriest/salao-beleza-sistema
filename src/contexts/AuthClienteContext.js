@@ -1,7 +1,7 @@
 // src/contexts/AuthClienteContext.js
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, supabaseConfig } from '../services/firebase';
 import { 
   getAuth, 
   signOut, 
@@ -237,12 +237,15 @@ export const AuthClienteProvider = ({ children }) => {
       sessionStorage.setItem('empresa_publica_nome', empresaNome || '');
       sessionStorage.setItem('empresa_publica_slug', empresaSlug || '');
       
-      // Construir URL de callback
-      const callbackUrl = `${window.location.origin}/cliente/auth/callback`;
-      const redirectTo = encodeURIComponent(callbackUrl);
+      // Construir URL de callback mantendo o slug da empresa no retorno do OAuth.
+      const callbackUrl = new URL('/cliente/auth/callback', window.location.origin);
+      if (empresaSlug) {
+        callbackUrl.searchParams.set('empresa', empresaSlug);
+      }
+      const redirectTo = encodeURIComponent(callbackUrl.toString());
       
       // URL do Supabase OAuth
-      const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+      const authUrl = `${supabaseConfig.url}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
       
       console.log('🚀 Redirecionando para Google OAuth');
       
