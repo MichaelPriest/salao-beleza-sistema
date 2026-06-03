@@ -144,7 +144,8 @@ const getConfigTabFromSearch = (search = '') => {
 
 const getEmpresaTabFromSearch = (search = '') => {
   const tab = new URLSearchParams(search).get('empresaTab');
-  return EMPRESA_TAB_INDEX[tab] ?? Number(tab || 0) || 0;
+  const parsedTab = Number(tab || 0);
+  return EMPRESA_TAB_INDEX[tab] ?? (Number.isNaN(parsedTab) ? 0 : parsedTab);
 };
 
 function TabPanel({ children, value, index }) {
