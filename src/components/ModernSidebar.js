@@ -173,6 +173,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
+import { isSaasPlatformAdmin } from '../utils/saasAccess';
 
 // Estrutura do menu com ícones e permissões por cargo - ATUALIZADA
 const menuGroups = [
@@ -473,34 +474,48 @@ const menuGroups = [
     ],
   },
   {
-    title: 'SAAS E ASSINATURA',
+    title: 'ADMIN SAAS',
+    icon: <WorkspacePremiumIcon />,
+    items: [
+      {
+        text: 'Painel da Plataforma',
+        icon: <WorkspacePremiumIcon />,
+        path: '/saas-admin',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+    ],
+  },
+  {
+    title: 'MINHA EMPRESA',
     icon: <BusinessIcon />,
     items: [
       {
-        text: 'Empresa SaaS',
+        text: 'Empresa',
         icon: <BusinessIcon />,
-        path: '/saas',
+        path: '/empresa',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Unidades',
         icon: <ApartmentIcon />,
-        path: '/saas/unidades',
+        path: '/empresa/unidades',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Assinatura',
         icon: <WorkspacePremiumIcon />,
-        path: '/saas/assinatura',
+        path: '/empresa/assinatura',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Cobrança SaaS',
         icon: <PaymentsIcon />,
-        path: '/saas/cobranca',
+        path: '/empresa/cobranca',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
@@ -1234,8 +1249,12 @@ function ModernSidebar() {
   // Função para verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
+
+    if (item.plataformaOnly) {
+      return isSaasPlatformAdmin(usuario);
+    }
     
-    // Admin tem acesso a tudo
+    // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
     
     // Verificar se o cargo do usuário está na lista de cargos permitidos para o item

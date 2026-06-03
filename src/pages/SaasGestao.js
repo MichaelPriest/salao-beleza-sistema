@@ -281,10 +281,10 @@ function SaasGestao({ initialTab = 0 }) {
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-            Gestão SaaS
+            Minha empresa
           </Typography>
           <Typography color="text.secondary">
-            Configure empresas, unidades, planos e cobranças da assinatura mensal.
+            Gerencie somente os dados da sua empresa, unidades, assinatura e cobranças.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
@@ -295,7 +295,7 @@ function SaasGestao({ initialTab = 0 }) {
 
       {!empresa && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Cadastre a primeira empresa para ativar o modo SaaS. O sistema vai criar a unidade principal e iniciar um trial automaticamente.
+          Cadastre a sua empresa para ativar o acesso. O sistema vai criar a unidade principal e iniciar um trial automaticamente.
         </Alert>
       )}
 
@@ -312,7 +312,7 @@ function SaasGestao({ initialTab = 0 }) {
       <TabPanel value={tab} index={0}>
         <Card>
           <CardContent component="form" onSubmit={salvarEmpresa}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Dados da empresa contratante</Typography>
+            <Typography variant="h6" sx={{ mb: 2 }}>Dados da minha empresa</Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
                 <TextField fullWidth required label="Nome da empresa" value={empresaForm.nome} onChange={(e) => setEmpresaForm({ ...empresaForm, nome: e.target.value })} />
@@ -335,7 +335,7 @@ function SaasGestao({ initialTab = 0 }) {
               </Grid>
               <Grid item xs={12}>
                 <Button type="submit" variant="contained" disabled={saving} startIcon={<BusinessIcon />}>
-                  {empresa ? 'Salvar empresa' : 'Criar empresa SaaS'}
+                  {empresa ? 'Salvar empresa' : 'Criar minha empresa'}
                 </Button>
               </Grid>
             </Grid>

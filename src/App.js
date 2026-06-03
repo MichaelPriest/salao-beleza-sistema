@@ -1,7 +1,7 @@
 // src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
@@ -94,6 +94,7 @@ import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
+import SaasAdminRoute from './components/SaasAdminRoute';
 import Footer from './components/Footer';
 
 // Pages Principais
@@ -196,6 +197,7 @@ import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import SaasGestao from './pages/SaasGestao';
+import SaasAdmin from './pages/SaasAdmin';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -630,28 +632,36 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas" element={
+                <Route path="/saas" element={<Navigate to="/empresa" replace />} />
+                <Route path="/saas-admin" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasAdmin />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/empresa" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasGestao />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas/unidades" element={
+                <Route path="/empresa/unidades" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasGestao initialTab={1} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas/assinatura" element={
+                <Route path="/empresa/assinatura" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasGestao initialTab={3} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas/cobranca" element={
+                <Route path="/empresa/cobranca" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasGestao initialTab={4} />

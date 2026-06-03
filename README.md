@@ -94,12 +94,11 @@ O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseS
 
 ### Cobrança
 
-As telas administrativas foram adicionadas nas rotas privadas:
+As telas foram separadas em duas áreas isoladas:
 
-- `/saas`: cadastro/edição da empresa contratante e seleção do plano.
-- `/saas/unidades`: criação e troca da unidade ativa para empresas multiunidades.
-- `/saas/assinatura`: status da assinatura atual e abertura do checkout.
-- `/saas/cobranca`: faturas manuais, confirmação de pagamento e histórico recente.
+- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, sem alterar o contexto de empresa ativa.
+- **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado.
+- A rota antiga `/saas` redireciona para `/empresa` para evitar misturar o painel da plataforma com o painel do cliente.
 
 O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado:
 
