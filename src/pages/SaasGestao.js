@@ -38,7 +38,8 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
-import { PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import BillingPaymentForms from '../components/saas/BillingPaymentForms';
+import { CONFIG_COBRANCA_PADRAO, PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
@@ -77,6 +78,7 @@ function SaasGestao({ initialTab = 0 }) {
   const [faturas, setFaturas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
   const [checkout, setCheckout] = useState(null);
+  const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
   const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
@@ -88,6 +90,11 @@ function SaasGestao({ initialTab = 0 }) {
     ativo: true,
     mostrarServicos: true,
     mostrarProfissionais: true,
+    logo: '',
+    bannerUrl: '',
+    whatsapp: '',
+    temaLayout: 'moderno',
+    mostrarContato: true,
   });
 
   const planoAtual = useMemo(() => {
@@ -108,6 +115,7 @@ function SaasGestao({ initialTab = 0 }) {
         setAssinatura(null);
         setFaturas([]);
         setPagamentos([]);
+        setPaymentConfig(CONFIG_COBRANCA_PADRAO);
         setEmpresaForm((current) => ({ ...current, planoId: planosData[0]?.id || 'individual' }));
         setPortalForm((current) => ({ ...current, slug: '', titulo: '' }));
         return;
@@ -126,6 +134,16 @@ function SaasGestao({ initialTab = 0 }) {
       setAssinatura(assinaturaData);
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
+      const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
+      setPaymentConfig({
+        ...configGlobal,
+        ...(empresaData?.cobranca?.configPagamento || {}),
+        provider: empresaData?.cobranca?.provider || configGlobal.provider,
+        metodosPagamento: {
+          ...(configGlobal.metodosPagamento || {}),
+          ...(empresaData?.cobranca?.metodosPagamento || {})
+        }
+      });
       setEmpresaForm({
         nome: empresaData?.nome || '',
         documento: empresaData?.documento || '',
@@ -149,6 +167,11 @@ function SaasGestao({ initialTab = 0 }) {
         ativo: empresaData?.sitePublico?.ativo !== false,
         mostrarServicos: empresaData?.sitePublico?.mostrarServicos !== false,
         mostrarProfissionais: empresaData?.sitePublico?.mostrarProfissionais !== false,
+        logo: empresaData?.sitePublico?.logo || '',
+        bannerUrl: empresaData?.sitePublico?.bannerUrl || '',
+        whatsapp: empresaData?.sitePublico?.whatsapp || empresaData?.telefone || '',
+        temaLayout: empresaData?.sitePublico?.temaLayout || 'moderno',
+        mostrarContato: empresaData?.sitePublico?.mostrarContato !== false,
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -196,6 +219,9 @@ function SaasGestao({ initialTab = 0 }) {
             enderecoCobranca: empresaForm.enderecoCobranca,
             diaVencimento: Number(empresaForm.diaVencimento || 5),
             observacoes: empresaForm.observacoesCobranca,
+            provider: paymentConfig.provider,
+            metodosPagamento: paymentConfig.metodosPagamento,
+            configPagamento: paymentConfig,
           },
           updatedAt: new Date().toISOString(),
         };
@@ -240,6 +266,11 @@ function SaasGestao({ initialTab = 0 }) {
           ativo: portalForm.ativo,
           mostrarServicos: portalForm.mostrarServicos,
           mostrarProfissionais: portalForm.mostrarProfissionais,
+          logo: portalForm.logo,
+          bannerUrl: portalForm.bannerUrl,
+          whatsapp: portalForm.whatsapp,
+          temaLayout: portalForm.temaLayout,
+          mostrarContato: portalForm.mostrarContato,
         }
       });
       setEmpresa(atualizada);
@@ -251,6 +282,11 @@ function SaasGestao({ initialTab = 0 }) {
         ativo: atualizada.sitePublico?.ativo !== false,
         mostrarServicos: atualizada.sitePublico?.mostrarServicos !== false,
         mostrarProfissionais: atualizada.sitePublico?.mostrarProfissionais !== false,
+        logo: atualizada.sitePublico?.logo || '',
+        bannerUrl: atualizada.sitePublico?.bannerUrl || '',
+        whatsapp: atualizada.sitePublico?.whatsapp || '',
+        temaLayout: atualizada.sitePublico?.temaLayout || 'moderno',
+        mostrarContato: atualizada.sitePublico?.mostrarContato !== false,
       });
       toast.success('Página inicial da empresa atualizada.');
     } catch (error) {
@@ -306,7 +342,12 @@ function SaasGestao({ initialTab = 0 }) {
   const iniciarCheckout = async () => {
     setCheckoutLoading(true);
     try {
-      const data = await saasService.iniciarCheckout({ planoId: planoAtual.id });
+      const data = await saasService.iniciarCheckout({
+        planoId: planoAtual.id,
+        provider: paymentConfig.provider,
+        metodosPagamento: paymentConfig.metodosPagamento,
+        dadosPagamento: paymentConfig
+      });
       setCheckout(data);
       if (data.checkoutUrl) {
         window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
@@ -317,6 +358,34 @@ function SaasGestao({ initialTab = 0 }) {
       toast.error(error.message || 'Erro ao iniciar cobrança.');
     } finally {
       setCheckoutLoading(false);
+    }
+  };
+
+
+  const salvarConfiguracaoPagamentoEmpresa = async () => {
+    if (!empresa?.id) return;
+    setSaving(true);
+    try {
+      const atualizada = {
+        ...empresa,
+        cobranca: {
+          ...(empresa.cobranca || {}),
+          provider: paymentConfig.provider,
+          metodosPagamento: paymentConfig.metodosPagamento,
+          configPagamento: paymentConfig,
+          diaVencimento: paymentConfig.diaVencimentoPadrao || empresa.cobranca?.diaVencimento || 5,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      await firebaseService.update('empresas', empresa.id, atualizada);
+      setEmpresa(atualizada);
+      setTenantContext({ empresa: atualizada });
+      toast.success('Formas de pagamento da empresa salvas.');
+    } catch (error) {
+      console.error('Erro ao salvar pagamentos da empresa:', error);
+      toast.error(error.message || 'Erro ao salvar pagamentos.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -549,6 +618,20 @@ function SaasGestao({ initialTab = 0 }) {
 
       <TabPanel value={tab} index={4}>
         <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+                  <Box>
+                    <Typography variant="h6">Formas de pagamento da empresa</Typography>
+                    <Typography color="text.secondary">Mesmo formulário da configuração SaaS: cartão, PIX, boleto, gateway e automação ficam alinhados ao provedor selecionado.</Typography>
+                  </Box>
+                  <Button variant="contained" disabled={saving} onClick={salvarConfiguracaoPagamentoEmpresa}>Salvar formas de pagamento</Button>
+                </Stack>
+                <BillingPaymentForms value={paymentConfig} onChange={setPaymentConfig} mode="tenant" />
+              </CardContent>
+            </Card>
+          </Grid>
           <Grid item xs={12} md={4}>
             <Card>
               <CardContent component="form" onSubmit={criarFatura}>
@@ -617,6 +700,22 @@ function SaasGestao({ initialTab = 0 }) {
               <Grid item xs={12} md={6}>
                 <TextField fullWidth type="color" label="Cor principal" value={portalForm.corPrimaria} onChange={(e) => setPortalForm({ ...portalForm, corPrimaria: e.target.value })} InputLabelProps={{ shrink: true }} />
               </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Tema do layout" value={portalForm.temaLayout} onChange={(e) => setPortalForm({ ...portalForm, temaLayout: e.target.value })}>
+                  <MenuItem value="classico">Clássico</MenuItem>
+                  <MenuItem value="moderno">Moderno</MenuItem>
+                  <MenuItem value="premium">Premium</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="URL do logotipo" value={portalForm.logo} onChange={(e) => setPortalForm({ ...portalForm, logo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="WhatsApp de atendimento" value={portalForm.whatsapp} onChange={(e) => setPortalForm({ ...portalForm, whatsapp: e.target.value })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="URL do banner" value={portalForm.bannerUrl} onChange={(e) => setPortalForm({ ...portalForm, bannerUrl: e.target.value })} helperText="Imagem de capa da página pública." />
+              </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
               </Grid>
@@ -634,6 +733,12 @@ function SaasGestao({ initialTab = 0 }) {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Mostrar equipe" value={portalForm.mostrarProfissionais ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarProfissionais: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar contato/WhatsApp" value={portalForm.mostrarContato ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarContato: e.target.value === 'sim' })}>
                   <MenuItem value="sim">Sim</MenuItem>
                   <MenuItem value="nao">Não</MenuItem>
                 </TextField>

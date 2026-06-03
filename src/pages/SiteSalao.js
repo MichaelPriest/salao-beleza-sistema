@@ -290,8 +290,10 @@ function SiteSalao() {
             contato: {
               ...(landing.configuracoes?.salao?.contato || {}),
               telefone: empresaData?.telefone || landing.configuracoes?.salao?.contato?.telefone,
-              email: empresaData?.email || landing.configuracoes?.salao?.contato?.email
-            }
+              email: empresaData?.email || landing.configuracoes?.salao?.contato?.email,
+              whatsapp: sitePublico.whatsapp || landing.configuracoes?.salao?.contato?.whatsapp
+            },
+            bannerUrl: sitePublico.bannerUrl || landing.configuracoes?.salao?.bannerUrl
           },
           sitePublico
         };
@@ -449,17 +451,21 @@ function SiteSalao() {
 
   const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
   const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
+  const sitePublico = config?.sitePublico || {};
+  const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
+  const bannerUrl = sitePublico.bannerUrl || config?.salao?.bannerUrl;
+  const temaLayout = sitePublico.temaLayout || 'moderno';
   const salaoEndereco = config?.salao?.endereco || {};
   const contato = config?.salao?.contato || {};
 
   return (
-    <Box sx={{ bgcolor: '#faf5ff', minHeight: '100vh' }}>
+    <Box sx={{ bgcolor: temaLayout === 'premium' ? '#fffaf3' : '#faf5ff', minHeight: '100vh' }}>
       {/* Header */}
       <AppBar 
         position="fixed" 
         sx={{ 
           bgcolor: 'white', 
-          color: '#9c27b0',
+          color: corPrimaria,
           boxShadow: '0 2px 20px rgba(156,39,176,0.1)',
         }}
       >
@@ -664,7 +670,7 @@ function SiteSalao() {
                 }}
               >
                 Realce sua{' '}
-                <span style={{ color: '#9c27b0' }}>Beleza</span>
+                <span style={{ color: corPrimaria }}>Beleza</span>
               </Typography>
               <Typography variant="h5" color="textSecondary" sx={{ mb: 3, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.
@@ -677,7 +683,7 @@ function SiteSalao() {
                 size="large"
                 onClick={() => scrollToSection('tutorial')}
                 sx={{
-                  background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                  background: `linear-gradient(45deg, ${corPrimaria} 30%, #ff4081 90%)`,
                   color: 'white',
                   px: 4,
                   py: 1.5,
@@ -696,7 +702,7 @@ function SiteSalao() {
             >
               <Box
                 component="img"
-                src="https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+                src={bannerUrl || "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"}
                 alt="Salão de Beleza"
                 sx={{
                   width: '100%',
@@ -812,7 +818,7 @@ function SiteSalao() {
                     </Accordion>
 
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
-                      <Button variant="contained" size="large" href="/login" startIcon={<AdminIcon />} sx={{ background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)', color: 'white', px: 4 }}>
+                      <Button variant="contained" size="large" href="/login" startIcon={<AdminIcon />} sx={{ background: `linear-gradient(45deg, ${corPrimaria} 30%, #ff4081 90%)`, color: 'white', px: 4 }}>
                         Acessar Painel Administrativo
                       </Button>
                     </Box>

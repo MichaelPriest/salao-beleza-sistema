@@ -7,13 +7,19 @@ const json = (res, status, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+const getEnabledMethods = (metodosPagamento = {}) => ({
+  card: metodosPagamento.card !== false,
+  pix: metodosPagamento.pix !== false,
+  boleto: metodosPagamento.boleto !== false
+});
+
 const buildBaseUrl = (req) => {
   const protocol = req.headers['x-forwarded-proto'] || 'https';
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   return `${protocol}://${host}`;
 };
 
-const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl }) => {
+const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento = {} }) => {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error('STRIPE_SECRET_KEY não configurada no ambiente servidor.');
   }
@@ -26,6 +32,10 @@ const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl
   params.append('customer_email', empresa.email || '');
   params.append('metadata[empresaId]', empresa.id);
   params.append('metadata[planoId]', plano.id);
+  const methods = getEnabledMethods(metodosPagamento);
+  if (methods.card) params.append('payment_method_types[]', 'card');
+  if (methods.boleto) params.append('payment_method_types[]', 'boleto');
+  if (!methods.card && !methods.boleto) params.append('payment_method_types[]', 'card');
 
   if (plano.stripePriceId) {
     params.append('line_items[0][price]', plano.stripePriceId);
@@ -60,11 +70,18 @@ const getPagSeguroBaseUrl = (environment) => {
     : 'https://sandbox.api.pagseguro.com';
 };
 
-const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificationUrl, billingConfig = {} }) => {
+const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificationUrl, billingConfig = {}, metodosPagamento = {} }) => {
   const token = process.env.PAGSEGURO_TOKEN || process.env.PAGBANK_TOKEN;
   if (!token) {
     throw new Error('PAGSEGURO_TOKEN não configurado no ambiente servidor.');
   }
+
+  const methods = getEnabledMethods(metodosPagamento);
+  const paymentMethods = [
+    methods.card ? { type: 'CREDIT_CARD' } : null,
+    methods.pix ? { type: 'PIX' } : null,
+    methods.boleto ? { type: 'BOLETO' } : null
+  ].filter(Boolean);
 
   const payload = {
     reference_id: `${empresa.id}:${plano.id}:${Date.now()}`,
@@ -81,7 +98,7 @@ const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificatio
       }
     ],
     redirect_url: successUrl,
-    payment_methods: [{ type: 'CREDIT_CARD' }, { type: 'PIX' }, { type: 'BOLETO' }],
+    payment_methods: paymentMethods.length ? paymentMethods : [{ type: 'CREDIT_CARD' }],
     notification_urls: notificationUrl ? [notificationUrl] : undefined
   };
 
@@ -106,10 +123,18 @@ const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificatio
   return { provider: 'pagseguro', checkoutUrl, checkoutId: data.id, referenceId: data.reference_id };
 };
 
-const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl }) => {
+const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl, metodosPagamento = {} }) => {
   if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
     throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado no ambiente servidor.');
   }
+
+  const methods = getEnabledMethods(metodosPagamento);
+  const excludedPaymentTypes = [
+    !methods.card ? { id: 'credit_card' } : null,
+    !methods.card ? { id: 'debit_card' } : null,
+    !methods.pix ? { id: 'bank_transfer' } : null,
+    !methods.boleto ? { id: 'ticket' } : null
+  ].filter(Boolean);
 
   const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
     method: 'POST',
@@ -134,7 +159,8 @@ const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl
         failure: cancelUrl,
         pending: successUrl
       },
-      auto_return: 'approved'
+      auto_return: 'approved',
+      payment_methods: { excluded_payment_types: excludedPaymentTypes }
     })
   });
 
@@ -156,6 +182,7 @@ module.exports = async (req, res) => {
     const billingConfig = body.billingConfig || {};
     const empresa = body.empresa || {};
     const plano = body.plano || {};
+    const metodosPagamento = body.metodosPagamento || billingConfig.metodosPagamento || {};
 
     if (!empresa.id || !plano.id) {
       return json(res, 400, { error: 'empresa.id e plano.id são obrigatórios.' });
@@ -169,15 +196,15 @@ module.exports = async (req, res) => {
     const notificationUrl = body.notificationUrl || process.env.PAGSEGURO_NOTIFICATION_URL || `${baseUrl}${webhookPath}`;
 
     if (provider === 'stripe') {
-      return json(res, 200, await createStripeCheckout({ req, plano, empresa, successUrl, cancelUrl }));
+      return json(res, 200, await createStripeCheckout({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento }));
     }
 
     if (provider === 'mercadopago') {
-      return json(res, 200, await createMercadoPagoCheckout({ plano, empresa, successUrl, cancelUrl }));
+      return json(res, 200, await createMercadoPagoCheckout({ plano, empresa, successUrl, cancelUrl, metodosPagamento }));
     }
 
     if (provider === 'pagseguro' || provider === 'pagbank') {
-      return json(res, 200, await createPagSeguroCheckout({ plano, empresa, successUrl, notificationUrl, billingConfig }));
+      return json(res, 200, await createPagSeguroCheckout({ plano, empresa, successUrl, notificationUrl, billingConfig, metodosPagamento }));
     }
 
     return json(res, 200, {

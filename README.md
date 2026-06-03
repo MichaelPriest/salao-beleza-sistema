@@ -113,17 +113,17 @@ Os clientes devem acessar login e cadastro pelo link público da empresa (`/e/:s
 
 ### Página pública por empresa
 
-Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). Essa página usa o componente `SiteSalao.js` em modo tenant, define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.
+Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). Essa página usa o componente `SiteSalao.js` em modo tenant, define o slug/link público, título, subtítulo, cor principal, logo, banner, WhatsApp, tema de layout e se serviços/equipe/contato serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.
 
 ### Cobrança
 
 As telas foram separadas em duas áreas isoladas:
 
-- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área é um dashboard central e as rotas específicas evitam repetição de telas: `/saas-admin/empresas` para tenants/unidades/status, `/saas-admin/assinaturas` para planos e uso, `/saas-admin/cobrancas` para faturas/pagamentos e `/saas-admin/pagamentos` para as configurações das APIs de pagamento.
-- **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado. Em `/empresa`, a empresa cadastra também razão social, responsável financeiro, email/telefone de cobrança, documento para nota, endereço de cobrança, dia padrão de vencimento e observações da mensalidade.
-- A rota antiga `/saas` redireciona para `/empresa` para evitar misturar o painel da plataforma com o painel do cliente.
+- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área é um dashboard central e as rotas específicas evitam repetição de telas: `/saas-admin/empresas` para tenants/unidades/status, `/saas-admin/assinaturas` para definir valores, limites e recursos dos planos, `/saas-admin/cobrancas` para faturas/pagamentos, `/saas-admin/relatorios` para MRR/inadimplência/receita por plano e `/saas-admin/pagamentos` para as configurações das APIs de pagamento.
+- **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura`, `/empresa/cobranca` e `/empresa/site`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado. Em `/empresa`, a empresa cadastra razão social, responsável financeiro, email/telefone de cobrança, documento para nota, endereço de cobrança, dia padrão de vencimento e observações da mensalidade. Em `/empresa/cobranca`, os formulários de gateway são os mesmos da página de APIs de pagamento da plataforma, com seleção de cartão, Pix e boleto conforme o provedor ativo.
+- **Landing pública de venda**: `/saas` exibe os planos ativos, recursos liberados e o formulário para cadastro de novas empresas. O plano escolhido define automaticamente valores, limites e funcionalidades disponíveis no menu da empresa.
 
-O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado:
+O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado e respeita os métodos de pagamento habilitados (cartão, Pix e boleto):
 
 - `BILLING_PROVIDER=manual`: retorna instruções de cobrança manual.
 - `BILLING_PROVIDER=stripe`: cria uma sessão Stripe Checkout usando `STRIPE_SECRET_KEY`.

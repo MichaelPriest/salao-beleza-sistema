@@ -175,6 +175,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
+import { saasService } from '../services/saasService';
 
 // Estrutura do menu com ícones e permissões por cargo - ATUALIZADA
 const menuGroups = [
@@ -506,6 +507,14 @@ const menuGroups = [
         text: 'Cobranças SaaS',
         icon: <ReceiptLongIcon />,
         path: '/saas-admin/cobrancas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Relatórios SaaS',
+        icon: <AnalyticsIcon />,
+        path: '/saas-admin/relatorios',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
@@ -1223,6 +1232,7 @@ function ModernSidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
+  const [recursosPlano, setRecursosPlano] = useState([]);
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1242,9 +1252,31 @@ function ModernSidebar() {
     }
   };
 
+  const carregarRecursosPlano = async () => {
+    try {
+      const user = usuariosService.getUsuarioAtual();
+      if (!user || isSaasPlatformAdmin(user)) {
+        setRecursosPlano([]);
+        return;
+      }
+      const empresaId = user.empresaId || user.tenantId || user.empresa?.id;
+      if (!empresaId) {
+        setRecursosPlano([]);
+        return;
+      }
+      const assinatura = await saasService.buscarAssinaturaAtual(empresaId).catch(() => null);
+      const plano = await saasService.buscarPlano(assinatura?.planoId || user.planoId || user.empresa?.planoId).catch(() => null);
+      setRecursosPlano(plano?.recursos || assinatura?.recursos || user.recursosPlano || []);
+    } catch (error) {
+      console.error('Erro ao carregar recursos do plano no menu:', error);
+      setRecursosPlano([]);
+    }
+  };
+
   useEffect(() => {
     carregarUsuario();
     carregarNotificacoes();
+    carregarRecursosPlano();
 
     // Inicializar todos os grupos como FECHADOS
     const initialOpenState = {};
@@ -1255,6 +1287,7 @@ function ModernSidebar() {
 
     const handleUsuarioAtualizado = () => {
       carregarUsuario();
+      carregarRecursosPlano();
     };
 
     const handleStorageChange = (e) => {
@@ -1287,9 +1320,33 @@ function ModernSidebar() {
     }
   };
 
+  const recursoDoItem = (item) => {
+    if (item.recursoPlano) return item.recursoPlano;
+    const path = item.path || '';
+    if (path.includes('/agendamento') || path === '/agenda') return 'agenda';
+    if (path.includes('/cliente')) return 'clientes';
+    if (path.includes('/servico')) return 'servicos';
+    if (path.includes('/profissional')) return 'profissionais';
+    if (path.includes('/fidelidade') || path.includes('/meus-pontos') || path.includes('/recompensas') || path.includes('/indicacoes')) return 'fidelidade';
+    if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
+    if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
+    if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
+    if (path.includes('/empresa/unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site')) return 'site_publico';
+    return null;
+  };
+
+  const recursoLiberadoNoPlano = (item) => {
+    const recurso = recursoDoItem(item);
+    if (!recurso || recursosPlano.length === 0) return true;
+    return recursosPlano.includes(recurso);
+  };
+
   // Função para verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
+
+    if (!recursoLiberadoNoPlano(item)) return false;
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);

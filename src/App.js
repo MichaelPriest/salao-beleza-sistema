@@ -202,6 +202,8 @@ import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasEmpresas from './pages/SaasEmpresas';
 import SaasCobrancas from './pages/SaasCobrancas';
 import SaasPlanos from './pages/SaasPlanos';
+import SaasRelatorios from './pages/SaasRelatorios';
+import SaasLanding from './pages/SaasLanding';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -641,7 +643,7 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas" element={<Navigate to="/empresa" replace />} />
+                <Route path="/saas" element={<SimpleLayout><SaasLanding /></SimpleLayout>} />
                 <Route path="/saas-admin" element={
                   <SaasAdminRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -674,6 +676,13 @@ function App() {
                   <SaasAdminRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasPagamentosConfig />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/relatorios" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasRelatorios />
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />

@@ -10,6 +10,20 @@ export const STATUS_ASSINATURA = {
   EXPIRADA: 'expirada'
 };
 
+export const RECURSOS_SAAS = [
+  { id: 'agenda', nome: 'Agenda' },
+  { id: 'clientes', nome: 'Clientes' },
+  { id: 'servicos', nome: 'Serviços' },
+  { id: 'profissionais', nome: 'Profissionais' },
+  { id: 'financeiro_basico', nome: 'Financeiro básico' },
+  { id: 'financeiro_completo', nome: 'Financeiro completo' },
+  { id: 'fidelidade', nome: 'Fidelidade' },
+  { id: 'estoque', nome: 'Estoque' },
+  { id: 'multiunidades', nome: 'Multiunidades' },
+  { id: 'relatorios_rede', nome: 'Relatórios avançados' },
+  { id: 'site_publico', nome: 'Página pública personalizada' }
+];
+
 export const PROVEDORES_COBRANCA = [
   { id: 'manual', nome: 'Manual / boleto externo', secretEnvVars: [] },
   { id: 'stripe', nome: 'Stripe Checkout', secretEnvVars: ['STRIPE_SECRET_KEY'] },
@@ -27,6 +41,7 @@ export const CONFIG_COBRANCA_PADRAO = {
   diasAntesVencimento: 3,
   diaVencimentoPadrao: 5,
   instrucoesManual: 'Entre em contato para pagamento da mensalidade.',
+  metodosPagamento: { card: true, pix: true, boleto: true },
   successPath: '/billing/sucesso',
   cancelPath: '/billing/cancelado',
   webhookPath: '/api/billing-webhook',
@@ -43,7 +58,7 @@ export const PLANOS_PADRAO = {
     precoMensal: 99,
     moeda: 'BRL',
     limites: { empresas: 1, unidades: 1, usuarios: 5, clientes: 1000 },
-    recursos: ['agenda', 'clientes', 'financeiro_basico', 'fidelidade']
+    recursos: ['agenda', 'clientes', 'servicos', 'profissionais', 'financeiro_basico', 'fidelidade', 'site_publico']
   },
   multiunidades: {
     id: 'multiunidades',
@@ -53,7 +68,7 @@ export const PLANOS_PADRAO = {
     precoPorUnidade: 49,
     moeda: 'BRL',
     limites: { empresas: 1, unidades: 999, usuarios: 999, clientes: 999999 },
-    recursos: ['agenda', 'clientes', 'financeiro_completo', 'fidelidade', 'multiunidades', 'relatorios_rede']
+    recursos: ['agenda', 'clientes', 'servicos', 'profissionais', 'financeiro_completo', 'fidelidade', 'estoque', 'multiunidades', 'relatorios_rede', 'site_publico']
   }
 };
 
@@ -127,7 +142,8 @@ export const saasService = {
       ...(config || {}),
       stripe: { ...CONFIG_COBRANCA_PADRAO.stripe, ...(config?.stripe || {}) },
       mercadopago: { ...CONFIG_COBRANCA_PADRAO.mercadopago, ...(config?.mercadopago || {}) },
-      pagseguro: { ...CONFIG_COBRANCA_PADRAO.pagseguro, ...(config?.pagseguro || {}) }
+      pagseguro: { ...CONFIG_COBRANCA_PADRAO.pagseguro, ...(config?.pagseguro || {}) },
+      metodosPagamento: { ...CONFIG_COBRANCA_PADRAO.metodosPagamento, ...(config?.metodosPagamento || {}) }
     };
   },
 
@@ -154,6 +170,32 @@ export const saasService = {
 
     await firebaseService.set('configuracoes_saas', BILLING_CONFIG_ID, payload);
     return payload;
+  },
+
+  salvarPlano: async (plano) => {
+    if (!plano?.id) throw new Error('Informe o ID do plano.');
+    const payload = {
+      ...plano,
+      precoMensal: Number(plano.precoMensal || 0),
+      precoPorUnidade: Number(plano.precoPorUnidade || 0),
+      limites: plano.limites || {},
+      recursos: plano.recursos || [],
+      updatedAt: new Date().toISOString()
+    };
+    await firebaseService.set('planos_saas', payload.id, payload);
+    return payload;
+  },
+
+  recursosDoPlano: async (planoId) => {
+    const plano = await saasService.buscarPlano(planoId);
+    return plano?.recursos || [];
+  },
+
+  recursoLiberado: async (empresaId, recurso) => {
+    const empresa = empresaId ? await firebaseService.getById('empresas', empresaId).catch(() => null) : null;
+    const assinatura = await saasService.buscarAssinaturaAtual(empresaId).catch(() => null);
+    const plano = await saasService.buscarPlano(assinatura?.planoId || empresa?.planoId || 'individual');
+    return Boolean((plano?.recursos || []).includes(recurso));
   },
 
   criarEmpresa: async ({ nome, documento, razaoSocial, email, telefone, planoId = 'individual', trialDias = 14, proprietario = null, responsavelFinanceiro = '', emailFinanceiro = '', telefoneFinanceiro = '', documentoCobranca = '', enderecoCobranca = '', diaVencimento = 5, observacoesCobranca = '' }) => {
@@ -223,6 +265,7 @@ export const saasService = {
       proximaCobrancaEm: addDays(new Date(), trialDias).toISOString(),
       diaVencimento: Number(diaVencimento || 5),
       gateway: process.env.REACT_APP_BILLING_PROVIDER || 'manual',
+      recursos: plano.recursos || [],
       createdAt: agora,
       updatedAt: agora
     };
@@ -330,7 +373,7 @@ export const saasService = {
 
 
 
-  iniciarCheckout: async ({ empresaId = getTenantContext().empresaId, planoId, provider } = {}) => {
+  iniciarCheckout: async ({ empresaId = getTenantContext().empresaId, planoId, provider, metodosPagamento = null, dadosPagamento = null } = {}) => {
     if (!empresaId) throw new Error('Empresa não selecionada.');
     const empresa = await firebaseService.getById('empresas', empresaId);
     const plano = await saasService.buscarPlano(planoId || empresa?.planoId || 'individual');
@@ -340,7 +383,7 @@ export const saasService = {
     const response = await fetch('/api/saas-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca })
+      body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca, metodosPagamento: metodosPagamento || configCobranca.metodosPagamento, dadosPagamento })
     });
 
     const data = await response.json();
@@ -365,6 +408,7 @@ export const saasService = {
       empresaId,
       assinaturaId: assinaturaId || empresaId,
       valor,
+      gateway: getTenantContext().empresa?.cobranca?.provider || 'manual',
       moeda: 'BRL',
       status: 'aberta',
       descricao: descricao || 'Mensalidade SaaS',
@@ -386,6 +430,7 @@ export const saasService = {
       empresaId,
       faturaId,
       valor,
+      gateway: getTenantContext().empresa?.cobranca?.provider || 'manual',
       moeda: 'BRL',
       gateway,
       gatewayPaymentId,
