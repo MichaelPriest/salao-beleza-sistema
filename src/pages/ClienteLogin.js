@@ -53,7 +53,7 @@ function ClienteLogin() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { login, loginComGoogle, completarCadastroGoogle, loading, isAuthenticated } = useAuthCliente();
+  const { login, loginComGoogle, completarCadastroGoogle, loading, isAuthenticated, cliente } = useAuthCliente();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -64,7 +64,6 @@ function ClienteLogin() {
   const [success, setSuccess] = useState('');
   const [empresaPublica, setEmpresaPublica] = useState(null);
   
-  // 🔥 ESTADOS PARA CADASTRO COMPLEMENTAR APÓS LOGIN GOOGLE
   const [openCadastroComplementar, setOpenCadastroComplementar] = useState(false);
   const [googleUserData, setGoogleUserData] = useState(null);
   const [dadosComplementares, setDadosComplementares] = useState({
@@ -92,14 +91,27 @@ function ClienteLogin() {
     }
   }, []);
 
-
   useEffect(() => {
     const carregarEmpresaPublica = async () => {
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
-      if (!slug) return;
-      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
-      if (!empresa) return;
+      if (!slug) {
+        console.log('❌ Nenhum slug de empresa encontrado na URL');
+        return;
+      }
+      
+      console.log('🔍 Buscando empresa por slug:', slug);
+      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch((err) => {
+        console.error('Erro ao buscar empresa:', err);
+        return null;
+      });
+      
+      if (!empresa) {
+        console.log('❌ Empresa não encontrada para o slug:', slug);
+        return;
+      }
+      
+      console.log('✅ Empresa encontrada:', empresa.id, empresa.nome);
       saasService.setContextoAtual({ empresa });
       setEmpresaPublica(empresa);
       window.sessionStorage.setItem('empresa_publica_slug', slug);
@@ -110,13 +122,16 @@ function ClienteLogin() {
     carregarEmpresaPublica();
   }, []);
 
-  // 🔥 REDIRECIONAR SE JÁ ESTIVER AUTENTICADO
+  // Monitorar autenticação
   useEffect(() => {
-    if (isAuthenticated) {
-      console.log('✅ Cliente já autenticado, redirecionando para dashboard');
-      navigate('/cliente/dashboard');
+    console.log('🔍 Monitorando autenticação - isAuthenticated:', isAuthenticated, 'cliente:', cliente);
+    if (isAuthenticated && cliente) {
+      console.log('✅ Cliente autenticado, redirecionando para dashboard');
+      setTimeout(() => {
+        navigate('/cliente/dashboard');
+      }, 500);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, cliente, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -135,18 +150,30 @@ function ClienteLogin() {
       return;
     }
 
-    if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+    const empresaId = empresaPublica?.id || window.sessionStorage.getItem('empresa_publica_id');
+    if (!empresaId) {
       setError('Acesse pelo link da empresa/salão para entrar na área do cliente.');
       return;
     }
 
-    const result = await login(formData.email, formData.senha, { empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
+    console.log('🔐 Tentando login com email:', formData.email, 'empresaId:', empresaId);
+    
+    const result = await login(formData.email, formData.senha, { 
+      empresaId, 
+      empresaNome: empresaPublica?.nome 
+    });
+    
+    console.log('📊 Resultado do login:', result);
+    
     if (result?.success) {
-      // O redirecionamento será feito pelo useEffect
+      setSuccess('Login realizado com sucesso! Redirecionando...');
+    } else if (result?.error) {
+      setError(result.error === 'cliente_fora_do_tenant' 
+        ? 'Conta não encontrada para esta empresa. Verifique se você está no link correto do salão.'
+        : 'Email ou senha inválidos');
     }
   };
 
-  // 🔥 FUNÇÃO PARA BUSCAR ENDEREÇO PELO CEP
   const buscarCep = async (cep) => {
     const cepLimpo = cep.replace(/\D/g, '');
     if (cepLimpo.length === 8) {
@@ -169,7 +196,6 @@ function ClienteLogin() {
     }
   };
 
-  // 🔥 VALIDAÇÃO E FORMATAÇÃO DE CPF
   const handleCpfChange = (e) => {
     const cpfFormatado = formatarCPF(e.target.value);
     setDadosComplementares({ ...dadosComplementares, cpf: cpfFormatado });
@@ -186,37 +212,47 @@ function ClienteLogin() {
     }
   };
 
-  // 🔥 LOGIN COM GOOGLE
   const handleGoogleLogin = async () => {
     try {
-      if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+      setError('');
+      
+      const empresaId = empresaPublica?.id || window.sessionStorage.getItem('empresa_publica_id');
+      if (!empresaId) {
         setError('Acesse pelo link da empresa/salão para entrar com Google.');
         return;
       }
 
-      const result = await loginComGoogle({ empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
+      console.log('🔐 Tentando login com Google para empresa:', empresaId);
       
-      // Se o login foi bem-sucedido e o cliente já existe
+      const result = await loginComGoogle({ 
+        empresaId, 
+        empresaNome: empresaPublica?.nome 
+      });
+      
+      console.log('📊 Resultado do login Google:', result);
+      
       if (result?.success) {
-        // O redirecionamento será feito pelo useEffect
+        console.log('✅ Login Google bem-sucedido!');
+        setSuccess('Login realizado com sucesso! Redirecionando...');
         return;
       }
       
-      // Se o usuário do Google não tem cadastro completo, abrir modal
       if (result?.needCompletion) {
-        console.log('📝 Abrindo modal de cadastro complementar');
+        console.log('📝 Usuário Google não encontrado, abrindo cadastro complementar');
         setGoogleUserData(result.userData);
         setOpenCadastroComplementar(true);
       }
+      
+      if (result?.error) {
+        setError('Erro ao fazer login com Google: ' + result.error);
+      }
     } catch (error) {
       console.error('Erro no login com Google:', error);
-      setError('Erro ao fazer login com Google');
+      setError('Erro ao fazer login com Google. Tente novamente.');
     }
   };
 
-  // 🔥 COMPLETAR CADASTRO APÓS LOGIN GOOGLE
   const handleCompletarCadastro = async () => {
-    // Validar CPF
     const cpfLimpo = removerMascaraCPF(dadosComplementares.cpf);
     if (!validarCPF(cpfLimpo)) {
       setCpfError('CPF inválido');
@@ -226,12 +262,26 @@ function ClienteLogin() {
     try {
       setLoadingComplementar(true);
       
-      const result = await completarCadastroGoogle({ ...dadosComplementares, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
+      console.log('📝 Completando cadastro para:', googleUserData?.email);
+      console.log('📝 Dados complementares:', dadosComplementares);
+      
+      const empresaId = empresaPublica?.id || window.sessionStorage.getItem('empresa_publica_id');
+      
+      const result = await completarCadastroGoogle({ 
+        ...dadosComplementares, 
+        empresaId, 
+        empresaNome: empresaPublica?.nome 
+      });
+      
+      console.log('📊 Resultado do completar cadastro:', result);
       
       if (result?.success) {
-        console.log('✅ Cadastro completado com sucesso');
+        console.log('✅ Cadastro completado com sucesso!');
         setOpenCadastroComplementar(false);
-        // O redirecionamento será feito pelo useEffect
+        setSuccess('Cadastro realizado com sucesso! Redirecionando...');
+        setTimeout(() => {
+          navigate('/cliente/dashboard');
+        }, 1500);
       } else {
         setError('Erro ao completar cadastro. Tente novamente.');
       }
@@ -248,7 +298,6 @@ function ClienteLogin() {
     const { name, value } = e.target;
     setDadosComplementares(prev => ({ ...prev, [name]: value }));
     
-    // Se for CEP, buscar endereço
     if (name === 'cep') {
       const cepLimpo = value.replace(/\D/g, '');
       if (cepLimpo.length === 8) {
@@ -283,7 +332,6 @@ function ClienteLogin() {
           style={{ width: '100%', maxWidth: 450 }}
         >
           <Card sx={{ borderRadius: 4, overflow: 'hidden' }}>
-            {/* Header com logo */}
             <Box
               sx={{
                 p: 3,
@@ -341,7 +389,6 @@ function ClienteLogin() {
                 </Alert>
               )}
 
-              {/* BOTÃO DE LOGIN COM GOOGLE */}
               <Button
                 fullWidth
                 variant="outlined"
@@ -474,7 +521,6 @@ function ClienteLogin() {
         </motion.div>
       </Box>
 
-      {/* 🔥 DIALOG DE CADASTRO COMPLEMENTAR APÓS LOGIN GOOGLE */}
       <Dialog 
         open={openCadastroComplementar} 
         onClose={() => setOpenCadastroComplementar(false)}
@@ -490,7 +536,6 @@ function ClienteLogin() {
           </Typography>
           
           <Grid container spacing={2}>
-            {/* CPF - Campo obrigatório para evitar duplicatas */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -512,7 +557,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Telefone */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -532,7 +576,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Data de Nascimento */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -553,7 +596,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Gênero */}
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Gênero</InputLabel>
@@ -562,11 +604,6 @@ function ClienteLogin() {
                   value={dadosComplementares.genero}
                   onChange={handleDadosComplementaresChange}
                   label="Gênero"
-                  startAdornment={
-                    <InputAdornment position="start">
-                      <WcIcon color="action" />
-                    </InputAdornment>
-                  }
                 >
                   <MenuItem value="feminino">Feminino</MenuItem>
                   <MenuItem value="masculino">Masculino</MenuItem>
@@ -576,7 +613,6 @@ function ClienteLogin() {
               </FormControl>
             </Grid>
 
-            {/* CEP */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -595,7 +631,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Logradouro */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -607,7 +642,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Número */}
             <Grid item xs={6} md={3}>
               <TextField
                 fullWidth
@@ -619,7 +653,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Complemento */}
             <Grid item xs={6} md={3}>
               <TextField
                 fullWidth
@@ -631,7 +664,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Bairro */}
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -643,7 +675,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Cidade */}
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -655,7 +686,6 @@ function ClienteLogin() {
               />
             </Grid>
 
-            {/* Estado */}
             <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
@@ -676,7 +706,7 @@ function ClienteLogin() {
           <Button
             variant="contained"
             onClick={handleCompletarCadastro}
-            disabled={loadingComplementar || !dadosComplementares.cpf || cpfError}
+            disabled={loadingComplementar || !dadosComplementares.cpf || !!cpfError}
             sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
           >
             {loadingComplementar ? <CircularProgress size={24} /> : 'Finalizar Cadastro'}
