@@ -194,11 +194,11 @@ import Manutencao from './pages/Manutencao';
 import ImportarServicos from './pages/ImportarServicos';
 import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
-import EmpresaLanding from './pages/EmpresaLanding';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import SaasGestao from './pages/SaasGestao';
 import SaasAdmin from './pages/SaasAdmin';
+import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -399,7 +399,7 @@ function App() {
                 } />
                 <Route path="/e/:slug" element={
                   <SimpleLayout>
-                    <EmpresaLanding />
+                    <SiteSalao />
                   </SimpleLayout>
                 } />
                 <Route path="/login" element={
@@ -643,6 +643,13 @@ function App() {
                   <SaasAdminRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasAdmin />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/pagamentos" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPagamentosConfig />
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />

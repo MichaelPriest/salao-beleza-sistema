@@ -96,13 +96,13 @@ O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseS
 
 ### Página pública por empresa
 
-Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). A tela define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.
+Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). Essa página usa o componente `SiteSalao.js` em modo tenant, define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.
 
 ### Cobrança
 
 As telas foram separadas em duas áreas isoladas:
 
-- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, configura gateways de pagamento e automação de mensalidades, sem alterar o contexto de empresa ativa.
+- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, configura gateways de pagamento e automação de mensalidades, sem alterar o contexto de empresa ativa. A página `/saas-admin/pagamentos` centraliza as configurações das APIs de pagamento.
 - **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado.
 - A rota antiga `/saas` redireciona para `/empresa` para evitar misturar o painel da plataforma com o painel do cliente.
 

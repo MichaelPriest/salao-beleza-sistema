@@ -486,6 +486,14 @@ const menuGroups = [
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
       },
+      {
+        text: 'APIs de Pagamento',
+        icon: <PaymentsIcon />,
+        path: '/saas-admin/pagamentos',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
     ],
   },
   {

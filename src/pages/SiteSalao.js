@@ -80,6 +80,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { siteService } from '../services/siteService';
 import { QRCodeSVG } from 'qrcode.react';
+import { useParams } from 'react-router-dom';
 
 // Mapa de nomes dos dias
 const nomesDias = {
@@ -220,6 +221,7 @@ const sanitizarProfissionais = (profissionais) => {
 };
 
 function SiteSalao() {
+  const { slug } = useParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
@@ -231,6 +233,7 @@ function SiteSalao() {
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
+  const [empresaPublica, setEmpresaPublica] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
   
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -248,10 +251,12 @@ function SiteSalao() {
   const [instagramUser, setInstagramUser] = useState('');
 
   const baseUrl = window.location.origin;
+  const clienteLoginUrl = slug ? `/cliente/login?empresa=${encodeURIComponent(slug)}` : '/cliente/login';
+  const clienteCadastroUrl = slug ? `/cliente/cadastro?empresa=${encodeURIComponent(slug)}` : '/cliente/cadastro';
 
   useEffect(() => {
     carregarDados();
-  }, []);
+  }, [slug]);
 
   const carregarDados = async (forceRefresh = false) => {
     try {
@@ -263,35 +268,69 @@ function SiteSalao() {
       setError(null);
       
       const cache = cacheRef.current;
+      const cachePrefix = slug ? `empresa_${slug}_` : '';
       
-      let configData = forceRefresh ? null : cache.get('config');
-      let servicosData = forceRefresh ? null : cache.get('servicos');
-      let profissionaisData = forceRefresh ? null : cache.get('profissionais');
+      let configData = forceRefresh ? null : cache.get(`${cachePrefix}config`);
+      let servicosData = forceRefresh ? null : cache.get(`${cachePrefix}servicos`);
+      let profissionaisData = forceRefresh ? null : cache.get(`${cachePrefix}profissionais`);
+      let empresaData = forceRefresh ? null : cache.get(`${cachePrefix}empresa`);
+
+      if (slug && (!configData || !servicosData || !profissionaisData || !empresaData)) {
+        console.log('🔄 Carregando página pública da empresa...');
+        const landing = await siteService.buscarLandingEmpresa(slug);
+        if (!landing) throw new Error('Página da empresa não encontrada ou indisponível.');
+        empresaData = landing.empresa;
+        const sitePublico = empresaData?.sitePublico || {};
+        configData = {
+          ...(landing.configuracoes || {}),
+          salao: {
+            ...(landing.configuracoes?.salao || {}),
+            nome: sitePublico.titulo || empresaData?.nome || landing.configuracoes?.salao?.nome,
+            logo: sitePublico.logo || landing.configuracoes?.salao?.logo,
+            contato: {
+              ...(landing.configuracoes?.salao?.contato || {}),
+              telefone: empresaData?.telefone || landing.configuracoes?.salao?.contato?.telefone,
+              email: empresaData?.email || landing.configuracoes?.salao?.contato?.email
+            }
+          },
+          sitePublico
+        };
+        servicosData = landing.servicos;
+        profissionaisData = landing.profissionais;
+        window.sessionStorage.setItem('empresa_publica_slug', slug);
+        window.sessionStorage.setItem('empresa_publica_id', empresaData.id);
+        window.sessionStorage.setItem('empresa_publica_nome', empresaData.nome || '');
+        cache.set(`${cachePrefix}empresa`, empresaData);
+        cache.set(`${cachePrefix}config`, configData);
+        cache.set(`${cachePrefix}servicos`, servicosData);
+        cache.set(`${cachePrefix}profissionais`, profissionaisData);
+      }
       
-      if (!configData) {
+      if (!slug && !configData) {
         console.log('🔄 Carregando configurações do servidor...');
         configData = await siteService.buscarConfiguracoes();
         cache.set('config', configData);
-      } else {
+      } else if (!slug) {
         console.log('✅ Configurações carregadas do cache');
       }
       
-      if (!servicosData) {
+      if (!slug && !servicosData) {
         console.log('🔄 Carregando serviços do servidor...');
         servicosData = await siteService.buscarServicos();
         cache.set('servicos', servicosData);
-      } else {
+      } else if (!slug) {
         console.log('✅ Serviços carregados do cache');
       }
       
-      if (!profissionaisData) {
+      if (!slug && !profissionaisData) {
         console.log('🔄 Carregando profissionais do servidor...');
         profissionaisData = await siteService.buscarProfissionais();
         cache.set('profissionais', profissionaisData);
-      } else {
+      } else if (!slug) {
         console.log('✅ Profissionais carregados do cache');
       }
       
+      setEmpresaPublica(empresaData || null);
       setConfig(configData || {});
       setServicos(sanitizarServicos(servicosData));
       setProfissionais(sanitizarProfissionais(profissionaisData));
@@ -327,7 +366,7 @@ function SiteSalao() {
       
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
-      setError('Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
+      setError(err.message || 'Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
       toast.error('Erro ao carregar dados do salão');
     } finally {
       setLoading(false);
@@ -832,7 +871,7 @@ function SiteSalao() {
                             <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
                             <ListItemText 
                               primary="2. Acesse o link:"
-                              secondary={<Link href={`${baseUrl}/cliente/login`} target="_blank" sx={{ fontWeight: 600, color: '#ff9800' }}>{baseUrl}/cliente/login</Link>}
+                              secondary={<Link href={`${baseUrl}${clienteLoginUrl}`} target="_blank" sx={{ fontWeight: 600, color: '#ff9800' }}>{baseUrl}{clienteLoginUrl}</Link>}
                             />
                           </ListItem>
                           <ListItem>
@@ -859,14 +898,17 @@ function SiteSalao() {
                           </ListItem>
                         </List>
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                          <QRCodeSVG value={`${baseUrl}/cliente/login`} size={120} bgColor="#ffffff" fgColor="#ff9800" level="H" />
+                          <QRCodeSVG value={`${baseUrl}${clienteLoginUrl}`} size={120} bgColor="#ffffff" fgColor="#ff9800" level="H" />
                         </Box>
                       </AccordionDetails>
                     </Accordion>
 
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
-                      <Button variant="contained" size="large" href="/cliente/login" startIcon={<PersonIcon />} sx={{ background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)', color: 'white', px: 4 }}>
+                      <Button variant="contained" size="large" href={clienteLoginUrl} startIcon={<PersonIcon />} sx={{ background: 'linear-gradient(45deg, #ff9800 30%, #f44336 90%)', color: 'white', px: 4, mr: { sm: 1 }, mb: { xs: 1, sm: 0 } }}>
                         Acessar Área do Cliente
+                      </Button>
+                      <Button variant="outlined" size="large" href={clienteCadastroUrl} sx={{ borderColor: '#ff9800', color: '#ff9800', px: 4 }}>
+                        Criar conta
                       </Button>
                     </Box>
                   </Box>
@@ -1040,7 +1082,7 @@ function SiteSalao() {
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>Precisa de ajuda?</Typography>
                 <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>Entre em contato conosco através dos canais acima ou acesse a Área do Cliente para agendar seus serviços.</Typography>
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}><strong>💡 Dica:</strong> Para agendar, cancelar ou reagendar horários, acesse a <Link href="/cliente/login" sx={{ color: '#9c27b0', fontWeight: 600 }}>Área do Cliente</Link> com seu login e senha.</Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}><strong>💡 Dica:</strong> Para agendar, cancelar ou reagendar horários, acesse a <Link href={clienteLoginUrl} sx={{ color: '#9c27b0', fontWeight: 600 }}>Área do Cliente</Link> com seu login e senha.</Typography>
               </Paper>
             </Grid>
           </Grid>
