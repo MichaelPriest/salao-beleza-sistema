@@ -1,7 +1,7 @@
 // src/contexts/AuthClienteContext.js
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, supabaseConfig } from '../services/firebase';
 import { 
   getAuth, 
   signOut, 
@@ -14,8 +14,6 @@ import {
   clearTenantContext 
 } from '../services/firebase';
 
-const SUPABASE_URL = 'https://kvjrerxqwtrxttiiqkgf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
 
 const AuthClienteContext = createContext({});
 
@@ -50,126 +48,16 @@ export const AuthClienteProvider = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
-  // Efeito para processar callback do Google
-  useEffect(() => {
-    const processGoogleCallback = async () => {
-      // Verificar se estamos no callback
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      const accessToken = hashParams.get('access_token');
-      
-      if (!accessToken) return;
-      
-      console.log('🔄 Processando callback do Google...');
-      setLoading(true);
-      
-      try {
-        // Buscar usuário no Supabase
-        const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
-        
-        if (!userResponse.ok) throw new Error('Erro ao buscar usuário');
-        
-        const supabaseUser = await userResponse.json();
-        console.log('✅ Usuário Google autenticado:', supabaseUser.email);
-        
-        const empresaId = sessionStorage.getItem('empresa_publica_id');
-        const empresaNome = sessionStorage.getItem('empresa_publica_nome');
-        
-        if (!empresaId) {
-          throw new Error('Empresa não identificada. Use o link correto do salão.');
-        }
-        
-        // Buscar cliente no Supabase
-        const url = `${SUPABASE_URL}/rest/v1/clientes?data->>email=eq.${encodeURIComponent(supabaseUser.email)}&data->>empresaId=eq.${empresaId}&select=*`;
-        const clientesResponse = await fetch(url, {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-        
-        const clientes = await clientesResponse.json();
-        
-        if (clientes && clientes.length > 0) {
-          // Cliente encontrado
-          const clienteData = clientes[0].data;
-          console.log('✅ Cliente encontrado:', clienteData.nome);
-          
-          // Atualizar authUid se necessário
-          if (!clienteData.authUid || clienteData.authUid !== supabaseUser.id) {
-            await fetch(`${SUPABASE_URL}/rest/v1/clientes?document_id=eq.${clientes[0].document_id}`, {
-              method: 'PATCH',
-              headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                data: {
-                  ...clienteData,
-                  authUid: supabaseUser.id,
-                  googleUid: supabaseUser.id,
-                  updatedAt: new Date().toISOString()
-                }
-              })
-            });
-            clienteData.authUid = supabaseUser.id;
-            clienteData.googleUid = supabaseUser.id;
-          }
-          
-          setCliente(clienteData);
-          setIsAuthenticated(true);
-          setTenantContextFromUser(clienteData);
-          localStorage.setItem('cliente', JSON.stringify(clienteData));
-          localStorage.setItem('supabase.auth.session', JSON.stringify({
-            access_token: accessToken,
-            user: supabaseUser
-          }));
-          
-          toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
-          
-          // Limpar hash da URL e redirecionar
-          window.history.replaceState({}, document.title, window.location.pathname);
-          navigate('/cliente/dashboard');
-        } else {
-          // Cliente não encontrado - precisa completar cadastro
-          console.log('⚠️ Cliente não encontrado, redirecionando para cadastro complementar');
-          
-          const pendingUser = {
-            uid: supabaseUser.id,
-            email: supabaseUser.email,
-            nome: supabaseUser.user_metadata?.full_name || supabaseUser.email.split('@')[0],
-            foto: supabaseUser.user_metadata?.avatar_url || null,
-            empresaId,
-            empresaNome
-          };
-          
-          sessionStorage.setItem('pending_google_user', JSON.stringify(pendingUser));
-          window.location.href = `/cliente/cadastro-complementar?empresa=${sessionStorage.getItem('empresa_publica_slug')}`;
-        }
-        
-      } catch (error) {
-        console.error('❌ Erro no callback:', error);
-        toast.error(error.message || 'Erro ao processar login');
-        setTimeout(() => {
-          window.location.href = '/cliente/login';
-        }, 2000);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    processGoogleCallback();
-  }, []);
-
   useEffect(() => {
     const path = window.location.pathname;
     if (!path.startsWith('/cliente')) {
       console.log('🚫 AuthClienteProvider - Ignorando inicialização fora da área do cliente');
+      setLoading(false);
+      return;
+    }
+
+    if (path === '/cliente/auth/callback') {
+      console.log('🚫 AuthClienteProvider - Callback Google será processado pela página dedicada');
       setLoading(false);
       return;
     }
@@ -349,12 +237,15 @@ export const AuthClienteProvider = ({ children }) => {
       sessionStorage.setItem('empresa_publica_nome', empresaNome || '');
       sessionStorage.setItem('empresa_publica_slug', empresaSlug || '');
       
-      // Construir URL de callback
-      const callbackUrl = `${window.location.origin}/cliente/auth/callback`;
-      const redirectTo = encodeURIComponent(callbackUrl);
+      // Construir URL de callback mantendo o slug da empresa no retorno do OAuth.
+      const callbackUrl = new URL('/cliente/auth/callback', window.location.origin);
+      if (empresaSlug) {
+        callbackUrl.searchParams.set('empresa', empresaSlug);
+      }
+      const redirectTo = encodeURIComponent(callbackUrl.toString());
       
       // URL do Supabase OAuth
-      const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+      const authUrl = `${supabaseConfig.url}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
       
       console.log('🚀 Redirecionando para Google OAuth');
       
