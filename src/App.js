@@ -199,6 +199,9 @@ import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import SaasGestao from './pages/SaasGestao';
 import SaasAdmin from './pages/SaasAdmin';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
+import SaasEmpresas from './pages/SaasEmpresas';
+import SaasCobrancas from './pages/SaasCobrancas';
+import SaasPlanos from './pages/SaasPlanos';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -643,6 +646,27 @@ function App() {
                   <SaasAdminRoute>
                     <SistemaLayout theme={currentTheme}>
                       <SaasAdmin />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/empresas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasEmpresas />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/assinaturas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPlanos />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/cobrancas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasCobrancas />
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />

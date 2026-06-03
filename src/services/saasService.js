@@ -156,7 +156,7 @@ export const saasService = {
     return payload;
   },
 
-  criarEmpresa: async ({ nome, documento, email, telefone, planoId = 'individual', trialDias = 14, proprietario = null }) => {
+  criarEmpresa: async ({ nome, documento, razaoSocial, email, telefone, planoId = 'individual', trialDias = 14, proprietario = null, responsavelFinanceiro = '', emailFinanceiro = '', telefoneFinanceiro = '', documentoCobranca = '', enderecoCobranca = '', diaVencimento = 5, observacoesCobranca = '' }) => {
     const plano = await saasService.buscarPlano(planoId);
     const agora = new Date().toISOString();
     const empresaId = firebaseService.generateId('empresas');
@@ -168,8 +168,19 @@ export const saasService = {
       id: empresaId,
       nome,
       documento: documento || null,
+      razaoSocial: razaoSocial || null,
       email: email || usuario?.email || null,
       telefone: telefone || null,
+      cobranca: {
+        razaoSocial: razaoSocial || nome,
+        documentoCobranca: documentoCobranca || documento || null,
+        responsavelFinanceiro: responsavelFinanceiro || usuario?.nome || '',
+        emailFinanceiro: emailFinanceiro || email || usuario?.email || '',
+        telefoneFinanceiro: telefoneFinanceiro || telefone || '',
+        enderecoCobranca: enderecoCobranca || '',
+        diaVencimento: Number(diaVencimento || 5),
+        observacoes: observacoesCobranca || ''
+      },
       tipo: plano.tipo,
       planoId: plano.id,
       status: 'ativa',
@@ -210,10 +221,13 @@ export const saasService = {
       trialFimEm: addDays(new Date(), trialDias).toISOString(),
       inicioEm: agora,
       proximaCobrancaEm: addDays(new Date(), trialDias).toISOString(),
+      diaVencimento: Number(diaVencimento || 5),
       gateway: process.env.REACT_APP_BILLING_PROVIDER || 'manual',
       createdAt: agora,
       updatedAt: agora
     };
+
+    setTenantContext({ empresa, unidade });
 
     await firebaseService.set('empresas', empresaId, empresa);
     await firebaseService.set('unidades', unidadeId, unidade);
@@ -230,7 +244,6 @@ export const saasService = {
       }).catch(() => {});
     }
 
-    setTenantContext({ empresa, unidade });
     return { empresa, unidade, assinatura };
   },
 

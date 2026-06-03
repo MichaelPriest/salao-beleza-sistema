@@ -77,7 +77,7 @@ function SaasGestao({ initialTab = 0 }) {
   const [faturas, setFaturas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
   const [checkout, setCheckout] = useState(null);
-  const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', email: '', telefone: '', planoId: 'individual' });
+  const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
   const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
   const [portalForm, setPortalForm] = useState({
@@ -129,9 +129,17 @@ function SaasGestao({ initialTab = 0 }) {
       setEmpresaForm({
         nome: empresaData?.nome || '',
         documento: empresaData?.documento || '',
+        razaoSocial: empresaData?.razaoSocial || empresaData?.cobranca?.razaoSocial || '',
         email: empresaData?.email || '',
         telefone: empresaData?.telefone || '',
         planoId: empresaData?.planoId || assinaturaData?.planoId || planosData[0]?.id || 'individual',
+        responsavelFinanceiro: empresaData?.cobranca?.responsavelFinanceiro || empresaData?.responsavelFinanceiro || '',
+        emailFinanceiro: empresaData?.cobranca?.emailFinanceiro || empresaData?.emailFinanceiro || empresaData?.email || '',
+        telefoneFinanceiro: empresaData?.cobranca?.telefoneFinanceiro || empresaData?.telefoneFinanceiro || empresaData?.telefone || '',
+        documentoCobranca: empresaData?.cobranca?.documentoCobranca || empresaData?.documento || '',
+        enderecoCobranca: empresaData?.cobranca?.enderecoCobranca || '',
+        diaVencimento: empresaData?.cobranca?.diaVencimento || assinaturaData?.diaVencimento || 5,
+        observacoesCobranca: empresaData?.cobranca?.observacoes || '',
       });
       setPortalForm({
         slug: empresaData?.slug || '',
@@ -178,6 +186,17 @@ function SaasGestao({ initialTab = 0 }) {
         const atualizada = {
           ...empresa,
           ...empresaForm,
+          cobranca: {
+            ...(empresa.cobranca || {}),
+            razaoSocial: empresaForm.razaoSocial,
+            documentoCobranca: empresaForm.documentoCobranca || empresaForm.documento,
+            responsavelFinanceiro: empresaForm.responsavelFinanceiro,
+            emailFinanceiro: empresaForm.emailFinanceiro || empresaForm.email,
+            telefoneFinanceiro: empresaForm.telefoneFinanceiro || empresaForm.telefone,
+            enderecoCobranca: empresaForm.enderecoCobranca,
+            diaVencimento: Number(empresaForm.diaVencimento || 5),
+            observacoes: empresaForm.observacoesCobranca,
+          },
           updatedAt: new Date().toISOString(),
         };
         await firebaseService.update('empresas', empresa.id, atualizada);
@@ -387,27 +406,56 @@ function SaasGestao({ initialTab = 0 }) {
             <Typography variant="h6" sx={{ mb: 2 }}>Dados da minha empresa</Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
-                <TextField fullWidth required label="Nome da empresa" value={empresaForm.nome} onChange={(e) => setEmpresaForm({ ...empresaForm, nome: e.target.value })} />
+                <TextField fullWidth required label="Nome fantasia" value={empresaForm.nome} onChange={(e) => setEmpresaForm({ ...empresaForm, nome: e.target.value })} />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Razão social" value={empresaForm.razaoSocial} onChange={(e) => setEmpresaForm({ ...empresaForm, razaoSocial: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField fullWidth label="CNPJ/CPF" value={empresaForm.documento} onChange={(e) => setEmpresaForm({ ...empresaForm, documento: e.target.value })} />
               </Grid>
-              <Grid item xs={12} md={3}>
-                <TextField fullWidth label="Telefone" value={empresaForm.telefone} onChange={(e) => setEmpresaForm({ ...empresaForm, telefone: e.target.value })} />
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Telefone comercial" value={empresaForm.telefone} onChange={(e) => setEmpresaForm({ ...empresaForm, telefone: e.target.value })} />
               </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField fullWidth type="email" label="Email financeiro" value={empresaForm.email} onChange={(e) => setEmpresaForm({ ...empresaForm, email: e.target.value })} />
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="email" label="Email principal" value={empresaForm.email} onChange={(e) => setEmpresaForm({ ...empresaForm, email: e.target.value })} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Dados para cobrança da mensalidade</Typography>
+                <Typography variant="body2" color="text.secondary">Essas informações serão usadas para emitir faturas, enviar cobrança e identificar pagamentos do SaaS.</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Responsável financeiro" value={empresaForm.responsavelFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, responsavelFinanceiro: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="email" label="Email de cobrança" value={empresaForm.emailFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, emailFinanceiro: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Telefone/WhatsApp financeiro" value={empresaForm.telefoneFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, telefoneFinanceiro: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Documento para nota/cobrança" value={empresaForm.documentoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, documentoCobranca: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="number" label="Dia padrão de vencimento" value={empresaForm.diaVencimento} onChange={(e) => setEmpresaForm({ ...empresaForm, diaVencimento: e.target.value })} inputProps={{ min: 1, max: 28 }} />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Plano" value={empresaForm.planoId} onChange={(e) => setEmpresaForm({ ...empresaForm, planoId: e.target.value })}>
                   {planos.map((plano) => (
                     <MenuItem key={plano.id} value={plano.id}>{plano.nome} - {formatCurrency(plano.precoMensal, plano.moeda)}</MenuItem>
                   ))}
                 </TextField>
               </Grid>
+              <Grid item xs={12} md={8}>
+                <TextField fullWidth multiline minRows={2} label="Endereço de cobrança" value={empresaForm.enderecoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, enderecoCobranca: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth multiline minRows={2} label="Observações de cobrança" value={empresaForm.observacoesCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, observacoesCobranca: e.target.value })} />
+              </Grid>
               <Grid item xs={12}>
                 <Button type="submit" variant="contained" disabled={saving} startIcon={<BusinessIcon />}>
-                  {empresa ? 'Salvar empresa' : 'Criar minha empresa'}
+                  {empresa ? 'Salvar empresa e cobrança' : 'Criar minha empresa'}
                 </Button>
               </Grid>
             </Grid>

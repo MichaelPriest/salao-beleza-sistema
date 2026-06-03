@@ -114,8 +114,8 @@ Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha E
 
 As telas foram separadas em duas áreas isoladas:
 
-- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, configura gateways de pagamento e automação de mensalidades, sem alterar o contexto de empresa ativa. A página `/saas-admin/pagamentos` centraliza as configurações das APIs de pagamento.
-- **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado.
+- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área é um dashboard central e as rotas específicas evitam repetição de telas: `/saas-admin/empresas` para tenants/unidades/status, `/saas-admin/assinaturas` para planos e uso, `/saas-admin/cobrancas` para faturas/pagamentos e `/saas-admin/pagamentos` para as configurações das APIs de pagamento.
+- **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado. Em `/empresa`, a empresa cadastra também razão social, responsável financeiro, email/telefone de cobrança, documento para nota, endereço de cobrança, dia padrão de vencimento e observações da mensalidade.
 - A rota antiga `/saas` redireciona para `/empresa` para evitar misturar o painel da plataforma com o painel do cliente.
 
 O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado:

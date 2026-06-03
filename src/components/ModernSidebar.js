@@ -487,6 +487,30 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
+        text: 'Empresas/Tenants',
+        icon: <BusinessIcon />,
+        path: '/saas-admin/empresas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Planos e Assinaturas',
+        icon: <WorkspacePremiumIcon />,
+        path: '/saas-admin/assinaturas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Cobranças SaaS',
+        icon: <ReceiptLongIcon />,
+        path: '/saas-admin/cobrancas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
         text: 'APIs de Pagamento',
         icon: <PaymentsIcon />,
         path: '/saas-admin/pagamentos',
