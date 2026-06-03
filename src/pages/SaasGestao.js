@@ -49,6 +49,19 @@ const formatDate = (value) => {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 };
 
+const metodosSomentePreferencial = (metodo = 'card') => ({
+  card: metodo === 'card',
+  pix: metodo === 'pix',
+  boleto: metodo === 'boleto',
+});
+
+const primeiroMetodoDisponivel = (metodos = {}) => {
+  if (metodos.card !== false) return 'card';
+  if (metodos.pix !== false) return 'pix';
+  if (metodos.boleto !== false) return 'boleto';
+  return 'card';
+};
+
 const getStatusColor = (status) => {
   const colors = {
     [STATUS_ASSINATURA.TRIAL]: 'info',
@@ -135,14 +148,19 @@ function SaasGestao({ initialTab = 0 }) {
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
       const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
+      const metodosDisponiveis = configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento;
       setPaymentConfig({
         ...configGlobal,
-        ...(empresaData?.cobranca?.configPagamento || {}),
-        provider: empresaData?.cobranca?.provider || configGlobal.provider,
-        metodosPagamento: {
-          ...(configGlobal.metodosPagamento || {}),
-          ...(empresaData?.cobranca?.metodosPagamento || {})
-        }
+        dadosCobranca: {
+          responsavel: empresaData?.cobranca?.responsavelFinanceiro || empresaData?.responsavelFinanceiro || '',
+          email: empresaData?.cobranca?.emailFinanceiro || empresaData?.email || '',
+          documento: empresaData?.cobranca?.documentoCobranca || empresaData?.documento || '',
+          ...(empresaData?.cobranca?.configPagamento?.dadosCobranca || {})
+        },
+        provider: configGlobal.provider,
+        metodosDisponiveis,
+        metodosPagamento: metodosSomentePreferencial(empresaData?.cobranca?.metodoPreferencial || primeiroMetodoDisponivel(metodosDisponiveis)),
+        metodoPreferencial: empresaData?.cobranca?.metodoPreferencial || primeiroMetodoDisponivel(metodosDisponiveis)
       });
       setEmpresaForm({
         nome: empresaData?.nome || '',
@@ -220,8 +238,10 @@ function SaasGestao({ initialTab = 0 }) {
             diaVencimento: Number(empresaForm.diaVencimento || 5),
             observacoes: empresaForm.observacoesCobranca,
             provider: paymentConfig.provider,
-            metodosPagamento: paymentConfig.metodosPagamento,
+            metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+            metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
             configPagamento: paymentConfig,
+            dadosCobranca: paymentConfig.dadosCobranca || {},
           },
           updatedAt: new Date().toISOString(),
         };
@@ -342,11 +362,12 @@ function SaasGestao({ initialTab = 0 }) {
   const iniciarCheckout = async () => {
     setCheckoutLoading(true);
     try {
+      const metodoPreferencial = paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento);
       const data = await saasService.iniciarCheckout({
         planoId: planoAtual.id,
         provider: paymentConfig.provider,
-        metodosPagamento: paymentConfig.metodosPagamento,
-        dadosPagamento: paymentConfig
+        metodosPagamento: metodosSomentePreferencial(metodoPreferencial),
+        dadosPagamento: { ...paymentConfig, metodoPreferencial }
       });
       setCheckout(data);
       if (data.checkoutUrl) {
@@ -371,8 +392,10 @@ function SaasGestao({ initialTab = 0 }) {
         cobranca: {
           ...(empresa.cobranca || {}),
           provider: paymentConfig.provider,
-          metodosPagamento: paymentConfig.metodosPagamento,
+          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
           configPagamento: paymentConfig,
+          dadosCobranca: paymentConfig.dadosCobranca || {},
           diaVencimento: paymentConfig.diaVencimentoPadrao || empresa.cobranca?.diaVencimento || 5,
         },
         updatedAt: new Date().toISOString(),
@@ -380,7 +403,7 @@ function SaasGestao({ initialTab = 0 }) {
       await firebaseService.update('empresas', empresa.id, atualizada);
       setEmpresa(atualizada);
       setTenantContext({ empresa: atualizada });
-      toast.success('Formas de pagamento da empresa salvas.');
+      toast.success('Método de cobrança da empresa salvo.');
     } catch (error) {
       console.error('Erro ao salvar pagamentos da empresa:', error);
       toast.error(error.message || 'Erro ao salvar pagamentos.');
@@ -623,10 +646,10 @@ function SaasGestao({ initialTab = 0 }) {
               <CardContent>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
                   <Box>
-                    <Typography variant="h6">Formas de pagamento da empresa</Typography>
-                    <Typography color="text.secondary">Mesmo formulário da configuração SaaS: cartão, PIX, boleto, gateway e automação ficam alinhados ao provedor selecionado.</Typography>
+                    <Typography variant="h6">Método de cobrança da empresa</Typography>
+                    <Typography color="text.secondary">Aqui a empresa escolhe como quer pagar a mensalidade do sistema: cartão, PIX ou boleto. O gateway e as chaves continuam definidos no Admin SaaS.</Typography>
                   </Box>
-                  <Button variant="contained" disabled={saving} onClick={salvarConfiguracaoPagamentoEmpresa}>Salvar formas de pagamento</Button>
+                  <Button variant="contained" disabled={saving} onClick={salvarConfiguracaoPagamentoEmpresa}>Salvar método de cobrança</Button>
                 </Stack>
                 <BillingPaymentForms value={paymentConfig} onChange={setPaymentConfig} mode="tenant" />
               </CardContent>

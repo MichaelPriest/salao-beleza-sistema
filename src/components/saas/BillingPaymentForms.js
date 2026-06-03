@@ -36,6 +36,56 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
   const setConfig = (patch) => onChange({ ...config, ...patch });
   const setSection = (section, patch) => onChange(updateNested(config, section, patch));
   const toggleMetodo = (metodo, checked) => setConfig({ metodosPagamento: { ...metodos, [metodo]: checked } });
+  const metodosDisponiveis = config.metodosDisponiveis || metodos;
+  const enabledTenantMethods = PAYMENT_METHODS.filter((metodo) => metodosDisponiveis[metodo.id] !== false);
+  const selectedTenantMethod = enabledTenantMethods.some((metodo) => metodo.id === config.metodoPreferencial)
+    ? config.metodoPreferencial
+    : enabledTenantMethods[0]?.id || 'card';
+  const setTenantMethod = (metodo) => setConfig({ metodoPreferencial: metodo });
+  const setDadosCobranca = (patch) => setSection('dadosCobranca', patch);
+
+  if (isTenant) {
+    return (
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Método de cobrança da mensalidade</Typography>
+          <Typography variant="body2" color="text.secondary">Escolha como esta empresa quer pagar a assinatura do sistema. O gateway é configurado somente pelo admin SaaS da plataforma.</Typography>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField select fullWidth label="Método preferencial" value={selectedTenantMethod} onChange={(e) => setTenantMethod(e.target.value)}>
+            {enabledTenantMethods.map((metodo) => <MenuItem key={metodo.id} value={metodo.id}>{metodo.label}</MenuItem>)}
+          </TextField>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth type="number" label="Dia de vencimento" value={config.diaVencimentoPadrao || 5} onChange={(e) => setConfig({ diaVencimentoPadrao: Number(e.target.value || 5) })} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth label="E-mail para cobrança" value={config.dadosCobranca?.email || ''} onChange={(e) => setDadosCobranca({ email: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField fullWidth label="Nome do responsável financeiro" value={config.dadosCobranca?.responsavel || ''} onChange={(e) => setDadosCobranca({ responsavel: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField fullWidth label="CPF/CNPJ para cobrança" value={config.dadosCobranca?.documento || ''} onChange={(e) => setDadosCobranca({ documento: e.target.value })} />
+        </Grid>
+        {selectedTenantMethod === 'card' && (
+          <Grid item xs={12}>
+            <Alert severity="info">Cartão selecionado. Os dados sensíveis do cartão devem ser informados no checkout seguro do gateway; o sistema salva apenas a preferência de cobrança.</Alert>
+          </Grid>
+        )}
+        {selectedTenantMethod === 'pix' && (
+          <Grid item xs={12}>
+            <Alert severity="info">PIX selecionado. A cobrança automática gerará QR Code/link PIX pelo gateway habilitado pela plataforma.</Alert>
+          </Grid>
+        )}
+        {selectedTenantMethod === 'boleto' && (
+          <Grid item xs={12}>
+            <Alert severity="info">Boleto selecionado. A cobrança automática gerará boleto pelo gateway habilitado pela plataforma.</Alert>
+          </Grid>
+        )}
+      </Grid>
+    );
+  }
 
   return (
     <Grid container spacing={2}>
