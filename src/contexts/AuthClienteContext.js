@@ -2,7 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, setTenantContextFromUser, clearTenantContext } from '../services/firebase';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, setTenantContextFromUser, setTenantContext, clearTenantContext } from '../services/firebase';
 import { removerMascaraCPF } from '../utils/cpfUtils';
 
 // Autenticação Supabase
@@ -264,12 +264,21 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Completando cadastro para:', pendingGoogleUser.email);
 
+      const empresaPublicaId = dadosComplementares.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
+      const empresaPublicaNome = dadosComplementares.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
+      if (!empresaPublicaId) {
+        toast.error('Acesse pelo link da empresa para concluir o cadastro.');
+        return { success: false };
+      }
+      setTenantContext({ empresaId: empresaPublicaId, empresa: { id: empresaPublicaId, nome: empresaPublicaNome } });
+
       // 🔥 IMPORTANTE: Manter o CPF com a máscara (já vem formatado do input)
       const cpfFormatado = dadosComplementares.cpf; // Ex: "331.200.588-40"
       
-      // Para busca, usamos o CPF com máscara para consistência
+      // Para busca, usamos o CPF com máscara para consistência dentro da empresa atual
       const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: cpfFormatado }
+        { field: 'cpf', operator: '==', value: cpfFormatado },
+        { field: 'empresaId', operator: '==', value: empresaPublicaId }
       ]);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
@@ -313,6 +322,8 @@ export const AuthClienteProvider = ({ children }) => {
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA E GOOGLEUID
       const novoCliente = {
         id: pendingGoogleUser.uid, // ID do documento = UID do Google
+        empresaId: empresaPublicaId,
+        empresaNome: empresaPublicaNome,
         nome: pendingGoogleUser.nome,
         email: pendingGoogleUser.email,
         foto: pendingGoogleUser.foto,
@@ -371,13 +382,21 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Cadastrando novo cliente:', dadosCliente.email);
 
+      const empresaPublicaId = dadosCliente.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
+      const empresaPublicaNome = dadosCliente.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
+      if (!empresaPublicaId) {
+        toast.error('Acesse pelo link da empresa para realizar o cadastro.');
+        return false;
+      }
+      setTenantContext({ empresaId: empresaPublicaId, empresa: { id: empresaPublicaId, nome: empresaPublicaNome } });
+
       // 🔥 IMPORTANTE: CPF já deve vir formatado do formulário
       const cpfFormatado = dadosCliente.cpf; // Ex: "331.200.588-40"
       
-      // Para busca, usamos o CPF formatado para consistência
-      const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: cpfFormatado }
-      ]);
+      // Para busca, usamos o CPF formatado para consistência dentro da empresa atual
+      const cpfConditions = [{ field: 'cpf', operator: '==', value: cpfFormatado }];
+      if (empresaPublicaId) cpfConditions.push({ field: 'empresaId', operator: '==', value: empresaPublicaId });
+      const clientesPorCpf = await firebaseService.query('clientes', cpfConditions);
 
       if (clientesPorCpf && clientesPorCpf.length > 0) {
         toast.error('Este CPF já está cadastrado no sistema');
@@ -409,9 +428,6 @@ export const AuthClienteProvider = ({ children }) => {
       // 2. Criar documento do cliente com o UID do Firebase Auth
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
-
-      const empresaPublicaId = dadosCliente.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
-      const empresaPublicaNome = dadosCliente.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
 
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {

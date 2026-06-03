@@ -49,6 +49,8 @@ export const siteService = {
     const empresa = await saasService.buscarEmpresaPorSlug(slug);
     if (!empresa) return null;
 
+    saasService.setContextoAtual({ empresa });
+
     const [configuracoes, servicos, profissionais] = await Promise.all([
       siteService.buscarConfiguracoes(empresa.id),
       siteService.buscarServicos(empresa.id),

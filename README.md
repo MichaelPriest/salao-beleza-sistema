@@ -94,6 +94,18 @@ Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assin
 
 O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseService` adiciona/faz filtro automático por `empresaId` e, quando aplicável, por `unidadeId` nas coleções operacionais. Isso permite separar os dados de cada contratante sem reescrever todas as telas.
 
+### Isolamento de tenants
+
+A camada de compatibilidade força o isolamento antes de qualquer chamada REST ao Supabase:
+
+- coleções operacionais (`clientes`, `usuarios`, `servicos`, `agendamentos`, financeiro, estoque e fidelidade) sempre recebem filtro do `empresaId` atual; filtros enviados pela tela com outro `empresaId` são substituídos pelo tenant logado;
+- coleções por unidade também recebem `unidadeId`, evitando que uma filial veja agenda/caixa/estoque de outra unidade;
+- gravações sem empresa selecionada ou com `empresaId`/`unidadeId` diferente do contexto atual são bloqueadas no frontend;
+- a coleção `empresas` só retorna a empresa do tenant ativo para usuários comuns; somente o admin SaaS da plataforma enxerga todas as empresas;
+- login/cadastro de clientes vindos de `/e/:slug` ou `?empresa=slug` carregam o tenant público antes de consultar ou criar clientes, vinculando CPF/email à empresa correta.
+
+Para isolamento em profundidade, mantenha as políticas RLS do Supabase alinhadas com essa mesma regra de `empresaId`/`unidadeId` e use `SUPABASE_SERVICE_ROLE_KEY` apenas em scripts/servidor.
+
 ### Página pública por empresa
 
 Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). Essa página usa o componente `SiteSalao.js` em modo tenant, define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.

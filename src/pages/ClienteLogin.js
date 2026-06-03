@@ -99,6 +99,7 @@ function ClienteLogin() {
       if (!slug) return;
       const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
       if (!empresa) return;
+      saasService.setContextoAtual({ empresa });
       window.sessionStorage.setItem('empresa_publica_slug', slug);
       window.sessionStorage.setItem('empresa_publica_id', empresa.id);
       window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');

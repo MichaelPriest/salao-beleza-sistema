@@ -66,7 +66,15 @@ const TENANT_SCOPED_COLLECTIONS = new Set([
   'respostas_anamnese',
   'servicos',
   'transacoes',
-  'usos_cupons'
+  'unidades',
+  'usos_cupons',
+  'usuarios',
+  'assinaturas',
+  'faturas_saas',
+  'pagamentos_saas',
+  'convites_saas',
+  'uso_saas',
+  'eventos_cobranca_saas'
 ]);
 
 const UNIT_SCOPED_COLLECTIONS = new Set([
@@ -86,6 +94,11 @@ const UNIT_SCOPED_COLLECTIONS = new Set([
   'produtos',
   'transacoes'
 ]);
+
+const PLATFORM_ROLES = ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'];
+const PLATFORM_ONLY_COLLECTIONS = new Set(['configuracoes_saas', 'webhooks_cobranca_saas']);
+const TENANT_ROOT_COLLECTIONS = new Set(['empresas']);
+
 
 const safeLocalStorage = {
   getItem: (key) => (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)),
@@ -345,20 +358,52 @@ export const setTenantContextFromUser = (usuario = {}) => {
   });
 };
 
+const getLocalUsuario = () => {
+  try {
+    return JSON.parse(safeLocalStorage.getItem('usuario') || 'null');
+  } catch (error) {
+    return null;
+  }
+};
+
+const isPlatformAdmin = () => {
+  const usuario = getLocalUsuario();
+  return Boolean(
+    usuario?.isSaasAdmin ||
+    usuario?.adminSaas ||
+    usuario?.tipoUsuario === 'saas_admin' ||
+    usuario?.tipoUsuario === 'plataforma' ||
+    PLATFORM_ROLES.includes(usuario?.cargo) ||
+    PLATFORM_ROLES.includes(usuario?.role) ||
+    usuario?.permissoes?.includes('admin_saas')
+  );
+};
+
+const getNoTenantCondition = () => ({ field: 'empresaId', operator: '==', value: '__tenant_nao_selecionado__' });
 const isTenantScopedCollection = (collectionName) => TENANT_SCOPED_COLLECTIONS.has(collectionName);
 const isUnitScopedCollection = (collectionName) => UNIT_SCOPED_COLLECTIONS.has(collectionName);
+const isPlatformOnlyCollection = (collectionName) => PLATFORM_ONLY_COLLECTIONS.has(collectionName);
+const isTenantRootCollection = (collectionName) => TENANT_ROOT_COLLECTIONS.has(collectionName);
+const hasCondition = (conditions = [], field) => conditions.some((condition) => condition.field === field);
+
+const assertPlatformWriteAccess = (collectionName) => {
+  if (isPlatformOnlyCollection(collectionName) && !isPlatformAdmin()) {
+    throw new Error('Acesso restrito ao administrador SaaS da plataforma.');
+  }
+};
+
 
 const getTenantConditions = (collectionName) => {
-  if (!isTenantScopedCollection(collectionName)) return [];
+  if (!isTenantScopedCollection(collectionName) || isPlatformAdmin()) return [];
 
   const { empresaId, unidadeId } = getTenantContext();
   const conditions = [];
 
-  if (empresaId) {
-    conditions.push({ field: 'empresaId', operator: '==', value: empresaId });
-  }
+  if (!empresaId) return [getNoTenantCondition()];
 
-  if (empresaId && unidadeId && isUnitScopedCollection(collectionName)) {
+  conditions.push({ field: 'empresaId', operator: '==', value: empresaId });
+
+  if (unidadeId && isUnitScopedCollection(collectionName)) {
     conditions.push({ field: 'unidadeId', operator: '==', value: unidadeId });
   }
 
@@ -366,36 +411,98 @@ const getTenantConditions = (collectionName) => {
 };
 
 const mergeTenantConditions = (collectionName, conditions = []) => {
-  const fields = new Set(conditions.map((condition) => condition.field));
-  const tenantConditions = getTenantConditions(collectionName).filter((condition) => !fields.has(condition.field));
-  return [...conditions, ...tenantConditions];
+  if (isPlatformAdmin()) return conditions;
+
+  if (isTenantRootCollection(collectionName)) {
+    const { empresaId } = getTenantContext();
+    if (hasCondition(conditions, 'slug')) return conditions;
+    if (!empresaId) return [...conditions.filter((condition) => condition.field !== 'id'), { field: 'id', operator: '==', value: '__tenant_nao_selecionado__' }];
+    return [
+      ...conditions.filter((condition) => condition.field !== 'id'),
+      { field: 'id', operator: '==', value: empresaId }
+    ];
+  }
+
+  if (!isTenantScopedCollection(collectionName)) return conditions;
+
+  const { empresaId, unidadeId } = getTenantContext();
+  const conditionsWithoutTenant = conditions.filter((condition) => condition.field !== 'empresaId' && condition.field !== 'unidadeId');
+
+  if (!empresaId) return [...conditionsWithoutTenant, getNoTenantCondition()];
+
+  const scopedConditions = [
+    ...conditionsWithoutTenant,
+    { field: 'empresaId', operator: '==', value: empresaId }
+  ];
+
+  if (unidadeId && isUnitScopedCollection(collectionName)) {
+    scopedConditions.push({ field: 'unidadeId', operator: '==', value: unidadeId });
+  }
+
+  return scopedConditions;
 };
 
 const applyTenantMetadata = (collectionName, data = {}) => {
-  if (!isTenantScopedCollection(collectionName)) return data;
+  if (!isTenantScopedCollection(collectionName) || isPlatformAdmin()) return data;
 
   const { empresaId, unidadeId } = getTenantContext();
   const scopedData = { ...data };
 
-  if (empresaId && !scopedData.empresaId) {
+  if (!empresaId) {
+    throw new Error(`Tenant não selecionado para gravar em ${collectionName}.`);
+  }
+
+  if (!scopedData.empresaId) {
     scopedData.empresaId = empresaId;
   }
 
-  if (empresaId && unidadeId && isUnitScopedCollection(collectionName) && !scopedData.unidadeId) {
+  if (scopedData.empresaId !== empresaId) {
+    throw new Error(`Operação bloqueada: ${collectionName} pertence a outra empresa.`);
+  }
+
+  if (unidadeId && isUnitScopedCollection(collectionName) && !scopedData.unidadeId) {
     scopedData.unidadeId = unidadeId;
+  }
+
+  if (unidadeId && isUnitScopedCollection(collectionName) && scopedData.unidadeId !== unidadeId) {
+    throw new Error(`Operação bloqueada: ${collectionName} pertence a outra unidade.`);
   }
 
   return scopedData;
 };
 
 const isDocumentVisibleInTenant = (collectionName, data) => {
-  if (!data || !isTenantScopedCollection(collectionName)) return true;
+  if (!data || isPlatformAdmin()) return Boolean(data);
+
   const { empresaId, unidadeId } = getTenantContext();
 
-  if (empresaId && data.empresaId && data.empresaId !== empresaId) return false;
-  if (empresaId && unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
+  if (isTenantRootCollection(collectionName)) {
+    return Boolean(empresaId && data.id === empresaId);
+  }
+
+  if (!isTenantScopedCollection(collectionName)) return true;
+  if (!empresaId) return false;
+  if (!data.empresaId || data.empresaId !== empresaId) return false;
+  if (unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
 
   return true;
+};
+
+const canReadDocumentByIdWithoutTenant = (collectionName, id) => {
+  const sessionUserId = getStoredSession()?.user?.id;
+  return collectionName === 'usuarios' && sessionUserId && id === sessionUserId;
+};
+
+const assertTenantRootWrite = (collectionName, id, data = {}) => {
+  if (!isTenantRootCollection(collectionName) || isPlatformAdmin()) return;
+  const { empresaId } = getTenantContext();
+  const targetId = id || data?.id;
+  if (!empresaId) {
+    throw new Error('Tenant não selecionado para alterar empresa.');
+  }
+  if (targetId && targetId !== empresaId) {
+    throw new Error('Operação bloqueada: empresa fora do tenant atual.');
+  }
 };
 
 const encodeFilterValue = (value) => encodeURIComponent(value instanceof Date ? value.toISOString() : value);
@@ -718,6 +825,12 @@ export const writeBatch = () => {
 export const firebaseService = {
   getAll: async (collectionName) => {
     try {
+      if (isTenantRootCollection(collectionName) && !isPlatformAdmin()) {
+        const { empresaId } = getTenantContext();
+        if (!empresaId) return [];
+        const empresa = await firebaseService.getById(collectionName, empresaId);
+        return empresa ? [empresa] : [];
+      }
       return toDocuments(await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${buildQueryString(collectionName, getTenantConditions(collectionName))}`));
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} no Supabase:`, error);
@@ -729,6 +842,7 @@ export const firebaseService = {
     try {
       const rows = await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${getDocumentFilter(collectionName, id)}&select=*&limit=1`);
       const documentData = toDocument(rows?.[0]) || null;
+      if (canReadDocumentByIdWithoutTenant(collectionName, id)) return documentData;
       return isDocumentVisibleInTenant(collectionName, documentData) ? documentData : null;
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} por ID no Supabase:`, error);
@@ -738,7 +852,9 @@ export const firebaseService = {
 
   add: async (collectionName, data) => {
     try {
+      assertPlatformWriteAccess(collectionName);
       const documentId = data?.id || crypto.randomUUID();
+      assertTenantRootWrite(collectionName, documentId, data);
       const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
         ...tenantData,
@@ -760,6 +876,8 @@ export const firebaseService = {
 
   set: async (collectionName, id, data) => {
     try {
+      assertPlatformWriteAccess(collectionName);
+      assertTenantRootWrite(collectionName, id, data);
       const current = await firebaseService.getById(collectionName, id).catch(() => null);
       const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
@@ -783,7 +901,12 @@ export const firebaseService = {
 
   update: async (collectionName, id, data) => {
     try {
+      assertPlatformWriteAccess(collectionName);
+      assertTenantRootWrite(collectionName, id, data);
       const current = await firebaseService.getById(collectionName, id).catch(() => null);
+      if (!current && (isTenantScopedCollection(collectionName) || isTenantRootCollection(collectionName)) && !isPlatformAdmin()) {
+        throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
+      }
       const tenantData = applyTenantMetadata(collectionName, data);
       const documentData = sanitizeForSupabase({
         ...(current || {}),
@@ -806,6 +929,11 @@ export const firebaseService = {
 
   delete: async (collectionName, id) => {
     try {
+      assertPlatformWriteAccess(collectionName);
+      const current = await firebaseService.getById(collectionName, id).catch(() => null);
+      if (!current && (isTenantScopedCollection(collectionName) || isTenantRootCollection(collectionName)) && !isPlatformAdmin()) {
+        throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
+      }
       await supabaseFetch(`/rest/v1/${getRestTableName(collectionName)}?${getDocumentFilter(collectionName, id)}`, { method: 'DELETE' });
       return id;
     } catch (error) {
