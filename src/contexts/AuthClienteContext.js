@@ -2,7 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, setTenantContextFromUser, setTenantContext, clearTenantContext } from '../services/firebase';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, setTenantContextFromUser, setTenantContext, getTenantContext, clearTenantContext } from '../services/firebase';
 import { removerMascaraCPF } from '../utils/cpfUtils';
 
 // Autenticação Supabase
@@ -10,6 +10,28 @@ const auth = getAuth();
 const googleProvider = new GoogleAuthProvider();
 
 const AuthClienteContext = createContext({});
+
+const getEmpresaPublicaContext = () => ({
+  empresaId: window.sessionStorage.getItem('empresa_publica_id') || null,
+  empresaNome: window.sessionStorage.getItem('empresa_publica_nome') || null,
+  empresaSlug: window.sessionStorage.getItem('empresa_publica_slug') || null
+});
+
+const ensureClienteTenantContext = (dados = {}) => {
+  const contexto = getEmpresaPublicaContext();
+  const empresaId = dados.empresaId || contexto.empresaId;
+  const empresaNome = dados.empresaNome || contexto.empresaNome;
+
+  if (!empresaId) {
+    throw new Error('Acesse pelo link da empresa para entrar ou criar sua conta.');
+  }
+
+  setTenantContext({ empresaId, empresa: { id: empresaId, nome: empresaNome } });
+  return { empresaId, empresaNome, empresaSlug: contexto.empresaSlug };
+};
+
+const isClienteDoTenant = (clienteData, empresaId) => Boolean(clienteData?.empresaId && clienteData.empresaId === empresaId);
+const getClienteTenantDocumentId = (empresaId, uid) => `${empresaId}_${uid}`;
 
 export const useAuthCliente = () => useContext(AuthClienteContext);
 
@@ -47,6 +69,10 @@ export const AuthClienteProvider = ({ children }) => {
         if (clienteSalvo) {
           try {
             const clienteData = JSON.parse(clienteSalvo);
+            const empresaPublicaId = window.sessionStorage.getItem('empresa_publica_id');
+            if (empresaPublicaId && clienteData.empresaId !== empresaPublicaId) {
+              throw new Error('Cliente salvo pertence a outro tenant.');
+            }
             console.log('✅ AuthClienteProvider - Cliente carregado do localStorage:', clienteData);
             setCliente(clienteData);
             setIsAuthenticated(true);
@@ -64,50 +90,46 @@ export const AuthClienteProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 FUNÇÃO CORRIGIDA PARA BUSCAR CLIENTE POR MÚLTIPLOS CRITÉRIOS
+  const buscarClienteNoTenant = async (uid, email, empresaId = getTenantContext().empresaId) => {
+    if (!empresaId) return null;
+
+    const tenantDocumentId = getClienteTenantDocumentId(empresaId, uid);
+    let clienteData = await firebaseService.getById('clientes', tenantDocumentId);
+
+    if (!clienteData) {
+      clienteData = await firebaseService.getById('clientes', uid);
+    }
+
+    if (!clienteData) {
+      const clientesPorAuthUid = await firebaseService.query('clientes', [
+        { field: 'authUid', operator: '==', value: uid }
+      ]);
+      clienteData = clientesPorAuthUid?.[0] || null;
+    }
+
+    if (!clienteData) {
+      const clientesPorGoogleUid = await firebaseService.query('clientes', [
+        { field: 'googleUid', operator: '==', value: uid }
+      ]);
+      clienteData = clientesPorGoogleUid?.[0] || null;
+    }
+
+    if (!clienteData && email) {
+      const clientesPorEmail = await firebaseService.query('clientes', [
+        { field: 'email', operator: '==', value: email }
+      ]);
+      clienteData = clientesPorEmail?.[0] || null;
+    }
+
+    return isClienteDoTenant(clienteData, empresaId) ? clienteData : null;
+  };
+
+  // 🔥 FUNÇÃO CORRIGIDA PARA BUSCAR CLIENTE POR MÚLTIPLOS CRITÉRIOS DENTRO DO TENANT
   const carregarClientePorUid = async (uid, email) => {
     try {
-      console.log('🔍 AuthClienteProvider - Buscando cliente para UID:', uid);
-      
-      // 🔥 PRIMEIRA TENTATIVA: Buscar cliente pelo UID (ID do documento)
-      let clienteData = await firebaseService.getById('clientes', uid);
-
-      // 🔥 SEGUNDA TENTATIVA: Se não encontrar, buscar por googleUid
-      if (!clienteData) {
-        console.log('🔍 AuthClienteProvider - Cliente não encontrado por UID, buscando por googleUid...');
-        
-        const clientesPorGoogleUid = await firebaseService.query('clientes', [
-          { field: 'googleUid', operator: '==', value: uid }
-        ]);
-        
-        if (clientesPorGoogleUid && clientesPorGoogleUid.length > 0) {
-          clienteData = clientesPorGoogleUid[0];
-          console.log('✅ AuthClienteProvider - Cliente encontrado por googleUid:', clienteData);
-        }
-      }
-
-      // 🔥 TERCEIRA TENTATIVA: Buscar por email (fallback)
-      if (!clienteData && email) {
-        console.log('🔍 AuthClienteProvider - Buscando cliente por email:', email);
-        
-        const clientesPorEmail = await firebaseService.query('clientes', [
-          { field: 'email', operator: '==', value: email }
-        ]);
-        
-        if (clientesPorEmail && clientesPorEmail.length > 0) {
-          clienteData = clientesPorEmail[0];
-          console.log('✅ AuthClienteProvider - Cliente encontrado por email:', clienteData);
-          
-          // Se encontrou por email, atualizar com o googleUid para próximos logins
-          if (!clienteData.googleUid) {
-            await firebaseService.update('clientes', clienteData.id, {
-              googleUid: uid,
-              updatedAt: new Date().toISOString()
-            });
-            console.log('✅ AuthClienteProvider - Cliente atualizado com googleUid');
-          }
-        }
-      }
+      const { empresaId } = getTenantContext();
+      console.log('🔍 AuthClienteProvider - Buscando cliente para UID no tenant:', uid, empresaId);
+      const clienteData = await buscarClienteNoTenant(uid, email, empresaId);
 
       if (clienteData) {
         console.log('✅ AuthClienteProvider - Cliente encontrado:', clienteData);
@@ -116,11 +138,10 @@ export const AuthClienteProvider = ({ children }) => {
         setTenantContextFromUser(clienteData);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
       } else {
-        console.log('❌ AuthClienteProvider - Cliente não encontrado para o UID:', uid);
+        console.log('❌ AuthClienteProvider - Cliente não encontrado no tenant atual para o UID:', uid);
         setCliente(null);
         setIsAuthenticated(false);
         localStorage.removeItem('cliente');
-        clearTenantContext();
       }
     } catch (error) {
       console.error('❌ AuthClienteProvider - Erro ao carregar cliente:', error);
@@ -130,9 +151,10 @@ export const AuthClienteProvider = ({ children }) => {
   };
 
   // LOGIN COM EMAIL/SENHA
-  const login = async (email, senha) => {
+  const login = async (email, senha, dadosTenant = {}) => {
     try {
       setLoading(true);
+      const { empresaId } = ensureClienteTenantContext(dadosTenant);
       
       console.log('🔐 AuthClienteProvider - Tentando login com email:', email);
       
@@ -141,14 +163,14 @@ export const AuthClienteProvider = ({ children }) => {
       const user = userCredential.user;
       console.log('✅ AuthClienteProvider - Usuário autenticado:', user.uid);
       
-      // 2. Buscar dados do cliente no Firestore usando o UID
-      const clienteData = await firebaseService.getById('clientes', user.uid);
+      // 2. Buscar dados do cliente no tenant atual usando o UID/authUid/email
+      const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId);
       
-      if (!clienteData) {
-        console.error('❌ AuthClienteProvider - Dados do cliente não encontrados para UID:', user.uid);
-        toast.error('Dados do cliente não encontrados');
+      if (!isClienteDoTenant(clienteData, empresaId)) {
+        console.error('❌ AuthClienteProvider - Cliente não pertence ao tenant atual:', user.uid);
+        toast.error('Conta não encontrada para esta empresa. Use o link correto do salão.');
         await signOut(auth);
-        return false;
+        return { success: false, error: 'cliente_fora_do_tenant' };
       }
 
       console.log('✅ AuthClienteProvider - Dados do cliente carregados:', clienteData);
@@ -171,6 +193,8 @@ export const AuthClienteProvider = ({ children }) => {
         toast.error('Senha incorreta');
       } else if (error.code === 'auth/invalid-credential') {
         toast.error('Email ou senha inválidos');
+      } else if (error.message?.includes('link da empresa')) {
+        toast.error(error.message);
       } else {
         toast.error('Erro ao fazer login');
       }
@@ -181,9 +205,10 @@ export const AuthClienteProvider = ({ children }) => {
   };
 
   // LOGIN COM GOOGLE
-  const loginComGoogle = async () => {
+  const loginComGoogle = async (dadosTenant = {}) => {
     try {
       setLoading(true);
+      const { empresaId, empresaNome } = ensureClienteTenantContext(dadosTenant);
       
       console.log('🔐 AuthClienteProvider - Tentando login com Google');
       
@@ -191,24 +216,14 @@ export const AuthClienteProvider = ({ children }) => {
       const user = result.user;
       console.log('✅ AuthClienteProvider - Usuário Google autenticado:', user.uid);
       
-      // Verificar se o cliente já existe no Firestore (pelo UID ou googleUid)
-      let clienteData = await firebaseService.getById('clientes', user.uid);
-
-      if (!clienteData) {
-        // Se não encontrar por UID, buscar por googleUid
-        const clientesPorGoogleUid = await firebaseService.query('clientes', [
-          { field: 'googleUid', operator: '==', value: user.uid }
-        ]);
-        
-        if (clientesPorGoogleUid && clientesPorGoogleUid.length > 0) {
-          clienteData = clientesPorGoogleUid[0];
-        }
-      }
+      // Verificar se o cliente já existe no tenant atual (pelo UID/authUid/googleUid/email)
+      const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId);
 
       if (clienteData) {
         console.log('✅ AuthClienteProvider - Cliente encontrado no Firestore:', clienteData);
         setCliente(clienteData);
         setIsAuthenticated(true);
+        setTenantContextFromUser(clienteData);
         localStorage.setItem('cliente', JSON.stringify(clienteData));
         toast.success(`Bem-vindo(a), ${clienteData.nome}!`);
         return { success: true, data: clienteData };
@@ -221,6 +236,8 @@ export const AuthClienteProvider = ({ children }) => {
           nome: user.displayName || 'Cliente Google',
           email: user.email,
           foto: user.photoURL || null,
+          empresaId,
+          empresaNome,
         };
         
         // Guardar dados do usuário pendente
@@ -241,6 +258,8 @@ export const AuthClienteProvider = ({ children }) => {
         toast.error('Login cancelado');
       } else if (error.code === 'auth/popup-blocked') {
         toast.error('Popup bloqueado. Permita popups para este site.');
+      } else if (error.message?.includes('link da empresa')) {
+        toast.error(error.message);
       } else {
         toast.error('Erro ao fazer login com Google');
       }
@@ -264,13 +283,7 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Completando cadastro para:', pendingGoogleUser.email);
 
-      const empresaPublicaId = dadosComplementares.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
-      const empresaPublicaNome = dadosComplementares.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
-      if (!empresaPublicaId) {
-        toast.error('Acesse pelo link da empresa para concluir o cadastro.');
-        return { success: false };
-      }
-      setTenantContext({ empresaId: empresaPublicaId, empresa: { id: empresaPublicaId, nome: empresaPublicaNome } });
+      const { empresaId: empresaPublicaId, empresaNome: empresaPublicaNome } = ensureClienteTenantContext(dadosComplementares);
 
       // 🔥 IMPORTANTE: Manter o CPF com a máscara (já vem formatado do input)
       const cpfFormatado = dadosComplementares.cpf; // Ex: "331.200.588-40"
@@ -321,7 +334,8 @@ export const AuthClienteProvider = ({ children }) => {
 
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA E GOOGLEUID
       const novoCliente = {
-        id: pendingGoogleUser.uid, // ID do documento = UID do Google
+        id: getClienteTenantDocumentId(empresaPublicaId, pendingGoogleUser.uid),
+        authUid: pendingGoogleUser.uid,
         empresaId: empresaPublicaId,
         empresaNome: empresaPublicaNome,
         nome: pendingGoogleUser.nome,
@@ -352,8 +366,8 @@ export const AuthClienteProvider = ({ children }) => {
         updatedAt: agora
       };
 
-      // 🔥 USAR set EM VEZ DE add PARA GARANTIR O ID CORRETO
-      await firebaseService.set('clientes', pendingGoogleUser.uid, novoCliente);
+      // 🔥 ID do cliente é composto por empresa + UID para permitir multi-tenant
+      await firebaseService.set('clientes', novoCliente.id, novoCliente);
       
       console.log('✅ AuthClienteProvider - Novo cliente criado:', novoCliente);
       
@@ -382,13 +396,7 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('📝 AuthClienteProvider - Cadastrando novo cliente:', dadosCliente.email);
 
-      const empresaPublicaId = dadosCliente.empresaId || window.sessionStorage.getItem('empresa_publica_id') || null;
-      const empresaPublicaNome = dadosCliente.empresaNome || window.sessionStorage.getItem('empresa_publica_nome') || null;
-      if (!empresaPublicaId) {
-        toast.error('Acesse pelo link da empresa para realizar o cadastro.');
-        return false;
-      }
-      setTenantContext({ empresaId: empresaPublicaId, empresa: { id: empresaPublicaId, nome: empresaPublicaNome } });
+      const { empresaId: empresaPublicaId, empresaNome: empresaPublicaNome } = ensureClienteTenantContext(dadosCliente);
 
       // 🔥 IMPORTANTE: CPF já deve vir formatado do formulário
       const cpfFormatado = dadosCliente.cpf; // Ex: "331.200.588-40"
@@ -431,7 +439,8 @@ export const AuthClienteProvider = ({ children }) => {
 
       // 🔥 CRIAR CLIENTE COM CPF NO FORMATO COM MÁSCARA
       const novoCliente = {
-        id: user.uid,
+        id: getClienteTenantDocumentId(empresaPublicaId, user.uid),
+        authUid: user.uid,
         empresaId: empresaPublicaId,
         empresaNome: empresaPublicaNome,
         nome: dadosCliente.nome,
@@ -464,8 +473,8 @@ export const AuthClienteProvider = ({ children }) => {
         updatedAt: agora
       };
 
-      // 3. Salvar no Firestore usando o UID como ID do documento
-      await firebaseService.set('clientes', user.uid, novoCliente);
+      // 3. Salvar no Supabase usando ID composto por empresa + UID para isolar tenants
+      await firebaseService.set('clientes', novoCliente.id, novoCliente);
       
       console.log('✅ AuthClienteProvider - Cliente salvo no Firestore com CPF:', cpfFormatado);
       

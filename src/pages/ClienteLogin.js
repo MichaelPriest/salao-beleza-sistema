@@ -62,6 +62,7 @@ function ClienteLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [empresaPublica, setEmpresaPublica] = useState(null);
   
   // 🔥 ESTADOS PARA CADASTRO COMPLEMENTAR APÓS LOGIN GOOGLE
   const [openCadastroComplementar, setOpenCadastroComplementar] = useState(false);
@@ -100,6 +101,7 @@ function ClienteLogin() {
       const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
       if (!empresa) return;
       saasService.setContextoAtual({ empresa });
+      setEmpresaPublica(empresa);
       window.sessionStorage.setItem('empresa_publica_slug', slug);
       window.sessionStorage.setItem('empresa_publica_id', empresa.id);
       window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
@@ -133,7 +135,12 @@ function ClienteLogin() {
       return;
     }
 
-    const result = await login(formData.email, formData.senha);
+    if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+      setError('Acesse pelo link da empresa/salão para entrar na área do cliente.');
+      return;
+    }
+
+    const result = await login(formData.email, formData.senha, { empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
     if (result?.success) {
       // O redirecionamento será feito pelo useEffect
     }
@@ -182,7 +189,12 @@ function ClienteLogin() {
   // 🔥 LOGIN COM GOOGLE
   const handleGoogleLogin = async () => {
     try {
-      const result = await loginComGoogle();
+      if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+        setError('Acesse pelo link da empresa/salão para entrar com Google.');
+        return;
+      }
+
+      const result = await loginComGoogle({ empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       
       // Se o login foi bem-sucedido e o cliente já existe
       if (result?.success) {
@@ -214,7 +226,7 @@ function ClienteLogin() {
     try {
       setLoadingComplementar(true);
       
-      const result = await completarCadastroGoogle(dadosComplementares);
+      const result = await completarCadastroGoogle({ ...dadosComplementares, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       
       if (result?.success) {
         console.log('✅ Cadastro completado com sucesso');
@@ -248,6 +260,9 @@ function ClienteLogin() {
   const handleVoltar = () => {
     navigate('/');
   };
+
+  const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+  const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
 
   return (
     <>
@@ -303,6 +318,16 @@ function ClienteLogin() {
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
                 Login
               </Typography>
+
+              {empresaPublica ? (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  Acessando área do cliente de <strong>{empresaPublica.nome}</strong>.
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                  Use o link da empresa ou salão para entrar. Assim sua conta fica vinculada ao tenant correto.
+                </Alert>
+              )}
 
               {success && (
                 <Alert severity="success" sx={{ mb: 3 }}>
@@ -417,7 +442,7 @@ function ClienteLogin() {
                 </Typography>
                 <Button
                   component={RouterLink}
-                  to="/cliente/cadastro"
+                  to={`/cliente/cadastro${tenantQuery}`}
                   variant="outlined"
                   fullWidth
                   sx={{
@@ -437,7 +462,7 @@ function ClienteLogin() {
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Link
                   component={RouterLink}
-                  to="/cliente/recuperar-senha"
+                  to={`/cliente/recuperar-senha${tenantQuery}`}
                   variant="body2"
                   sx={{ color: '#9c27b0', cursor: 'pointer' }}
                 >

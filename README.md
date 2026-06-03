@@ -106,6 +106,11 @@ A camada de compatibilidade força o isolamento antes de qualquer chamada REST a
 
 Para isolamento em profundidade, mantenha as políticas RLS do Supabase alinhadas com essa mesma regra de `empresaId`/`unidadeId` e use `SUPABASE_SERVICE_ROLE_KEY` apenas em scripts/servidor.
 
+
+### Login e cadastro de clientes por tenant
+
+Os clientes devem acessar login e cadastro pelo link público da empresa (`/e/:slug`) ou pelas rotas com `?empresa=slug`, por exemplo `/cliente/login?empresa=meu-salao`. O sistema grava esse contexto em sessão, filtra os clientes pelo `empresaId` atual e usa IDs compostos por `empresaId + uid` para permitir isolamento entre tenants e evitar sobrescrever clientes de outra empresa.
+
 ### Página pública por empresa
 
 Cada empresa possui uma página própria em `/e/:slug`, configurada em **Minha Empresa > Página inicial** (`/empresa/site`). Essa página usa o componente `SiteSalao.js` em modo tenant, define o slug/link público, título, subtítulo, cor principal e se serviços/equipe serão exibidos. Os botões de login e cadastro carregam o contexto da empresa para vincular novos clientes ao `empresaId` correto.

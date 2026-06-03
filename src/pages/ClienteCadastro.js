@@ -147,12 +147,18 @@ function ClienteCadastro() {
   const handleSubmit = async () => {
     setError('');
 
+    if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+      setError('Acesse pelo link da empresa/salão para criar sua conta no tenant correto.');
+      return;
+    }
+
     try {
       const success = await cadastrar({ ...formData, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       if (success) {
         setSuccess(true);
         setTimeout(() => {
-          navigate('/cliente/login');
+          const slug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+          navigate(`/cliente/login${slug ? `?empresa=${encodeURIComponent(slug)}` : ''}`);
         }, 3000);
       }
     } catch (err) {
@@ -163,6 +169,9 @@ function ClienteCadastro() {
   const handleVoltar = () => {
     navigate('/');
   };
+
+  const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+  const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
 
   const servicosDisponiveis = [
     'Corte de Cabelo',
@@ -513,6 +522,9 @@ function ClienteCadastro() {
                 <Typography variant="h6" gutterBottom>
                   Revise seus dados
                 </Typography>
+                <Alert severity={empresaPublica ? 'info' : 'warning'} sx={{ mb: 2 }}>
+                  {empresaPublica ? `Cadastro vinculado à empresa ${empresaPublica.nome}.` : 'Use o link da empresa/salão para vincular o cadastro ao tenant correto.'}
+                </Alert>
                 <Paper variant="outlined" sx={{ p: 2, mt: 2, textAlign: 'left' }}>
                   <Typography variant="subtitle2" color="primary">
                     Dados Pessoais
@@ -654,7 +666,7 @@ function ClienteCadastro() {
                   Já tem uma conta?{' '}
                   <Link
                     component={RouterLink}
-                    to="/cliente/login"
+                    to={`/cliente/login${tenantQuery}`}
                     sx={{ color: '#9c27b0', cursor: 'pointer', fontWeight: 600 }}
                   >
                     Faça login
