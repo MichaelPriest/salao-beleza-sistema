@@ -2,7 +2,7 @@
 import { firebaseService } from './firebase';
 import { toast } from 'react-hot-toast';
 import { db } from './firebase';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, writeBatch } from './firebase';
 
 export const backupService = {
   // Listar histórico de backups

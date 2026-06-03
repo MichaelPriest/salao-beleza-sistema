@@ -4,7 +4,28 @@
     <meta charset="utf-8" />
     <link rel="icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/icon-180x180.png">
-    <link rel="manifest" href="/manifest.json">
+    <script>
+      // Carrega o manifest somente quando o arquivo público estiver acessível.
+      // Em alguns ambientes com proteção/autenticação, /manifest.json pode retornar
+      // 401 e gerar erro visual no console antes do app iniciar.
+      (function carregarManifestSeguro() {
+        fetch('/manifest.json', { credentials: 'omit' })
+          .then(function(response) {
+            if (!response.ok) return null;
+            return response.blob();
+          })
+          .then(function(blob) {
+            if (!blob) return;
+            var manifest = document.createElement('link');
+            manifest.rel = 'manifest';
+            manifest.href = URL.createObjectURL(blob);
+            document.head.appendChild(manifest);
+          })
+          .catch(function() {
+            // Ignora: o app não depende do manifest para funcionar.
+          });
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#9c27b0" />
     <meta

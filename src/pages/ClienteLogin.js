@@ -46,6 +46,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { firebaseService } from '../services/firebase';
+import { saasService } from '../services/saasService';
 import { formatarCPF, removerMascaraCPF, validarCPF } from '../utils/cpfUtils';
 
 function ClienteLogin() {
@@ -60,6 +61,8 @@ function ClienteLogin() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [empresaPublica, setEmpresaPublica] = useState(null);
   
   // 🔥 ESTADOS PARA CADASTRO COMPLEMENTAR APÓS LOGIN GOOGLE
   const [openCadastroComplementar, setOpenCadastroComplementar] = useState(false);
@@ -80,6 +83,33 @@ function ClienteLogin() {
   const [loadingComplementar, setLoadingComplementar] = useState(false);
   const [cpfError, setCpfError] = useState('');
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const redirectType = params.get('type') || window.sessionStorage.getItem('supabase.auth.redirect_type');
+    if (redirectType === 'signup') {
+      setSuccess('Email confirmado com sucesso! Você já pode acessar sua área do cliente.');
+      window.sessionStorage.removeItem('supabase.auth.redirect_type');
+    }
+  }, []);
+
+
+  useEffect(() => {
+    const carregarEmpresaPublica = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+      if (!slug) return;
+      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
+      if (!empresa) return;
+      saasService.setContextoAtual({ empresa });
+      setEmpresaPublica(empresa);
+      window.sessionStorage.setItem('empresa_publica_slug', slug);
+      window.sessionStorage.setItem('empresa_publica_id', empresa.id);
+      window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
+    };
+
+    carregarEmpresaPublica();
+  }, []);
+
   // 🔥 REDIRECIONAR SE JÁ ESTIVER AUTENTICADO
   useEffect(() => {
     if (isAuthenticated) {
@@ -92,18 +122,25 @@ function ClienteLogin() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
+    setSuccess('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!formData.email || !formData.senha) {
       setError('Preencha todos os campos');
       return;
     }
 
-    const result = await login(formData.email, formData.senha);
+    if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+      setError('Acesse pelo link da empresa/salão para entrar na área do cliente.');
+      return;
+    }
+
+    const result = await login(formData.email, formData.senha, { empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
     if (result?.success) {
       // O redirecionamento será feito pelo useEffect
     }
@@ -152,7 +189,12 @@ function ClienteLogin() {
   // 🔥 LOGIN COM GOOGLE
   const handleGoogleLogin = async () => {
     try {
-      const result = await loginComGoogle();
+      if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+        setError('Acesse pelo link da empresa/salão para entrar com Google.');
+        return;
+      }
+
+      const result = await loginComGoogle({ empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       
       // Se o login foi bem-sucedido e o cliente já existe
       if (result?.success) {
@@ -184,7 +226,7 @@ function ClienteLogin() {
     try {
       setLoadingComplementar(true);
       
-      const result = await completarCadastroGoogle(dadosComplementares);
+      const result = await completarCadastroGoogle({ ...dadosComplementares, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       
       if (result?.success) {
         console.log('✅ Cadastro completado com sucesso');
@@ -218,6 +260,9 @@ function ClienteLogin() {
   const handleVoltar = () => {
     navigate('/');
   };
+
+  const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+  const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
 
   return (
     <>
@@ -273,6 +318,22 @@ function ClienteLogin() {
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
                 Login
               </Typography>
+
+              {empresaPublica ? (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  Acessando área do cliente de <strong>{empresaPublica.nome}</strong>.
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                  Use o link da empresa ou salão para entrar. Assim sua conta fica vinculada ao tenant correto.
+                </Alert>
+              )}
+
+              {success && (
+                <Alert severity="success" sx={{ mb: 3 }}>
+                  {success}
+                </Alert>
+              )}
 
               {error && (
                 <Alert severity="error" sx={{ mb: 3 }}>
@@ -381,7 +442,7 @@ function ClienteLogin() {
                 </Typography>
                 <Button
                   component={RouterLink}
-                  to="/cliente/cadastro"
+                  to={`/cliente/cadastro${tenantQuery}`}
                   variant="outlined"
                   fullWidth
                   sx={{
@@ -401,7 +462,7 @@ function ClienteLogin() {
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Link
                   component={RouterLink}
-                  to="/cliente/recuperar-senha"
+                  to={`/cliente/recuperar-senha${tenantQuery}`}
                   variant="body2"
                   sx={{ color: '#9c27b0', cursor: 'pointer' }}
                 >

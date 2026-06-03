@@ -1,7 +1,7 @@
 // src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Toaster } from 'react-hot-toast';
@@ -94,6 +94,7 @@ import GlobalLoading from './components/GlobalLoading';
 import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
+import SaasAdminRoute from './components/SaasAdminRoute';
 import Footer from './components/Footer';
 
 // Pages Principais
@@ -195,6 +196,14 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
+import SaasGestao from './pages/SaasGestao';
+import SaasAdmin from './pages/SaasAdmin';
+import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
+import SaasEmpresas from './pages/SaasEmpresas';
+import SaasCobrancas from './pages/SaasCobrancas';
+import SaasPlanos from './pages/SaasPlanos';
+import SaasRelatorios from './pages/SaasRelatorios';
+import SaasLanding from './pages/SaasLanding';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -391,6 +400,11 @@ function App() {
                 <Route path="/promocoes/:id" element={
                   <SimpleLayout>
                     <PromocaoVisualizar />
+                  </SimpleLayout>
+                } />
+                <Route path="/e/:slug" element={
+                  <SimpleLayout>
+                    <SiteSalao />
                   </SimpleLayout>
                 } />
                 <Route path="/login" element={
@@ -626,6 +640,84 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <Entradas />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/saas" element={<SimpleLayout><SaasLanding /></SimpleLayout>} />
+                <Route path="/saas-admin" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasAdmin />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/empresas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasEmpresas />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/assinaturas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPlanos />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/cobrancas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasCobrancas />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/pagamentos" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPagamentosConfig />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/relatorios" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasRelatorios />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/empresa" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/unidades" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={1} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/assinatura" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={3} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/cobranca" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={4} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/site" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={5} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />

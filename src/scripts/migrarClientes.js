@@ -1,5 +1,5 @@
 // src/scripts/migrarClientes.js
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword } from '../services/firebase';
 import { firebaseService } from '../services/firebase';
 
 export const migrarClientesParaFirebaseAuth = async () => {

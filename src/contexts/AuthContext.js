@@ -2,14 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, db, setTenantContextFromUser, clearTenantContext } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
 
 const AuthContext = createContext({});
@@ -60,6 +53,7 @@ export const AuthProvider = ({ children }) => {
             
             setUser(usuarioCompleto);
             localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+            setTenantContextFromUser(usuarioCompleto);
             
           } else {
             console.log('⚠️ AuthContext - Usuário não encontrado no Firestore');
@@ -92,6 +86,7 @@ export const AuthProvider = ({ children }) => {
               
               setUser(usuarioCompleto);
               localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+              setTenantContextFromUser(usuarioCompleto);
             } else {
               console.log('❌ AuthContext - Usuário não encontrado no sistema');
               // 🔥 IMPORTANTE: Não setar usuário, apenas logar
@@ -110,6 +105,7 @@ export const AuthProvider = ({ children }) => {
         console.log('👋 AuthContext - Usuário deslogado');
         setUser(null);
         localStorage.removeItem('usuario');
+        clearTenantContext();
       }
       setLoading(false);
     });
@@ -167,6 +163,7 @@ export const AuthProvider = ({ children }) => {
           
           setUser(usuarioCompleto);
           localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+          setTenantContextFromUser(usuarioCompleto);
           
           // 🔥 REGISTRAR LOGIN NA AUDITORIA
           await auditoriaService.registrarLogin(usuarioCompleto);
@@ -201,6 +198,7 @@ export const AuthProvider = ({ children }) => {
       
       setUser(usuarioCompleto);
       localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+      setTenantContextFromUser(usuarioCompleto);
       
       // 🔥 REGISTRAR LOGIN NA AUDITORIA
       await auditoriaService.registrarLogin(usuarioCompleto);

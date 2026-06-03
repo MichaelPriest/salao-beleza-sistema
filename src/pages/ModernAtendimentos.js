@@ -83,7 +83,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/firebase';
 
 // Importar o logo
 import logo from '../assets/logo.png';

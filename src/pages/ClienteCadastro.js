@@ -1,5 +1,5 @@
 // src/pages/ClienteCadastro.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Card,
@@ -41,6 +41,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { masks, MaskedInput } from '../utils/plugins';
+import { saasService } from '../services/saasService';
 
 const steps = ['Dados Pessoais', 'Login', 'Preferências', 'Confirmação'];
 
@@ -52,6 +53,8 @@ function ClienteCadastro() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const [empresaPublica, setEmpresaPublica] = useState(null);
 
   const [formData, setFormData] = useState({
     // Dados Pessoais
@@ -80,6 +83,23 @@ function ClienteCadastro() {
     cidade: '',
     estado: '',
   });
+
+  useEffect(() => {
+    const carregarEmpresaPublica = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+      if (!slug) return;
+      const empresa = await saasService.buscarEmpresaPorSlug(slug).catch(() => null);
+      if (!empresa) return;
+      saasService.setContextoAtual({ empresa });
+      setEmpresaPublica(empresa);
+      window.sessionStorage.setItem('empresa_publica_slug', slug);
+      window.sessionStorage.setItem('empresa_publica_id', empresa.id);
+      window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
+    };
+
+    carregarEmpresaPublica();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -127,12 +147,18 @@ function ClienteCadastro() {
   const handleSubmit = async () => {
     setError('');
 
+    if (!empresaPublica?.id && !window.sessionStorage.getItem('empresa_publica_id')) {
+      setError('Acesse pelo link da empresa/salão para criar sua conta no tenant correto.');
+      return;
+    }
+
     try {
-      const success = await cadastrar(formData);
+      const success = await cadastrar({ ...formData, empresaId: empresaPublica?.id, empresaNome: empresaPublica?.nome });
       if (success) {
         setSuccess(true);
         setTimeout(() => {
-          navigate('/cliente/login');
+          const slug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+          navigate(`/cliente/login${slug ? `?empresa=${encodeURIComponent(slug)}` : ''}`);
         }, 3000);
       }
     } catch (err) {
@@ -143,6 +169,9 @@ function ClienteCadastro() {
   const handleVoltar = () => {
     navigate('/');
   };
+
+  const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
+  const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
 
   const servicosDisponiveis = [
     'Corte de Cabelo',
@@ -475,7 +504,7 @@ function ClienteCadastro() {
                   Cadastro realizado com sucesso!
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  Você será redirecionado para a página de login em instantes...
+                  Enviamos um email de confirmação. Confirme sua conta e depois faça login.
                 </Typography>
               </>
             ) : (
@@ -493,6 +522,9 @@ function ClienteCadastro() {
                 <Typography variant="h6" gutterBottom>
                   Revise seus dados
                 </Typography>
+                <Alert severity={empresaPublica ? 'info' : 'warning'} sx={{ mb: 2 }}>
+                  {empresaPublica ? `Cadastro vinculado à empresa ${empresaPublica.nome}.` : 'Use o link da empresa/salão para vincular o cadastro ao tenant correto.'}
+                </Alert>
                 <Paper variant="outlined" sx={{ p: 2, mt: 2, textAlign: 'left' }}>
                   <Typography variant="subtitle2" color="primary">
                     Dados Pessoais
@@ -634,7 +666,7 @@ function ClienteCadastro() {
                   Já tem uma conta?{' '}
                   <Link
                     component={RouterLink}
-                    to="/cliente/login"
+                    to={`/cliente/login${tenantQuery}`}
                     sx={{ color: '#9c27b0', cursor: 'pointer', fontWeight: 600 }}
                   >
                     Faça login

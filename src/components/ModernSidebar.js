@@ -113,6 +113,11 @@ import {
   Settings as SettingsIcon,
   SettingsApplications as SettingsApplicationsIcon,
   Tune as TuneIcon,
+  Business as BusinessIcon,
+  Apartment as ApartmentIcon,
+  WorkspacePremium as WorkspacePremiumIcon,
+  Payments as PaymentsIcon,
+  Language as LanguageIcon,
   
   // Ícones de navegação
   ChevronLeft as ChevronLeftIcon,
@@ -169,6 +174,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
+import { isSaasPlatformAdmin } from '../utils/saasAccess';
+import { saasService } from '../services/saasService';
 
 // Estrutura do menu com ícones e permissões por cargo - ATUALIZADA
 const menuGroups = [
@@ -469,6 +476,101 @@ const menuGroups = [
     ],
   },
   {
+    title: 'ADMIN SAAS',
+    icon: <WorkspacePremiumIcon />,
+    items: [
+      {
+        text: 'Painel da Plataforma',
+        icon: <WorkspacePremiumIcon />,
+        path: '/saas-admin',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Empresas/Tenants',
+        icon: <BusinessIcon />,
+        path: '/saas-admin/empresas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Planos e Assinaturas',
+        icon: <WorkspacePremiumIcon />,
+        path: '/saas-admin/assinaturas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Cobranças SaaS',
+        icon: <ReceiptLongIcon />,
+        path: '/saas-admin/cobrancas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Relatórios SaaS',
+        icon: <AnalyticsIcon />,
+        path: '/saas-admin/relatorios',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'APIs de Pagamento',
+        icon: <PaymentsIcon />,
+        path: '/saas-admin/pagamentos',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+    ],
+  },
+  {
+    title: 'MINHA EMPRESA',
+    icon: <BusinessIcon />,
+    items: [
+      {
+        text: 'Empresa',
+        icon: <BusinessIcon />,
+        path: '/empresa',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Unidades',
+        icon: <ApartmentIcon />,
+        path: '/empresa/unidades',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Assinatura',
+        icon: <WorkspacePremiumIcon />,
+        path: '/empresa/assinatura',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Cobrança SaaS',
+        icon: <PaymentsIcon />,
+        path: '/empresa/cobranca',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Página inicial',
+        icon: <LanguageIcon />,
+        path: '/empresa/site',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
+    ],
+  },
+  {
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
@@ -540,6 +642,11 @@ export const extraIcons = {
   checklist: <ChecklistIcon />,
   listBulleted: <ListBulletedIcon />,
   ballot: <BallotIcon />,
+  business: <BusinessIcon />,
+  apartment: <ApartmentIcon />,
+  workspacePremium: <WorkspacePremiumIcon />,
+  payments: <PaymentsIcon />,
+  language: <LanguageIcon />,
 };
 
 // Componente Mobile Sidebar (mantido igual)
@@ -1125,6 +1232,7 @@ function ModernSidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
+  const [recursosPlano, setRecursosPlano] = useState([]);
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1144,9 +1252,31 @@ function ModernSidebar() {
     }
   };
 
+  const carregarRecursosPlano = async () => {
+    try {
+      const user = usuariosService.getUsuarioAtual();
+      if (!user || isSaasPlatformAdmin(user)) {
+        setRecursosPlano([]);
+        return;
+      }
+      const empresaId = user.empresaId || user.tenantId || user.empresa?.id;
+      if (!empresaId) {
+        setRecursosPlano([]);
+        return;
+      }
+      const assinatura = await saasService.buscarAssinaturaAtual(empresaId).catch(() => null);
+      const plano = await saasService.buscarPlano(assinatura?.planoId || user.planoId || user.empresa?.planoId).catch(() => null);
+      setRecursosPlano(plano?.recursos || assinatura?.recursos || user.recursosPlano || []);
+    } catch (error) {
+      console.error('Erro ao carregar recursos do plano no menu:', error);
+      setRecursosPlano([]);
+    }
+  };
+
   useEffect(() => {
     carregarUsuario();
     carregarNotificacoes();
+    carregarRecursosPlano();
 
     // Inicializar todos os grupos como FECHADOS
     const initialOpenState = {};
@@ -1157,6 +1287,7 @@ function ModernSidebar() {
 
     const handleUsuarioAtualizado = () => {
       carregarUsuario();
+      carregarRecursosPlano();
     };
 
     const handleStorageChange = (e) => {
@@ -1189,11 +1320,39 @@ function ModernSidebar() {
     }
   };
 
+  const recursoDoItem = (item) => {
+    if (item.recursoPlano) return item.recursoPlano;
+    const path = item.path || '';
+    if (path.includes('/agendamento') || path === '/agenda') return 'agenda';
+    if (path.includes('/cliente')) return 'clientes';
+    if (path.includes('/servico')) return 'servicos';
+    if (path.includes('/profissional')) return 'profissionais';
+    if (path.includes('/fidelidade') || path.includes('/meus-pontos') || path.includes('/recompensas') || path.includes('/indicacoes')) return 'fidelidade';
+    if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
+    if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
+    if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
+    if (path.includes('/empresa/unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site')) return 'site_publico';
+    return null;
+  };
+
+  const recursoLiberadoNoPlano = (item) => {
+    const recurso = recursoDoItem(item);
+    if (!recurso || recursosPlano.length === 0) return true;
+    return recursosPlano.includes(recurso);
+  };
+
   // Função para verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
+
+    if (!recursoLiberadoNoPlano(item)) return false;
+
+    if (item.plataformaOnly) {
+      return isSaasPlatformAdmin(usuario);
+    }
     
-    // Admin tem acesso a tudo
+    // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
     
     // Verificar se o cargo do usuário está na lista de cargos permitidos para o item

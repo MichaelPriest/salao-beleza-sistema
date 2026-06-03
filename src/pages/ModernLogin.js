@@ -24,13 +24,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { getAuth, signInWithPopup, GoogleAuthProvider, doc, getDoc, setDoc, db } from '../services/firebase';
 
 function ModernLogin() {
   const navigate = useNavigate();

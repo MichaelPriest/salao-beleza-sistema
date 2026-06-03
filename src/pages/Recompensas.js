@@ -85,7 +85,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '../services/firebase';
 import { QRCodeSVG } from 'qrcode.react';
 
 // Tipos de recompensa

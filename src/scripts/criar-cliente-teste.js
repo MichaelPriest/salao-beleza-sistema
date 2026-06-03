@@ -1,24 +1,76 @@
 // criar-cliente-teste.js
-const admin = require('firebase-admin');
+// Script utilitário migrado para Supabase.
 
-// 🔥 INICIALIZAR O FIREBASE ADMIN SDK
-// Você precisa baixar a chave privada do Firebase Console:
-// Configurações do Projeto > Contas de serviço > Gerar nova chave privada
-const serviceAccount = require('./caminho-para-sua-chave.json');
+const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL || 'https://kvjrerxqwtrxttiiqkgf.supabase.co').replace(/\/$/, '');
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const DOCUMENTS_TABLE = process.env.REACT_APP_SUPABASE_DOCUMENTS_TABLE || process.env.SUPABASE_DOCUMENTS_TABLE || 'registros';
+const USE_COLLECTION_TABLES = process.env.REACT_APP_SUPABASE_USE_COLLECTION_TABLES !== 'false' && process.env.SUPABASE_USE_COLLECTION_TABLES !== 'false';
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: 'salao-beleza-sistema'
-});
+if (!SUPABASE_KEY) {
+  console.error('❌ Configure SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY antes de executar este script.');
+  process.exit(1);
+}
 
-const db = admin.firestore();
-const auth = admin.auth();
+const supabaseFetch = async (path, options = {}) => {
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+      ...(options.headers || {})
+    }
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error_description || data?.error || response.statusText);
+  }
+
+  return data;
+};
+
+const addDocument = async (collection, document) => {
+  const documentId = document.id || crypto.randomUUID();
+  const now = new Date().toISOString();
+  const data = {
+    ...document,
+    id: documentId,
+    createdAt: document.createdAt || now,
+    updatedAt: now
+  };
+
+  const tableName = USE_COLLECTION_TABLES ? collection : DOCUMENTS_TABLE;
+  const payload = USE_COLLECTION_TABLES
+    ? { document_id: documentId, data }
+    : { collection, document_id: documentId, data };
+
+  const rows = await supabaseFetch(`/rest/v1/${tableName}`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  return { id: documentId, ...(rows?.[0]?.data || data) };
+};
+
+const signUp = async ({ email, password, metadata }) => {
+  const result = await supabaseFetch('/auth/v1/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, data: metadata }),
+    headers: { Authorization: `Bearer ${SUPABASE_KEY}` }
+  });
+
+  return result.user;
+};
 
 async function criarClienteTeste() {
-  console.log('🚀 Iniciando criação do cliente teste...');
+  console.log('🚀 Iniciando criação do cliente teste no Supabase...');
 
   try {
-    // Dados do cliente
+    const now = new Date().toISOString();
     const clienteData = {
       nome: 'Cliente Teste Fidelidade',
       email: 'cliente.teste@email.com',
@@ -27,138 +79,94 @@ async function criarClienteTeste() {
       dataNascimento: '1990-01-01',
       status: 'ativo',
       observacoes: 'Cliente criado para testar o sistema de fidelidade',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: now,
+      updatedAt: now
     };
 
-    // Dados de pontuação
     const pontuacoesData = [
-      {
-        quantidade: 100,
-        tipo: 'credito',
-        motivo: 'Cadastro inicial',
-        data: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      },
-      {
-        quantidade: 50,
-        tipo: 'credito',
-        motivo: 'Aniversário',
-        data: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      },
-      {
-        quantidade: 30,
-        tipo: 'credito',
-        motivo: 'Indicação',
-        data: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      },
-      {
-        quantidade: 200,
-        tipo: 'credito',
-        motivo: 'Compra de serviço',
-        data: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      }
+      { quantidade: 100, tipo: 'credito', motivo: 'Cadastro inicial', data: now, createdAt: now },
+      { quantidade: 50, tipo: 'credito', motivo: 'Aniversário', data: now, createdAt: now },
+      { quantidade: 30, tipo: 'credito', motivo: 'Indicação', data: now, createdAt: now },
+      { quantidade: 200, tipo: 'credito', motivo: 'Compra de serviço', data: now, createdAt: now }
     ];
 
-    // Dados de resgate
     const resgateData = {
       recompensaId: 'desc_10',
       recompensaNome: '10% de desconto',
       pontosGastos: 100,
-      data: admin.firestore.FieldValue.serverTimestamp(),
+      data: now,
       status: 'resgatado',
       utilizado: false,
       codigo: 'FID2025' + Math.floor(Math.random() * 10000),
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: now
     };
 
-    // 1. Criar o cliente no Firestore
+    console.log('\n📌 Criando usuário no Supabase Auth...');
+    const authUser = await signUp({
+      email: clienteData.email,
+      password: '123456',
+      metadata: { nome: clienteData.nome, perfil: 'cliente' }
+    });
+    console.log('✅ Usuário criado no Auth com ID:', authUser.id);
+
     console.log('\n📌 Criando cliente...');
-    const clienteRef = await db.collection('clientes').add(clienteData);
-    const clienteId = clienteRef.id;
+    const cliente = await addDocument('clientes', { ...clienteData, id: authUser.id, uid: authUser.id });
+    const clienteId = cliente.id;
     console.log('✅ Cliente criado com ID:', clienteId);
 
-    // 2. Criar o usuário no Firebase Auth
-    console.log('\n📌 Criando usuário no Authentication...');
-    const userRecord = await auth.createUser({
-      uid: clienteId, // Usar o mesmo ID do Firestore
-      email: clienteData.email,
-      emailVerified: false,
-      password: '123456', // 🔥 SENHA PROVISÓRIA - mude depois
-      displayName: clienteData.nome,
-      disabled: false
-    });
-    console.log('✅ Usuário criado no Auth com UID:', userRecord.uid);
-
-    // 3. Criar o documento do usuário no Firestore
     console.log('\n📌 Criando documento do usuário...');
-    const usuarioData = {
-      uid: userRecord.uid,
+    await addDocument('usuarios', {
+      id: authUser.id,
+      uid: authUser.id,
       nome: clienteData.nome,
       email: clienteData.email,
       cargo: 'cliente',
       status: 'ativo',
-      clienteId: clienteId,
+      clienteId,
       permissoes: ['visualizar_fidelidade', 'visualizar_meus_pontos'],
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    };
-    await db.collection('usuarios').doc(userRecord.uid).set(usuarioData);
+      createdAt: now,
+      updatedAt: now
+    });
     console.log('✅ Documento do usuário criado');
 
-    // 4. Criar as pontuações
     console.log('\n📌 Criando pontuações...');
     for (const pontuacao of pontuacoesData) {
-      pontuacao.clienteId = clienteId;
-      pontuacao.clienteNome = clienteData.nome;
-      const pontuacaoRef = await db.collection('pontuacao').add(pontuacao);
-      console.log(`   ✅ Pontuação criada: ${pontuacao.motivo} - ${pontuacao.quantidade} pontos (ID: ${pontuacaoRef.id})`);
+      const pontuacaoDoc = await addDocument('pontuacao', {
+        ...pontuacao,
+        clienteId,
+        clienteNome: clienteData.nome
+      });
+      console.log(`   ✅ Pontuação criada: ${pontuacao.motivo} - ${pontuacao.quantidade} pontos (ID: ${pontuacaoDoc.id})`);
     }
 
-    // 5. Criar o resgate
     console.log('\n📌 Criando resgate de teste...');
-    resgateData.clienteId = clienteId;
-    resgateData.clienteNome = clienteData.nome;
-    const resgateRef = await db.collection('resgates_fidelidade').add(resgateData);
-    console.log('✅ Resgate criado com ID:', resgateRef.id);
+    const resgate = await addDocument('resgates_fidelidade', {
+      ...resgateData,
+      clienteId,
+      clienteNome: clienteData.nome
+    });
+    console.log('✅ Resgate criado com ID:', resgate.id);
 
-    // 6. Calcular saldo total
     const saldoTotal = pontuacoesData.reduce((acc, p) => acc + p.quantidade, 0) - resgateData.pontosGastos;
-    
-    // Determinar nível
     let nivel = 'bronze';
     if (saldoTotal >= 5000) nivel = 'platina';
     else if (saldoTotal >= 2000) nivel = 'ouro';
     else if (saldoTotal >= 500) nivel = 'prata';
 
     console.log('\n' + '='.repeat(60));
-    console.log('🎉 CLIENTE CRIADO COM SUCESSO!');
+    console.log('🎉 CLIENTE CRIADO COM SUCESSO NO SUPABASE!');
     console.log('='.repeat(60));
-    console.log('📋 DADOS DO CLIENTE:');
     console.log(`   Nome: ${clienteData.nome}`);
     console.log(`   Email: ${clienteData.email}`);
     console.log(`   Cliente ID: ${clienteId}`);
-    console.log(`   UID Auth: ${userRecord.uid}`);
-    console.log('\n💰 PONTUAÇÃO:');
+    console.log(`   UID Auth: ${authUser.id}`);
     console.log(`   Saldo total: ${saldoTotal} pontos`);
     console.log(`   Nível: ${nivel.toUpperCase()}`);
-    console.log('\n📊 DETALHAMENTO:');
-    pontuacoesData.forEach(p => {
-      console.log(`   - ${p.motivo}: ${p.quantidade} pontos`);
-    });
-    console.log(`   - Resgate (10% desconto): -${resgateData.pontosGastos} pontos`);
-    console.log('\n🔑 DADOS DE ACESSO:');
-    console.log(`   Email: ${clienteData.email}`);
-    console.log(`   Senha: 123456 (altere após o primeiro login)`);
+    console.log('   Senha provisória: 123456');
     console.log('='.repeat(60));
-
   } catch (error) {
     console.error('❌ Erro:', error);
-  } finally {
-    process.exit();
+    process.exitCode = 1;
   }
 }
 

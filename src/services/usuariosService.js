@@ -1,13 +1,6 @@
 // src/services/usuariosService.js
 import { firebaseService } from './firebase';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  signOut,
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, db } from './firebase';
 
 class UsuariosService {
   constructor() {
