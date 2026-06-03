@@ -86,9 +86,10 @@ A base SaaS foi adicionada para atender empresas individuais e redes multiunidad
 
 ```txt
 supabase/migrations/20260602120000_create_saas_structure.sql
+supabase/migrations/20260603100000_create_saas_billing_config.sql
 ```
 
-Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assinaturas`, `faturas_saas`, `pagamentos_saas`, `convites_saas`, `uso_saas` e `eventos_cobranca_saas`, além de semear os planos `individual` e `multiunidades`.
+Ela cria as coleções documentais `empresas`, `unidades`, `planos_saas`, `assinaturas`, `faturas_saas`, `pagamentos_saas`, `convites_saas`, `uso_saas` e `eventos_cobranca_saas`, `configuracoes_saas` e `webhooks_cobranca_saas`, além de semear os planos `individual` e `multiunidades`.
 
 O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseService` adiciona/faz filtro automático por `empresaId` e, quando aplicável, por `unidadeId` nas coleções operacionais. Isso permite separar os dados de cada contratante sem reescrever todas as telas.
 
@@ -96,7 +97,7 @@ O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseS
 
 As telas foram separadas em duas áreas isoladas:
 
-- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, sem alterar o contexto de empresa ativa.
+- **Admin SaaS da plataforma**: `/saas-admin`, protegido por `SaasAdminRoute`, para usuários `superadmin`, `admin_saas`, `saas_admin`, `admin_plataforma` ou com permissão `admin_saas`. Essa área lista todas as empresas, assinaturas e faturas, configura gateways de pagamento e automação de mensalidades, sem alterar o contexto de empresa ativa.
 - **Área da empresa cliente**: `/empresa`, `/empresa/unidades`, `/empresa/assinatura` e `/empresa/cobranca`. Essas telas usam somente o `empresaId`/`unidadeId` do contexto do usuário logado.
 - A rota antiga `/saas` redireciona para `/empresa` para evitar misturar o painel da plataforma com o painel do cliente.
 
@@ -105,8 +106,9 @@ O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor co
 - `BILLING_PROVIDER=manual`: retorna instruções de cobrança manual.
 - `BILLING_PROVIDER=stripe`: cria uma sessão Stripe Checkout usando `STRIPE_SECRET_KEY`.
 - `BILLING_PROVIDER=mercadopago`: cria uma preferência Mercado Pago usando `MERCADOPAGO_ACCESS_TOKEN`.
+- `BILLING_PROVIDER=pagseguro` ou `pagbank`: cria um checkout PagSeguro/PagBank usando `PAGSEGURO_TOKEN` e `PAGSEGURO_ENVIRONMENT`.
 
-Nunca exponha `STRIPE_SECRET_KEY`, `MERCADOPAGO_ACCESS_TOKEN` ou `SUPABASE_SERVICE_ROLE_KEY` no frontend. Configure essas variáveis apenas no ambiente servidor/Vercel.
+Nunca exponha `STRIPE_SECRET_KEY`, `MERCADOPAGO_ACCESS_TOKEN`, `PAGSEGURO_TOKEN` ou `SUPABASE_SERVICE_ROLE_KEY` no frontend. Configure essas variáveis apenas no ambiente servidor/Vercel.
 
 ## Scripts disponíveis
 

@@ -10,6 +10,31 @@ export const STATUS_ASSINATURA = {
   EXPIRADA: 'expirada'
 };
 
+export const PROVEDORES_COBRANCA = [
+  { id: 'manual', nome: 'Manual / boleto externo', secretEnvVars: [] },
+  { id: 'stripe', nome: 'Stripe Checkout', secretEnvVars: ['STRIPE_SECRET_KEY'] },
+  { id: 'mercadopago', nome: 'Mercado Pago', secretEnvVars: ['MERCADOPAGO_ACCESS_TOKEN'] },
+  { id: 'pagseguro', nome: 'PagSeguro / PagBank', secretEnvVars: ['PAGSEGURO_TOKEN'] }
+];
+
+export const BILLING_CONFIG_ID = 'billing';
+
+export const CONFIG_COBRANCA_PADRAO = {
+  id: BILLING_CONFIG_ID,
+  provider: 'manual',
+  modoAutomatico: true,
+  gerarFaturaAutomaticamente: true,
+  diasAntesVencimento: 3,
+  diaVencimentoPadrao: 5,
+  instrucoesManual: 'Entre em contato para pagamento da mensalidade.',
+  successPath: '/billing/sucesso',
+  cancelPath: '/billing/cancelado',
+  webhookPath: '/api/billing-webhook',
+  stripe: { enabled: false },
+  mercadopago: { enabled: false },
+  pagseguro: { enabled: false, environment: 'sandbox' }
+};
+
 export const PLANOS_PADRAO = {
   individual: {
     id: 'individual',
@@ -60,6 +85,42 @@ export const saasService = {
   buscarPlano: async (planoId = 'individual') => {
     const plano = await firebaseService.getById('planos_saas', planoId).catch(() => null);
     return plano || PLANOS_PADRAO[planoId] || PLANOS_PADRAO.individual;
+  },
+
+  buscarConfigCobranca: async () => {
+    const config = await firebaseService.getById('configuracoes_saas', BILLING_CONFIG_ID).catch(() => null);
+    return {
+      ...CONFIG_COBRANCA_PADRAO,
+      ...(config || {}),
+      stripe: { ...CONFIG_COBRANCA_PADRAO.stripe, ...(config?.stripe || {}) },
+      mercadopago: { ...CONFIG_COBRANCA_PADRAO.mercadopago, ...(config?.mercadopago || {}) },
+      pagseguro: { ...CONFIG_COBRANCA_PADRAO.pagseguro, ...(config?.pagseguro || {}) }
+    };
+  },
+
+  salvarConfigCobranca: async (config) => {
+    const agora = new Date().toISOString();
+    const configAtual = await saasService.buscarConfigCobranca();
+    const stripeConfig = { ...configAtual.stripe, ...(config?.stripe || {}) };
+    const mercadoPagoConfig = { ...configAtual.mercadopago, ...(config?.mercadopago || {}) };
+    const pagSeguroConfig = { ...configAtual.pagseguro, ...(config?.pagseguro || {}) };
+    delete stripeConfig.secretKey;
+    delete mercadoPagoConfig.accessToken;
+    delete pagSeguroConfig.token;
+
+    const payload = {
+      ...configAtual,
+      ...config,
+      id: BILLING_CONFIG_ID,
+      updatedAt: agora,
+      // Nunca salvar chaves secret no documento público; elas ficam apenas nas variáveis do servidor.
+      stripe: stripeConfig,
+      mercadopago: mercadoPagoConfig,
+      pagseguro: pagSeguroConfig
+    };
+
+    await firebaseService.set('configuracoes_saas', BILLING_CONFIG_ID, payload);
+    return payload;
   },
 
   criarEmpresa: async ({ nome, documento, email, telefone, planoId = 'individual', trialDias = 14, proprietario = null }) => {
@@ -186,11 +247,13 @@ export const saasService = {
     if (!empresaId) throw new Error('Empresa não selecionada.');
     const empresa = await firebaseService.getById('empresas', empresaId);
     const plano = await saasService.buscarPlano(planoId || empresa?.planoId || 'individual');
+    const configCobranca = await saasService.buscarConfigCobranca();
+    const gateway = provider || configCobranca.provider || 'manual';
 
     const response = await fetch('/api/saas-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empresa, plano, provider })
+      body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca })
     });
 
     const data = await response.json();
@@ -199,7 +262,7 @@ export const saasService = {
     await saasService.registrarEventoCobranca({
       empresaId,
       tipo: 'checkout_iniciado',
-      gateway: data.provider,
+      gateway: data.provider || gateway,
       payload: data
     }).catch(() => {});
 
@@ -252,6 +315,29 @@ export const saasService = {
     await firebaseService.update('assinaturas', empresaId, { status: STATUS_ASSINATURA.ATIVA, updatedAt: agora }).catch(() => {});
 
     return pagamento;
+  },
+
+  gerarFaturasMensais: async ({ assinaturas = [], empresas = [], vencimentoEm = null } = {}) => {
+    const empresasPorId = empresas.reduce((acc, empresa) => ({ ...acc, [empresa.id]: empresa }), {});
+    const abertas = [];
+
+    for (const assinatura of assinaturas) {
+      if (![STATUS_ASSINATURA.TRIAL, STATUS_ASSINATURA.ATIVA].includes(assinatura.status)) continue;
+      const empresaId = assinatura.empresaId || assinatura.id;
+      const empresa = empresasPorId[empresaId];
+      if (!empresaId || !empresa) continue;
+
+      const fatura = await saasService.criarFatura({
+        empresaId,
+        assinaturaId: assinatura.id || empresaId,
+        valor: assinatura.valorMensal || 0,
+        vencimentoEm: vencimentoEm || assinatura.proximaCobrancaEm || addDays(new Date(), 7).toISOString(),
+        descricao: `Mensalidade SaaS - ${empresa.nome || empresaId}`
+      });
+      abertas.push(fatura);
+    }
+
+    return abertas;
   },
 
   registrarEventoCobranca: async ({ empresaId, tipo, payload, gateway = 'manual' }) => {

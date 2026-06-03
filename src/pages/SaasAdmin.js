@@ -9,6 +9,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Grid,
   MenuItem,
   Paper,
@@ -19,6 +20,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -32,7 +34,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
-import { PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import { CONFIG_COBRANCA_PADRAO, PLANOS_PADRAO, PROVEDORES_COBRANCA, STATUS_ASSINATURA, saasService } from '../services/saasService';
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
@@ -62,8 +64,10 @@ function SaasAdmin() {
   const [assinaturas, setAssinaturas] = useState([]);
   const [faturas, setFaturas] = useState([]);
   const [planos, setPlanos] = useState([]);
+  const [billingConfig, setBillingConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaSelecionadaId, setEmpresaSelecionadaId] = useState('');
   const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
+  const [autoForm, setAutoForm] = useState({ vencimentoEm: '' });
 
   const assinaturaPorEmpresa = useMemo(() => {
     return assinaturas.reduce((acc, assinatura) => ({ ...acc, [assinatura.empresaId || assinatura.id]: assinatura }), {});
@@ -91,12 +95,13 @@ function SaasAdmin() {
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [empresasData, unidadesData, assinaturasData, faturasData, planosData] = await Promise.all([
+      const [empresasData, unidadesData, assinaturasData, faturasData, planosData, billingConfigData] = await Promise.all([
         firebaseService.getAll('empresas').catch(() => []),
         firebaseService.getAll('unidades').catch(() => []),
         firebaseService.getAll('assinaturas').catch(() => []),
         firebaseService.getAll('faturas_saas').catch(() => []),
         saasService.listarPlanos().catch(() => Object.values(PLANOS_PADRAO)),
+        saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO),
       ]);
 
       setEmpresas(empresasData);
@@ -104,6 +109,7 @@ function SaasAdmin() {
       setAssinaturas(assinaturasData);
       setFaturas(faturasData);
       setPlanos(planosData);
+      setBillingConfig(billingConfigData);
       setEmpresaSelecionadaId((current) => current || empresasData[0]?.id || '');
     } catch (error) {
       console.error('Erro ao carregar admin SaaS:', error);
@@ -162,6 +168,40 @@ function SaasAdmin() {
     }
   };
 
+
+  const salvarConfigCobranca = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const config = await saasService.salvarConfigCobranca(billingConfig);
+      setBillingConfig(config);
+      toast.success('Configurações de cobrança salvas.');
+    } catch (error) {
+      console.error('Erro ao salvar configurações de cobrança:', error);
+      toast.error(error.message || 'Erro ao salvar configurações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const gerarFaturasAutomaticas = async () => {
+    setSaving(true);
+    try {
+      const novasFaturas = await saasService.gerarFaturasMensais({
+        assinaturas,
+        empresas,
+        vencimentoEm: autoForm.vencimentoEm || null,
+      });
+      toast.success(`${novasFaturas.length} fatura(s) gerada(s) automaticamente.`);
+      await carregarDados();
+    } catch (error) {
+      console.error('Erro ao gerar faturas automáticas:', error);
+      toast.error(error.message || 'Erro ao gerar faturas automáticas.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
@@ -187,6 +227,81 @@ function SaasAdmin() {
       <Alert severity="warning" sx={{ mb: 3 }}>
         Esta área é da plataforma SaaS. Ela não altera o contexto ativo de uma empresa cliente e deve ser liberada apenas para usuários `admin_saas`, `saas_admin`, `admin_plataforma` ou `superadmin`.
       </Alert>
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent component="form" onSubmit={salvarConfigCobranca}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+            <Box>
+              <Typography variant="h6">Configuração automática de cobrança</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Escolha o gateway padrão e configure o comportamento automático. As chaves secret ficam somente nas variáveis do servidor.
+              </Typography>
+            </Box>
+            <Chip label={`Gateway: ${billingConfig.provider}`} color="primary" />
+          </Stack>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <TextField select fullWidth label="Gateway padrão" value={billingConfig.provider} onChange={(event) => setBillingConfig({ ...billingConfig, provider: event.target.value })}>
+                {PROVEDORES_COBRANCA.map((provedor) => <MenuItem key={provedor.id} value={provedor.id}>{provedor.nome}</MenuItem>)}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Dias antes do vencimento" value={billingConfig.diasAntesVencimento} onChange={(event) => setBillingConfig({ ...billingConfig, diasAntesVencimento: Number(event.target.value || 0) })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth type="number" label="Dia padrão de vencimento" value={billingConfig.diaVencimentoPadrao} onChange={(event) => setBillingConfig({ ...billingConfig, diaVencimentoPadrao: Number(event.target.value || 1) })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControlLabel control={<Switch checked={Boolean(billingConfig.modoAutomatico)} onChange={(event) => setBillingConfig({ ...billingConfig, modoAutomatico: event.target.checked })} />} label="Checkout automático" />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControlLabel control={<Switch checked={Boolean(billingConfig.gerarFaturaAutomaticamente)} onChange={(event) => setBillingConfig({ ...billingConfig, gerarFaturaAutomaticamente: event.target.checked })} />} label="Gerar faturas automaticamente" />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField select fullWidth label="Ambiente PagSeguro" value={billingConfig.pagseguro?.environment || 'sandbox'} onChange={(event) => setBillingConfig({ ...billingConfig, pagseguro: { ...(billingConfig.pagseguro || {}), environment: event.target.value } })}>
+                <MenuItem value="sandbox">Sandbox</MenuItem>
+                <MenuItem value="production">Produção</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="URL sucesso" value={billingConfig.successPath} onChange={(event) => setBillingConfig({ ...billingConfig, successPath: event.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="URL cancelamento" value={billingConfig.cancelPath} onChange={(event) => setBillingConfig({ ...billingConfig, cancelPath: event.target.value })} />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField fullWidth label="Webhook" value={billingConfig.webhookPath} onChange={(event) => setBillingConfig({ ...billingConfig, webhookPath: event.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField fullWidth multiline minRows={2} label="Instruções cobrança manual" value={billingConfig.instrucoesManual} onChange={(event) => setBillingConfig({ ...billingConfig, instrucoesManual: event.target.value })} />
+            </Grid>
+            <Grid item xs={12}>
+              <Alert severity="info">
+                Configure no servidor: <strong>STRIPE_SECRET_KEY</strong>, <strong>MERCADOPAGO_ACCESS_TOKEN</strong>, <strong>PAGSEGURO_TOKEN</strong>, <strong>PAGSEGURO_ENVIRONMENT</strong> e <strong>PAGSEGURO_NOTIFICATION_URL</strong>. Não salve chaves secret nesta tela.
+              </Alert>
+            </Grid>
+            <Grid item xs={12}>
+              <Button type="submit" variant="contained" disabled={saving}>Salvar configurações de cobrança</Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
+            <Box>
+              <Typography variant="h6">Automação de mensalidades</Typography>
+              <Typography variant="body2" color="text.secondary">Gere faturas para todas as assinaturas ativas/trial usando o valor mensal de cada plano.</Typography>
+            </Box>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField size="small" type="datetime-local" label="Vencimento" InputLabelProps={{ shrink: true }} value={autoForm.vencimentoEm} onChange={(event) => setAutoForm({ ...autoForm, vencimentoEm: event.target.value })} />
+              <Button variant="outlined" disabled={saving || !billingConfig.gerarFaturaAutomaticamente} onClick={gerarFaturasAutomaticas}>Gerar faturas do mês</Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} md={4}><Card><CardContent><BusinessIcon color="primary" /><Typography variant="h5">{totais.empresas}</Typography><Typography color="text.secondary">Empresas</Typography></CardContent></Card></Grid>

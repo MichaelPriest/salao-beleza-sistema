@@ -53,6 +53,59 @@ const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl
   return { provider: 'stripe', checkoutUrl: data.url, sessionId: data.id };
 };
 
+const getPagSeguroBaseUrl = (environment) => {
+  const env = (environment || process.env.PAGSEGURO_ENVIRONMENT || process.env.PAGBANK_ENVIRONMENT || 'sandbox').toLowerCase();
+  return env === 'production' || env === 'producao'
+    ? 'https://api.pagseguro.com'
+    : 'https://sandbox.api.pagseguro.com';
+};
+
+const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificationUrl, billingConfig = {} }) => {
+  const token = process.env.PAGSEGURO_TOKEN || process.env.PAGBANK_TOKEN;
+  if (!token) {
+    throw new Error('PAGSEGURO_TOKEN não configurado no ambiente servidor.');
+  }
+
+  const payload = {
+    reference_id: `${empresa.id}:${plano.id}:${Date.now()}`,
+    customer: {
+      name: empresa.nome || empresa.email || 'Cliente SaaS',
+      email: empresa.email
+    },
+    items: [
+      {
+        reference_id: plano.id,
+        name: plano.nome || 'Mensalidade SaaS',
+        quantity: 1,
+        unit_amount: Math.round(Number(plano.precoMensal || 0) * 100)
+      }
+    ],
+    redirect_url: successUrl,
+    payment_methods: [{ type: 'CREDIT_CARD' }, { type: 'PIX' }, { type: 'BOLETO' }],
+    notification_urls: notificationUrl ? [notificationUrl] : undefined
+  };
+
+  const response = await fetch(`${getPagSeguroBaseUrl(billingConfig.pagseguro?.environment)}/checkouts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error_messages?.[0]?.description || data?.message || 'Erro ao criar checkout PagSeguro/PagBank.');
+
+  const checkoutUrl = data?.links?.find((link) => ['PAY', 'PAYMENT'].includes(String(link.rel).toUpperCase()))?.href
+    || data?.links?.find((link) => link.href)?.href
+    || data?.payment_url
+    || data?.checkout_url;
+
+  return { provider: 'pagseguro', checkoutUrl, checkoutId: data.id, referenceId: data.reference_id };
+};
+
 const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl }) => {
   if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
     throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado no ambiente servidor.');
@@ -100,6 +153,7 @@ module.exports = async (req, res) => {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const provider = (body.provider || process.env.BILLING_PROVIDER || 'manual').toLowerCase();
     const baseUrl = process.env.APP_URL || buildBaseUrl(req);
+    const billingConfig = body.billingConfig || {};
     const empresa = body.empresa || {};
     const plano = body.plano || {};
 
@@ -107,8 +161,12 @@ module.exports = async (req, res) => {
       return json(res, 400, { error: 'empresa.id e plano.id são obrigatórios.' });
     }
 
-    const successUrl = body.successUrl || `${baseUrl}/billing/sucesso?empresaId=${encodeURIComponent(empresa.id)}`;
-    const cancelUrl = body.cancelUrl || `${baseUrl}/billing/cancelado?empresaId=${encodeURIComponent(empresa.id)}`;
+    const successPath = billingConfig.successPath || '/billing/sucesso';
+    const cancelPath = billingConfig.cancelPath || '/billing/cancelado';
+    const webhookPath = billingConfig.webhookPath || '/api/billing-webhook';
+    const successUrl = body.successUrl || `${baseUrl}${successPath}?empresaId=${encodeURIComponent(empresa.id)}`;
+    const cancelUrl = body.cancelUrl || `${baseUrl}${cancelPath}?empresaId=${encodeURIComponent(empresa.id)}`;
+    const notificationUrl = body.notificationUrl || process.env.PAGSEGURO_NOTIFICATION_URL || `${baseUrl}${webhookPath}`;
 
     if (provider === 'stripe') {
       return json(res, 200, await createStripeCheckout({ req, plano, empresa, successUrl, cancelUrl }));
@@ -118,10 +176,14 @@ module.exports = async (req, res) => {
       return json(res, 200, await createMercadoPagoCheckout({ plano, empresa, successUrl, cancelUrl }));
     }
 
+    if (provider === 'pagseguro' || provider === 'pagbank') {
+      return json(res, 200, await createPagSeguroCheckout({ plano, empresa, successUrl, notificationUrl, billingConfig }));
+    }
+
     return json(res, 200, {
       provider: 'manual',
       checkoutUrl: null,
-      instrucoes: process.env.BILLING_MANUAL_INSTRUCTIONS || 'Cobrança manual habilitada. Configure Stripe ou Mercado Pago para checkout automático.'
+      instrucoes: billingConfig.instrucoesManual || process.env.BILLING_MANUAL_INSTRUCTIONS || 'Cobrança manual habilitada. Configure Stripe, Mercado Pago ou PagSeguro/PagBank para checkout automático.'
     });
   } catch (error) {
     return json(res, 500, { error: error.message });
