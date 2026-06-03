@@ -1,4 +1,4 @@
-// src/pages/ModernLogin.js
+// src/pages/ModernLogin.js - CORRIGIDO PARA SUPABASE
 import React, { useState } from 'react';
 import {
   Box,
@@ -24,7 +24,10 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { getAuth, signInWithPopup, GoogleAuthProvider, doc, getDoc, setDoc, db } from '../services/firebase';
+
+// Importações diretas do Supabase
+const SUPABASE_URL = 'https://kvjrerxqwtrxttiiqkgf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
 
 function ModernLogin() {
   const navigate = useNavigate();
@@ -42,14 +45,257 @@ function ModernLogin() {
     senha: ''
   });
 
-  const auth = getAuth();
-  const googleProvider = new GoogleAuthProvider();
+  // 🔥 FUNÇÃO PARA VERIFICAR USUÁRIO NO SUPABASE
+  const verificarUsuarioSupabase = async (email) => {
+    try {
+      console.log('🔍 Verificando usuário no Supabase:', email);
+      
+      // Buscar usuário por email na tabela usuarios
+      const url = `${SUPABASE_URL}/rest/v1/usuarios?data->>email=eq.${encodeURIComponent(email)}&select=*`;
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      const usuarios = await response.json();
+      console.log('📊 Usuários encontrados:', usuarios);
+      
+      if (!usuarios || usuarios.length === 0) {
+        return { 
+          success: false, 
+          error: 'not_found',
+          message: 'Usuário não encontrado no sistema. Entre em contato com o administrador.' 
+        };
+      }
+      
+      const usuarioData = usuarios[0].data;
+      console.log('✅ Usuário encontrado:', usuarioData);
+      
+      // Verificar se está ativo
+      if (usuarioData.status !== 'ativo') {
+        return { 
+          success: false, 
+          error: 'inactive',
+          message: 'Usuário inativo. Contate o administrador para reativar seu acesso.' 
+        };
+      }
+      
+      return { 
+        success: true, 
+        data: { 
+          id: usuarios[0].document_id,
+          ...usuarioData
+        } 
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao verificar usuário:', error);
+      return { 
+        success: false, 
+        error: 'system_error',
+        message: 'Erro ao verificar usuário. Tente novamente.' 
+      };
+    }
+  };
+
+  // 🔥 FUNÇÃO PARA CRIAR/CONVERTER USUÁRIO DO GOOGLE
+  const criarOuConverterUsuarioGoogle = async (userEmail, userNome, userUid) => {
+    try {
+      console.log('🔄 Verificando se usuário Google já existe:', userEmail);
+      
+      // Buscar usuário existente
+      const url = `${SUPABASE_URL}/rest/v1/usuarios?data->>email=eq.${encodeURIComponent(userEmail)}&select=*`;
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      const usuarios = await response.json();
+      
+      if (usuarios && usuarios.length > 0) {
+        // Usuário já existe, atualizar com googleUid
+        const usuarioExistente = usuarios[0];
+        console.log('✅ Usuário encontrado, atualizando com Google UID:', usuarioExistente);
+        
+        const updateUrl = `${SUPABASE_URL}/rest/v1/usuarios?document_id=eq.${usuarioExistente.document_id}`;
+        const updatedData = {
+          ...usuarioExistente.data,
+          googleUid: userUid,
+          authUid: userUid,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await fetch(updateUrl, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({ data: updatedData })
+        });
+        
+        return {
+          success: true,
+          data: { id: usuarioExistente.document_id, ...updatedData }
+        };
+      }
+      
+      // Usuário não existe, verificar se é um novo cadastro válido
+      console.log('🆕 Usuário Google não encontrado, verificar se pode criar...');
+      
+      // Aqui você pode decidir se permite criação automática ou precisa de convite
+      // Por enquanto, retorna erro pedindo contato com admin
+      return {
+        success: false,
+        error: 'not_found',
+        message: 'Seu email não está cadastrado no sistema. Entre em contato com o administrador para solicitar acesso.',
+        needsInvite: true
+      };
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar usuário Google:', error);
+      return {
+        success: false,
+        error: 'system_error',
+        message: 'Erro ao processar login. Tente novamente.'
+      };
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setErrorDetails('');
+    
+    if (!validarCampos()) {
+      setErrorType('warning');
+      setError('Por favor, corrija os erros no formulário');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await login(formData.email, formData.senha);
+      if (result?.success) {
+        navigate('/dashboard');
+      } else {
+        setErrorType('error');
+        setError(result?.error || 'Erro ao fazer login');
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setErrorType('error');
+      setError(error.message || 'Erro ao fazer login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔥 LOGIN COM GOOGLE CORRIGIDO
+  const handleGoogleLogin = async () => {
+    setError('');
+    setErrorDetails('');
+    setLoading(true);
+
+    try {
+      // Redirecionar para Supabase OAuth
+      const redirectTo = encodeURIComponent(`${window.location.origin}/dashboard`);
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+      
+    } catch (error) {
+      console.error('Erro no login com Google:', error);
+      setErrorType('error');
+      setError('Erro ao iniciar login com Google');
+      setErrorDetails(error.message || 'Tente novamente mais tarde');
+      setLoading(false);
+    }
+  };
+
+  // 🔥 PROCESSAR RETORNO DO GOOGLE (quando voltar do OAuth)
+  React.useEffect(() => {
+    const processGoogleRedirect = async () => {
+      // Verificar se tem token na URL
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const accessToken = hashParams.get('access_token');
+      
+      if (!accessToken) return;
+      
+      console.log('🔐 Processando retorno do Google OAuth...');
+      setLoading(true);
+      
+      try {
+        // Buscar usuário do Supabase com o token
+        const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        
+        const supabaseUser = await userResponse.json();
+        console.log('📊 Usuário Supabase:', supabaseUser);
+        
+        if (supabaseUser && supabaseUser.email) {
+          // Verificar se usuário existe na tabela usuarios
+          const resultado = await verificarUsuarioSupabase(supabaseUser.email);
+          
+          if (!resultado.success) {
+            // Usuário não encontrado, tentar criar ou converter
+            const criarResultado = await criarOuConverterUsuarioGoogle(
+              supabaseUser.email,
+              supabaseUser.user_metadata?.full_name || supabaseUser.email.split('@')[0],
+              supabaseUser.id
+            );
+            
+            if (!criarResultado.success) {
+              setErrorType('error');
+              setError(criarResultado.message);
+              setErrorDetails('Entre em contato com o administrador para solicitar acesso.');
+              setLoading(false);
+              return;
+            }
+            
+            // Salvar usuário no localStorage
+            localStorage.setItem('usuario', JSON.stringify(criarResultado.data));
+            toast.success(`Bem-vindo, ${criarResultado.data.nome || criarResultado.data.email}!`);
+            
+            // Limpar hash da URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            navigate('/dashboard');
+            return;
+          }
+          
+          // Usuário encontrado
+          localStorage.setItem('usuario', JSON.stringify(resultado.data));
+          toast.success(`Bem-vindo, ${resultado.data.nome || resultado.data.email}!`);
+          
+          // Limpar hash da URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate('/dashboard');
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro ao processar retorno Google:', error);
+        setErrorType('error');
+        setError('Erro ao processar login com Google');
+        setErrorDetails(error.message || 'Tente novamente');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    processGoogleRedirect();
+  }, [navigate]);
 
   const validarCampos = () => {
-    const errors = {
-      email: '',
-      senha: ''
-    };
+    const errors = { email: '', senha: '' };
     let isValid = true;
 
     if (!formData.email) {
@@ -70,178 +316,6 @@ function ModernLogin() {
 
     setFieldErrors(errors);
     return isValid;
-  };
-
-  // 🔥 FUNÇÃO CORRIGIDA - Agora identifica pelo cargo
-  const verificarUsuarioFirestore = async (user) => {
-    try {
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        console.log('⚠️ Usuário não encontrado no Firestore, tentando buscar por email...');
-        
-        // Buscar por email como fallback
-        import('../services/firebase').then(({ firebaseService }) => {
-          firebaseService.query('usuarios', [
-            { field: 'email', operator: '==', value: user.email }
-          ]).then(usuarios => {
-            if (usuarios && usuarios.length > 0) {
-              const usuarioData = usuarios[0];
-              console.log('✅ Usuário encontrado por email:', usuarioData);
-              
-              // Criar documento com o UID correto
-              setDoc(doc(db, 'usuarios', user.uid), {
-                ...usuarioData,
-                uid: user.uid,
-                migrado: true,
-                migradoEm: new Date().toISOString()
-              }).then(() => {
-                console.log('✅ Documento migrado com sucesso');
-              });
-            }
-          });
-        });
-        
-        // 🔥 NÃO RETORNAR ERRO! Deixar o AuthContext cuidar disso
-        return { 
-          success: true, 
-          data: { 
-            id: user.uid, 
-            email: user.email,
-            nome: user.email.split('@')[0],
-            cargo: 'cliente', // Cargo padrão
-            status: 'ativo'
-          } 
-        };
-      }
-
-      const usuarioData = userSnap.data();
-      console.log('✅ Usuário encontrado no Firestore:', usuarioData);
-      
-      // Verificar se está ativo
-      if (usuarioData.status !== 'ativo') {
-        console.log('❌ Usuário inativo:', user.uid);
-        return { 
-          error: true, 
-          type: 'inactive',
-          message: 'Usuário inativo. Contate o administrador para reativar seu acesso.' 
-        };
-      }
-
-      // 🔥 IMPORTANTE: Verificar o cargo para decidir o que fazer
-      const cargosFuncionario = ['admin', 'gerente', 'atendente', 'profissional'];
-      
-      if (cargosFuncionario.includes(usuarioData.cargo)) {
-        console.log('✅ Usuário é funcionário (cargo:', usuarioData.cargo, ') - permitindo acesso');
-      } else {
-        console.log('✅ Usuário é cliente - permitindo acesso');
-      }
-
-      // Atualizar último acesso
-      await setDoc(userRef, { 
-        ...usuarioData,
-        ultimoAcesso: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      return { success: true, data: { id: user.uid, ...usuarioData } };
-    } catch (error) {
-      console.error('Erro ao verificar usuário no Firestore:', error);
-      return { 
-        success: true, // 🔥 MUDADO PARA true para não bloquear login
-        data: { 
-          id: user.uid, 
-          email: user.email,
-          nome: user.email.split('@')[0],
-          cargo: 'cliente',
-          status: 'ativo'
-        }
-      };
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setErrorDetails('');
-    
-    if (!validarCampos()) {
-      setErrorType('warning');
-      setError('Por favor, corrija os erros no formulário');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await login(formData.email, formData.senha);
-      // 🔥 REDIRECIONAR PARA DASHBOARD
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Erro no login:', error);
-      
-      setErrorType('error');
-      setError(error.message || 'Erro ao fazer login');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError('');
-    setErrorDetails('');
-    setLoading(true);
-
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      // Verificar se usuário existe no Firestore
-      const resultado = await verificarUsuarioFirestore(user);
-      
-      if (resultado.error) {
-        // Usuário não autorizado - fazer logout
-        await auth.signOut();
-        
-        setErrorType(resultado.type === 'not_found' ? 'error' : 'warning');
-        setError(resultado.message);
-        
-        if (resultado.type === 'not_found') {
-          setErrorDetails('Seu email está autenticado no Google, mas não possui cadastro no sistema. Entre em contato com o administrador para solicitar acesso.');
-        } else if (resultado.type === 'inactive') {
-          setErrorDetails('Seu acesso foi desativado. Entre em contato com o administrador para reativar sua conta.');
-        }
-        
-        setLoading(false);
-        return;
-      }
-      
-      // Salvar no localStorage
-      localStorage.setItem('usuario', JSON.stringify(resultado.data));
-      
-      toast.success(`Bem-vindo, ${resultado.data.nome}!`);
-      // 🔥 REDIRECIONAR PARA DASHBOARD
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Erro no login com Google:', error);
-      
-      if (error.code === 'auth/popup-closed-by-user') {
-        setErrorType('info');
-        setError('Login cancelado');
-        setErrorDetails('Você fechou a janela de login do Google.');
-      } else if (error.code === 'auth/popup-blocked') {
-        setErrorType('warning');
-        setError('Popup bloqueado');
-        setErrorDetails('Permita popups para este site ou tente novamente.');
-      } else {
-        setErrorType('error');
-        setError('Erro no login com Google');
-        setErrorDetails('Não foi possível fazer login com Google. Tente novamente mais tarde.');
-      }
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleInputChange = (field, value) => {
