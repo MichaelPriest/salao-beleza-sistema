@@ -94,6 +94,13 @@ O contexto atual de empresa/unidade fica em `localStorage` e a camada `firebaseS
 
 ### Cobrança
 
+As telas administrativas foram adicionadas nas rotas privadas:
+
+- `/saas`: cadastro/edição da empresa contratante e seleção do plano.
+- `/saas/unidades`: criação e troca da unidade ativa para empresas multiunidades.
+- `/saas/assinatura`: status da assinatura atual e abertura do checkout.
+- `/saas/cobranca`: faturas manuais, confirmação de pagamento e histórico recente.
+
 O endpoint server-side `/api/saas-checkout` inicia a cobrança com o provedor configurado:
 
 - `BILLING_PROVIDER=manual`: retorna instruções de cobrança manual.

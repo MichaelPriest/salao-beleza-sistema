@@ -195,6 +195,7 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
+import SaasGestao from './pages/SaasGestao';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -626,6 +627,34 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <Entradas />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/saas" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/saas/unidades" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={1} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/saas/assinatura" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={3} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/saas/cobranca" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={4} />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />

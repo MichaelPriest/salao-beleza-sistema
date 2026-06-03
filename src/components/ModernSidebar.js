@@ -113,6 +113,10 @@ import {
   Settings as SettingsIcon,
   SettingsApplications as SettingsApplicationsIcon,
   Tune as TuneIcon,
+  Business as BusinessIcon,
+  Apartment as ApartmentIcon,
+  WorkspacePremium as WorkspacePremiumIcon,
+  Payments as PaymentsIcon,
   
   // Ícones de navegação
   ChevronLeft as ChevronLeftIcon,
@@ -469,6 +473,40 @@ const menuGroups = [
     ],
   },
   {
+    title: 'SAAS E ASSINATURA',
+    icon: <BusinessIcon />,
+    items: [
+      {
+        text: 'Empresa SaaS',
+        icon: <BusinessIcon />,
+        path: '/saas',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Unidades',
+        icon: <ApartmentIcon />,
+        path: '/saas/unidades',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Assinatura',
+        icon: <WorkspacePremiumIcon />,
+        path: '/saas/assinatura',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Cobrança SaaS',
+        icon: <PaymentsIcon />,
+        path: '/saas/cobranca',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+    ],
+  },
+  {
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
@@ -540,6 +578,10 @@ export const extraIcons = {
   checklist: <ChecklistIcon />,
   listBulleted: <ListBulletedIcon />,
   ballot: <BallotIcon />,
+  business: <BusinessIcon />,
+  apartment: <ApartmentIcon />,
+  workspacePremium: <WorkspacePremiumIcon />,
+  payments: <PaymentsIcon />,
 };
 
 // Componente Mobile Sidebar (mantido igual)
