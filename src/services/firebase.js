@@ -698,6 +698,12 @@ export const createUserWithEmailAndPassword = async (_auth, email, password, met
   return { user: toAuthUser(session.user) };
 };
 
+export const createAuthUserWithoutSession = async (email, password, metadata = {}) => {
+  const redirectTo = getRedirectUrl(DEFAULT_CONFIRM_REDIRECT_PATH);
+  const session = await authRequest(appendRedirectTo('signup', redirectTo), { email, password, data: metadata });
+  return { user: toAuthUser(session.user), session };
+};
+
 export const signOut = async () => {
   try {
     const token = getStoredSession()?.access_token;
