@@ -1,4 +1,4 @@
-// src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA
+// src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA E ROTAS CORRIGIDAS
 
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -173,6 +173,7 @@ import RelatorioAnamnese from './pages/Anamnese/RelatorioAnamnese';
 
 // Páginas do Cliente
 import ClienteLogin from './pages/ClienteLogin';
+import ClienteAuthCallback from './pages/ClienteAuthCallback';
 import ClienteCadastro from './pages/ClienteCadastro';
 import ClienteRecuperarSenha from './pages/ClienteRecuperarSenha';
 import ClienteDashboard from './pages/ClienteDashboard';
@@ -185,6 +186,7 @@ import ClienteNotificacoes from './pages/ClienteNotificacoes';
 import ClienteAnamnese from './pages/ClienteAnamnese';
 import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
 import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
+import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 
 // Páginas de Erro
 import Page404 from './pages/404';
@@ -433,7 +435,7 @@ function App() {
                   </SimpleLayout>
                 } />
                 
-                {/* Rotas do Cliente - O ClienteLayout já inclui o Footer */}
+                {/* Rotas do Cliente */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -441,6 +443,16 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
+                
+                {/* 🔥 ROTA DE CALLBACK DO GOOGLE - IMPORTANTE */}
+                <Route path="/cliente/auth/callback" element={
+                  <AuthClienteProvider>
+                    <SimpleLayout>
+                      <ClienteAuthCallback />
+                    </SimpleLayout>
+                  </AuthClienteProvider>
+                } />
+                
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -448,11 +460,22 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                {/* Rota para cadastro via indicação (sem AuthClienteProvider, layout simples) */}
+                
+                {/* Rota para cadastro via indicação */}
                 <Route 
                   path="/cadastro" 
                   element={<CadastroIndicacao />} 
-                />                 
+                />
+                
+                {/* Rota para cadastro complementar após login Google */}
+                <Route path="/cliente/cadastro-complementar" element={
+                  <AuthClienteProvider>
+                    <SimpleLayout>
+                      <ClienteCadastroComplementar />
+                    </SimpleLayout>
+                  </AuthClienteProvider>
+                } />
+                
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
