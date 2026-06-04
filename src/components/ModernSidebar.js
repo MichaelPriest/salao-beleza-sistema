@@ -174,6 +174,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
@@ -1246,6 +1247,7 @@ function ModernSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
   const [recursosPlano, setRecursosPlano] = useState([]);
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1360,6 +1362,7 @@ function ModernSidebar() {
     if (!usuario) return false;
 
     if (!recursoLiberadoNoPlano(item)) return false;
+    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) return false;
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);

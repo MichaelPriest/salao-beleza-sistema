@@ -103,6 +103,7 @@ import { masks, MaskedInput } from '../utils/plugins';
 import { backupService } from '../services/backupService';
 import { collection, getDocs, deleteDoc, doc, writeBatch, db } from '../services/firebase';
 import SaasGestao from './SaasGestao';
+import { notificarFidelidadeConfigAtualizada } from '../hooks/useFidelidadeAtiva';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (
@@ -554,6 +555,7 @@ function ModernConfiguracoes() {
         });
       }
       
+      notificarFidelidadeConfigAtualizada(fidelidadeConfig);
       mostrarSnackbar('Configurações de fidelidade salvas!', 'success');
     } catch (error) {
       console.error('Erro ao salvar fidelidade:', error);

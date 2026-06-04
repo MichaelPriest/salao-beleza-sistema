@@ -49,6 +49,7 @@ import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
 import { firebaseService } from '../services/firebase';
 import Footer from './Footer';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 
 // ============================================
 // CONSTANTES
@@ -57,8 +58,8 @@ import Footer from './Footer';
 const MENU_ITEMS = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/cliente/dashboard' },
   { text: 'Agendamentos', icon: <CalendarIcon />, path: '/cliente/agendamentos' },
-  { text: 'Recompensas', icon: <GiftIcon />, path: '/cliente/recompensas' },
-  { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos' },
+  { text: 'Recompensas', icon: <GiftIcon />, path: '/cliente/recompensas', recurso: 'fidelidade' },
+  { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos', recurso: 'fidelidade' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
@@ -90,6 +91,7 @@ function ClienteLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { cliente, logout, firebaseUser } = useAuthCliente();
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
 
   // ==========================================
   // ESTADOS
@@ -124,8 +126,12 @@ function ClienteLayout() {
         return [];
       });
       
+      // Ocultar notificações do programa quando a fidelidade estiver desativada
+      const tiposFidelidade = ['pontos', 'nivel', 'recompensa', 'resgate'];
+      const notificacoesVisiveis = fidelidadeAtiva ? (data || []) : (data || []).filter((item) => !tiposFidelidade.includes(item.tipo));
+
       // Ordenar por data (mais recentes primeiro)
-      const notificacoesOrdenadas = (data || []).sort((a, b) => 
+      const notificacoesOrdenadas = notificacoesVisiveis.sort((a, b) =>
         new Date(b.createdAt || b.data) - new Date(a.createdAt || a.data)
       );
       
@@ -142,7 +148,7 @@ function ClienteLayout() {
     } finally {
       setLoadingNotificacoes(false);
     }
-  }, [cliente, firebaseUser]);
+  }, [cliente, firebaseUser, fidelidadeAtiva]);
 
   // ==========================================
   // FUNÇÃO PARA VERIFICAR FORMULÁRIOS PENDENTES
@@ -401,7 +407,7 @@ function ClienteLayout() {
       <Divider />
 
       <List sx={{ flex: 1, p: 1 }}>
-        {MENU_ITEMS.map((item) => {
+        {MENU_ITEMS.filter((item) => item.recurso !== 'fidelidade' || fidelidadeAtiva).map((item) => {
           const isActive = location.pathname === item.path;
           const isAnamnese = item.text === 'Anamnese';
           const badgeCount = isAnamnese ? formulariosPendentes : 0;

@@ -95,6 +95,7 @@ import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
 import SaasAdminRoute from './components/SaasAdminRoute';
+import FidelidadeRoute from './components/FidelidadeRoute';
 import Footer from './components/Footer';
 
 // Pages Principais
@@ -493,8 +494,8 @@ function App() {
                 }>
                   <Route path="dashboard" element={<ClienteDashboard />} />
                   <Route path="agendamentos" element={<ClienteAgendamentos />} />
-                  <Route path="recompensas" element={<ClienteRecompensas />} />
-                  <Route path="pontos" element={<ClientePontos />} />
+                  <Route path="recompensas" element={<FidelidadeRoute cliente><ClienteRecompensas /></FidelidadeRoute>} />
+                  <Route path="pontos" element={<FidelidadeRoute cliente><ClientePontos /></FidelidadeRoute>} />
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
@@ -565,42 +566,42 @@ function App() {
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Fidelidade />
+                      <FidelidadeRoute><Fidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <GerenciarFidelidade />
+                      <FidelidadeRoute><GerenciarFidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/recompensas" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Recompensas />
+                      <FidelidadeRoute><Recompensas /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/meus-pontos" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <MeusPontos />
+                      <FidelidadeRoute><MeusPontos /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/indicacoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Indicacoes />
+                      <FidelidadeRoute><Indicacoes /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <FidelidadeHistorico />
+                      <FidelidadeRoute><FidelidadeHistorico /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
