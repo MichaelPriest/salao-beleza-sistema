@@ -198,7 +198,7 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
-import SaasGestao from './pages/SaasGestao';
+import ManualSistema from './pages/ManualSistema';
 import SaasAdmin from './pages/SaasAdmin';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasEmpresas from './pages/SaasEmpresas';
@@ -498,6 +498,7 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
@@ -709,41 +710,11 @@ function App() {
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />
-                <Route path="/empresa" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/unidades" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={1} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/assinatura" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={3} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/cobranca" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={4} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/site" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={5} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
+                <Route path="/empresa" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=dados" replace />} />
+                <Route path="/empresa/unidades" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=unidades" replace />} />
+                <Route path="/empresa/assinatura" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=assinatura" replace />} />
+                <Route path="/empresa/cobranca" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=cobranca" replace />} />
+                <Route path="/empresa/site" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=site" replace />} />
                 <Route path="/usuarios" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -776,6 +747,13 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/manual" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
