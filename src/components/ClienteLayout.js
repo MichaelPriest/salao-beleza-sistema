@@ -42,6 +42,7 @@ import {
   Info as InfoIcon,
   Assignment as AssignmentIcon,
   Close as CloseIcon,
+  HelpCenter as HelpCenterIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
@@ -62,6 +63,7 @@ const MENU_ITEMS = [
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
+  { text: 'Manual de Uso', icon: <HelpCenterIcon />, path: '/cliente/manual' },
 ];
 
 const NOTIFICATION_ICONS = {

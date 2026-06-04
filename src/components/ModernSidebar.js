@@ -142,6 +142,7 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  HelpCenter as HelpCenterIcon,
   Close as CloseIcon,
   EmojiEvents as EmojiEventsIcon,
   CardGiftcard as CardGiftcardIcon,
@@ -589,6 +590,12 @@ const menuGroups = [
         cargos: ['admin', 'gerente']
       },
       { 
+        text: 'Manual do Sistema',
+        icon: <HelpCenterIcon />,
+        path: '/manual',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
+      },
+      {
         text: 'Backup', 
         icon: <BackupIcon />, 
         path: '/backup', 

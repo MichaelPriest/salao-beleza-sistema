@@ -198,6 +198,7 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
+import ManualSistema from './pages/ManualSistema';
 import SaasAdmin from './pages/SaasAdmin';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasEmpresas from './pages/SaasEmpresas';
@@ -497,6 +498,7 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
@@ -745,6 +747,13 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/manual" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
