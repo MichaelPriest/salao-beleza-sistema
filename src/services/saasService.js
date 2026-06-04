@@ -416,6 +416,9 @@ export const saasService = {
     }
 
     if (!response.ok) {
+      if (response.status === 405) {
+        throw new Error('O checkout não está disponível nesta implantação. Publique novamente o sistema com a função /api/saas-checkout habilitada.');
+      }
       throw new Error(data?.error || data?.message || `Erro ao iniciar cobrança (${response.status}).`);
     }
 

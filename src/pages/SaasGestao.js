@@ -79,7 +79,7 @@ function TabPanel({ children, value, index }) {
   return <Box sx={{ mt: 3 }}>{children}</Box>;
 }
 
-function SaasGestao({ initialTab = 0 }) {
+function SaasGestao({ initialTab = 0, embedded = false }) {
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -459,7 +459,7 @@ function SaasGestao({ initialTab = 0 }) {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
