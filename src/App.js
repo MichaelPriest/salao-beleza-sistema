@@ -95,6 +95,7 @@ import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
 import SaasAdminRoute from './components/SaasAdminRoute';
+import FidelidadeRoute from './components/FidelidadeRoute';
 import Footer from './components/Footer';
 
 // Pages Principais
@@ -198,7 +199,7 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
-import SaasGestao from './pages/SaasGestao';
+import ManualSistema from './pages/ManualSistema';
 import SaasAdmin from './pages/SaasAdmin';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasEmpresas from './pages/SaasEmpresas';
@@ -493,11 +494,12 @@ function App() {
                 }>
                   <Route path="dashboard" element={<ClienteDashboard />} />
                   <Route path="agendamentos" element={<ClienteAgendamentos />} />
-                  <Route path="recompensas" element={<ClienteRecompensas />} />
-                  <Route path="pontos" element={<ClientePontos />} />
+                  <Route path="recompensas" element={<FidelidadeRoute cliente><ClienteRecompensas /></FidelidadeRoute>} />
+                  <Route path="pontos" element={<FidelidadeRoute cliente><ClientePontos /></FidelidadeRoute>} />
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
@@ -564,42 +566,42 @@ function App() {
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Fidelidade />
+                      <FidelidadeRoute><Fidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <GerenciarFidelidade />
+                      <FidelidadeRoute><GerenciarFidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/recompensas" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Recompensas />
+                      <FidelidadeRoute><Recompensas /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/meus-pontos" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <MeusPontos />
+                      <FidelidadeRoute><MeusPontos /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/indicacoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Indicacoes />
+                      <FidelidadeRoute><Indicacoes /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <FidelidadeHistorico />
+                      <FidelidadeRoute><FidelidadeHistorico /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
@@ -709,41 +711,11 @@ function App() {
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />
-                <Route path="/empresa" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/unidades" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={1} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/assinatura" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={3} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/cobranca" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={4} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/site" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={5} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
+                <Route path="/empresa" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=dados" replace />} />
+                <Route path="/empresa/unidades" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=unidades" replace />} />
+                <Route path="/empresa/assinatura" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=assinatura" replace />} />
+                <Route path="/empresa/cobranca" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=cobranca" replace />} />
+                <Route path="/empresa/site" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=site" replace />} />
                 <Route path="/usuarios" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -776,6 +748,13 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/manual" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
