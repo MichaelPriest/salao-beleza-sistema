@@ -17,11 +17,24 @@ import {
 
 const AuthClienteContext = createContext({});
 
-const getEmpresaPublicaContext = () => ({
-  empresaId: window.sessionStorage.getItem('empresa_publica_id') || null,
-  empresaNome: window.sessionStorage.getItem('empresa_publica_nome') || null,
-  empresaSlug: window.sessionStorage.getItem('empresa_publica_slug') || null
-});
+const getClienteSalvo = () => {
+  try {
+    return JSON.parse(localStorage.getItem('cliente') || 'null');
+  } catch (error) {
+    return null;
+  }
+};
+
+const getEmpresaPublicaContext = () => {
+  const tenant = getTenantContext();
+  const clienteSalvo = getClienteSalvo();
+
+  return {
+    empresaId: window.sessionStorage.getItem('empresa_publica_id') || tenant.empresaId || clienteSalvo?.empresaId || null,
+    empresaNome: window.sessionStorage.getItem('empresa_publica_nome') || tenant.empresa?.nome || clienteSalvo?.empresaNome || null,
+    empresaSlug: window.sessionStorage.getItem('empresa_publica_slug') || tenant.empresa?.slug || clienteSalvo?.empresaSlug || null
+  };
+};
 
 const ensureClienteTenantContext = (dados = {}) => {
   const contexto = getEmpresaPublicaContext();
@@ -166,7 +179,20 @@ export const AuthClienteProvider = ({ children }) => {
 
   const carregarClientePorUid = async (uid, email) => {
     try {
-      const { empresaId } = getTenantContext();
+      let { empresaId } = getTenantContext();
+      const clienteSalvo = getClienteSalvo();
+
+      if (!empresaId && clienteSalvo?.empresaId && (
+        clienteSalvo.authUid === uid ||
+        clienteSalvo.googleUid === uid ||
+        clienteSalvo.email === email ||
+        clienteSalvo.id?.endsWith(`_${uid}`)
+      )) {
+        console.log('🔄 Restaurando tenant do cliente salvo:', clienteSalvo.empresaId);
+        setTenantContextFromUser(clienteSalvo);
+        empresaId = clienteSalvo.empresaId;
+      }
+
       console.log('🔍 AuthClienteProvider - Buscando cliente:', { uid, email, empresaId });
       
       const clienteData = await buscarClienteNoTenant(uid, email, empresaId);

@@ -530,6 +530,47 @@ const menuGroups = [
     ],
   },
   {
+    title: 'MINHA EMPRESA',
+    icon: <BusinessIcon />,
+    items: [
+      {
+        text: 'Empresa',
+        icon: <BusinessIcon />,
+        path: '/configuracoes?tab=empresa&empresaTab=dados',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Unidades',
+        icon: <ApartmentIcon />,
+        path: '/configuracoes?tab=empresa&empresaTab=unidades',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Assinatura',
+        icon: <WorkspacePremiumIcon />,
+        path: '/configuracoes?tab=empresa&empresaTab=assinatura',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Cobrança SaaS',
+        icon: <PaymentsIcon />,
+        path: '/configuracoes?tab=empresa&empresaTab=cobranca',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Página inicial',
+        icon: <LanguageIcon />,
+        path: '/configuracoes?tab=empresa&empresaTab=site',
+        permission: 'configurar_sistema',
+        cargos: ['admin', 'gerente']
+      },
+    ],
+  },
+  {
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
