@@ -11,13 +11,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { PROVEDORES_COBRANCA } from '../../services/saasService';
+import { METODOS_PAGAMENTO_COBRANCA, PROVEDORES_COBRANCA } from '../../services/saasService';
 
-export const PAYMENT_METHODS = [
-  { id: 'card', label: 'Cartão de crédito/débito' },
-  { id: 'pix', label: 'PIX' },
-  { id: 'boleto', label: 'Boleto' },
-];
+export const PAYMENT_METHODS = METODOS_PAGAMENTO_COBRANCA.map((metodo) => ({
+  ...metodo,
+  label: metodo.id === 'card' ? 'Cartão de crédito/débito' : metodo.nome
+}));
 
 const updateNested = (value, section, patch) => ({
   ...value,
