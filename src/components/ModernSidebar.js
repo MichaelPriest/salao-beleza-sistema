@@ -171,9 +171,11 @@ import {
   Checklist as ChecklistIcon,
   FormatListBulleted as ListBulletedIcon,
   Ballot as BallotIcon,
+  SwapHoriz as SwapHorizIcon,
+  SupportAgent as SupportAgentIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, getTenantContext } from '../services/firebase';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
@@ -498,6 +500,14 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
+        text: 'Acessar empresa',
+        icon: <SwapHorizIcon />,
+        path: '/selecionar-empresa',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
         text: 'Planos e Assinaturas',
         icon: <WorkspacePremiumIcon />,
         path: '/saas-admin/assinaturas',
@@ -597,6 +607,13 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
       {
+        text: 'Chamados',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
+        permission: 'visualizar_chamados',
+        cargos: ['admin', 'gerente']
+      },
+      {
         text: 'Backup', 
         icon: <BackupIcon />, 
         path: '/backup', 
@@ -650,6 +667,8 @@ export const extraIcons = {
   checklist: <ChecklistIcon />,
   listBulleted: <ListBulletedIcon />,
   ballot: <BallotIcon />,
+  swapHoriz: <SwapHorizIcon />,
+  supportAgent: <SupportAgentIcon />,
   business: <BusinessIcon />,
   apartment: <ApartmentIcon />,
   workspacePremium: <WorkspacePremiumIcon />,
@@ -1368,6 +1387,8 @@ function ModernSidebar() {
       return isSaasPlatformAdmin(usuario);
     }
     
+    if (isSaasPlatformAdmin(usuario) && getTenantContext().empresaId) return true;
+
     // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
     

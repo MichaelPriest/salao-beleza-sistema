@@ -33,6 +33,65 @@ export const PROVEDORES_COBRANCA = [
 
 export const BILLING_CONFIG_ID = 'billing';
 
+export const METODOS_PAGAMENTO_COBRANCA = [
+  { id: 'card', nome: 'Cartão' },
+  { id: 'pix', nome: 'PIX' },
+  { id: 'boleto', nome: 'Boleto' }
+];
+
+export const METODOS_PAGAMENTO_PADRAO = { card: true, pix: true, boleto: true };
+
+export const metodoPagamentoLabel = (metodo) => METODOS_PAGAMENTO_COBRANCA.find((item) => item.id === metodo)?.nome || metodo || 'Manual';
+
+export const normalizarMetodosPagamento = (metodos = {}) => ({
+  ...METODOS_PAGAMENTO_PADRAO,
+  ...(metodos || {})
+});
+
+export const primeiroMetodoDisponivel = (metodos = {}) => {
+  const normalizados = normalizarMetodosPagamento(metodos);
+  return METODOS_PAGAMENTO_COBRANCA.find((metodo) => normalizados[metodo.id] !== false)?.id || 'card';
+};
+
+export const metodosSomentePreferencial = (metodo = 'card') => ({
+  card: metodo === 'card',
+  pix: metodo === 'pix',
+  boleto: metodo === 'boleto'
+});
+
+const resolverPerfilCobranca = (empresa = {}, configCobranca = CONFIG_COBRANCA_PADRAO, overrides = {}) => {
+  const cobrancaEmpresa = empresa?.cobranca || {};
+  const configPagamentoEmpresa = cobrancaEmpresa.configPagamento || {};
+  const dadosPagamento = overrides.dadosPagamento || {};
+  const metodosDisponiveis = normalizarMetodosPagamento(configCobranca.metodosPagamento);
+  const metodoPreferencial = dadosPagamento.metodoPreferencial
+    || overrides.metodoPreferencial
+    || cobrancaEmpresa.metodoPreferencial
+    || configPagamentoEmpresa.metodoPreferencial
+    || primeiroMetodoDisponivel(metodosDisponiveis);
+  const metodoValido = metodosDisponiveis[metodoPreferencial] !== false ? metodoPreferencial : primeiroMetodoDisponivel(metodosDisponiveis);
+  const metodosPagamento = overrides.metodosPagamento
+    ? normalizarMetodosPagamento(overrides.metodosPagamento)
+    : metodosSomentePreferencial(metodoValido);
+
+  return {
+    provider: overrides.provider || cobrancaEmpresa.provider || configPagamentoEmpresa.provider || configCobranca.provider || 'manual',
+    metodoPreferencial: metodoValido,
+    metodosPagamento,
+    metodosDisponiveis,
+    dadosCobranca: {
+      responsavel: cobrancaEmpresa.responsavelFinanceiro || empresa?.responsavelFinanceiro || empresa?.nome || '',
+      email: cobrancaEmpresa.emailFinanceiro || empresa?.emailFinanceiro || empresa?.email || '',
+      documento: cobrancaEmpresa.documentoCobranca || empresa?.documento || '',
+      telefone: cobrancaEmpresa.telefoneFinanceiro || empresa?.telefoneFinanceiro || empresa?.telefone || '',
+      endereco: cobrancaEmpresa.enderecoCobranca || '',
+      ...(configPagamentoEmpresa.dadosCobranca || {}),
+      ...(dadosPagamento.dadosCobranca || {})
+    },
+    diaVencimento: Number(dadosPagamento.diaVencimentoPadrao || cobrancaEmpresa.diaVencimento || configCobranca.diaVencimentoPadrao || 5)
+  };
+};
+
 export const CONFIG_COBRANCA_PADRAO = {
   id: BILLING_CONFIG_ID,
   provider: 'manual',
@@ -41,7 +100,7 @@ export const CONFIG_COBRANCA_PADRAO = {
   diasAntesVencimento: 3,
   diaVencimentoPadrao: 5,
   instrucoesManual: 'Entre em contato para pagamento da mensalidade.',
-  metodosPagamento: { card: true, pix: true, boleto: true },
+  metodosPagamento: METODOS_PAGAMENTO_PADRAO,
   successPath: '/billing/sucesso',
   cancelPath: '/billing/cancelado',
   webhookPath: '/api/billing-webhook',
@@ -143,7 +202,7 @@ export const saasService = {
       stripe: { ...CONFIG_COBRANCA_PADRAO.stripe, ...(config?.stripe || {}) },
       mercadopago: { ...CONFIG_COBRANCA_PADRAO.mercadopago, ...(config?.mercadopago || {}) },
       pagseguro: { ...CONFIG_COBRANCA_PADRAO.pagseguro, ...(config?.pagseguro || {}) },
-      metodosPagamento: { ...CONFIG_COBRANCA_PADRAO.metodosPagamento, ...(config?.metodosPagamento || {}) }
+      metodosPagamento: normalizarMetodosPagamento(config?.metodosPagamento)
     };
   },
 
@@ -378,7 +437,8 @@ export const saasService = {
     const empresa = await firebaseService.getById('empresas', empresaId);
     const plano = await saasService.buscarPlano(planoId || empresa?.planoId || 'individual');
     const configCobranca = await saasService.buscarConfigCobranca();
-    const gateway = provider || configCobranca.provider || 'manual';
+    const perfilCobranca = resolverPerfilCobranca(empresa, configCobranca, { provider, metodosPagamento, dadosPagamento });
+    const gateway = perfilCobranca.provider;
 
     const registrar = async (payload) => {
       await saasService.registrarEventoCobranca({
@@ -395,14 +455,16 @@ export const saasService = {
         provider: 'manual',
         checkoutUrl: null,
         instrucoes: configCobranca.instrucoesManual || 'Cobrança manual habilitada. Envie as instruções de pagamento para a empresa.',
-        metodoPreferencial: dadosPagamento?.metodoPreferencial || null
+        metodoPreferencial: perfilCobranca.metodoPreferencial,
+        metodosPagamento: perfilCobranca.metodosPagamento,
+        dadosCobranca: perfilCobranca.dadosCobranca
       });
     }
 
     const response = await fetch('/api/saas-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca, metodosPagamento: metodosPagamento || configCobranca.metodosPagamento, dadosPagamento })
+      body: JSON.stringify({ empresa, plano, provider: gateway, billingConfig: configCobranca, metodosPagamento: perfilCobranca.metodosPagamento, dadosPagamento: { ...dadosPagamento, ...perfilCobranca }, billingProfile: perfilCobranca })
     });
 
     const rawBody = await response.text();
@@ -429,8 +491,11 @@ export const saasService = {
     return registrar(data);
   },
 
-  criarFatura: async ({ empresaId = getTenantContext().empresaId, assinaturaId, valor, vencimentoEm, descricao }) => {
+  criarFatura: async ({ empresaId = getTenantContext().empresaId, assinaturaId, valor, vencimentoEm, descricao, provider = null, metodoPagamento = null, metodosPagamento = null, dadosCobranca = null } = {}) => {
     if (!empresaId) throw new Error('Empresa não selecionada.');
+    const empresa = await firebaseService.getById('empresas', empresaId).catch(() => getTenantContext().empresa || null);
+    const configCobranca = await saasService.buscarConfigCobranca();
+    const perfilCobranca = resolverPerfilCobranca(empresa, configCobranca, { provider, metodoPreferencial: metodoPagamento, metodosPagamento, dadosPagamento: { dadosCobranca } });
     const faturaId = firebaseService.generateId('faturas_saas');
     const agora = new Date().toISOString();
     const fatura = {
@@ -438,7 +503,11 @@ export const saasService = {
       empresaId,
       assinaturaId: assinaturaId || empresaId,
       valor,
-      gateway: getTenantContext().empresa?.cobranca?.provider || 'manual',
+      gateway: perfilCobranca.provider,
+      metodoPagamento: perfilCobranca.metodoPreferencial,
+      metodoPagamentoLabel: metodoPagamentoLabel(perfilCobranca.metodoPreferencial),
+      metodosPagamento: perfilCobranca.metodosPagamento,
+      dadosCobranca: perfilCobranca.dadosCobranca,
       moeda: 'BRL',
       status: 'aberta',
       descricao: descricao || 'Mensalidade SaaS',
@@ -451,8 +520,12 @@ export const saasService = {
     return fatura;
   },
 
-  registrarPagamento: async ({ empresaId = getTenantContext().empresaId, faturaId, valor, gateway = 'manual', gatewayPaymentId = null }) => {
+  registrarPagamento: async ({ empresaId = getTenantContext().empresaId, faturaId, valor, gateway = null, metodoPagamento = null, gatewayPaymentId = null }) => {
     if (!empresaId) throw new Error('Empresa não selecionada.');
+    const fatura = faturaId ? await firebaseService.getById('faturas_saas', faturaId).catch(() => null) : null;
+    const empresa = await firebaseService.getById('empresas', empresaId).catch(() => getTenantContext().empresa || null);
+    const configCobranca = await saasService.buscarConfigCobranca();
+    const perfilCobranca = resolverPerfilCobranca(empresa, configCobranca, { provider: gateway || fatura?.gateway, metodoPreferencial: metodoPagamento || fatura?.metodoPagamento });
     const pagamentoId = firebaseService.generateId('pagamentos_saas');
     const agora = new Date().toISOString();
     const pagamento = {
@@ -460,9 +533,12 @@ export const saasService = {
       empresaId,
       faturaId,
       valor,
-      gateway: getTenantContext().empresa?.cobranca?.provider || 'manual',
+      gateway: perfilCobranca.provider,
+      metodoPagamento: perfilCobranca.metodoPreferencial,
+      metodoPagamentoLabel: metodoPagamentoLabel(perfilCobranca.metodoPreferencial),
+      metodosPagamento: perfilCobranca.metodosPagamento,
+      dadosCobranca: perfilCobranca.dadosCobranca,
       moeda: 'BRL',
-      gateway,
       gatewayPaymentId,
       status: 'confirmado',
       pagoEm: agora,
