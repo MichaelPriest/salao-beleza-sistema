@@ -579,14 +579,14 @@ function App() {
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <FidelidadeRoute><Fidelidade /></FidelidadeRoute>
+                      <FidelidadeRoute allowInactive><Fidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <FidelidadeRoute><GerenciarFidelidade /></FidelidadeRoute>
+                      <FidelidadeRoute allowInactive><GerenciarFidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
