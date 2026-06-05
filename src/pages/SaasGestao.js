@@ -39,7 +39,15 @@ import {
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
-import { CONFIG_COBRANCA_PADRAO, PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import {
+  CONFIG_COBRANCA_PADRAO,
+  PLANOS_PADRAO,
+  STATUS_ASSINATURA,
+  metodoPagamentoLabel,
+  metodosSomentePreferencial,
+  primeiroMetodoDisponivel,
+  saasService,
+} from '../services/saasService';
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
@@ -47,19 +55,6 @@ const formatCurrency = (value, currency = 'BRL') =>
 const formatDate = (value) => {
   if (!value) return '-';
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
-};
-
-const metodosSomentePreferencial = (metodo = 'card') => ({
-  card: metodo === 'card',
-  pix: metodo === 'pix',
-  boleto: metodo === 'boleto',
-});
-
-const primeiroMetodoDisponivel = (metodos = {}) => {
-  if (metodos.card !== false) return 'card';
-  if (metodos.pix !== false) return 'pix';
-  if (metodos.boleto !== false) return 'boleto';
-  return 'card';
 };
 
 const getStatusColor = (status) => {
@@ -79,7 +74,7 @@ function TabPanel({ children, value, index }) {
   return <Box sx={{ mt: 3 }}>{children}</Box>;
 }
 
-function SaasGestao({ initialTab = 0 }) {
+function SaasGestao({ initialTab = 0, embedded = false }) {
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -370,10 +365,10 @@ function SaasGestao({ initialTab = 0 }) {
         dadosPagamento: { ...paymentConfig, metodoPreferencial }
       });
       setCheckout(data);
+      toast.success(`Checkout ${metodoPagamentoLabel(data.metodoPreferencial || metodoPreferencial)} iniciado.`);
       if (data.checkoutUrl) {
         window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
       }
-      toast.success('Checkout iniciado.');
     } catch (error) {
       console.error('Erro ao iniciar checkout:', error);
       toast.error(error.message || 'Erro ao iniciar cobrança.');
@@ -420,6 +415,10 @@ function SaasGestao({ initialTab = 0 }) {
         valor: Number(faturaForm.valor || planoAtual.precoMensal || 0),
         vencimentoEm: faturaForm.vencimentoEm,
         descricao: faturaForm.descricao,
+        provider: paymentConfig.provider,
+        metodoPagamento: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+        metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
+        dadosCobranca: paymentConfig.dadosCobranca || {},
       });
       setFaturaForm({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
       toast.success('Fatura criada.');
@@ -438,7 +437,8 @@ function SaasGestao({ initialTab = 0 }) {
       await saasService.registrarPagamento({
         faturaId: fatura.id,
         valor: fatura.valor,
-        gateway: 'manual',
+        gateway: fatura.gateway || 'manual',
+        metodoPagamento: fatura.metodoPagamento,
       });
       toast.success('Pagamento confirmado.');
       await carregarDados();
@@ -459,7 +459,7 @@ function SaasGestao({ initialTab = 0 }) {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
@@ -634,7 +634,7 @@ function SaasGestao({ initialTab = 0 }) {
             <Button variant="contained" disabled={checkoutLoading} startIcon={<LaunchIcon />} onClick={iniciarCheckout}>
               {checkoutLoading ? 'Abrindo...' : 'Abrir checkout'}
             </Button>
-            {checkout && <Alert severity="info" sx={{ mt: 2 }}>{checkout.checkoutUrl || checkout.instrucoes}</Alert>}
+            {checkout && <Alert severity="info" sx={{ mt: 2 }}>Método: {metodoPagamentoLabel(checkout.metodoPreferencial)} · Gateway: {checkout.provider}. {checkout.checkoutUrl || checkout.instrucoes}</Alert>}
           </CardContent>
         </Card>
       </TabPanel>
@@ -676,6 +676,7 @@ function SaasGestao({ initialTab = 0 }) {
                     <TableCell>Descrição</TableCell>
                     <TableCell>Valor</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Método</TableCell>
                     <TableCell>Vencimento</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -686,6 +687,7 @@ function SaasGestao({ initialTab = 0 }) {
                       <TableCell>{fatura.descricao}</TableCell>
                       <TableCell>{formatCurrency(fatura.valor, fatura.moeda)}</TableCell>
                       <TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell>
+                      <TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell>
                       <TableCell>{formatDate(fatura.vencimentoEm)}</TableCell>
                       <TableCell align="right">{fatura.status !== 'paga' && <Button size="small" onClick={() => confirmarPagamento(fatura)}>Confirmar pagamento</Button>}</TableCell>
                     </TableRow>
@@ -696,7 +698,7 @@ function SaasGestao({ initialTab = 0 }) {
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Pagamentos recentes</Typography>
             <Stack spacing={1}>
               {pagamentos.slice(0, 5).map((pagamento) => (
-                <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} em {formatDate(pagamento.pagoEm)}</Alert>
+                <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} / {pagamento.metodoPagamentoLabel || metodoPagamentoLabel(pagamento.metodoPagamento)} em {formatDate(pagamento.pagoEm)}</Alert>
               ))}
             </Stack>
           </Grid>
