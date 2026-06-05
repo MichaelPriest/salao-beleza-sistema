@@ -367,8 +367,19 @@ function App() {
       }
     };
 
+    const handleTemaAtualizado = (e) => {
+      const modoEscuroAtual = typeof e.detail?.modoEscuro === 'boolean'
+        ? e.detail.modoEscuro
+        : localStorage.getItem('modoEscuro') === 'true';
+      setModoEscuro(modoEscuroAtual);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('temaAtualizado', handleTemaAtualizado);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('temaAtualizado', handleTemaAtualizado);
+    };
   }, []);
 
   if (loading) {
@@ -503,7 +514,6 @@ function App() {
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
-                  <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
@@ -766,13 +776,6 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <AdminChamados />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/manual" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />

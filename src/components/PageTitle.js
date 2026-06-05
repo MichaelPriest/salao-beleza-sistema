@@ -31,7 +31,7 @@ const pageTitles = {
   '/configuracoes': 'Configurações',
   '/manual': 'Manual do Sistema',
   '/selecionar-empresa': 'Selecionar Empresa',
-  '/chamados': 'Chamados de Suporte',
+  '/chamados': 'Chamados SaaS',
   '/minhas-comissoes': 'Minhas Comissões',
   '/importar-servicos': 'Importar Serviços',
   
@@ -43,7 +43,6 @@ const pageTitles = {
   '/cliente/historico': 'Meu Histórico',
   '/cliente/perfil': 'Meu Perfil',
   '/cliente/manual': 'Manual do Portal do Cliente',
-  '/cliente/chamados': 'Chamados de Suporte',
   '/cliente/login': 'Login do Cliente',
   '/cliente/cadastro': 'Cadastro de Cliente',
   '/cliente/recuperar-senha': 'Recuperar Senha',

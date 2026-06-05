@@ -606,7 +606,8 @@ function ModernConfiguracoes() {
   };
 
   const aplicarTema = (tema) => {
-    if (tema?.modoEscuro) {
+    const modoEscuroAtivo = Boolean(tema?.modoEscuro);
+    if (modoEscuroAtivo) {
       document.body.classList.add('modo-escuro');
     } else {
       document.body.classList.remove('modo-escuro');
@@ -614,6 +615,8 @@ function ModernConfiguracoes() {
     
     document.documentElement.style.setProperty('--cor-primaria', tema?.corPrimaria || '#9c27b0');
     document.documentElement.style.setProperty('--cor-secundaria', tema?.corSecundaria || '#ff4081');
+    localStorage.setItem('modoEscuro', String(modoEscuroAtivo));
+    window.dispatchEvent(new CustomEvent('temaAtualizado', { detail: { modoEscuro: modoEscuroAtivo, tema } }));
   };
 
   const handleLogoUpload = (event) => {
@@ -1036,29 +1039,32 @@ function ModernConfiguracoes() {
           <Tabs
             value={tabValue}
             onChange={(e, v) => setTabValue(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
               borderBottom: 1,
               borderColor: 'divider',
-              bgcolor: '#faf5ff',
-              '& .MuiTab-root': { fontWeight: 600 },
+              bgcolor: 'background.paper',
+              '& .MuiTab-root': { fontWeight: 600, minHeight: 64 },
             }}
           >
-            <Tab icon={<BusinessIcon />} label="Salão" />
+            <Tab icon={<BusinessIcon />} label="Salão/Empresa" />
             <Tab icon={<TimeIcon />} label="Horário" />
             <Tab icon={<NotificationsIcon />} label="Notificações" />
             <Tab icon={<PaletteIcon />} label="Aparência" />
             <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
             <Tab icon={<CleanIcon />} label="Limpeza" />
-            <Tab icon={<BusinessIcon />} label="Minha Empresa" />
+            <Tab icon={<BusinessIcon />} label="SaaS, cobrança e unidades" />
           </Tabs>
 
-          {/* Dados do Salão */}
+          {/* Dados do Salão e Empresa */}
           <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                  Logo do Salão
+                  Logo do Salão/Empresa
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
                   <Avatar

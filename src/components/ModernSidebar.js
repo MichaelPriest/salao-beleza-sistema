@@ -524,6 +524,14 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
+        text: 'Chamados das Empresas',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
         text: 'Relatórios SaaS',
         icon: <AnalyticsIcon />,
         path: '/saas-admin/relatorios',
@@ -607,7 +615,7 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
       {
-        text: 'Chamados',
+        text: 'Suporte SaaS',
         icon: <SupportAgentIcon />,
         path: '/chamados',
         permission: 'visualizar_chamados',
@@ -737,7 +745,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             border: '3px solid white',
             boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
             bgcolor: '#ffffff',
-            color: '#9c27b0',
+            color: theme.palette.primary.main,
             fontWeight: 'bold',
           }}
         >
@@ -784,13 +792,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             mx: 1,
             backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
             '&:hover': {
-              backgroundColor: alpha('#9c27b0', 0.04),
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
             },
           }}
         >
           <ListItemIcon sx={{ 
             minWidth: 40, 
-            color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+            color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
           }}>
             {group.icon}
           </ListItemIcon>
@@ -832,13 +840,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
                       ml: 2,
                       mr: 1,
                       borderRadius: 2,
-                      backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                      color: isActive ? '#9c27b0' : 'text.primary',
+                      backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                      color: isActive ? theme.palette.primary.main : 'text.primary',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                       '& .MuiListItemIcon-root': {
-                        color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                        color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         minWidth: 36,
                       },
                     }}
@@ -901,10 +909,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -937,6 +945,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
 
 // Componente Desktop Sidebar (mantido igual)
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
+  const theme = useTheme();
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -964,9 +973,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         '& .MuiDrawer-paper': {
           width: collapsed ? 80 : 300,
           boxSizing: 'border-box',
-          backgroundColor: '#ffffff',
-          borderRight: 'none',
-          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+          backgroundColor: theme.palette.background.paper,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          boxShadow: theme.palette.mode === 'dark' ? '4px 0 20px rgba(0,0,0,0.25)' : '4px 0 20px rgba(0,0,0,0.05)',
           overflowX: 'hidden',
           transition: theme => theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -989,9 +998,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         {!collapsed ? (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpaIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                Beauty<span style={{ color: '#ff4081' }}>Pro</span>
+              <SpaIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
+                Beauty<span style={{ color: theme.palette.secondary.main }}>Pro</span>
               </Typography>
             </Box>
             <Tooltip title="Recolher menu" placement="right">
@@ -1025,7 +1034,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                 alignItems: 'center',
                 gap: 2,
                 p: collapsed ? 1 : 2,
-                backgroundColor: alpha('#9c27b0', 0.04),
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 borderRadius: 3,
                 justifyContent: collapsed ? 'center' : 'flex-start',
               }}
@@ -1071,10 +1080,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -1095,7 +1104,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       borderRadius: 2,
                       backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                     }}
                   >
@@ -1136,13 +1145,13 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                                 py: 0.8,
                                 borderRadius: '0 20px 20px 0',
                                 mr: 1,
-                                backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                                color: isActive ? '#9c27b0' : 'text.primary',
+                                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                                color: isActive ? theme.palette.primary.main : 'text.primary',
                                 '&:hover': {
-                                  backgroundColor: alpha('#9c27b0', 0.04),
+                                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
                                 },
                                 '& .MuiListItemIcon-root': {
-                                  color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                                  color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                                   minWidth: 36,
                                 },
                               }}
@@ -1178,10 +1187,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       sx={{
                         width: 48,
                         height: 48,
-                        backgroundColor: groupActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                        color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+                        backgroundColor: groupActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                        color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         '&:hover': {
-                          backgroundColor: alpha('#9c27b0', 0.04),
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
                         },
                       }}
                     >
@@ -1189,7 +1198,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                     </IconButton>
                   </Tooltip>
 
-                  {group.items.slice(0, 2).map((item) => {
+                  {group.items.map((item) => {
                     const itemPath = item.path?.split('?')[0] || '';
                     const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
                     const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
@@ -1202,10 +1211,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                           sx={{
                             width: 40,
                             height: 40,
-                            backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                            color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                            backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                            color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                             '&:hover': {
-                              backgroundColor: alpha('#9c27b0', 0.04),
+                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
                             },
                           }}
                         >
@@ -1220,21 +1229,6 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       </Tooltip>
                     );
                   })}
-
-                  {group.items.length > 2 && (
-                    <Tooltip title={`+${group.items.length - 2} mais`} placement="right">
-                      <IconButton
-                        size="small"
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          color: alpha('#000', 0.38),
-                        }}
-                      >
-                        <ExpandMoreIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
               )}
             </Box>

@@ -1,7 +1,7 @@
 // src/pages/SaasCobrancas.js
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Grid, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { Payments as PaymentsIcon, ReceiptLong as ReceiptLongIcon } from '@mui/icons-material';
+import { Launch as LaunchIcon, Payments as PaymentsIcon, ReceiptLong as ReceiptLongIcon } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import firebaseService from '../services/firebase';
 import { metodoPagamentoLabel, saasService } from '../services/saasService';
@@ -19,6 +19,7 @@ function SaasCobrancas() {
   const [empresaSelecionadaId, setEmpresaSelecionadaId] = useState('');
   const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
   const [autoForm, setAutoForm] = useState({ vencimentoEm: '' });
+  const [checkoutLinks, setCheckoutLinks] = useState({});
 
   const assinaturaPorEmpresa = useMemo(() => assinaturas.reduce((acc, assinatura) => ({ ...acc, [assinatura.empresaId || assinatura.id]: assinatura }), {}), [assinaturas]);
 
@@ -71,6 +72,28 @@ function SaasCobrancas() {
     }
   };
 
+  const iniciarCheckoutFatura = async (fatura) => {
+    setSaving(true);
+    try {
+      const assinatura = assinaturaPorEmpresa[fatura.empresaId];
+      const empresa = empresas.find((item) => item.id === fatura.empresaId);
+      const checkout = await saasService.iniciarCheckout({
+        empresaId: fatura.empresaId,
+        planoId: assinatura?.planoId || empresa?.planoId,
+        provider: fatura.gateway || empresa?.cobranca?.provider || null,
+        metodosPagamento: fatura.metodosPagamento || null,
+        dadosPagamento: { metodoPreferencial: fatura.metodoPagamento || empresa?.cobranca?.metodoPreferencial || null }
+      });
+      setCheckoutLinks((current) => ({ ...current, [fatura.id]: checkout.checkoutUrl || checkout.instrucoes || '' }));
+      if (checkout.checkoutUrl) window.open(checkout.checkoutUrl, '_blank', 'noopener,noreferrer');
+      toast.success('Checkout automático iniciado. O pagamento será confirmado pelo gateway/webhook quando disponível.');
+    } catch (error) {
+      toast.error(error.message || 'Erro ao iniciar checkout automático.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const confirmarPagamento = async (fatura) => {
     setSaving(true);
     try {
@@ -112,7 +135,7 @@ function SaasCobrancas() {
           <Card><CardContent><Typography variant="h6" sx={{ mb: 2 }}>Automação mensal</Typography><Alert severity="info" sx={{ mb: 2 }}>Gera faturas para assinaturas em trial ou ativas usando o próximo vencimento da assinatura ou a data abaixo.</Alert><Stack spacing={2}><TextField label="Vencimento opcional" type="datetime-local" InputLabelProps={{ shrink: true }} value={autoForm.vencimentoEm} onChange={(event) => setAutoForm({ vencimentoEm: event.target.value })} /><Button variant="outlined" disabled={saving} onClick={gerarFaturasAutomaticas}>Gerar faturas automáticas</Button></Stack></CardContent></Card>
         </Grid>
         <Grid item xs={12} md={8}>
-          <TableContainer component={Paper}><Table><TableHead><TableRow><TableCell>Empresa</TableCell><TableCell>Descrição</TableCell><TableCell>Valor</TableCell><TableCell>Status</TableCell><TableCell>Método</TableCell><TableCell>Vencimento</TableCell><TableCell align="right">Ações</TableCell></TableRow></TableHead><TableBody>{faturas.map((fatura) => { const empresa = empresas.find((item) => item.id === fatura.empresaId); return <TableRow key={fatura.id}><TableCell>{empresa?.nome || fatura.empresaId}</TableCell><TableCell>{fatura.descricao}</TableCell><TableCell>{formatCurrency(fatura.valor, fatura.moeda)}</TableCell><TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell><TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell><TableCell>{formatDate(fatura.vencimentoEm)}</TableCell><TableCell align="right">{fatura.status !== 'paga' && <Button size="small" disabled={saving} onClick={() => confirmarPagamento(fatura)}>Confirmar pagamento</Button>}</TableCell></TableRow>; })}</TableBody></Table></TableContainer>
+          <TableContainer component={Paper}><Table><TableHead><TableRow><TableCell>Empresa</TableCell><TableCell>Descrição</TableCell><TableCell>Valor</TableCell><TableCell>Status</TableCell><TableCell>Método</TableCell><TableCell>Vencimento</TableCell><TableCell align="right">Ações</TableCell></TableRow></TableHead><TableBody>{faturas.map((fatura) => { const empresa = empresas.find((item) => item.id === fatura.empresaId); return <TableRow key={fatura.id}><TableCell>{empresa?.nome || fatura.empresaId}</TableCell><TableCell>{fatura.descricao}{checkoutLinks[fatura.id] && <Alert severity="info" sx={{ mt: 1 }}>Checkout gerado: {checkoutLinks[fatura.id]}</Alert>}</TableCell><TableCell>{formatCurrency(fatura.valor, fatura.moeda)}</TableCell><TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell><TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell><TableCell>{formatDate(fatura.vencimentoEm)}</TableCell><TableCell align="right">{fatura.status !== 'paga' && <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end"><Button size="small" variant="contained" startIcon={<LaunchIcon />} disabled={saving} onClick={() => iniciarCheckoutFatura(fatura)}>Checkout</Button><Button size="small" disabled={saving} onClick={() => confirmarPagamento(fatura)}>Confirmar manual</Button></Stack>}</TableCell></TableRow>; })}</TableBody></Table></TableContainer>
           <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Pagamentos recentes</Typography><Stack spacing={1} divider={<Divider flexItem />}>{pagamentos.slice(0, 8).map((pagamento) => <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} / {pagamento.metodoPagamentoLabel || metodoPagamentoLabel(pagamento.metodoPagamento)} em {formatDate(pagamento.pagoEm)}</Alert>)}</Stack>
         </Grid>
       </Grid>
