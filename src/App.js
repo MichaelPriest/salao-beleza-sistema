@@ -776,6 +776,13 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+                <Route path="/manual" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ManualSistema audience="admin" />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
                 <Route path="/configuracoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
