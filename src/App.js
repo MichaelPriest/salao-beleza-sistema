@@ -367,8 +367,19 @@ function App() {
       }
     };
 
+    const handleTemaAtualizado = (e) => {
+      const modoEscuroAtual = typeof e.detail?.modoEscuro === 'boolean'
+        ? e.detail.modoEscuro
+        : localStorage.getItem('modoEscuro') === 'true';
+      setModoEscuro(modoEscuroAtual);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('temaAtualizado', handleTemaAtualizado);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('temaAtualizado', handleTemaAtualizado);
+    };
   }, []);
 
   if (loading) {
@@ -766,13 +777,6 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <AdminChamados />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/manual" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />

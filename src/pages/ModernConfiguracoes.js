@@ -606,7 +606,8 @@ function ModernConfiguracoes() {
   };
 
   const aplicarTema = (tema) => {
-    if (tema?.modoEscuro) {
+    const modoEscuroAtivo = Boolean(tema?.modoEscuro);
+    if (modoEscuroAtivo) {
       document.body.classList.add('modo-escuro');
     } else {
       document.body.classList.remove('modo-escuro');
@@ -614,6 +615,8 @@ function ModernConfiguracoes() {
     
     document.documentElement.style.setProperty('--cor-primaria', tema?.corPrimaria || '#9c27b0');
     document.documentElement.style.setProperty('--cor-secundaria', tema?.corSecundaria || '#ff4081');
+    localStorage.setItem('modoEscuro', String(modoEscuroAtivo));
+    window.dispatchEvent(new CustomEvent('temaAtualizado', { detail: { modoEscuro: modoEscuroAtivo, tema } }));
   };
 
   const handleLogoUpload = (event) => {
