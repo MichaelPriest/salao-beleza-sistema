@@ -431,6 +431,10 @@ const mergeTenantConditions = (collectionName, conditions = []) => {
 
   if (!isTenantScopedCollection(collectionName)) return conditions;
 
+  if (collectionName === 'usuarios' && hasCondition(conditions, 'email')) {
+    return conditions;
+  }
+
   const { empresaId, unidadeId } = getTenantContext();
   const conditionsWithoutTenant = conditions.filter((condition) => condition.field !== 'empresaId' && condition.field !== 'unidadeId');
 

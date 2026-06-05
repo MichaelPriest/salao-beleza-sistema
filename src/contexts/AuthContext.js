@@ -146,6 +146,11 @@ export const AuthProvider = ({ children }) => {
         
         if (usuarios && usuarios.length > 0) {
           const usuarioData = usuarios[0];
+
+          if (usuarioData.status !== 'ativo') {
+            await signOut(auth);
+            throw new Error('Usuário inativo. Contate o administrador.');
+          }
           
           // Criar documento com o UID correto
           await setDoc(doc(db, 'usuarios', firebaseUser.uid), {
@@ -224,6 +229,14 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Muitas tentativas. Tente novamente mais tarde');
       } else if (error.code === 'auth/network-request-failed') {
         throw new Error('Erro de conexão. Verifique sua internet');
+      }
+
+      const mensagem = String(error.message || '').toLowerCase();
+      if (mensagem.includes('invalid login credentials')) {
+        throw new Error('Email ou senha incorretos');
+      }
+      if (mensagem.includes('email not confirmed')) {
+        throw new Error('Email ainda não confirmado. Verifique sua caixa de entrada.');
       }
       
       throw error;
