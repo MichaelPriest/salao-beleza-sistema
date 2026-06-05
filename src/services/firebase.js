@@ -34,6 +34,7 @@ const TENANT_SCOPED_COLLECTIONS = new Set([
   'caixa',
   'campanhas',
   'categorias_produtos',
+  'chamados_suporte',
   'clientes',
   'cloud_config',
   'comissoes',
@@ -373,18 +374,27 @@ const getLocalUsuario = () => {
   }
 };
 
-const isPlatformAdmin = () => {
-  const usuario = getLocalUsuario();
-  return Boolean(
-    usuario?.isSaasAdmin ||
-    usuario?.adminSaas ||
-    usuario?.tipoUsuario === 'saas_admin' ||
-    usuario?.tipoUsuario === 'plataforma' ||
-    PLATFORM_ROLES.includes(usuario?.cargo) ||
-    PLATFORM_ROLES.includes(usuario?.role) ||
-    usuario?.permissoes?.includes('admin_saas')
-  );
+const hasPlatformAdminRole = (usuario = getLocalUsuario()) => Boolean(
+  usuario?.isSaasAdmin ||
+  usuario?.adminSaas ||
+  usuario?.tipoUsuario === 'saas_admin' ||
+  usuario?.tipoUsuario === 'plataforma' ||
+  PLATFORM_ROLES.includes(usuario?.cargo) ||
+  PLATFORM_ROLES.includes(usuario?.role) ||
+  usuario?.permissoes?.includes('admin_saas')
+);
+
+const isPlatformArea = () => {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.startsWith('/saas-admin') || window.location.pathname.startsWith('/selecionar-empresa');
 };
+
+const isActingAsTenantAdmin = () => {
+  const usuario = getLocalUsuario();
+  return Boolean(hasPlatformAdminRole(usuario) && usuario?.tenantAssumidoPorSuperadmin && getTenantContext().empresaId && !isPlatformArea());
+};
+
+const isPlatformAdmin = () => hasPlatformAdminRole() && !isActingAsTenantAdmin();
 
 const getNoTenantCondition = () => ({ field: 'empresaId', operator: '==', value: '__tenant_nao_selecionado__' });
 const isTenantScopedCollection = (collectionName) => TENANT_SCOPED_COLLECTIONS.has(collectionName);

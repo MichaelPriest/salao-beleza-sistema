@@ -188,6 +188,7 @@ import ClienteAnamnese from './pages/ClienteAnamnese';
 import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
 import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
+import ClienteChamados from './pages/ClienteChamados';
 
 // Páginas de Erro
 import Page404 from './pages/404';
@@ -207,6 +208,8 @@ import SaasCobrancas from './pages/SaasCobrancas';
 import SaasPlanos from './pages/SaasPlanos';
 import SaasRelatorios from './pages/SaasRelatorios';
 import SaasLanding from './pages/SaasLanding';
+import SuperAdminSelecionarEmpresa from './pages/SuperAdminSelecionarEmpresa';
+import AdminChamados from './pages/AdminChamados';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -500,6 +503,7 @@ function App() {
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
+                  <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
@@ -748,6 +752,20 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/selecionar-empresa" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SuperAdminSelecionarEmpresa />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/chamados" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <AdminChamados />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
