@@ -83,16 +83,25 @@ const UNIT_SCOPED_COLLECTIONS = new Set([
   'atendimentos',
   'ausencias',
   'caixa',
+  'campanhas',
+  'categorias_produtos',
+  'clientes',
+  'comissoes',
   'compras',
   'contas_pagar',
   'contas_receber',
   'disponibilidades',
+  'avaliacoes',
+  'cupons',
   'entradas',
   'itens_venda',
+  'fornecedores',
   'movimentacoes_estoque',
   'orcamentos',
   'pagamentos',
   'produtos',
+  'profissionais',
+  'servicos',
   'transacoes'
 ]);
 
@@ -338,14 +347,19 @@ export const getTenantContext = () => {
 
 export const setTenantContext = ({ empresaId, empresa, unidadeId, unidade } = {}) => {
   const empresaContext = empresa || (empresaId ? { id: empresaId } : null);
+  const hasUnitSelection = Boolean(unidade || unidadeId);
   const unidadeContext = unidade || (unidadeId ? { id: unidadeId, empresaId: empresaContext?.id || empresaId } : null);
 
   if (empresaContext) {
     safeLocalStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(empresaContext));
   }
 
-  if (unidadeContext) {
+  // Quando a unidade vem vazia/nula, o contexto passa a representar "todas as unidades".
+  // Isso remove a unidade anterior para que coleções por unidade sejam filtradas apenas por empresa.
+  if (hasUnitSelection && unidadeContext) {
     safeLocalStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unidadeContext));
+  } else {
+    safeLocalStorage.removeItem(UNIT_STORAGE_KEY);
   }
 
   return getTenantContext();
@@ -462,7 +476,40 @@ const mergeTenantConditions = (collectionName, conditions = []) => {
   return scopedConditions;
 };
 
+const NOTIFICATION_COLLECTIONS = new Set(['notificacoes', 'notificacoes_cliente']);
+
+const normalizeNotificationData = (collectionName, data = {}) => {
+  if (!NOTIFICATION_COLLECTIONS.has(collectionName)) return data;
+
+  const agora = new Date().toISOString();
+  const tenant = getTenantContext();
+  const detalhes = data.detalhes || data.dados || {};
+  const usuarioId = data.usuarioId || data.userId || data.destinatarioId || (collectionName === 'notificacoes_cliente' ? data.clienteId : null);
+  const clienteId = data.clienteId || (collectionName === 'notificacoes_cliente' ? usuarioId : null);
+
+  return {
+    tipo: data.tipo || 'info',
+    titulo: data.titulo || 'Notificação',
+    mensagem: data.mensagem || data.descricao || '',
+    link: data.link || (collectionName === 'notificacoes_cliente' ? '/cliente/notificacoes' : '/notificacoes'),
+    prioridade: data.prioridade || 'media',
+    ...data,
+    usuarioId,
+    ...(clienteId ? { clienteId } : {}),
+    lida: Boolean(data.lida),
+    data: data.data || data.createdAt || agora,
+    createdAt: data.createdAt || data.data || agora,
+    updatedAt: data.updatedAt || agora,
+    detalhes,
+    empresaId: data.empresaId || detalhes.empresaId || tenant.empresaId || null,
+    empresaNome: data.empresaNome || detalhes.empresaNome || tenant.empresa?.nome || '',
+    unidadeId: data.unidadeId || detalhes.unidadeId || tenant.unidadeId || null,
+    unidadeNome: data.unidadeNome || detalhes.unidadeNome || tenant.unidade?.nome || '',
+  };
+};
+
 const applyTenantMetadata = (collectionName, data = {}) => {
+  data = normalizeNotificationData(collectionName, data);
   if (!isTenantScopedCollection(collectionName) || isPlatformAdmin()) return data;
 
   const { empresaId, unidadeId } = getTenantContext();
