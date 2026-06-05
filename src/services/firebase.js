@@ -591,7 +591,7 @@ const operatorMap = {
 };
 
 // FUNÇÃO CORRIGIDA - buildQueryString
-const buildQueryString = (collectionName, conditions = [], orderByField = null) => {
+const buildQueryString = (collectionName, conditions = [], orderByField = null, { jsonData = true } = {}) => {
   const params = new URLSearchParams();
   params.append('select', '*');
   
@@ -601,20 +601,19 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
     .filter(({ field, value }) => field && value !== undefined && value !== null)
     .forEach(({ field, operator = '==', value }) => {
       const supabaseOperator = operatorMap[operator] || operator;
-      // CORREÇÃO: Usar a sintaxe correta para campos JSONB
-      const jsonField = `data->>${field}`;
+      const filterField = jsonData ? `data->>${field}` : field;
       
       if (supabaseOperator === 'in' && Array.isArray(value)) {
-        params.append(jsonField, `in.(${value.map(encodeFilterValue).join(',')})`);
+        params.append(filterField, `in.(${value.map(encodeFilterValue).join(',')})`);
       } else if (supabaseOperator === 'cs') {
-        params.append(`data->${field}`, `cs.${JSON.stringify(Array.isArray(value) ? value : [value])}`);
+        params.append(jsonData ? `data->${field}` : field, `cs.${JSON.stringify(Array.isArray(value) ? value : [value])}`);
       } else {
-        params.append(jsonField, `${supabaseOperator}.${encodeFilterValue(value)}`);
+        params.append(filterField, `${supabaseOperator}.${encodeFilterValue(value)}`);
       }
     });
 
   if (orderByField) {
-    params.append('order', `data->>${orderByField}`);
+    params.append('order', jsonData ? `data->>${orderByField}` : orderByField);
   }
   
   const queryString = params.toString();
@@ -623,21 +622,17 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
   return queryString;
 };
 
-const getRestTableName = (collectionName) => collectionName; // Usar diretamente o nome da tabela
-const getDocumentFilter = (collectionName, id) => `document_id=eq.${encodeURIComponent(id)}`;
-const getUpsertConflict = () => 'document_id';
-
-const buildDocumentPayload = (collectionName, documentId, documentData) => {
-  return {
-    document_id: documentId,
-    data: documentData
-  };
+const isSchemaCacheColumnError = (error) => {
+  const message = String(error?.message || error?.details?.message || error?.details?.hint || '');
+  return /schema cache|column/i.test(message) && /data|document_id/i.test(message);
 };
 
 const toDocument = (row) => {
   if (!row) return null;
-  // Retorna os dados com o id sendo o document_id
-  return { id: row.document_id, ...(row.data || {}) };
+  if (Object.prototype.hasOwnProperty.call(row, 'data') || Object.prototype.hasOwnProperty.call(row, 'document_id')) {
+    return { id: row.document_id || row.data?.id, ...(row.data || {}) };
+  }
+  return { id: row.id || row.document_id, ...row };
 };
 
 const toDocuments = (rows = []) => rows.map(toDocument).filter(Boolean);
@@ -903,8 +898,16 @@ export const firebaseService = {
         const empresa = await firebaseService.getById(collectionName, empresaId);
         return empresa ? [empresa] : [];
       }
-      const queryString = buildQueryString(collectionName, getTenantConditions(collectionName));
-      const result = await supabaseFetch(`/rest/v1/${collectionName}?${queryString}`);
+      const tenantConditions = getTenantConditions(collectionName);
+      const queryString = buildQueryString(collectionName, tenantConditions);
+      let result;
+      try {
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${queryString}`);
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const directQueryString = buildQueryString(collectionName, tenantConditions, null, { jsonData: false });
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${directQueryString}`);
+      }
       return toDocuments(result);
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} no Supabase:`, error);
@@ -914,20 +917,30 @@ export const firebaseService = {
 
   getById: async (collectionName, id) => {
     try {
-      // Busca por document_id
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-      let documentData = toDocument(rows?.[0]) || null;
-      
-      // Se não encontrar, busca pelo authUid dentro do JSON
-      if (!documentData) {
-        const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?data->>authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-        documentData = toDocument(rowsByAuth?.[0]) || null;
-      }
-      
-      // Se não encontrar, busca pelo googleUid
-      if (!documentData) {
-        const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?data->>googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-        documentData = toDocument(rowsByGoogle?.[0]) || null;
+      let documentData = null;
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+        documentData = toDocument(rows?.[0]) || null;
+        if (!documentData) {
+          const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?data->>authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByAuth?.[0]) || null;
+        }
+        if (!documentData) {
+          const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?data->>googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByGoogle?.[0]) || null;
+        }
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+        documentData = toDocument(rows?.[0]) || null;
+        if (!documentData) {
+          const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByAuth?.[0]) || null;
+        }
+        if (!documentData) {
+          const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByGoogle?.[0]) || null;
+        }
       }
       
       if (canReadDocumentByIdWithoutTenant(collectionName, id)) return documentData;
@@ -950,15 +963,20 @@ export const firebaseService = {
         createdAt: tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const payload = {
-        document_id: documentId,
-        data: documentData
-      };
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
+          method: 'POST',
+          body: JSON.stringify({ document_id: documentId, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
+          method: 'POST',
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao adicionar em ${collectionName} no Supabase:`, error);
       throw error;
@@ -978,15 +996,22 @@ export const firebaseService = {
         createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          document_id: id,
-          data: documentData
-        })
-      });
-      return toDocument(rows?.[0]) || { id, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify({ document_id: id, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao salvar em ${collectionName} no Supabase:`, error);
       throw error;
@@ -1009,15 +1034,22 @@ export const firebaseService = {
         createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          document_id: id,
-          data: documentData
-        })
-      });
-      return toDocument(rows?.[0]) || { id, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify({ document_id: id, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao atualizar ${collectionName} no Supabase:`, error);
       throw error;
@@ -1031,7 +1063,12 @@ export const firebaseService = {
       if (!current && (isTenantScopedCollection(collectionName) || isTenantRootCollection(collectionName)) && !isPlatformAdmin()) {
         throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
       }
-      await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      try {
+        await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        await supabaseFetch(`/rest/v1/${collectionName}?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      }
       return id;
     } catch (error) {
       console.error(`Erro ao excluir de ${collectionName} no Supabase:`, error);
@@ -1050,7 +1087,14 @@ export const firebaseService = {
       const url = `/rest/v1/${collectionName}?${queryString}`;
       console.log('🔍 URL:', url);
       
-      const result = await supabaseFetch(url);
+      let result;
+      try {
+        result = await supabaseFetch(url);
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const directQueryString = buildQueryString(collectionName, scopedConditions, orderByField, { jsonData: false });
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${directQueryString}`);
+      }
       const documents = toDocuments(result);
       
       console.log('✅ firebaseService.query - Resultado:', documents.length, 'documentos');
