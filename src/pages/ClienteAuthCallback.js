@@ -3,9 +3,25 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { toast } from 'react-hot-toast';
+import { saasService } from '../services/saasService';
+import {
+  consumeSupabaseAuthRedirect,
+  firebaseService,
+  setTenantContext,
+  setTenantContextFromUser,
+} from '../services/firebase';
 
-const SUPABASE_URL = 'https://kvjrerxqwtrxttiiqkgf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
+const getAuthErrorFromUrl = () => {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const searchParams = new URLSearchParams(window.location.search);
+  const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+  const errorDescription = searchParams.get('error_description') || hashParams.get('error_description');
+  const errorMessage = searchParams.get('error') || hashParams.get('error');
+
+  if (!errorCode && !errorDescription && !errorMessage) return null;
+
+  return decodeURIComponent(errorDescription || errorMessage || errorCode || 'Erro desconhecido no login com Google');
+};
 
 function ClienteAuthCallback() {
   const navigate = useNavigate();
@@ -14,109 +30,92 @@ function ClienteAuthCallback() {
   useEffect(() => {
     const processCallback = async () => {
       try {
-        // Pegar token da URL
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-        const accessToken = hashParams.get('access_token');
-        
-        if (!accessToken) {
-          throw new Error('Token não encontrado');
+        const authError = getAuthErrorFromUrl();
+        if (authError) {
+          throw new Error(`Google não concluiu a autenticação: ${authError}`);
         }
-        
-        console.log('🔐 Token recebido, buscando usuário...');
-        
-        // Buscar usuário no Supabase
-        const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
-        
-        const user = await response.json();
-        console.log('📊 Usuário Supabase:', user);
-        
-        if (!user || !user.email) {
-          throw new Error('Usuário não encontrado');
+
+        const session = await consumeSupabaseAuthRedirect();
+        const user = session?.user;
+
+        if (!user?.id || !user?.email) {
+          throw new Error('Sessão do Google não encontrada. Tente entrar novamente.');
         }
-        
-        const empresaId = sessionStorage.getItem('empresa_publica_id');
-        const empresaNome = sessionStorage.getItem('empresa_publica_nome');
-        
-        console.log('🔍 Buscando cliente no tenant:', empresaId);
-        
-        // Buscar cliente pelo email no tenant
-        const url = `${SUPABASE_URL}/rest/v1/clientes?data->>email=eq.${encodeURIComponent(user.email)}&data->>empresaId=eq.${empresaId}&select=*`;
-        const clientesResponse = await fetch(url, {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+
+        const empresaSlug = new URLSearchParams(window.location.search).get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
+        let empresaId = window.sessionStorage.getItem('empresa_publica_id');
+        let empresaNome = window.sessionStorage.getItem('empresa_publica_nome');
+
+        if (!empresaId && empresaSlug) {
+          const empresa = await saasService.buscarEmpresaPorSlug(empresaSlug).catch(() => null);
+          if (empresa?.id) {
+            empresaId = empresa.id;
+            empresaNome = empresa.nome || '';
+            window.sessionStorage.setItem('empresa_publica_slug', empresaSlug);
+            window.sessionStorage.setItem('empresa_publica_id', empresaId);
+            window.sessionStorage.setItem('empresa_publica_nome', empresaNome);
           }
-        });
-        
-        const clientes = await clientesResponse.json();
-        console.log('📊 Clientes encontrados:', clientes);
-        
-        let cliente = null;
-        
-        if (clientes && clientes.length > 0) {
-          cliente = clientes[0].data;
-          console.log('✅ Cliente encontrado:', cliente.nome);
-          
-          // Atualizar authUid
-          await fetch(`${SUPABASE_URL}/rest/v1/clientes?document_id=eq.${clientes[0].document_id}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              data: {
-                ...cliente,
-                authUid: user.id,
-                googleUid: user.id,
-                updatedAt: new Date().toISOString()
-              }
-            })
-          });
-        } else {
-          // Cliente não existe, verificar se precisa criar
-          console.log('🆕 Cliente não encontrado, redirecionando para cadastro complementar');
-          sessionStorage.setItem('pending_google_user', JSON.stringify({
+        }
+
+        if (!empresaId) {
+          throw new Error('Empresa não identificada. Acesse pelo link público do salão.');
+        }
+
+        setTenantContext({ empresaId, empresa: { id: empresaId, nome: empresaNome } });
+
+        const clientes = await firebaseService.query('clientes', [
+          { field: 'email', operator: '==', value: user.email },
+          { field: 'empresaId', operator: '==', value: empresaId },
+        ]);
+
+        if (!clientes?.length) {
+          window.sessionStorage.setItem('pending_google_user', JSON.stringify({
             uid: user.id,
             email: user.email,
             nome: user.user_metadata?.full_name || user.email.split('@')[0],
-            foto: user.user_metadata?.avatar_url || null
+            foto: user.user_metadata?.avatar_url || null,
+            empresaId,
+            empresaNome,
           }));
-          navigate(`/cliente/cadastro-complementar?empresa=${sessionStorage.getItem('empresa_publica_slug')}`);
+
+          navigate(`/cliente/cadastro-complementar${empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : ''}`, { replace: true });
           return;
         }
-        
-        // Salvar cliente no localStorage
-        localStorage.setItem('cliente', JSON.stringify(cliente));
-        localStorage.setItem('supabase.auth.session', JSON.stringify({
-          access_token: accessToken,
-          user: user
-        }));
-        
-        toast.success(`Bem-vindo(a), ${cliente.nome}!`);
-        navigate('/cliente/dashboard');
-        
+
+        const clienteEncontrado = clientes[0];
+        const dadosVinculo = {
+          authUid: user.id,
+          googleUid: user.id,
+          foto: clienteEncontrado.foto || user.user_metadata?.avatar_url || null,
+          ultimoAcesso: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (clienteEncontrado.authUid !== user.id || clienteEncontrado.googleUid !== user.id) {
+          await firebaseService.update('clientes', clienteEncontrado.id, dadosVinculo);
+        }
+
+        const clienteAtualizado = { ...clienteEncontrado, ...dadosVinculo };
+        localStorage.setItem('cliente', JSON.stringify(clienteAtualizado));
+        setTenantContextFromUser(clienteAtualizado);
+
+        toast.success(`Bem-vindo(a), ${clienteAtualizado.nome}!`);
+        navigate('/cliente/dashboard', { replace: true });
       } catch (err) {
-        console.error('❌ Erro no callback:', err);
-        setError(err.message);
+        console.error('❌ Erro no callback Google do cliente:', err);
+        setError(err.message || 'Erro ao autenticar com Google');
         setTimeout(() => {
-          navigate('/cliente/login');
+          navigate('/cliente/login', { replace: true });
         }, 3000);
       }
     };
-    
+
     processCallback();
   }, [navigate]);
-  
+
   if (error) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', p: 2 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           Erro ao autenticar: {error}
         </Alert>
@@ -124,13 +123,13 @@ function ClienteAuthCallback() {
       </Box>
     );
   }
-  
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <CircularProgress size={60} sx={{ mb: 3 }} />
       <Typography variant="h6">Autenticando...</Typography>
       <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-        Aguarde enquanto processamos seu login
+        Aguarde enquanto processamos seu login com Google
       </Typography>
     </Box>
   );

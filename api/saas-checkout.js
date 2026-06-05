@@ -7,11 +7,42 @@ const json = (res, status, payload) => {
   res.end(JSON.stringify(payload));
 };
 
-const getEnabledMethods = (metodosPagamento = {}) => ({
+const METHOD_LABELS = { card: 'Cartão', pix: 'PIX', boleto: 'Boleto' };
+
+const normalizeMethods = (metodosPagamento = {}) => ({
   card: metodosPagamento.card !== false,
   pix: metodosPagamento.pix !== false,
   boleto: metodosPagamento.boleto !== false
 });
+
+const getEnabledMethods = (metodosPagamento = {}) => normalizeMethods(metodosPagamento);
+
+const firstEnabledMethod = (metodosPagamento = {}) => {
+  const methods = normalizeMethods(metodosPagamento);
+  return ['card', 'pix', 'boleto'].find((method) => methods[method]) || 'card';
+};
+
+const getBillingProfile = (body = {}, empresa = {}, billingConfig = {}) => {
+  const billingProfile = body.billingProfile || body.dadosPagamento || {};
+  const dadosCobranca = billingProfile.dadosCobranca || {};
+  const methods = normalizeMethods(body.metodosPagamento || billingProfile.metodosPagamento || billingConfig.metodosPagamento);
+  const preferred = billingProfile.metodoPreferencial && methods[billingProfile.metodoPreferencial]
+    ? billingProfile.metodoPreferencial
+    : firstEnabledMethod(methods);
+
+  return {
+    metodoPreferencial: preferred,
+    metodoPagamentoLabel: METHOD_LABELS[preferred] || preferred,
+    metodosPagamento: methods,
+    dadosCobranca: {
+      responsavel: dadosCobranca.responsavel || empresa.cobranca?.responsavelFinanceiro || empresa.nome || '',
+      email: dadosCobranca.email || empresa.cobranca?.emailFinanceiro || empresa.email || '',
+      documento: dadosCobranca.documento || empresa.cobranca?.documentoCobranca || empresa.documento || '',
+      telefone: dadosCobranca.telefone || empresa.cobranca?.telefoneFinanceiro || empresa.telefone || '',
+      endereco: dadosCobranca.endereco || empresa.cobranca?.enderecoCobranca || ''
+    }
+  };
+};
 
 const buildBaseUrl = (req) => {
   const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -19,20 +50,24 @@ const buildBaseUrl = (req) => {
   return `${protocol}://${host}`;
 };
 
-const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento = {} }) => {
+const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento = {}, billingProfile = {} }) => {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error('STRIPE_SECRET_KEY não configurada no ambiente servidor.');
   }
 
+  const methods = getEnabledMethods(metodosPagamento);
   const params = new URLSearchParams();
   params.append('mode', 'subscription');
   params.append('success_url', successUrl);
   params.append('cancel_url', cancelUrl);
   params.append('client_reference_id', empresa.id);
-  params.append('customer_email', empresa.email || '');
+  params.append('customer_email', billingProfile.dadosCobranca?.email || empresa.email || '');
   params.append('metadata[empresaId]', empresa.id);
   params.append('metadata[planoId]', plano.id);
-  const methods = getEnabledMethods(metodosPagamento);
+  params.append('metadata[metodoPagamento]', billingProfile.metodoPreferencial || firstEnabledMethod(methods));
+  if (methods.pix && !methods.card && !methods.boleto) {
+    throw new Error('PIX não está habilitado para Stripe nesta integração. Use Mercado Pago ou PagSeguro/PagBank para checkout PIX.');
+  }
   if (methods.card) params.append('payment_method_types[]', 'card');
   if (methods.boleto) params.append('payment_method_types[]', 'boleto');
   if (!methods.card && !methods.boleto) params.append('payment_method_types[]', 'card');
@@ -60,7 +95,7 @@ const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl
   const data = await response.json();
   if (!response.ok) throw new Error(data?.error?.message || 'Erro ao criar checkout Stripe.');
 
-  return { provider: 'stripe', checkoutUrl: data.url, sessionId: data.id };
+  return { provider: 'stripe', checkoutUrl: data.url, sessionId: data.id, metodoPreferencial: billingProfile.metodoPreferencial, metodoPagamentoLabel: billingProfile.metodoPagamentoLabel, metodosPagamento: methods };
 };
 
 const getPagSeguroBaseUrl = (environment) => {
@@ -70,7 +105,7 @@ const getPagSeguroBaseUrl = (environment) => {
     : 'https://sandbox.api.pagseguro.com';
 };
 
-const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificationUrl, billingConfig = {}, metodosPagamento = {} }) => {
+const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificationUrl, billingConfig = {}, metodosPagamento = {}, billingProfile = {} }) => {
   const token = process.env.PAGSEGURO_TOKEN || process.env.PAGBANK_TOKEN;
   if (!token) {
     throw new Error('PAGSEGURO_TOKEN não configurado no ambiente servidor.');
@@ -86,8 +121,9 @@ const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificatio
   const payload = {
     reference_id: `${empresa.id}:${plano.id}:${Date.now()}`,
     customer: {
-      name: empresa.nome || empresa.email || 'Cliente SaaS',
-      email: empresa.email
+      name: billingProfile.dadosCobranca?.responsavel || empresa.nome || empresa.email || 'Cliente SaaS',
+      email: billingProfile.dadosCobranca?.email || empresa.email,
+      tax_id: billingProfile.dadosCobranca?.documento || undefined
     },
     items: [
       {
@@ -120,10 +156,10 @@ const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificatio
     || data?.payment_url
     || data?.checkout_url;
 
-  return { provider: 'pagseguro', checkoutUrl, checkoutId: data.id, referenceId: data.reference_id };
+  return { provider: 'pagseguro', checkoutUrl, checkoutId: data.id, referenceId: data.reference_id, metodoPreferencial: billingProfile.metodoPreferencial, metodoPagamentoLabel: billingProfile.metodoPagamentoLabel, metodosPagamento: methods };
 };
 
-const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl, metodosPagamento = {} }) => {
+const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl, metodosPagamento = {}, billingProfile = {} }) => {
   if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
     throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado no ambiente servidor.');
   }
@@ -151,9 +187,13 @@ const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl
           unit_price: Number(plano.precoMensal || 0)
         }
       ],
-      payer: { email: empresa.email },
+      payer: {
+        email: billingProfile.dadosCobranca?.email || empresa.email,
+        name: billingProfile.dadosCobranca?.responsavel || empresa.nome,
+        identification: billingProfile.dadosCobranca?.documento ? { number: billingProfile.dadosCobranca.documento } : undefined
+      },
       external_reference: `${empresa.id}:${plano.id}`,
-      metadata: { empresaId: empresa.id, planoId: plano.id },
+      metadata: { empresaId: empresa.id, planoId: plano.id, metodoPagamento: billingProfile.metodoPreferencial },
       back_urls: {
         success: successUrl,
         failure: cancelUrl,
@@ -167,7 +207,7 @@ const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl
   const data = await response.json();
   if (!response.ok) throw new Error(data?.message || 'Erro ao criar checkout Mercado Pago.');
 
-  return { provider: 'mercadopago', checkoutUrl: data.init_point, preferenceId: data.id };
+  return { provider: 'mercadopago', checkoutUrl: data.init_point, preferenceId: data.id, metodoPreferencial: billingProfile.metodoPreferencial, metodoPagamentoLabel: billingProfile.metodoPagamentoLabel, metodosPagamento: methods };
 };
 
 module.exports = async (req, res) => {
@@ -182,7 +222,8 @@ module.exports = async (req, res) => {
     const billingConfig = body.billingConfig || {};
     const empresa = body.empresa || {};
     const plano = body.plano || {};
-    const metodosPagamento = body.metodosPagamento || billingConfig.metodosPagamento || {};
+    const billingProfile = getBillingProfile(body, empresa, billingConfig);
+    const metodosPagamento = billingProfile.metodosPagamento;
 
     if (!empresa.id || !plano.id) {
       return json(res, 400, { error: 'empresa.id e plano.id são obrigatórios.' });
@@ -196,20 +237,24 @@ module.exports = async (req, res) => {
     const notificationUrl = body.notificationUrl || process.env.PAGSEGURO_NOTIFICATION_URL || `${baseUrl}${webhookPath}`;
 
     if (provider === 'stripe') {
-      return json(res, 200, await createStripeCheckout({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento }));
+      return json(res, 200, await createStripeCheckout({ req, plano, empresa, successUrl, cancelUrl, metodosPagamento, billingProfile }));
     }
 
     if (provider === 'mercadopago') {
-      return json(res, 200, await createMercadoPagoCheckout({ plano, empresa, successUrl, cancelUrl, metodosPagamento }));
+      return json(res, 200, await createMercadoPagoCheckout({ plano, empresa, successUrl, cancelUrl, metodosPagamento, billingProfile }));
     }
 
     if (provider === 'pagseguro' || provider === 'pagbank') {
-      return json(res, 200, await createPagSeguroCheckout({ plano, empresa, successUrl, notificationUrl, billingConfig, metodosPagamento }));
+      return json(res, 200, await createPagSeguroCheckout({ plano, empresa, successUrl, notificationUrl, billingConfig, metodosPagamento, billingProfile }));
     }
 
     return json(res, 200, {
       provider: 'manual',
       checkoutUrl: null,
+      metodoPreferencial: billingProfile.metodoPreferencial,
+      metodoPagamentoLabel: billingProfile.metodoPagamentoLabel,
+      metodosPagamento,
+      dadosCobranca: billingProfile.dadosCobranca,
       instrucoes: billingConfig.instrucoesManual || process.env.BILLING_MANUAL_INSTRUCTIONS || 'Cobrança manual habilitada. Configure Stripe, Mercado Pago ou PagSeguro/PagBank para checkout automático.'
     });
   } catch (error) {
