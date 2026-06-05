@@ -39,7 +39,15 @@ import {
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
-import { CONFIG_COBRANCA_PADRAO, PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import {
+  CONFIG_COBRANCA_PADRAO,
+  PLANOS_PADRAO,
+  STATUS_ASSINATURA,
+  metodoPagamentoLabel,
+  metodosSomentePreferencial,
+  primeiroMetodoDisponivel,
+  saasService,
+} from '../services/saasService';
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
