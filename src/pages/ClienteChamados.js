@@ -54,6 +54,27 @@ const statusLabel = {
   fechado: 'Fechado',
 };
 
+const notificarAdminsNovoChamado = async (chamado) => {
+  try {
+    const usuarios = await firebaseService.getAll('usuarios').catch(() => []);
+    const admins = (usuarios || []).filter((usuario) => ['admin', 'gerente', 'superadmin', 'admin_saas', 'saas_admin'].includes(usuario.cargo || usuario.role));
+    await Promise.all(admins.map((admin) => firebaseService.add('notificacoes', {
+      usuarioId: admin.uid || admin.id,
+      tipo: 'chamado',
+      titulo: 'Novo chamado de suporte',
+      mensagem: `${chamado.clienteNome} abriu: ${chamado.titulo}`,
+      link: '/chamados',
+      lida: false,
+      prioridade: chamado.prioridade || 'media',
+      data: chamado.createdAt,
+      detalhes: { chamadoId: chamado.id, clienteId: chamado.clienteId },
+    }).catch(() => null)));
+    window.dispatchEvent(new CustomEvent('novaNotificacao'));
+  } catch (error) {
+    console.error('Erro ao notificar administradores sobre chamado:', error);
+  }
+};
+
 const formatDate = (value) => (value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '-');
 
 function ClienteChamados() {
@@ -102,7 +123,7 @@ function ClienteChamados() {
     try {
       const tenant = getTenantContext();
       const agora = new Date().toISOString();
-      await firebaseService.add('chamados_suporte', {
+      const payload = {
         titulo: form.titulo.trim(),
         categoria: form.categoria,
         prioridade: form.prioridade,
@@ -118,7 +139,9 @@ function ClienteChamados() {
         mensagens: [{ autorTipo: 'cliente', autorNome: cliente?.nome || 'Cliente', mensagem: form.descricao.trim(), createdAt: agora }],
         createdAt: agora,
         updatedAt: agora,
-      });
+      };
+      const criado = await firebaseService.add('chamados_suporte', payload);
+      await notificarAdminsNovoChamado({ ...payload, id: criado?.id });
       setForm({ titulo: '', categoria: 'bug', prioridade: 'media', descricao: '' });
       toast.success('Chamado enviado com sucesso.');
       await carregar();
