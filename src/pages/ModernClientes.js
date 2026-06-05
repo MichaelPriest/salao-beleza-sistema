@@ -62,6 +62,7 @@ import {
   CalendarToday as CalendarIcon,
   AttachMoney as MoneyIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
   History as HistoryIcon,
   Print as PrintIcon,
   Star as StarIcon,
@@ -74,11 +75,12 @@ import {
   Clear as ClearIcon,
   Sort as SortIcon,
   Download as DownloadIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
-import { firebaseService } from '../services/firebase';
+import { createAuthUserWithoutSession, firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { Timestamp } from '../services/firebase';
 import { 
@@ -306,6 +308,7 @@ function ModernClientes() {
   const [usuario, setUsuario] = useState(null);
   const [sortField, setSortField] = useState('nome');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [showPortalPassword, setShowPortalPassword] = useState(false);
   
   // Estado para filtros
   const [filtrosAnchorEl, setFiltrosAnchorEl] = useState(null);
@@ -355,6 +358,8 @@ function ModernClientes() {
     dataIndicacao: null,
     totalPontos: 0,
     nivelFidelidade: 'bronze',
+    senhaPortal: '',
+    confirmarSenhaPortal: '',
   });
 
   // Carregar usuário atual
@@ -710,7 +715,10 @@ function ModernClientes() {
       dataIndicacao: null,
       totalPontos: 0,
       nivelFidelidade: 'bronze',
+      senhaPortal: '',
+      confirmarSenhaPortal: '',
     });
+    setShowPortalPassword(false);
     setTabValue(0);
     setOpenDialog(true);
   };
@@ -745,7 +753,10 @@ function ModernClientes() {
       dataIndicacao: cliente.dataIndicacao || null,
       totalPontos: cliente.totalPontos || 0,
       nivelFidelidade: cliente.nivelFidelidade || 'bronze',
+      senhaPortal: '',
+      confirmarSenhaPortal: '',
     });
+    setShowPortalPassword(false);
     setTabValue(0);
     setOpenDialog(true);
   };
@@ -884,12 +895,64 @@ function ModernClientes() {
       toast.error('Telefone é obrigatório');
       return;
     }
+
+    const senhaPortalInformada = formData.senhaPortal || '';
+    const deveCriarAcessoPortal = !selectedCliente?.authUid && senhaPortalInformada;
+
+    if (!selectedCliente && !senhaPortalInformada) {
+      toast.error('Informe uma senha para liberar o acesso do cliente ao portal');
+      setTabValue(1);
+      return;
+    }
+
+    if (senhaPortalInformada && senhaPortalInformada.length < 6) {
+      toast.error('A senha do portal deve ter pelo menos 6 caracteres');
+      setTabValue(1);
+      return;
+    }
+
+    if (senhaPortalInformada !== (formData.confirmarSenhaPortal || '')) {
+      toast.error('A confirmação da senha do portal não confere');
+      setTabValue(1);
+      return;
+    }
   
     const agora = new Date().toISOString();
     const hoje = new Date().toISOString().split('T')[0];
   
+    let portalAuthData = {};
+
+    if (deveCriarAcessoPortal) {
+      try {
+        const result = await createAuthUserWithoutSession(formData.email, senhaPortalInformada, {
+          nome: formData.nome,
+          tipo: 'cliente',
+        });
+        const authUid = result.user?.id || result.user?.uid;
+        if (!authUid) {
+          throw new Error('Não foi possível obter o usuário criado para o portal.');
+        }
+        portalAuthData = {
+          authUid,
+          acessoPortalAtivo: true,
+          acessoPortalConfiguradoEm: agora,
+        };
+      } catch (authError) {
+        console.error('Erro ao configurar acesso ao portal:', authError);
+        toast.error(authError?.message?.includes('already') || authError?.message?.includes('registered')
+          ? 'Este email já possui uma conta de acesso. Use recuperação de senha no portal do cliente.'
+          : 'Erro ao configurar senha de acesso ao portal');
+        return;
+      }
+    }
+
+    const dadosCliente = { ...formData };
+    delete dadosCliente.senhaPortal;
+    delete dadosCliente.confirmarSenhaPortal;
+
     const dadosParaSalvar = {
-      ...formData,
+      ...dadosCliente,
+      ...portalAuthData,
       dataCadastro: selectedCliente ? selectedCliente.dataCadastro : hoje,
       ultimaVisita: selectedCliente ? selectedCliente.ultimaVisita : null,
       totalGasto: selectedCliente ? selectedCliente.totalGasto : 0,
@@ -1339,6 +1402,7 @@ function ModernClientes() {
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
               <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
                 <Tab label="Dados Pessoais" />
+                <Tab label="Acesso Portal" />
                 <Tab label="Endereço" />
                 <Tab label="Preferências" />
               </Tabs>
@@ -1393,6 +1457,58 @@ function ModernClientes() {
             </TabPanel>
 
             <TabPanel value={tabValue} index={1}>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Alert severity={selectedCliente?.authUid ? 'info' : 'warning'}>
+                    {selectedCliente?.authUid
+                      ? 'Este cliente já possui acesso ao portal. Para trocar a senha, oriente o cliente a usar a opção de recuperação de senha no login do portal.'
+                      : 'Defina uma senha inicial para permitir que o cliente acesse o portal com o email cadastrado.'}
+                  </Alert>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label={selectedCliente ? 'Nova senha inicial do portal' : 'Senha inicial do portal'}
+                    type={showPortalPassword ? 'text' : 'password'}
+                    value={formData.senhaPortal}
+                    onChange={(e) => setFormData({ ...formData, senhaPortal: e.target.value })}
+                    required={!selectedCliente}
+                    disabled={Boolean(selectedCliente?.authUid)}
+                    size="small"
+                    helperText={selectedCliente?.authUid ? 'Conta de acesso já vinculada' : 'Mínimo de 6 caracteres'}
+                    InputProps={{
+                      startAdornment: (<InputAdornment position="start"><LockIcon color="action" /></InputAdornment>),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowPortalPassword(!showPortalPassword)} edge="end">
+                            {showPortalPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Confirmar senha do portal"
+                    type={showPortalPassword ? 'text' : 'password'}
+                    value={formData.confirmarSenhaPortal}
+                    onChange={(e) => setFormData({ ...formData, confirmarSenhaPortal: e.target.value })}
+                    required={!selectedCliente}
+                    disabled={Boolean(selectedCliente?.authUid)}
+                    error={Boolean(formData.confirmarSenhaPortal && formData.senhaPortal !== formData.confirmarSenhaPortal)}
+                    helperText={formData.confirmarSenhaPortal && formData.senhaPortal !== formData.confirmarSenhaPortal ? 'As senhas não conferem' : ''}
+                    size="small"
+                    InputProps={{
+                      startAdornment: (<InputAdornment position="start"><LockIcon color="action" /></InputAdornment>),
+                    }}
+                  />
+                </Grid>
+              </Grid>
+            </TabPanel>
+
+            <TabPanel value={tabValue} index={2}>
               <EnderecoForm
                 endereco={{
                   cep: formData.cep,
@@ -1411,7 +1527,7 @@ function ModernClientes() {
               />
             </TabPanel>
 
-            <TabPanel value={tabValue} index={2}>
+            <TabPanel value={tabValue} index={3}>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
                   <TextField fullWidth label="Profissional Preferido" value={formData.preferencias.profissionalPreferido} onChange={(e) => setFormData({ ...formData, preferencias: { ...formData.preferencias, profissionalPreferido: e.target.value } })} size="small" />

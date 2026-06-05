@@ -1,5 +1,6 @@
 // src/pages/ModernConfiguracoes.js
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -101,6 +102,8 @@ import { firebaseService } from '../services/firebase';
 import { masks, MaskedInput } from '../utils/plugins';
 import { backupService } from '../services/backupService';
 import { collection, getDocs, deleteDoc, doc, writeBatch, db } from '../services/firebase';
+import SaasGestao from './SaasGestao';
+import { notificarFidelidadeConfigAtualizada } from '../hooks/useFidelidadeAtiva';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (
@@ -113,6 +116,38 @@ const LoadingSpinner = () => (
     </motion.div>
   </Box>
 );
+
+
+const CONFIG_TAB_INDEX = {
+  salao: 0,
+  horario: 1,
+  notificacoes: 2,
+  aparencia: 3,
+  fidelidade: 4,
+  backup: 5,
+  limpeza: 6,
+  empresa: 7,
+};
+
+const EMPRESA_TAB_INDEX = {
+  dados: 0,
+  empresa: 0,
+  unidades: 1,
+  assinatura: 3,
+  cobranca: 4,
+  site: 5,
+};
+
+const getConfigTabFromSearch = (search = '') => {
+  const tab = new URLSearchParams(search).get('tab');
+  return CONFIG_TAB_INDEX[tab] ?? 0;
+};
+
+const getEmpresaTabFromSearch = (search = '') => {
+  const tab = new URLSearchParams(search).get('empresaTab');
+  const parsedTab = Number(tab || 0);
+  return EMPRESA_TAB_INDEX[tab] ?? (Number.isNaN(parsedTab) ? 0 : parsedTab);
+};
 
 function TabPanel({ children, value, index }) {
   return (
@@ -194,10 +229,12 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
 };
 
 function ModernConfiguracoes() {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(() => getConfigTabFromSearch(window.location.search));
+  const [empresaInitialTab, setEmpresaInitialTab] = useState(() => getEmpresaTabFromSearch(window.location.search));
   const [config, setConfig] = useState(null);
   const [backup, setBackup] = useState(null);
   const [error, setError] = useState(null);
@@ -368,6 +405,13 @@ function ModernConfiguracoes() {
     carregarConfiguracoes();
   }, []);
 
+  useEffect(() => {
+    const nextTab = getConfigTabFromSearch(location.search);
+    const nextEmpresaTab = getEmpresaTabFromSearch(location.search);
+    setTabValue(nextTab);
+    setEmpresaInitialTab(nextEmpresaTab);
+  }, [location.search]);
+
   // Carregar configurações de fidelidade
   useEffect(() => {
     const carregarFidelidadeConfig = async () => {
@@ -511,6 +555,7 @@ function ModernConfiguracoes() {
         });
       }
       
+      notificarFidelidadeConfigAtualizada(fidelidadeConfig);
       mostrarSnackbar('Configurações de fidelidade salvas!', 'success');
     } catch (error) {
       console.error('Erro ao salvar fidelidade:', error);
@@ -1005,6 +1050,7 @@ function ModernConfiguracoes() {
             <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
             <Tab icon={<CleanIcon />} label="Limpeza" />
+            <Tab icon={<BusinessIcon />} label="Minha Empresa" />
           </Tabs>
 
           {/* Dados do Salão */}
@@ -1240,6 +1286,11 @@ function ModernConfiguracoes() {
                 />
               </Grid>
             </Grid>
+          </TabPanel>
+
+          {/* Gestão SaaS da empresa */}
+          <TabPanel value={tabValue} index={7}>
+            <SaasGestao initialTab={empresaInitialTab} embedded />
           </TabPanel>
 
           {/* Horário de Funcionamento */}

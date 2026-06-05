@@ -142,6 +142,7 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  HelpCenter as HelpCenterIcon,
   Close as CloseIcon,
   EmojiEvents as EmojiEventsIcon,
   CardGiftcard as CardGiftcardIcon,
@@ -173,6 +174,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
@@ -536,35 +538,35 @@ const menuGroups = [
       {
         text: 'Empresa',
         icon: <BusinessIcon />,
-        path: '/empresa',
+        path: '/configuracoes?tab=empresa&empresaTab=dados',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Unidades',
         icon: <ApartmentIcon />,
-        path: '/empresa/unidades',
+        path: '/configuracoes?tab=empresa&empresaTab=unidades',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Assinatura',
         icon: <WorkspacePremiumIcon />,
-        path: '/empresa/assinatura',
+        path: '/configuracoes?tab=empresa&empresaTab=assinatura',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Cobrança SaaS',
         icon: <PaymentsIcon />,
-        path: '/empresa/cobranca',
+        path: '/configuracoes?tab=empresa&empresaTab=cobranca',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Página inicial',
         icon: <LanguageIcon />,
-        path: '/empresa/site',
+        path: '/configuracoes?tab=empresa&empresaTab=site',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
@@ -589,6 +591,12 @@ const menuGroups = [
         cargos: ['admin', 'gerente']
       },
       { 
+        text: 'Manual do Sistema',
+        icon: <HelpCenterIcon />,
+        path: '/manual',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
+      },
+      {
         text: 'Backup', 
         icon: <BackupIcon />, 
         path: '/backup', 
@@ -781,8 +789,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         <Collapse in={isOpen} timeout="auto" unmountOnExit>
           <List component="div" disablePadding>
             {group.items.map((item) => {
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/' && location.pathname.startsWith(item.path));
+              const itemPath = item.path?.split('?')[0] || '';
+              const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+              const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
               return (
                 <motion.div
@@ -1087,8 +1097,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {group.items.map((item) => {
-                        const isActive = location.pathname === item.path ||
-                          (item.path !== '/' && location.pathname.startsWith(item.path));
+                        const itemPath = item.path?.split('?')[0] || '';
+                        const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                        const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                          (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
                         return (
                           <motion.div
@@ -1159,7 +1171,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   </Tooltip>
 
                   {group.items.slice(0, 2).map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const itemPath = item.path?.split('?')[0] || '';
+                    const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                    const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
                     return (
                       <Tooltip key={item.text} title={item.text} placement="right">
                         <IconButton
@@ -1233,6 +1247,7 @@ function ModernSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
   const [recursosPlano, setRecursosPlano] = useState([]);
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1331,8 +1346,8 @@ function ModernSidebar() {
     if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
     if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
     if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
-    if (path.includes('/empresa/unidades')) return 'multiunidades';
-    if (path.includes('/empresa/site')) return 'site_publico';
+    if (path.includes('/empresa/unidades') || path.includes('empresaTab=unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site') || path.includes('empresaTab=site')) return 'site_publico';
     return null;
   };
 
@@ -1347,6 +1362,7 @@ function ModernSidebar() {
     if (!usuario) return false;
 
     if (!recursoLiberadoNoPlano(item)) return false;
+    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) return false;
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);
@@ -1388,10 +1404,12 @@ function ModernSidebar() {
   };
 
   const isGroupActive = (group) => {
-    return group.items.some(item =>
-      location.pathname === item.path ||
-      (item.path !== '/' && location.pathname.startsWith(item.path))
-    );
+    return group.items.some(item => {
+      const itemPath = item.path?.split('?')[0] || '';
+      const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+      return (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+        (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
+    });
   };
 
   // Abrir grupo automaticamente se um item estiver ativo
@@ -1410,7 +1428,7 @@ function ModernSidebar() {
     if (changed) {
       setOpenGroups(newOpenGroups);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups
