@@ -7,9 +7,17 @@
       "config": {
         "distDir": "build"
       }
+    },
+    {
+      "src": "api/saas-checkout.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/saas-checkout/?$",
+      "dest": "/api/saas-checkout.js"
+    },
     {
       "handle": "filesystem"
     },

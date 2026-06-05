@@ -51,12 +51,14 @@ import {
   CalendarToday as CalendarIcon,
   Menu as MenuIcon,
   ArrowBack as ArrowBackIcon,
+  Refresh as RefreshIcon,
+  Apartment as ApartmentIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, getTenantContext, setTenantContext } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 import { notificacoesService } from '../services/notificacoesService';
 
@@ -93,9 +95,14 @@ const getBrasiliaTime = () => {
 const Search = styled('div')(({ theme, isMobile }) => ({
   position: 'relative',
   borderRadius: theme.shape.borderRadius * 3,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  backgroundColor: theme.palette.mode === 'dark'
+    ? alpha(theme.palette.common.white, 0.08)
+    : alpha(theme.palette.primary.main, 0.06),
+  border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.18 : 0.12)}`,
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
+    backgroundColor: theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.white, 0.12)
+      : alpha(theme.palette.primary.main, 0.1),
   },
   marginRight: theme.spacing(2),
   marginLeft: isMobile ? theme.spacing(1) : theme.spacing(3),
@@ -318,6 +325,9 @@ function ModernHeader() {
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unidades, setUnidades] = useState([]);
+  const [unidadeAtualId, setUnidadeAtualId] = useState('');
+  const [loadingUnidades, setLoadingUnidades] = useState(false);
   
   // 🔥 REFS PARA CONTROLE
   const isMounted = useRef(true);
@@ -337,6 +347,9 @@ function ModernHeader() {
   const lastSearchTerm = useRef('');
   const abortControllerRef = useRef(null);
   const searchInputRef = useRef(null);
+  const searchDataCacheRef = useRef({ data: null, timestamp: 0 });
+  const searchRequestIdRef = useRef(0);
+  const MIN_SEARCH_CHARS = 2;
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -360,16 +373,48 @@ function ModernHeader() {
     }
   };
 
+  const carregarUnidades = useCallback(async () => {
+    const user = usuariosService.getUsuarioAtual();
+    const tenant = getTenantContext();
+    const empresaId = user?.empresaId || user?.tenantId || user?.empresa?.id || tenant.empresaId;
+
+    if (!empresaId) {
+      setUnidades([]);
+      setUnidadeAtualId('');
+      return;
+    }
+
+    setLoadingUnidades(true);
+    try {
+      const data = await firebaseService.query('unidades', [
+        { field: 'empresaId', operator: '==', value: empresaId }
+      ]).catch(() => []);
+      const unidadesAtivas = (data || [])
+        .filter((unidade) => unidade.ativo !== false)
+        .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
+      setUnidades(unidadesAtivas);
+      setUnidadeAtualId(tenant.unidadeId || user?.unidadeId || '');
+    } catch (error) {
+      console.error('Header - Erro ao carregar unidades:', error);
+      setUnidades([]);
+    } finally {
+      setLoadingUnidades(false);
+    }
+  }, []);
+
   useEffect(() => {
     carregarUsuario();
+    carregarUnidades();
 
     const handleUsuarioAtualizado = () => {
       carregarUsuario();
+      carregarUnidades();
     };
 
     const handleStorageChange = (e) => {
       if (e.key === 'usuario') {
         carregarUsuario();
+        carregarUnidades();
       }
     };
 
@@ -386,30 +431,30 @@ function ModernHeader() {
   const carregarNotificacoes = useCallback(async (force = false) => {
     const user = usuariosService.getUsuarioAtual();
     const userId = user?.uid || user?.id;
-    
+
     if (!userId) {
-      console.log('❌ Header - Nenhum usuário logado');
+      setNotifications([]);
+      setUnreadCount(0);
       return;
     }
 
     try {
-      console.log(`📥 Header - Carregando notificações para ${userId}${force ? ' (forçado)' : ''}`);
-      
-      // Timeout para evitar travamento
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 5000)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout ao carregar notificações')), force ? 6000 : 4000)
       );
 
-      const dataPromise = notificacoesService.listar(userId);
-      const data = await Promise.race([dataPromise, timeoutPromise]);
-      
-      if (isMounted.current) {
-        console.log(`✅ Header - ${data.length} notificações carregadas`);
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.lida).length);
-      }
+      const data = await Promise.race([notificacoesService.listar(userId), timeoutPromise]);
+      if (!isMounted.current) return;
+
+      const notificacoesNormalizadas = Array.from(new Map((data || [])
+        .filter((item) => item && item.id)
+        .map((item) => [item.id, { ...item, lida: Boolean(item.lida) }])
+      ).values()).sort((a, b) => new Date(b.data || b.createdAt || 0) - new Date(a.data || a.createdAt || 0));
+
+      setNotifications(notificacoesNormalizadas);
+      setUnreadCount(notificacoesNormalizadas.filter((n) => !n.lida).length);
     } catch (error) {
-      console.error('❌ Header - Erro ao carregar notificações:', error);
+      console.error('Header - Erro ao carregar notificações:', error);
     }
   }, []);
 
@@ -454,14 +499,22 @@ function ModernHeader() {
     }
   }, [usuario, carregarNotificacoes]);
 
-  // 🔥 LOG DE DIAGNÓSTICO
-  useEffect(() => {
-    console.log('🔍 Header - Estado atual:', {
-      usuario: usuario?.uid || usuario?.id,
-      notifications: notifications.length,
-      unreadCount
-    });
-  }, [notifications, unreadCount, usuario]);
+  const carregarDadosBusca = async () => {
+    const cacheValido = searchDataCacheRef.current.data && (Date.now() - searchDataCacheRef.current.timestamp) < 60000;
+    if (cacheValido) return searchDataCacheRef.current.data;
+
+    const data = await Promise.all([
+      firebaseService.getAll('clientes').catch(() => []),
+      firebaseService.getAll('profissionais').catch(() => []),
+      firebaseService.getAll('servicos').catch(() => []),
+      firebaseService.getAll('produtos').catch(() => []),
+      firebaseService.getAll('agendamentos').catch(() => []),
+      firebaseService.getAll('atendimentos').catch(() => []),
+    ]);
+
+    searchDataCacheRef.current = { data, timestamp: Date.now() };
+    return data;
+  };
 
   // 🔥 FUNÇÃO DE BUSCA LIVRE - OTIMIZADA
   const realizarBusca = useCallback(async (termo) => {
@@ -471,7 +524,7 @@ function ModernHeader() {
 
     abortControllerRef.current = new AbortController();
 
-    if (!termo || termo.length < 1) {
+    if (!termo || termo.trim().length < MIN_SEARCH_CHARS) {
       setSearchResults([]);
       setSearchLoading(false);
       return;
@@ -483,22 +536,15 @@ function ModernHeader() {
     }
 
     setSearchLoading(true);
-    const termoLower = termo.toLowerCase();
+    const termoLower = termo.trim().toLowerCase();
     lastSearchTerm.current = termo;
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
 
     try {
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 5000)
+        setTimeout(() => reject(new Error('Timeout')), 3500)
       );
-
-      const buscaPromise = Promise.all([
-        firebaseService.getAll('clientes').catch(() => []),
-        firebaseService.getAll('profissionais').catch(() => []),
-        firebaseService.getAll('servicos').catch(() => []),
-        firebaseService.getAll('produtos').catch(() => []),
-        firebaseService.getAll('agendamentos').catch(() => []),
-        firebaseService.getAll('atendimentos').catch(() => []),
-      ]);
 
       const [
         clientesData,
@@ -507,9 +553,9 @@ function ModernHeader() {
         produtosData,
         agendamentosData,
         atendimentosData,
-      ] = await Promise.race([buscaPromise, timeoutPromise]);
+      ] = await Promise.race([carregarDadosBusca(), timeoutPromise]);
 
-      if (abortControllerRef.current?.signal.aborted) {
+      if (requestId !== searchRequestIdRef.current || abortControllerRef.current?.signal.aborted) {
         return;
       }
 
@@ -656,16 +702,18 @@ function ModernHeader() {
         return 0;
       });
 
-      setSearchResults(resultados.slice(0, limiteTotal));
+      if (requestId === searchRequestIdRef.current) {
+        setSearchResults(resultados.slice(0, limiteTotal));
+      }
     } catch (error) {
       if (error.message === 'Timeout') {
         console.error('Busca excedeu o tempo limite');
       } else if (error.name !== 'AbortError') {
         console.error('Erro na busca:', error);
       }
-      setSearchResults([]);
+      if (requestId === searchRequestIdRef.current) setSearchResults([]);
     } finally {
-      setSearchLoading(false);
+      if (requestId === searchRequestIdRef.current) setSearchLoading(false);
     }
   }, [isMobile]);
 
@@ -678,7 +726,7 @@ function ModernHeader() {
       clearTimeout(searchTimeout.current);
     }
 
-    if (value.length < 1) {
+    if (value.trim().length < MIN_SEARCH_CHARS) {
       setSearchResults([]);
       if (!isMobile) {
         setOpenSearch(false);
@@ -687,7 +735,7 @@ function ModernHeader() {
       return;
     }
 
-    if (!isMobile && value.length >= 1 && searchInputRef.current) {
+    if (!isMobile && value.trim().length >= MIN_SEARCH_CHARS && searchInputRef.current) {
       setSearchAnchorEl(searchInputRef.current);
       setOpenSearch(true);
     }
@@ -716,6 +764,9 @@ function ModernHeader() {
       setSearchAnchorEl(null);
     }
     setSearchResults([]);
+    setSearchLoading(false);
+    lastSearchTerm.current = '';
+    searchRequestIdRef.current += 1;
     
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -723,10 +774,6 @@ function ModernHeader() {
     
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-    }
-    
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
     }
   };
 
@@ -760,12 +807,12 @@ function ModernHeader() {
 
   // 🔥 RENDERIZAR RESULTADOS DA BUSCA
   const renderSearchResults = () => {
-    if (searchTerm.length < 1) {
+    if (searchTerm.trim().length < MIN_SEARCH_CHARS) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <SearchIcon sx={{ fontSize: isMobile ? 32 : 40, color: '#ccc', mb: 1 }} />
           <Typography variant="body2" color="textSecondary">
-            Digite para começar a buscar
+            Digite pelo menos 2 caracteres para buscar
           </Typography>
         </Box>
       );
@@ -938,6 +985,33 @@ function ModernHeader() {
     handleClose();
   };
 
+  const handleTrocarUnidade = (event) => {
+    const unidadeId = event.target.value;
+    const tenant = getTenantContext();
+    const unidadeSelecionada = unidades.find((item) => item.id === unidadeId) || null;
+    const user = usuariosService.getUsuarioAtual() || usuario || {};
+    const usuarioAtualizado = {
+      ...user,
+      unidadeId: unidadeSelecionada?.id || null,
+      unidadeNome: unidadeSelecionada?.nome || null,
+      unidade: unidadeSelecionada,
+    };
+
+    setTenantContext({
+      empresaId: tenant.empresaId || user.empresaId || user.empresa?.id,
+      empresa: tenant.empresa || user.empresa,
+      unidadeId: unidadeSelecionada?.id || null,
+      unidade: unidadeSelecionada,
+    });
+    localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+    setUsuario(usuarioAtualizado);
+    usuarioRef.current = usuarioAtualizado;
+    setUnidadeAtualId(unidadeId);
+    searchDataCacheRef.current = { data: null, timestamp: 0 };
+    window.dispatchEvent(new Event('usuarioAtualizado'));
+    toast.success(unidadeSelecionada ? `Unidade alterada para ${unidadeSelecionada.nome}` : 'Visualizando todas as unidades');
+  };
+
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -983,7 +1057,7 @@ function ModernHeader() {
           sx={{ 
             borderBottom: '1px solid rgba(0,0,0,0.08)',
             backdropFilter: 'blur(20px)',
-            backgroundColor: 'rgba(255,255,255,0.9)',
+            backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.92 : 0.9),
           }}
         >
           <Toolbar sx={{ minHeight: 56, px: 1 }}>
@@ -1121,7 +1195,7 @@ function ModernHeader() {
             </Typography>
             <Box>
               <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar">
-                <SearchIcon fontSize="small" />
+                <RefreshIcon fontSize="small" />
               </IconButton>
               <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas">
                 <DoneAllIcon fontSize="small" />
@@ -1200,7 +1274,7 @@ function ModernHeader() {
       sx={{ 
         borderBottom: '1px solid rgba(0,0,0,0.08)',
         backdropFilter: 'blur(20px)',
-        backgroundColor: 'rgba(255,255,255,0.9)',
+        backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.92 : 0.9),
       }}
     >
       <Toolbar>
@@ -1285,6 +1359,24 @@ function ModernHeader() {
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <RelogioDigital isMobile={false} />
 
+          {unidades.length > 1 && (
+            <TextField
+              select
+              size="small"
+              value={unidadeAtualId}
+              onChange={handleTrocarUnidade}
+              disabled={loadingUnidades}
+              label="Unidade"
+              sx={{ minWidth: 190, display: { xs: 'none', lg: 'block' } }}
+              InputProps={{ startAdornment: <ApartmentIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> }}
+            >
+              <MenuItem value="">Todas as unidades</MenuItem>
+              {unidades.map((unidade) => (
+                <MenuItem key={unidade.id} value={unidade.id}>{unidade.nome}</MenuItem>
+              ))}
+            </TextField>
+          )}
+
           {/* Notificações */}
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
             <IconButton color="inherit" onClick={handleNotificationsOpen}>
@@ -1335,7 +1427,7 @@ function ModernHeader() {
             </Typography>
             <Box>
               <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar">
-                <SearchIcon fontSize="small" />
+                <RefreshIcon fontSize="small" />
               </IconButton>
               <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas">
                 <DoneAllIcon fontSize="small" />
