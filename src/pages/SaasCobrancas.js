@@ -1,7 +1,8 @@
 // src/pages/SaasCobrancas.js
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
-import { Autorenew as AutorenewIcon, Launch as LaunchIcon, Payments as PaymentsIcon, ReceiptLong as ReceiptLongIcon } from '@mui/icons-material';
+import { Autorenew as AutorenewIcon, Launch as LaunchIcon, Payments as PaymentsIcon } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-hot-toast';
 import firebaseService from '../services/firebase';
 import { metodoPagamentoLabel, saasService } from '../services/saasService';

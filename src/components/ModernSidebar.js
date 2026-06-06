@@ -75,7 +75,6 @@ import {
   Assessment as AssessmentIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
-  ReceiptLong as ReceiptLongIcon,
   ReceiptOutlined as ReceiptOutlinedIcon,
   
   // Compras
@@ -174,6 +173,7 @@ import {
   SwapHoriz as SwapHorizIcon,
   SupportAgent as SupportAgentIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService, getTenantContext } from '../services/firebase';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
