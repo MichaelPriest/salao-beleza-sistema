@@ -126,6 +126,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
 import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -523,6 +524,8 @@ function ModernFinanceiro() {
         transacoesManuaisData,
         comissoesData,
         comprasData,
+        contasReceberData,
+        contasPagarData,
         caixaData,
         clientesData,
         fornecedoresData,
@@ -534,6 +537,8 @@ function ModernFinanceiro() {
         firebaseService.getAll('transacoes').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
         firebaseService.getAll('compras').catch(() => []),
+        firebaseService.getAll('contas_receber').catch(() => []),
+        firebaseService.getAll('contas_pagar').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
@@ -610,6 +615,7 @@ function ModernFinanceiro() {
         valorTotal: toNumber(c.valorTotal),
         status: toString(c.status, 'pendente'),
         dataCompra: safeToDateString(c.dataCompra) || safeToDateString(c.createdAt),
+        dataVencimento: safeToDateString(c.dataVencimento) || safeToDateString(c.prazoEntrega) || safeToDateString(c.dataCompra) || safeToDateString(c.createdAt),
         dataPagamento: toISOString(c.dataPagamento),
         formaPagamento: toString(c.formaPagamento, 'pix'),
         prazoEntrega: toString(c.prazoEntrega),
@@ -621,6 +627,8 @@ function ModernFinanceiro() {
       }));
       
       setCompras(comprasProcessadas);
+      const contasReceberProcessadas = contasReceberParaTransacoes(contasReceberData || []);
+      const contasPagarProcessadas = contasPagarParaTransacoes(contasPagarData || []);
       
       // Processar outros dados
       setClientes(clientesData || []);
@@ -691,8 +699,8 @@ function ModernFinanceiro() {
         descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
         valor: c.valorTotal,
         data: c.dataCompra,
-        dataVencimento: c.dataCompra,
-        categoria: 'Compras',
+        dataVencimento: c.dataVencimento || c.prazoEntrega || c.dataCompra,
+        categoria: c.categoriaFinanceira || 'Compras de estoque',
         formaPagamento: c.formaPagamento,
         status: c.status === 'pago' ? 'pago' : (c.status === 'cancelada' ? 'cancelado' : 'pendente'),
         fornecedorId: c.fornecedorId,
@@ -708,6 +716,8 @@ function ModernFinanceiro() {
 
       const todasTransacoes = [
         ...transacoesProcessadas,
+        ...contasReceberProcessadas,
+        ...contasPagarProcessadas,
         ...comissoesComoTransacoes,
         ...comprasComoTransacoes,
       ];

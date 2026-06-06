@@ -380,6 +380,8 @@ export const setTenantContext = ({ empresaId, empresa, unidadeId, unidade } = {}
     safeLocalStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(empresaContext));
   }
 
+  // Quando a unidade vem vazia/nula, o contexto passa a representar "todas as unidades".
+  // Isso remove a unidade anterior para que coleções por unidade sejam filtradas apenas por empresa.
   if (hasUnitSelection && unidadeContext) {
     safeLocalStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unidadeContext));
   } else {
@@ -573,7 +575,13 @@ const isDocumentVisibleInTenant = (collectionName, data) => {
 
   if (!isTenantScopedCollection(collectionName)) return true;
   if (!empresaId) return false;
-  if (!data.empresaId || data.empresaId !== empresaId) return false;
+
+  const documentEmpresaId = data.empresaId || data.empresa_id || data.tenantId || data.tenant_id || data.empresa?.id || null;
+  const idIndicaTenant = collectionName === 'clientes' && data.id && String(data.id).startsWith(`${empresaId}_`);
+
+  if (documentEmpresaId && String(documentEmpresaId) !== String(empresaId)) return false;
+  if (!documentEmpresaId && !idIndicaTenant) return false;
+
   if (unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
 
   return true;
@@ -614,6 +622,7 @@ const operatorMap = {
   ilike: 'ilike'
 };
 
+// FUNÇÃO CORRIGIDA - buildQueryString
 const buildQueryString = (collectionName, conditions = [], orderByField = null, { jsonData = true } = {}) => {
   const params = new URLSearchParams();
   params.append('select', '*');

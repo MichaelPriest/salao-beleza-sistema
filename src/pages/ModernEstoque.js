@@ -62,10 +62,12 @@ import {
   GridOn as GridIcon,
   ViewModule as ViewModuleIcon,
   LocationOn as LocationIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { registrarAlteracaoPrecoProduto } from '../services/produtosHistoricoService';
 import { useReactToPrint } from 'react-to-print';
 import {
   BarChart,
@@ -485,10 +487,13 @@ function ModernEstoque() {
   const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
   const [openMapaDialog, setOpenMapaDialog] = useState(false);
+  const [openHistoricoDialog, setOpenHistoricoDialog] = useState(false);
   
   // Selected items
   const [selectedProduto, setSelectedProduto] = useState(null);
   const [produtoToDelete, setProdutoToDelete] = useState(null);
+  const [produtoHistoricoSelecionado, setProdutoHistoricoSelecionado] = useState(null);
+  const [historicoPrecos, setHistoricoPrecos] = useState([]);
   const [categoriaEditando, setCategoriaEditando] = useState(null);
   
   // Pagination
@@ -600,15 +605,17 @@ function ModernEstoque() {
     try {
       setLoading(true);
       
-      const [produtosData, categoriasData, fornecedoresData] = await Promise.all([
+      const [produtosData, categoriasData, fornecedoresData, historicoData] = await Promise.all([
         firebaseService.getAll('produtos').catch(() => []),
         firebaseService.getAll('categorias_produtos').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
+        firebaseService.getAll('movimentacoes_estoque').catch(() => []),
       ]);
       
       setProdutos(produtosData || []);
       setCategorias(categoriasData || []);
       setFornecedores(fornecedoresData || []);
+      setHistoricoPrecos((historicoData || []).filter(item => item.tipo === 'alteracao_preco'));
       
       // Inicializar mapa
       inicializarMapa();
@@ -867,6 +874,20 @@ function ModernEstoque() {
     setOpenDeleteDialog(true);
   };
 
+  const handleOpenHistoricoPreco = (produto) => {
+    setProdutoHistoricoSelecionado(produto);
+    setOpenHistoricoDialog(true);
+  };
+
+  const handleCloseHistoricoPreco = () => {
+    setOpenHistoricoDialog(false);
+    setProdutoHistoricoSelecionado(null);
+  };
+
+  const getHistoricoProduto = (produtoId) => historicoPrecos
+    .filter(item => item.produtoId === produtoId)
+    .sort((a, b) => new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0));
+
   const confirmDelete = async () => {
     try {
       await firebaseService.delete('produtos', produtoToDelete);
@@ -935,12 +956,30 @@ function ModernEstoque() {
 
     try {
       if (selectedProduto) {
+        const produtoAtualizado = { ...selectedProduto, ...produtoData, id: selectedProduto.id };
+
         await firebaseService.update('produtos', selectedProduto.id, produtoData);
+
+        const historicoRegistrado = await registrarAlteracaoPrecoProduto({
+          produtoId: selectedProduto.id,
+          produtoNome: produtoData.nome,
+          produtoAnterior: selectedProduto,
+          produtoNovo: produtoAtualizado,
+          origem: 'cadastro_produto',
+          motivo: 'Alteração manual no cadastro de produto',
+          referenciaId: selectedProduto.id,
+          referenciaTipo: 'produto',
+        });
+
+        if (historicoRegistrado) {
+          setHistoricoPrecos(prev => [{ ...historicoRegistrado, id: historicoRegistrado.id || `local_${Date.now()}` }, ...prev]);
+        }
+
         const produtosAtualizados = produtos.map(p => 
-          p.id === selectedProduto.id ? { ...p, ...produtoData, id: selectedProduto.id } : p
+          p.id === selectedProduto.id ? produtoAtualizado : p
         );
         setProdutos(produtosAtualizados);
-        mostrarSnackbar('Produto atualizado com sucesso!');
+        mostrarSnackbar(historicoRegistrado ? 'Produto atualizado e histórico de preço registrado!' : 'Produto atualizado com sucesso!');
       } else {
         produtoData.dataCriacao = new Date().toISOString();
         const novoId = await firebaseService.add('produtos', produtoData);
@@ -1567,6 +1606,15 @@ function ModernEstoque() {
                                 <EditIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Histórico de preços">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenHistoricoPreco(produto)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <HistoryIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Excluir">
                               <IconButton 
                                 size="small" 
@@ -1609,6 +1657,63 @@ function ModernEstoque() {
           />
         </CardContent>
       </Card>
+
+      {/* Dialog de Histórico de Preços */}
+      <Dialog open={openHistoricoDialog} onClose={handleCloseHistoricoPreco} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+          Histórico de Preços - {produtoHistoricoSelecionado?.nome || 'Produto'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {produtoHistoricoSelecionado && getHistoricoProduto(produtoHistoricoSelecionado.id).length > 0 ? (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell><strong>Data</strong></TableCell>
+                    <TableCell><strong>Origem</strong></TableCell>
+                    <TableCell align="right"><strong>Custo</strong></TableCell>
+                    <TableCell align="right"><strong>Venda</strong></TableCell>
+                    <TableCell align="right"><strong>Margem</strong></TableCell>
+                    <TableCell><strong>Responsável</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {getHistoricoProduto(produtoHistoricoSelecionado.id).map((item, index) => (
+                    <TableRow key={item.id || index}>
+                      <TableCell>{new Date(item.createdAt || item.data).toLocaleString('pt-BR')}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {item.origem === 'compra_recebida' ? 'Compra recebida' : 'Cadastro'}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {item.motivo || item.documento || 'Alteração registrada'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        R$ {Number(item.precoCustoAnterior || 0).toFixed(2)} → R$ {Number(item.precoCustoNovo || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell align="right">
+                        R$ {Number(item.precoVendaAnterior || 0).toFixed(2)} → R$ {Number(item.precoVendaNovo || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell align="right">
+                        {Number(item.margemAnterior || 0).toFixed(1)}% → {Number(item.margemNova || 0).toFixed(1)}%
+                      </TableCell>
+                      <TableCell>{item.usuarioNome || 'Sistema'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Alert severity="info">
+              Ainda não há alterações de preço registradas para este produto. O histórico será criado automaticamente ao alterar preço de custo/venda ou ao receber compras com novo custo.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseHistoricoPreco}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog de Produto */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>

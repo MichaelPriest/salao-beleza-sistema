@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { toast } from 'react-hot-toast';
 import { saasService } from '../services/saasService';
+import { buscarClientePortalNoTenant, vincularAuthClientePortal } from '../services/clientePortalLookupService';
 import {
   consumeSupabaseAuthRedirect,
-  firebaseService,
   setTenantContext,
   setTenantContextFromUser,
 } from '../services/firebase';
@@ -63,12 +63,13 @@ function ClienteAuthCallback() {
 
         setTenantContext({ empresaId, empresa: { id: empresaId, nome: empresaNome } });
 
-        const clientes = await firebaseService.query('clientes', [
-          { field: 'email', operator: '==', value: user.email },
-          { field: 'empresaId', operator: '==', value: empresaId },
-        ]);
+        const clienteEncontrado = await buscarClientePortalNoTenant({
+          uid: user.id,
+          email: user.email,
+          empresaId,
+        });
 
-        if (!clientes?.length) {
+        if (!clienteEncontrado) {
           window.sessionStorage.setItem('pending_google_user', JSON.stringify({
             uid: user.id,
             email: user.email,
@@ -82,20 +83,11 @@ function ClienteAuthCallback() {
           return;
         }
 
-        const clienteEncontrado = clientes[0];
-        const dadosVinculo = {
-          authUid: user.id,
-          googleUid: user.id,
-          foto: clienteEncontrado.foto || user.user_metadata?.avatar_url || null,
-          ultimoAcesso: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        if (clienteEncontrado.authUid !== user.id || clienteEncontrado.googleUid !== user.id) {
-          await firebaseService.update('clientes', clienteEncontrado.id, dadosVinculo);
-        }
-
-        const clienteAtualizado = { ...clienteEncontrado, ...dadosVinculo };
+        const clienteAtualizado = await vincularAuthClientePortal(clienteEncontrado, {
+          uid: user.id,
+          provider: 'google',
+          foto: user.user_metadata?.avatar_url || null,
+        });
         localStorage.setItem('cliente', JSON.stringify(clienteAtualizado));
         setTenantContextFromUser(clienteAtualizado);
 
