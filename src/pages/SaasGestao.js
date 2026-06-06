@@ -35,7 +35,6 @@ import {
   DomainAdd as DomainAddIcon,
   Language as LanguageIcon,
   Launch as LaunchIcon,
-  ReceiptLong as ReceiptLongIcon,
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
