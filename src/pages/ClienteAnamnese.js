@@ -421,6 +421,20 @@ function ClienteAnamnese() {
   const entityId = atendimentoId || agendamentoId;
   const entityType = atendimentoId ? 'atendimento' : 'agendamento';
 
+  const getClienteIds = useCallback(() => Array.from(new Set([
+    firebaseUser?.uid,
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean))), [cliente, firebaseUser]);
+
+  const getServicoIds = (origem = {}) => Array.from(new Set([
+    origem.servicoId,
+    ...(origem.servicosIds || []),
+    ...(origem.servicoIds || []),
+    ...(origem.servicos || []).map((servico) => servico.id),
+  ].flat().filter(Boolean)));
+
   // ==========================================
   // FUNÇÕES DE BUSCA
   // ==========================================
@@ -485,8 +499,9 @@ function ClienteAnamnese() {
         const profissionalNome = agendamento.profissionalNome || 
           (agendamento.profissionalId ? await buscarProfissionalNome(agendamento.profissionalId) : 'Não informado');
         
-        const servicoNome = agendamento.servicoNome || 
-          (agendamento.servicoId ? await buscarServicoNome(agendamento.servicoId) : 'Serviço');
+        const servicoIds = getServicoIds(agendamento);
+        const nomesServicos = agendamento.servicosNomes || agendamento.servicoNome || await Promise.all(servicoIds.map(buscarServicoNome));
+        const servicoNome = Array.isArray(nomesServicos) ? nomesServicos.filter(Boolean).join(', ') : nomesServicos;
 
         atendimentoData = {
           id: agendamento.id,
@@ -494,8 +509,9 @@ function ClienteAnamnese() {
           clienteId: agendamento.clienteId,
           profissionalId: agendamento.profissionalId,
           profissionalNome: profissionalNome,
-          servicoId: agendamento.servicoId,
-          servicoNome: servicoNome,
+          servicoId: servicoIds[0],
+          servicosIds: servicoIds,
+          servicoNome: servicoNome || 'Serviço',
           data: agendamento.data,
           horaInicio: agendamento.horario,
         };
@@ -526,12 +542,18 @@ function ClienteAnamnese() {
         return;
       }
 
-      const formularios = await firebaseService
-        .query('formularios_anamnese', [
-          { field: 'servicoIds', operator: 'array-contains', value: atendimentoData.servicoId },
+      const servicoIdsAtendimento = getServicoIds(atendimentoData);
+      const formulariosPorServico = await Promise.all(servicoIdsAtendimento.flatMap((servicoId) => [
+        firebaseService.query('formularios_anamnese', [
+          { field: 'servicoIds', operator: 'array-contains', value: servicoId },
           { field: 'ativo', operator: '==', value: true },
-        ])
-        .catch(() => []);
+        ]).catch(() => []),
+        firebaseService.query('formularios_anamnese', [
+          { field: 'servicosIds', operator: 'array-contains', value: servicoId },
+          { field: 'ativo', operator: '==', value: true },
+        ]).catch(() => []),
+      ]));
+      const formularios = Array.from(new Map(formulariosPorServico.flat().map((item) => [item.id, item])).values());
 
       if (formularios.length > 0) {
         setFormulario(formularios[0]);
@@ -670,7 +692,11 @@ function ClienteAnamnese() {
     try {
       setEnviando(true);
 
-      const uid = firebaseUser?.uid || cliente?.id;
+      const uid = getClienteIds()[0];
+      if (!uid) {
+        toast.error('Cliente não identificado. Faça login novamente.');
+        return;
+      }
 
       const respostasVisiveis = Object.entries(respostas).filter(
         ([perguntaId]) => camposCondicionais[perguntaId] !== false
@@ -694,6 +720,7 @@ function ClienteAnamnese() {
         profissionalId: atendimento?.profissionalId,
         profissionalNome: atendimento?.profissionalNome || 'Não informado',
         servicoId: atendimento?.servicoId,
+        servicosIds: getServicoIds(atendimento),
         servicoNome: atendimento?.servicoNome,
         status: 'respondido',
         respostas: respostasFormatadas,
