@@ -38,6 +38,12 @@ function ClienteHistorico() {
     servicosFavoritos: [],
   });
 
+  const getClienteIds = () => Array.from(new Set([
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean)));
+
   useEffect(() => {
     if (cliente) {
       carregarHistorico();
@@ -48,9 +54,13 @@ function ClienteHistorico() {
     try {
       setLoading(true);
 
-      const atendimentosData = await firebaseService.query('atendimentos', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ], 'data', 'desc');
+      const idsCliente = getClienteIds();
+      const atendimentosPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('atendimentos', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'data', 'desc')
+      ));
+      const atendimentosData = Array.from(new Map(atendimentosPorId.flat().map((item) => [item.id, item])).values());
 
       setAtendimentos(atendimentosData || []);
 
