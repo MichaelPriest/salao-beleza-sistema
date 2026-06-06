@@ -183,12 +183,16 @@ function ModernLogin() {
 
     try {
       const result = await login(formData.email, formData.senha);
-      if (result?.success) {
-        navigate('/dashboard');
-      } else {
-        setErrorType('error');
-        setError(result?.error || 'Erro ao fazer login');
+      const usuarioLogado = result?.data || result?.user || result;
+
+      if (result?.success || usuarioLogado?.id || usuarioLogado?.uid || usuarioLogado?.email) {
+        toast.success(`Bem-vindo, ${usuarioLogado?.nome || usuarioLogado?.email || 'usuário'}!`);
+        navigate('/dashboard', { replace: true });
+        return;
       }
+
+      setErrorType('error');
+      setError(result?.error || 'Erro ao fazer login');
     } catch (error) {
       console.error('Erro no login:', error);
       setErrorType('error');
