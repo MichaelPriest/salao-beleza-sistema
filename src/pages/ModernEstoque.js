@@ -609,13 +609,13 @@ function ModernEstoque() {
         firebaseService.getAll('produtos').catch(() => []),
         firebaseService.getAll('categorias_produtos').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
-        firebaseService.getAll('historico_precos_produtos').catch(() => []),
+        firebaseService.getAll('movimentacoes_estoque').catch(() => []),
       ]);
       
       setProdutos(produtosData || []);
       setCategorias(categoriasData || []);
       setFornecedores(fornecedoresData || []);
-      setHistoricoPrecos(historicoData || []);
+      setHistoricoPrecos((historicoData || []).filter(item => item.tipo === 'alteracao_preco'));
       
       // Inicializar mapa
       inicializarMapa();
@@ -873,6 +873,20 @@ function ModernEstoque() {
     setProdutoToDelete(id);
     setOpenDeleteDialog(true);
   };
+
+  const handleOpenHistoricoPreco = (produto) => {
+    setProdutoHistoricoSelecionado(produto);
+    setOpenHistoricoDialog(true);
+  };
+
+  const handleCloseHistoricoPreco = () => {
+    setOpenHistoricoDialog(false);
+    setProdutoHistoricoSelecionado(null);
+  };
+
+  const getHistoricoProduto = (produtoId) => historicoPrecos
+    .filter(item => item.produtoId === produtoId)
+    .sort((a, b) => new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0));
 
   const confirmDelete = async () => {
     try {

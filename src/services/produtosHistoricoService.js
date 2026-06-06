@@ -78,21 +78,21 @@ export const registrarAlteracaoPrecoProduto = async (params = {}) => {
 
   const historico = montarHistoricoPreco(params);
 
+  const historicoComoMovimentacao = {
+    ...historico,
+    tipo: 'alteracao_preco',
+    quantidade: 0,
+    data: historico.createdAt,
+    saldo: toNumber(produtoNovo.quantidadeEstoque || produtoAnterior.quantidadeEstoque),
+    observacoes: historico.motivo,
+  };
+
   try {
-    const id = await firebaseService.add('historico_precos_produtos', historico);
-    return { ...historico, id };
+    const id = await firebaseService.add('movimentacoes_estoque', historicoComoMovimentacao);
+    return { ...historicoComoMovimentacao, id };
   } catch (error) {
-    console.warn('Erro ao registrar histórico de preço em tabela dedicada. Registrando fallback em movimentações:', error);
-    await firebaseService.add('movimentacoes_estoque', {
-      ...historico,
-      tipo: 'alteracao_preco',
-      quantidade: 0,
-      data: historico.createdAt,
-      saldo: toNumber(produtoNovo.quantidadeEstoque || produtoAnterior.quantidadeEstoque),
-    }).catch((fallbackError) => {
-      console.warn('Erro ao registrar fallback do histórico de preço:', fallbackError);
-    });
-    return historico;
+    console.warn('Erro ao registrar histórico de preço em movimentações:', error);
+    return historicoComoMovimentacao;
   }
 };
 
