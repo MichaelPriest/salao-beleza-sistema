@@ -1375,7 +1375,10 @@ function ModernSidebar() {
     if (!usuario) return false;
 
     if (!recursoLiberadoNoPlano(item)) return false;
-    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) return false;
+    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) {
+      const podeConfigurarFidelidade = item.path === '/fidelidade' && ['admin', 'gerente'].includes(usuario.cargo);
+      if (!podeConfigurarFidelidade) return false;
+    }
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);

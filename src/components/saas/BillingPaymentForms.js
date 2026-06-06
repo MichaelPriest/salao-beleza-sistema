@@ -29,7 +29,8 @@ const updateNested = (value, section, patch) => ({
 function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
   const config = value || {};
   const isTenant = mode === 'tenant';
-  const provider = config.provider || 'manual';
+  const provedoresAutomaticos = PROVEDORES_COBRANCA.filter((provedor) => provedor.id !== 'manual');
+  const provider = config.provider && config.provider !== 'manual' ? config.provider : provedoresAutomaticos[0]?.id || 'stripe';
   const metodos = config.metodosPagamento || { card: true, pix: true, boleto: true };
 
   const setConfig = (patch) => onChange({ ...config, ...patch });
@@ -90,7 +91,7 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
     <Grid container spacing={2}>
       <Grid item xs={12} md={4}>
         <TextField select fullWidth label="Gateway padrão" value={provider} onChange={(e) => setConfig({ provider: e.target.value })}>
-          {PROVEDORES_COBRANCA.map((provedor) => <MenuItem key={provedor.id} value={provedor.id}>{provedor.nome}</MenuItem>)}
+          {provedoresAutomaticos.map((provedor) => <MenuItem key={provedor.id} value={provedor.id}>{provedor.nome}</MenuItem>)}
         </TextField>
       </Grid>
       <Grid item xs={12} md={4}>
@@ -101,10 +102,10 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
       </Grid>
 
       <Grid item xs={12} md={4}>
-        <FormControlLabel control={<Switch checked={Boolean(config.modoAutomatico)} onChange={(e) => setConfig({ modoAutomatico: e.target.checked })} />} label="Checkout automático" />
+        <FormControlLabel control={<Switch checked disabled />} label="Checkout automático sempre ativo" />
       </Grid>
       <Grid item xs={12} md={4}>
-        <FormControlLabel control={<Switch checked={Boolean(config.gerarFaturaAutomaticamente)} onChange={(e) => setConfig({ gerarFaturaAutomaticamente: e.target.checked })} />} label="Gerar faturas automaticamente" />
+        <FormControlLabel control={<Switch checked disabled />} label="Faturas automáticas sempre ativas" />
       </Grid>
       <Grid item xs={12} md={4}>
         <TextField select fullWidth label="Ambiente PagSeguro/PagBank" value={config.pagseguro?.environment || 'sandbox'} onChange={(e) => setSection('pagseguro', { environment: e.target.value })}>
@@ -176,14 +177,14 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
       )}
 
       <Grid item xs={12}>
-        <TextField fullWidth multiline minRows={2} label="Instruções de cobrança manual" value={config.instrucoesManual || ''} onChange={(e) => setConfig({ instrucoesManual: e.target.value })} />
+        <TextField fullWidth multiline minRows={2} label="Mensagem de fallback quando o gateway não retornar link" value={config.instrucoesManual || ''} onChange={(e) => setConfig({ instrucoesManual: e.target.value })} />
       </Grid>
 
       <Grid item xs={12}>
         <Alert severity={isTenant ? 'info' : 'warning'}>
           {isTenant
             ? 'A empresa pode escolher preferências de cobrança, formas de pagamento e dados para cartão/PIX/boleto. O checkout real usa o gateway ativo da plataforma.'
-            : 'Chaves secret continuam somente no servidor/Vercel. Esta tela salva preferências, caminhos, métodos e metadados públicos do gateway.'}
+            : 'Chaves secret continuam somente no servidor/Vercel. Esta tela salva preferências públicas do gateway; a geração de faturas e a baixa de pagamentos seguem o fluxo automático do sistema.'}
         </Alert>
       </Grid>
     </Grid>

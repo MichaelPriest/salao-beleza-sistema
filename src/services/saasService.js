@@ -137,6 +137,18 @@ const addDays = (date, days) => {
   return result;
 };
 
+const addMonths = (date, months = 1) => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+};
+
+const getPeriodoReferencia = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 7);
+  return date.toISOString().slice(0, 7);
+};
+
 const getUsuarioAtual = () => {
   try {
     return JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -220,6 +232,9 @@ export const saasService = {
       ...configAtual,
       ...config,
       id: BILLING_CONFIG_ID,
+      provider: config?.provider && config.provider !== 'manual' ? config.provider : (configAtual.provider !== 'manual' ? configAtual.provider : 'stripe'),
+      modoAutomatico: true,
+      gerarFaturaAutomaticamente: true,
       updatedAt: agora,
       // Nunca salvar chaves secret no documento público; elas ficam apenas nas variáveis do servidor.
       stripe: stripeConfig,
@@ -491,7 +506,7 @@ export const saasService = {
     return registrar(data);
   },
 
-  criarFatura: async ({ empresaId = getTenantContext().empresaId, assinaturaId, valor, vencimentoEm, descricao, provider = null, metodoPagamento = null, metodosPagamento = null, dadosCobranca = null } = {}) => {
+  criarFatura: async ({ empresaId = getTenantContext().empresaId, assinaturaId, valor, vencimentoEm, descricao, provider = null, metodoPagamento = null, metodosPagamento = null, dadosCobranca = null, origem = 'automatica', periodoReferencia = null } = {}) => {
     if (!empresaId) throw new Error('Empresa não selecionada.');
     const empresa = await firebaseService.getById('empresas', empresaId).catch(() => getTenantContext().empresa || null);
     const configCobranca = await saasService.buscarConfigCobranca();
@@ -510,6 +525,9 @@ export const saasService = {
       dadosCobranca: perfilCobranca.dadosCobranca,
       moeda: 'BRL',
       status: 'aberta',
+      origem,
+      geradaAutomaticamente: origem !== 'manual',
+      periodoReferencia: periodoReferencia || getPeriodoReferencia(vencimentoEm || agora),
       descricao: descricao || 'Mensalidade SaaS',
       vencimentoEm,
       createdAt: agora,
@@ -557,25 +575,56 @@ export const saasService = {
 
   gerarFaturasMensais: async ({ assinaturas = [], empresas = [], vencimentoEm = null } = {}) => {
     const empresasPorId = empresas.reduce((acc, empresa) => ({ ...acc, [empresa.id]: empresa }), {});
+    const configCobranca = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
+    const faturasExistentes = await firebaseService.getAll('faturas_saas').catch(() => []);
     const abertas = [];
+    const limiteGeracao = addDays(new Date(), Number(configCobranca.diasAntesVencimento || 0));
 
     for (const assinatura of assinaturas) {
-      if (![STATUS_ASSINATURA.TRIAL, STATUS_ASSINATURA.ATIVA].includes(assinatura.status)) continue;
+      if (![STATUS_ASSINATURA.TRIAL, STATUS_ASSINATURA.ATIVA, STATUS_ASSINATURA.PENDENTE].includes(assinatura.status)) continue;
       const empresaId = assinatura.empresaId || assinatura.id;
       const empresa = empresasPorId[empresaId];
       if (!empresaId || !empresa) continue;
 
+      const vencimento = new Date(vencimentoEm || assinatura.proximaCobrancaEm || addDays(new Date(), 7).toISOString());
+      if (!vencimentoEm && vencimento > limiteGeracao) continue;
+
+      const assinaturaId = assinatura.id || empresaId;
+      const periodoReferencia = getPeriodoReferencia(vencimento);
+      const jaExiste = faturasExistentes.some((fatura) => (
+        fatura.empresaId === empresaId
+        && (fatura.assinaturaId || empresaId) === assinaturaId
+        && fatura.periodoReferencia === periodoReferencia
+        && fatura.status !== 'cancelada'
+      ));
+      if (jaExiste) continue;
+
       const fatura = await saasService.criarFatura({
         empresaId,
-        assinaturaId: assinatura.id || empresaId,
+        assinaturaId,
         valor: assinatura.valorMensal || 0,
-        vencimentoEm: vencimentoEm || assinatura.proximaCobrancaEm || addDays(new Date(), 7).toISOString(),
-        descricao: `Mensalidade SaaS - ${empresa.nome || empresaId}`
+        vencimentoEm: vencimento.toISOString(),
+        descricao: `Mensalidade SaaS - ${empresa.nome || empresaId}`,
+        origem: 'automatica',
+        periodoReferencia
       });
       abertas.push(fatura);
+
+      await firebaseService.update('assinaturas', assinaturaId, {
+        ultimaFaturaEm: new Date().toISOString(),
+        proximaCobrancaEm: addMonths(vencimento, 1).toISOString(),
+        status: assinatura.status === STATUS_ASSINATURA.TRIAL ? STATUS_ASSINATURA.PENDENTE : assinatura.status,
+        updatedAt: new Date().toISOString()
+      }).catch(() => {});
     }
 
     return abertas;
+  },
+
+  processarCobrancasAutomaticas: async ({ assinaturas = [], empresas = [] } = {}) => {
+    const assinaturasBase = assinaturas.length > 0 ? assinaturas : await firebaseService.getAll('assinaturas').catch(() => []);
+    const empresasBase = empresas.length > 0 ? empresas : await firebaseService.getAll('empresas').catch(() => []);
+    return saasService.gerarFaturasMensais({ assinaturas: assinaturasBase, empresas: empresasBase });
   },
 
   registrarEventoCobranca: async ({ empresaId, tipo, payload, gateway = 'manual' }) => {

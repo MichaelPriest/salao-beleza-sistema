@@ -33,7 +33,6 @@ import {
   DomainAdd as DomainAddIcon,
   Language as LanguageIcon,
   Launch as LaunchIcon,
-  ReceiptLong as ReceiptLongIcon,
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
@@ -89,7 +88,6 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
-  const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
   const [portalForm, setPortalForm] = useState({
     slug: '',
     titulo: '',
@@ -407,49 +405,6 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     }
   };
 
-  const criarFatura = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      await saasService.criarFatura({
-        valor: Number(faturaForm.valor || planoAtual.precoMensal || 0),
-        vencimentoEm: faturaForm.vencimentoEm,
-        descricao: faturaForm.descricao,
-        provider: paymentConfig.provider,
-        metodoPagamento: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
-        metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
-        dadosCobranca: paymentConfig.dadosCobranca || {},
-      });
-      setFaturaForm({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
-      toast.success('Fatura criada.');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao criar fatura:', error);
-      toast.error(error.message || 'Erro ao criar fatura.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmarPagamento = async (fatura) => {
-    setSaving(true);
-    try {
-      await saasService.registrarPagamento({
-        faturaId: fatura.id,
-        valor: fatura.valor,
-        gateway: fatura.gateway || 'manual',
-        metodoPagamento: fatura.metodoPagamento,
-      });
-      toast.success('Pagamento confirmado.');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao confirmar pagamento:', error);
-      toast.error(error.message || 'Erro ao confirmar pagamento.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
@@ -655,20 +610,12 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent component="form" onSubmit={criarFatura}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Criar fatura manual</Typography>
-                <Stack spacing={2}>
-                  <TextField label="Valor" type="number" value={faturaForm.valor} onChange={(e) => setFaturaForm({ ...faturaForm, valor: e.target.value })} placeholder={String(planoAtual?.precoMensal || '')} />
-                  <TextField label="Vencimento" type="datetime-local" InputLabelProps={{ shrink: true }} value={faturaForm.vencimentoEm} onChange={(e) => setFaturaForm({ ...faturaForm, vencimentoEm: e.target.value })} />
-                  <TextField label="Descrição" value={faturaForm.descricao} onChange={(e) => setFaturaForm({ ...faturaForm, descricao: e.target.value })} />
-                  <Button type="submit" variant="contained" disabled={saving} startIcon={<ReceiptLongIcon />}>Criar fatura</Button>
-                </Stack>
-              </CardContent>
-            </Card>
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              As cobranças do SaaS são geradas automaticamente pela rotina do sistema com base na assinatura, plano, vencimento e método de pagamento configurado. A criação manual de faturas foi removida para evitar divergências financeiras.
+            </Alert>
           </Grid>
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -689,7 +636,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                       <TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell>
                       <TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell>
                       <TableCell>{formatDate(fatura.vencimentoEm)}</TableCell>
-                      <TableCell align="right">{fatura.status !== 'paga' && <Button size="small" onClick={() => confirmarPagamento(fatura)}>Confirmar pagamento</Button>}</TableCell>
+                      <TableCell align="right">{fatura.status !== 'paga' ? <Button size="small" variant="outlined" onClick={iniciarCheckout}>Abrir checkout</Button> : <Chip size="small" color="success" label="Confirmada" />}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
