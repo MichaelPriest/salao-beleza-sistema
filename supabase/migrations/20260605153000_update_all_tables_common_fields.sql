@@ -190,6 +190,7 @@ declare
     'faturas_saas',
     'formularios_anamnese',
     'fornecedores',
+    'historico_precos_produtos',
     'indicacoes',
     'itens_venda',
     'leads_saas',

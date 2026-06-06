@@ -266,6 +266,7 @@ function ModernConfiguracoes() {
     'contas_receber',
     'entradas',
     'fornecedores',
+    'historico_precos_produtos',
     'indicacoes',
     'logs',
     'movimentacoes_estoque',
@@ -306,6 +307,7 @@ function ModernConfiguracoes() {
       case 'contas_receber': return <ReceiptIcon fontSize="small" />;
       case 'entradas': return <InventoryIcon fontSize="small" />;
       case 'fornecedores': return <ShippingIcon fontSize="small" />;
+      case 'historico_precos_produtos': return <HistoryIcon fontSize="small" />;
       case 'indicacoes': return <GiftIcon fontSize="small" />;
       case 'logs': return <HistoryIcon fontSize="small" />;
       case 'movimentacoes_estoque': return <InventoryIcon fontSize="small" />;

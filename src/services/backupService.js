@@ -46,6 +46,7 @@ export const backupService = {
         'categorias_produtos',
         'contas_pagar',
         'contas_receber',
+        'historico_precos_produtos',
         'movimentacoes_estoque',
         'notificacoes_cliente',
         'transacoes',
