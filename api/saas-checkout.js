@@ -9,6 +9,35 @@ const json = (res, status, payload) => {
 
 const METHOD_LABELS = { card: 'Cartão', pix: 'PIX', boleto: 'Boleto' };
 
+
+const onlyDigits = (value = '') => String(value || '').replace(/\D/g, '');
+
+const getDocumentType = (documento = '') => {
+  const digits = onlyDigits(documento);
+  if (digits.length === 11) return 'CPF';
+  if (digits.length === 14) return 'CNPJ';
+  return undefined;
+};
+
+const normalizeAddress = (address = {}) => {
+  if (typeof address === 'string') return { street: address };
+  return {
+    street: address.street || address.logradouro || address.rua || address.endereco || address.descricao || '',
+    number: address.number || address.numero || '',
+    complement: address.complement || address.complemento || '',
+    district: address.district || address.bairro || '',
+    city: address.city || address.cidade || '',
+    state: address.state || address.estado || address.uf || '',
+    zipCode: onlyDigits(address.zipCode || address.cep || address.postal_code || ''),
+    country: address.country || 'BRA'
+  };
+};
+
+const splitName = (name = '') => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || parts[0] || '' };
+};
+
 const normalizeMethods = (metodosPagamento = {}) => ({
   card: metodosPagamento.card !== false,
   pix: metodosPagamento.pix !== false,
@@ -39,7 +68,7 @@ const getBillingProfile = (body = {}, empresa = {}, billingConfig = {}) => {
       email: dadosCobranca.email || empresa.cobranca?.emailFinanceiro || empresa.email || '',
       documento: dadosCobranca.documento || empresa.cobranca?.documentoCobranca || empresa.documento || '',
       telefone: dadosCobranca.telefone || empresa.cobranca?.telefoneFinanceiro || empresa.telefone || '',
-      endereco: dadosCobranca.endereco || empresa.cobranca?.enderecoCobranca || ''
+      endereco: normalizeAddress(dadosCobranca.endereco || empresa.cobranca?.enderecoCobranca || empresa.endereco || {})
     }
   };
 };
@@ -62,9 +91,13 @@ const createStripeCheckout = async ({ req, plano, empresa, successUrl, cancelUrl
   params.append('cancel_url', cancelUrl);
   params.append('client_reference_id', empresa.id);
   params.append('customer_email', billingProfile.dadosCobranca?.email || empresa.email || '');
+  params.append('billing_address_collection', methods.boleto ? 'required' : 'auto');
+  params.append('tax_id_collection[enabled]', methods.boleto ? 'true' : 'false');
   params.append('metadata[empresaId]', empresa.id);
   params.append('metadata[planoId]', plano.id);
   params.append('metadata[metodoPagamento]', billingProfile.metodoPreferencial || firstEnabledMethod(methods));
+  params.append('metadata[documentoCobranca]', onlyDigits(billingProfile.dadosCobranca?.documento || ''));
+  params.append('metadata[nomeCobranca]', billingProfile.dadosCobranca?.responsavel || empresa.nome || '');
   if (methods.pix && !methods.card && !methods.boleto) {
     throw new Error('PIX não está habilitado para Stripe nesta integração. Use Mercado Pago ou PagSeguro/PagBank para checkout PIX.');
   }
@@ -123,7 +156,18 @@ const createPagSeguroCheckout = async ({ plano, empresa, successUrl, notificatio
     customer: {
       name: billingProfile.dadosCobranca?.responsavel || empresa.nome || empresa.email || 'Cliente SaaS',
       email: billingProfile.dadosCobranca?.email || empresa.email,
-      tax_id: billingProfile.dadosCobranca?.documento || undefined
+      tax_id: onlyDigits(billingProfile.dadosCobranca?.documento || ''),
+      phones: onlyDigits(billingProfile.dadosCobranca?.telefone || empresa.telefone || '') ? [{ country: '55', number: onlyDigits(billingProfile.dadosCobranca?.telefone || empresa.telefone || '') }] : undefined,
+      address: billingProfile.dadosCobranca?.endereco?.street ? {
+        street: billingProfile.dadosCobranca.endereco.street,
+        number: billingProfile.dadosCobranca.endereco.number || 'S/N',
+        complement: billingProfile.dadosCobranca.endereco.complement || undefined,
+        locality: billingProfile.dadosCobranca.endereco.district || undefined,
+        city: billingProfile.dadosCobranca.endereco.city || undefined,
+        region_code: billingProfile.dadosCobranca.endereco.state || undefined,
+        postal_code: billingProfile.dadosCobranca.endereco.zipCode || undefined,
+        country: billingProfile.dadosCobranca.endereco.country || 'BRA'
+      } : undefined
     },
     items: [
       {
@@ -189,8 +233,15 @@ const createMercadoPagoCheckout = async ({ plano, empresa, successUrl, cancelUrl
       ],
       payer: {
         email: billingProfile.dadosCobranca?.email || empresa.email,
-        name: billingProfile.dadosCobranca?.responsavel || empresa.nome,
-        identification: billingProfile.dadosCobranca?.documento ? { number: billingProfile.dadosCobranca.documento } : undefined
+        name: splitName(billingProfile.dadosCobranca?.responsavel || empresa.nome).firstName,
+        surname: splitName(billingProfile.dadosCobranca?.responsavel || empresa.nome).lastName,
+        identification: billingProfile.dadosCobranca?.documento ? { type: getDocumentType(billingProfile.dadosCobranca.documento), number: onlyDigits(billingProfile.dadosCobranca.documento) } : undefined,
+        phone: onlyDigits(billingProfile.dadosCobranca?.telefone || empresa.telefone || '') ? { area_code: onlyDigits(billingProfile.dadosCobranca?.telefone || empresa.telefone || '').slice(0, 2), number: onlyDigits(billingProfile.dadosCobranca?.telefone || empresa.telefone || '').slice(2) } : undefined,
+        address: billingProfile.dadosCobranca?.endereco?.street ? {
+          street_name: billingProfile.dadosCobranca.endereco.street,
+          street_number: billingProfile.dadosCobranca.endereco.number || 'S/N',
+          zip_code: billingProfile.dadosCobranca.endereco.zipCode || undefined
+        } : undefined
       },
       external_reference: `${empresa.id}:${plano.id}`,
       metadata: { empresaId: empresa.id, planoId: plano.id, metodoPagamento: billingProfile.metodoPreferencial },

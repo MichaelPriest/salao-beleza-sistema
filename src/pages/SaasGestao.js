@@ -9,6 +9,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Grid,
   MenuItem,
   Paper,
@@ -21,6 +22,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -43,10 +45,18 @@ import {
   PLANOS_PADRAO,
   STATUS_ASSINATURA,
   metodoPagamentoLabel,
+  metodosAtivosNoGateway,
   metodosSomentePreferencial,
   primeiroMetodoDisponivel,
   saasService,
 } from '../services/saasService';
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
@@ -101,6 +111,9 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     whatsapp: '',
     temaLayout: 'moderno',
     mostrarContato: true,
+    mostrarAreaRestrita: true,
+    mostrarRedesSociais: true,
+    mostrarBanner: true,
   });
 
   const planoAtual = useMemo(() => {
@@ -141,7 +154,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
       const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
-      const metodosDisponiveis = configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento;
+      const metodosDisponiveis = metodosAtivosNoGateway(configGlobal.provider, configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento);
       setPaymentConfig({
         ...configGlobal,
         dadosCobranca: {
@@ -183,6 +196,9 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         whatsapp: empresaData?.sitePublico?.whatsapp || empresaData?.telefone || '',
         temaLayout: empresaData?.sitePublico?.temaLayout || 'moderno',
         mostrarContato: empresaData?.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: empresaData?.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: empresaData?.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: empresaData?.sitePublico?.mostrarBanner !== false,
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -261,6 +277,28 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     }
   };
 
+  const handlePortalImageChange = async (field, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione uma imagem válida.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setPortalForm((current) => ({ ...current, [field]: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem:', error);
+      toast.error('Erro ao carregar imagem.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const salvarPortalEmpresa = async (event) => {
     event.preventDefault();
     if (!empresa?.id) {
@@ -284,6 +322,9 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
           whatsapp: portalForm.whatsapp,
           temaLayout: portalForm.temaLayout,
           mostrarContato: portalForm.mostrarContato,
+          mostrarAreaRestrita: portalForm.mostrarAreaRestrita,
+          mostrarRedesSociais: portalForm.mostrarRedesSociais,
+          mostrarBanner: portalForm.mostrarBanner,
         }
       });
       setEmpresa(atualizada);
@@ -300,6 +341,9 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         whatsapp: atualizada.sitePublico?.whatsapp || '',
         temaLayout: atualizada.sitePublico?.temaLayout || 'moderno',
         mostrarContato: atualizada.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: atualizada.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: atualizada.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: atualizada.sitePublico?.mostrarBanner !== false,
       });
       toast.success('Página inicial da empresa atualizada.');
     } catch (error) {
@@ -355,7 +399,10 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   const iniciarCheckout = async () => {
     setCheckoutLoading(true);
     try {
-      const metodoPreferencial = paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento);
+      const metodosAtivos = metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento);
+      const metodoPreferencial = paymentConfig.metodoPreferencial && metodosAtivos[paymentConfig.metodoPreferencial] !== false
+        ? paymentConfig.metodoPreferencial
+        : primeiroMetodoDisponivel(metodosAtivos);
       const data = await saasService.iniciarCheckout({
         planoId: planoAtual.id,
         provider: paymentConfig.provider,
@@ -385,8 +432,8 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         cobranca: {
           ...(empresa.cobranca || {}),
           provider: paymentConfig.provider,
-          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
-          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
+          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento)),
+          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento))),
           configPagamento: paymentConfig,
           dadosCobranca: paymentConfig.dadosCobranca || {},
           diaVencimento: paymentConfig.diaVencimentoPadrao || empresa.cobranca?.diaVencimento || 5,
@@ -674,19 +721,35 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Tema do layout" value={portalForm.temaLayout} onChange={(e) => setPortalForm({ ...portalForm, temaLayout: e.target.value })}>
-                  <MenuItem value="classico">Clássico</MenuItem>
-                  <MenuItem value="moderno">Moderno</MenuItem>
-                  <MenuItem value="premium">Premium</MenuItem>
+                  <MenuItem value="classico">Clássico - página simples e direta</MenuItem>
+                  <MenuItem value="moderno">Moderno - cards e gradientes</MenuItem>
+                  <MenuItem value="premium">Premium - visual elegante</MenuItem>
+                  <MenuItem value="compacto">Compacto - foco em acesso rápido</MenuItem>
                 </TextField>
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="URL do logotipo" value={portalForm.logo} onChange={(e) => setPortalForm({ ...portalForm, logo: e.target.value })} />
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar logotipo
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('logo', e)} />
+                  </Button>
+                  {portalForm.logo && <Box component="img" src={portalForm.logo} alt="Logo" sx={{ height: 72, objectFit: 'contain', border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1 }} />}
+                  {portalForm.logo && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, logo: '' })}>Remover logo</Button>}
+                </Stack>
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField fullWidth label="WhatsApp de atendimento" value={portalForm.whatsapp} onChange={(e) => setPortalForm({ ...portalForm, whatsapp: e.target.value })} />
               </Grid>
               <Grid item xs={12}>
-                <TextField fullWidth label="URL do banner" value={portalForm.bannerUrl} onChange={(e) => setPortalForm({ ...portalForm, bannerUrl: e.target.value })} helperText="Imagem de capa da página pública." />
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar banner da página pública
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('bannerUrl', e)} />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">As imagens de logo e banner são salvas em base64; não é necessário informar URL externa.</Typography>
+                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
+                  {portalForm.bannerUrl && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, bannerUrl: '' })}>Remover banner</Button>}
+                </Stack>
               </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
@@ -714,6 +777,22 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                   <MenuItem value="sim">Sim</MenuItem>
                   <MenuItem value="nao">Não</MenuItem>
                 </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Conteúdo exibido na página pública</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      ['mostrarBanner', 'Mostrar banner/imagem principal'],
+                      ['mostrarAreaRestrita', 'Mostrar área restrita e links de login'],
+                      ['mostrarRedesSociais', 'Mostrar redes sociais'],
+                    ].map(([field, label]) => (
+                      <Grid item xs={12} md={4} key={field}>
+                        <FormControlLabel control={<Switch checked={portalForm[field] !== false} onChange={(e) => setPortalForm({ ...portalForm, [field]: e.target.checked })} />} label={label} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
               </Grid>
               <Grid item xs={12}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

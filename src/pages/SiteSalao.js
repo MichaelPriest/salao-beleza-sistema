@@ -94,7 +94,7 @@ const nomesDias = {
 };
 
 // Mapa de ícones para o menu
-const menuItems = [
+const BASE_MENU_ITEMS = [
   { id: 'home', label: 'Início', icon: <HomeIcon /> },
   { id: 'servicos', label: 'Serviços', icon: <StoreIcon /> },
   { id: 'profissionais', label: 'Profissionais', icon: <PeopleIcon /> },
@@ -115,7 +115,7 @@ class DataCache {
       data: data,
       timestamp: Date.now(),
     });
-    
+
     try {
       localStorage.setItem(`cache_${key}`, JSON.stringify({
         data: data,
@@ -128,7 +128,7 @@ class DataCache {
 
   get(key) {
     const cached = this.cache.get(key);
-    
+
     if (cached) {
       const isExpired = Date.now() - cached.timestamp > this.ttl;
       if (!isExpired) {
@@ -136,7 +136,7 @@ class DataCache {
       }
       this.cache.delete(key);
     }
-    
+
     try {
       const stored = localStorage.getItem(`cache_${key}`);
       if (stored) {
@@ -151,7 +151,7 @@ class DataCache {
     } catch (e) {
       console.warn('Erro ao recuperar cache do localStorage:', e);
     }
-    
+
     return null;
   }
 
@@ -224,7 +224,7 @@ function SiteSalao() {
   const { slug } = useParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -235,7 +235,7 @@ function SiteSalao() {
   const [profissionais, setProfissionais] = useState([]);
   const [empresaPublica, setEmpresaPublica] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  
+
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const cacheRef = useRef(new DataCache(30));
@@ -266,10 +266,10 @@ function SiteSalao() {
         setLoading(true);
       }
       setError(null);
-      
+
       const cache = cacheRef.current;
       const cachePrefix = slug ? `empresa_${slug}_` : '';
-      
+
       let configData = forceRefresh ? null : cache.get(`${cachePrefix}config`);
       let servicosData = forceRefresh ? null : cache.get(`${cachePrefix}servicos`);
       let profissionaisData = forceRefresh ? null : cache.get(`${cachePrefix}profissionais`);
@@ -307,7 +307,7 @@ function SiteSalao() {
         cache.set(`${cachePrefix}servicos`, servicosData);
         cache.set(`${cachePrefix}profissionais`, profissionaisData);
       }
-      
+
       if (!slug && !configData) {
         console.log('🔄 Carregando configurações do servidor...');
         configData = await siteService.buscarConfiguracoes();
@@ -315,7 +315,7 @@ function SiteSalao() {
       } else if (!slug) {
         console.log('✅ Configurações carregadas do cache');
       }
-      
+
       if (!slug && !servicosData) {
         console.log('🔄 Carregando serviços do servidor...');
         servicosData = await siteService.buscarServicos();
@@ -323,7 +323,7 @@ function SiteSalao() {
       } else if (!slug) {
         console.log('✅ Serviços carregados do cache');
       }
-      
+
       if (!slug && !profissionaisData) {
         console.log('🔄 Carregando profissionais do servidor...');
         profissionaisData = await siteService.buscarProfissionais();
@@ -331,17 +331,17 @@ function SiteSalao() {
       } else if (!slug) {
         console.log('✅ Profissionais carregados do cache');
       }
-      
+
       setEmpresaPublica(empresaData || null);
       setConfig(configData || {});
       setServicos(sanitizarServicos(servicosData));
       setProfissionais(sanitizarProfissionais(profissionaisData));
       setLastUpdate(new Date());
-      
+
       const contato = configData?.salao?.contato || {};
       const instagramAtivo = !!contato.instagram;
       const facebookAtivo = !!contato.facebook;
-      
+
       setRedesAtivas({
         instagram: instagramAtivo,
         facebook: facebookAtivo,
@@ -353,7 +353,7 @@ function SiteSalao() {
         setInstagramUser(user);
         setInstagramUrl(`https://instagram.com/${user}`);
       }
-      
+
       if (facebookAtivo && contato.facebook) {
         let fbUrl = String(contato.facebook);
         if (!fbUrl.startsWith('http')) {
@@ -361,11 +361,11 @@ function SiteSalao() {
         }
         setFacebookUrl(fbUrl);
       }
-      
+
       if (forceRefresh) {
         mostrarSnackbar('Dados atualizados com sucesso!', 'success');
       }
-      
+
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setError(err.message || 'Não foi possível carregar os dados do salão. Tente novamente mais tarde.');
@@ -401,7 +401,7 @@ function SiteSalao() {
 
   const formatarHorarioFuncionamento = () => {
     if (!config?.horarioFuncionamento) return 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
-    
+
     const diasAbertos = Object.entries(config.horarioFuncionamento)
       .filter(([_, h]) => h && h.aberto === true)
       .map(([dia, h]) => {
@@ -410,7 +410,7 @@ function SiteSalao() {
         const fechamento = h.fechamento || '18:00';
         return `${nomeDia}: ${abertura} - ${fechamento}`;
       });
-    
+
     return diasAbertos.length > 0 ? diasAbertos.join(' | ') : 'Segunda a Sexta: 09:00 - 19:00 | Sábado: 09:00 - 18:00';
   };
 
@@ -434,8 +434,8 @@ function SiteSalao() {
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', p: 3 }}>
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           sx={{ maxWidth: 600 }}
           action={
             <Button color="inherit" size="small" onClick={() => carregarDados(true)}>
@@ -453,23 +453,42 @@ function SiteSalao() {
   const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
   const sitePublico = config?.sitePublico || {};
   const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
-  const bannerUrl = sitePublico.bannerUrl || config?.salao?.bannerUrl;
+  const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
   const temaLayout = sitePublico.temaLayout || 'moderno';
+  const mostrarServicos = sitePublico.mostrarServicos !== false;
+  const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
+  const mostrarContato = sitePublico.mostrarContato !== false;
+  const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
+  const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
+  const menuItems = BASE_MENU_ITEMS.filter((item) => {
+    if (item.id === 'servicos') return mostrarServicos;
+    if (item.id === 'profissionais') return mostrarProfissionais;
+    if (item.id === 'redes') return mostrarRedesSociais && (redesAtivas.instagram || redesAtivas.facebook);
+    if (item.id === 'contato') return mostrarContato;
+    if (item.id === 'tutorial') return mostrarAreaRestrita;
+    return true;
+  });
+  const layoutStyles = {
+    classico: { pageBg: '#ffffff', heroBg: '#ffffff', cardRadius: 2, heroDirection: 'row', title: `Bem-vindo ao ${salaoNome}` },
+    moderno: { pageBg: '#faf5ff', heroBg: '#faf5ff', cardRadius: 4, heroDirection: 'row', title: 'Realce sua Beleza' },
+    premium: { pageBg: '#fffaf3', heroBg: 'linear-gradient(135deg, #fffaf3 0%, #fff7ed 100%)', cardRadius: 5, heroDirection: 'row', title: `Experiência premium em ${salaoNome}` },
+    compacto: { pageBg: '#f8fafc', heroBg: '#f8fafc', cardRadius: 3, heroDirection: 'column-reverse', title: salaoNome },
+  }[temaLayout] || { pageBg: '#faf5ff', heroBg: '#faf5ff', cardRadius: 4, heroDirection: 'row', title: 'Realce sua Beleza' };
   const salaoEndereco = config?.salao?.endereco || {};
   const contato = config?.salao?.contato || {};
 
   return (
-    <Box sx={{ bgcolor: temaLayout === 'premium' ? '#fffaf3' : '#faf5ff', minHeight: '100vh' }}>
+    <Box sx={{ bgcolor: layoutStyles.pageBg, minHeight: '100vh' }}>
       {/* Header */}
-      <AppBar 
-        position="fixed" 
-        sx={{ 
-          bgcolor: 'white', 
+      <AppBar
+        position="fixed"
+        sx={{
+          bgcolor: 'white',
           color: corPrimaria,
           boxShadow: '0 2px 20px rgba(156,39,176,0.1)',
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: '64px', sm: '70px' } }}>
+        <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: '64px', sm: temaLayout === 'compacto' ? '60px' : '70px' } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => scrollToSection('home')}>
             {salaoLogo ? (
               <Box
@@ -493,14 +512,14 @@ function SiteSalao() {
             ) : (
               <SpaIcon sx={{ fontSize: { xs: 30, sm: 40 }, mr: 1, color: '#9c27b0' }} />
             )}
-            
+
             {!salaoLogo && (
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 {salaoNome}
               </Typography>
             )}
           </Box>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Tooltip title={`Última atualização: ${formatarUltimaAtualizacao()}`}>
               <Chip
@@ -508,24 +527,24 @@ function SiteSalao() {
                 icon={<CachedIcon sx={{ fontSize: 16 }} />}
                 label="Cache ativo"
                 variant="outlined"
-                sx={{ 
-                  borderColor: '#9c27b0', 
+                sx={{
+                  borderColor: '#9c27b0',
                   color: '#9c27b0',
                   display: { xs: 'none', sm: 'flex' }
                 }}
               />
             </Tooltip>
-            
+
             <Tooltip title="Atualizar dados">
-              <IconButton 
-                onClick={() => carregarDados(true)} 
+              <IconButton
+                onClick={() => carregarDados(true)}
                 disabled={refreshing}
                 sx={{ color: '#9c27b0' }}
               >
                 {refreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
               </IconButton>
             </Tooltip>
-            
+
             {!isMobile ? (
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 {menuItems.map((item) => (
@@ -567,7 +586,7 @@ function SiteSalao() {
               <CloseIcon />
             </IconButton>
           </Box>
-          
+
           {salaoLogo && (
             <Box sx={{ textAlign: 'center', mb: 3 }}>
               <Box
@@ -592,12 +611,12 @@ function SiteSalao() {
               </Typography>
             </Box>
           )}
-          
+
           <List>
             {menuItems.map((item) => (
-              <ListItem 
-                key={item.id} 
-                button 
+              <ListItem
+                key={item.id}
+                button
                 onClick={() => scrollToSection(item.id)}
                 sx={{
                   borderRadius: 2,
@@ -608,7 +627,7 @@ function SiteSalao() {
                 <ListItemIcon sx={{ color: activeSection === item.id ? '#9c27b0' : '#666' }}>
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText 
+                <ListItemText
                   primary={item.label}
                   sx={{ color: activeSection === item.id ? '#9c27b0' : '#666' }}
                 />
@@ -624,7 +643,7 @@ function SiteSalao() {
               <ListItemText primary="Limpar Cache" />
             </ListItem>
           </List>
-          
+
           <Box sx={{ mt: 2, p: 2, bgcolor: '#f3e5f5', borderRadius: 2 }}>
             <Typography variant="caption" color="textSecondary">
               📦 Cache ativo<br />
@@ -637,8 +656,9 @@ function SiteSalao() {
       <Toolbar id="home" />
 
       {/* Hero Section */}
-      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
-        <Grid container spacing={4} alignItems="center">
+      <Box sx={{ background: layoutStyles.heroBg }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: temaLayout === 'compacto' ? 5 : 8 } }}>
+        <Grid container spacing={4} alignItems="center" direction={{ xs: 'column-reverse', md: layoutStyles.heroDirection }}>
           <Grid item xs={12} md={6}>
             <motion.div
               initial={{ opacity: 0, x: -50 }}
@@ -660,40 +680,45 @@ function SiteSalao() {
                   />
                 </Box>
               )}
-              
-              <Typography 
-                variant="h2" 
-                sx={{ 
-                  fontWeight: 800, 
-                  mb: 2, 
-                  fontSize: { xs: '2rem', sm: '2.5rem', md: '3rem' } 
+
+              <Typography
+                variant="h2"
+                sx={{
+                  fontWeight: temaLayout === 'classico' ? 700 : 800,
+                  mb: 2,
+                  fontSize: { xs: temaLayout === 'compacto' ? '1.8rem' : '2rem', sm: '2.5rem', md: temaLayout === 'premium' ? '3.3rem' : '3rem' }
                 }}
               >
-                Realce sua{' '}
-                <span style={{ color: corPrimaria }}>Beleza</span>
+                {layoutStyles.title.includes('Beleza') ? <>Realce sua <span style={{ color: corPrimaria }}>Beleza</span></> : layoutStyles.title}
               </Typography>
               <Typography variant="h5" color="textSecondary" sx={{ mb: 3, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.
+                {sitePublico.subtitulo || 'O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.'}
               </Typography>
-              <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-                Para agendar um horário, acesse a Área do Cliente e faça login ou cadastre-se.
-              </Typography>
-              <Button
-                variant="contained"
-                size="large"
-                onClick={() => scrollToSection('tutorial')}
-                sx={{
-                  background: `linear-gradient(45deg, ${corPrimaria} 30%, #ff4081 90%)`,
-                  color: 'white',
-                  px: 4,
-                  py: 1.5,
-                  fontSize: '1.1rem',
-                }}
-              >
-                Área do Cliente
-              </Button>
+              {mostrarAreaRestrita && (
+                <>
+                  <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
+                    Para agendar um horário, acesse a Área do Cliente e faça login ou cadastre-se.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => scrollToSection('tutorial')}
+                    sx={{
+                      background: `linear-gradient(45deg, ${corPrimaria} 30%, #ff4081 90%)`,
+                      color: 'white',
+                      px: 4,
+                      py: 1.5,
+                      fontSize: '1.1rem',
+                      borderRadius: temaLayout === 'premium' ? 999 : 2,
+                    }}
+                  >
+                    Área do Cliente
+                  </Button>
+                </>
+              )}
             </motion.div>
           </Grid>
+          {bannerUrl && (
           <Grid item xs={12} md={6}>
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
@@ -702,28 +727,31 @@ function SiteSalao() {
             >
               <Box
                 component="img"
-                src={bannerUrl || "https://images.unsplash.com/photo-1560066984-138dadb4c035?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"}
+                src={bannerUrl}
                 alt="Salão de Beleza"
                 sx={{
                   width: '100%',
                   height: 'auto',
-                  borderRadius: 4,
+                  borderRadius: layoutStyles.cardRadius,
                   boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
                 }}
               />
             </motion.div>
           </Grid>
+          )}
         </Grid>
       </Container>
+      </Box>
 
       {/* Área Restrita Section */}
+      {mostrarAreaRestrita && (
       <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="tutorial">
         <Container maxWidth="lg">
-          <Typography 
-            variant="h3" 
-            align="center" 
-            sx={{ 
-              fontWeight: 700, 
+          <Typography
+            variant="h3"
+            align="center"
+            sx={{
+              fontWeight: 700,
               mb: 2,
               fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' }
             }}
@@ -743,8 +771,8 @@ function SiteSalao() {
                 transition={{ duration: 0.5 }}
                 viewport={{ once: true }}
               >
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: '100%',
                     p: 3,
                     background: 'linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%)',
@@ -783,7 +811,7 @@ function SiteSalao() {
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><LoginIcon sx={{ color: '#9c27b0' }} /></ListItemIcon>
-                            <ListItemText 
+                            <ListItemText
                               primary="2. Acesse o link:"
                               secondary={<Link href={`${baseUrl}/login`} target="_blank" sx={{ fontWeight: 600, color: '#9c27b0' }}>{baseUrl}/login</Link>}
                             />
@@ -835,8 +863,8 @@ function SiteSalao() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 viewport={{ once: true }}
               >
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     height: '100%',
                     p: 3,
                     background: 'linear-gradient(135deg, #fff3e0 0%, #ffffff 100%)',
@@ -875,7 +903,7 @@ function SiteSalao() {
                           </ListItem>
                           <ListItem>
                             <ListItemIcon><LoginIcon sx={{ color: '#ff9800' }} /></ListItemIcon>
-                            <ListItemText 
+                            <ListItemText
                               primary="2. Acesse o link:"
                               secondary={<Link href={`${baseUrl}${clienteLoginUrl}`} target="_blank" sx={{ fontWeight: 600, color: '#ff9800' }}>{baseUrl}{clienteLoginUrl}</Link>}
                             />
@@ -945,8 +973,10 @@ function SiteSalao() {
           </motion.div>
         </Container>
       </Box>
+      )}
 
       {/* Serviços Section */}
+      {mostrarServicos && (
       <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="servicos">
         <Container maxWidth="lg">
           <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
@@ -982,8 +1012,10 @@ function SiteSalao() {
           )}
         </Container>
       </Box>
+      )}
 
       {/* Profissionais Section */}
+      {mostrarProfissionais && (
       <Box sx={{ py: { xs: 4, md: 8 } }} id="profissionais">
         <Container maxWidth="lg">
           <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 6, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
@@ -1012,9 +1044,10 @@ function SiteSalao() {
           )}
         </Container>
       </Box>
+      )}
 
       {/* Redes Sociais Section */}
-      {(redesAtivas.instagram || redesAtivas.facebook) && (
+      {mostrarRedesSociais && (redesAtivas.instagram || redesAtivas.facebook) && (
         <Box sx={{ bgcolor: 'white', py: { xs: 4, md: 8 } }} id="redes">
           <Container maxWidth="lg">
             <Typography variant="h3" align="center" sx={{ fontWeight: 700, mb: 2, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
@@ -1056,6 +1089,7 @@ function SiteSalao() {
       )}
 
       {/* Contato Section */}
+      {mostrarContato && (
       <Box sx={{ py: { xs: 4, md: 8 } }} id="contato">
         <Container maxWidth="lg">
           <Grid container spacing={4}>
@@ -1063,7 +1097,7 @@ function SiteSalao() {
               <Typography variant="h3" sx={{ fontWeight: 700, mb: 3, fontSize: { xs: '1.75rem', sm: '2rem', md: '2.5rem' } }}>
                 Entre em <span style={{ color: '#9c27b0' }}>Contato</span>
               </Typography>
-              
+
               <List>
                 {(salaoEndereco.logradouro || salaoEndereco.cidade) && (
                   <ListItem>
@@ -1094,6 +1128,7 @@ function SiteSalao() {
           </Grid>
         </Container>
       </Box>
+      )}
 
       {/* Footer */}
       <Box sx={{ bgcolor: '#9c27b0', color: 'white', py: 3, mt: 8 }}>

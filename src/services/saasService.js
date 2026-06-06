@@ -59,11 +59,34 @@ export const metodosSomentePreferencial = (metodo = 'card') => ({
   boleto: metodo === 'boleto'
 });
 
+
+export const metodosSuportadosPorGateway = (provider = 'manual') => {
+  const gateway = String(provider || 'manual').toLowerCase();
+  const metodosPorGateway = {
+    stripe: { card: true, pix: false, boleto: true },
+    mercadopago: { card: true, pix: true, boleto: true },
+    pagseguro: { card: true, pix: true, boleto: true },
+    pagbank: { card: true, pix: true, boleto: true },
+    manual: { card: false, pix: false, boleto: false }
+  };
+  return metodosPorGateway[gateway] || METODOS_PAGAMENTO_PADRAO;
+};
+
+export const metodosAtivosNoGateway = (provider = 'manual', metodos = {}) => {
+  const suportados = metodosSuportadosPorGateway(provider);
+  const configurados = normalizarMetodosPagamento(metodos);
+  return METODOS_PAGAMENTO_COBRANCA.reduce((acc, metodo) => ({
+    ...acc,
+    [metodo.id]: suportados[metodo.id] !== false && configurados[metodo.id] !== false
+  }), {});
+};
+
 const resolverPerfilCobranca = (empresa = {}, configCobranca = CONFIG_COBRANCA_PADRAO, overrides = {}) => {
   const cobrancaEmpresa = empresa?.cobranca || {};
   const configPagamentoEmpresa = cobrancaEmpresa.configPagamento || {};
   const dadosPagamento = overrides.dadosPagamento || {};
-  const metodosDisponiveis = normalizarMetodosPagamento(configCobranca.metodosPagamento);
+  const providerResolvido = overrides.provider || cobrancaEmpresa.provider || configPagamentoEmpresa.provider || configCobranca.provider || 'manual';
+  const metodosDisponiveis = metodosAtivosNoGateway(providerResolvido, configCobranca.metodosPagamento);
   const metodoPreferencial = dadosPagamento.metodoPreferencial
     || overrides.metodoPreferencial
     || cobrancaEmpresa.metodoPreferencial
@@ -75,7 +98,7 @@ const resolverPerfilCobranca = (empresa = {}, configCobranca = CONFIG_COBRANCA_P
     : metodosSomentePreferencial(metodoValido);
 
   return {
-    provider: overrides.provider || cobrancaEmpresa.provider || configPagamentoEmpresa.provider || configCobranca.provider || 'manual',
+    provider: providerResolvido,
     metodoPreferencial: metodoValido,
     metodosPagamento,
     metodosDisponiveis,
@@ -214,7 +237,7 @@ export const saasService = {
       stripe: { ...CONFIG_COBRANCA_PADRAO.stripe, ...(config?.stripe || {}) },
       mercadopago: { ...CONFIG_COBRANCA_PADRAO.mercadopago, ...(config?.mercadopago || {}) },
       pagseguro: { ...CONFIG_COBRANCA_PADRAO.pagseguro, ...(config?.pagseguro || {}) },
-      metodosPagamento: normalizarMetodosPagamento(config?.metodosPagamento)
+      metodosPagamento: metodosAtivosNoGateway(config?.provider || CONFIG_COBRANCA_PADRAO.provider, config?.metodosPagamento)
     };
   },
 

@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { METODOS_PAGAMENTO_COBRANCA, PROVEDORES_COBRANCA } from '../../services/saasService';
+import { METODOS_PAGAMENTO_COBRANCA, PROVEDORES_COBRANCA, metodosAtivosNoGateway, primeiroMetodoDisponivel } from '../../services/saasService';
 
 export const PAYMENT_METHODS = METODOS_PAGAMENTO_COBRANCA.map((metodo) => ({
   ...metodo,
@@ -31,18 +31,30 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
   const isTenant = mode === 'tenant';
   const provedoresAutomaticos = PROVEDORES_COBRANCA.filter((provedor) => provedor.id !== 'manual');
   const provider = config.provider && config.provider !== 'manual' ? config.provider : provedoresAutomaticos[0]?.id || 'stripe';
-  const metodos = config.metodosPagamento || { card: true, pix: true, boleto: true };
+  const metodos = metodosAtivosNoGateway(provider, config.metodosPagamento || { card: true, pix: true, boleto: true });
 
   const setConfig = (patch) => onChange({ ...config, ...patch });
+  const setProvider = (nextProvider) => {
+    const nextMethods = metodosAtivosNoGateway(nextProvider, config.metodosPagamento || { card: true, pix: true, boleto: true });
+    setConfig({ provider: nextProvider, metodosPagamento: nextMethods, metodoPreferencial: primeiroMetodoDisponivel(nextMethods) });
+  };
   const setSection = (section, patch) => onChange(updateNested(config, section, patch));
-  const toggleMetodo = (metodo, checked) => setConfig({ metodosPagamento: { ...metodos, [metodo]: checked } });
-  const metodosDisponiveis = config.metodosDisponiveis || metodos;
+  const toggleMetodo = (metodo, checked) => {
+    const nextMethods = metodosAtivosNoGateway(provider, { ...metodos, [metodo]: checked });
+    const nextPreferred = nextMethods[config.metodoPreferencial] !== false ? config.metodoPreferencial : primeiroMetodoDisponivel(nextMethods);
+    setConfig({ metodosPagamento: nextMethods, metodoPreferencial: nextPreferred });
+  };
+  const metodosDisponiveis = metodosAtivosNoGateway(provider, config.metodosDisponiveis || metodos);
   const enabledTenantMethods = PAYMENT_METHODS.filter((metodo) => metodosDisponiveis[metodo.id] !== false);
   const selectedTenantMethod = enabledTenantMethods.some((metodo) => metodo.id === config.metodoPreferencial)
     ? config.metodoPreferencial
     : enabledTenantMethods[0]?.id || 'card';
   const setTenantMethod = (metodo) => setConfig({ metodoPreferencial: metodo });
   const setDadosCobranca = (patch) => setSection('dadosCobranca', patch);
+  const enderecoCobranca = typeof config.dadosCobranca?.endereco === 'object' && config.dadosCobranca.endereco !== null
+    ? config.dadosCobranca.endereco
+    : { logradouro: config.dadosCobranca?.endereco || '' };
+  const setEnderecoCobranca = (patch) => setDadosCobranca({ endereco: { ...enderecoCobranca, ...patch } });
 
   if (isTenant) {
     return (
@@ -68,6 +80,24 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
         <Grid item xs={12} md={6}>
           <TextField fullWidth label="CPF/CNPJ para cobrança" value={config.dadosCobranca?.documento || ''} onChange={(e) => setDadosCobranca({ documento: e.target.value })} />
         </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth label="CEP" value={enderecoCobranca.cep || enderecoCobranca.zipCode || ''} onChange={(e) => setEnderecoCobranca({ cep: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField fullWidth label="Endereço de cobrança" value={enderecoCobranca.logradouro || enderecoCobranca.street || ''} onChange={(e) => setEnderecoCobranca({ logradouro: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={2}>
+          <TextField fullWidth label="Número" value={enderecoCobranca.numero || enderecoCobranca.number || ''} onChange={(e) => setEnderecoCobranca({ numero: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth label="Bairro" value={enderecoCobranca.bairro || enderecoCobranca.district || ''} onChange={(e) => setEnderecoCobranca({ bairro: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth label="Cidade" value={enderecoCobranca.cidade || enderecoCobranca.city || ''} onChange={(e) => setEnderecoCobranca({ cidade: e.target.value })} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <TextField fullWidth label="Estado/UF" value={enderecoCobranca.estado || enderecoCobranca.state || ''} onChange={(e) => setEnderecoCobranca({ estado: e.target.value })} />
+        </Grid>
         {selectedTenantMethod === 'card' && (
           <Grid item xs={12}>
             <Alert severity="info">Cartão selecionado. Os dados sensíveis do cartão devem ser informados no checkout seguro do gateway; o sistema salva apenas a preferência de cobrança.</Alert>
@@ -90,7 +120,7 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
   return (
     <Grid container spacing={2}>
       <Grid item xs={12} md={4}>
-        <TextField select fullWidth label="Gateway padrão" value={provider} onChange={(e) => setConfig({ provider: e.target.value })}>
+        <TextField select fullWidth label="Gateway padrão" value={provider} onChange={(e) => setProvider(e.target.value)}>
           {provedoresAutomaticos.map((provedor) => <MenuItem key={provedor.id} value={provedor.id}>{provedor.nome}</MenuItem>)}
         </TextField>
       </Grid>
@@ -115,12 +145,13 @@ function BillingPaymentForms({ value, onChange, mode = 'platform' }) {
       </Grid>
 
       <Grid item xs={12}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Formas de pagamento liberadas</Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Formas de pagamento liberadas no gateway ativo</Typography>
+        <Typography variant="body2" color="text.secondary">A empresa só poderá escolher métodos suportados e ativados para o gateway selecionado.</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
           {PAYMENT_METHODS.map((metodo) => (
             <FormControlLabel
               key={metodo.id}
-              control={<Switch checked={metodos[metodo.id] !== false} onChange={(e) => toggleMetodo(metodo.id, e.target.checked)} />}
+              control={<Switch checked={metodos[metodo.id] !== false} disabled={metodosAtivosNoGateway(provider, { [metodo.id]: true })[metodo.id] === false} onChange={(e) => toggleMetodo(metodo.id, e.target.checked)} />}
               label={metodo.label}
             />
           ))}

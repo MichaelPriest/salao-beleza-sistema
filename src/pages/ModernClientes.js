@@ -896,14 +896,9 @@ function ModernClientes() {
       return;
     }
 
-    const senhaPortalInformada = formData.senhaPortal || '';
-    const deveCriarAcessoPortal = !selectedCliente?.authUid && senhaPortalInformada;
-
-    if (!selectedCliente && !senhaPortalInformada) {
-      toast.error('Informe uma senha para liberar o acesso do cliente ao portal');
-      setTabValue(1);
-      return;
-    }
+    const senhaPortalInformada = (formData.senhaPortal || '').trim();
+    const confirmarSenhaPortalInformada = (formData.confirmarSenhaPortal || '').trim();
+    const deveCriarAcessoPortal = !selectedCliente?.authUid && Boolean(senhaPortalInformada);
 
     if (senhaPortalInformada && senhaPortalInformada.length < 6) {
       toast.error('A senha do portal deve ter pelo menos 6 caracteres');
@@ -911,7 +906,7 @@ function ModernClientes() {
       return;
     }
 
-    if (senhaPortalInformada !== (formData.confirmarSenhaPortal || '')) {
+    if ((senhaPortalInformada || confirmarSenhaPortalInformada) && senhaPortalInformada !== confirmarSenhaPortalInformada) {
       toast.error('A confirmação da senha do portal não confere');
       setTabValue(1);
       return;
@@ -929,20 +924,28 @@ function ModernClientes() {
           tipo: 'cliente',
         });
         const authUid = result.user?.id || result.user?.uid;
-        if (!authUid) {
-          throw new Error('Não foi possível obter o usuário criado para o portal.');
+        if (authUid) {
+          portalAuthData = {
+            authUid,
+            acessoPortalAtivo: true,
+            acessoPortalConfiguradoEm: agora,
+          };
+        } else {
+          portalAuthData = {
+            acessoPortalAtivo: false,
+            acessoPortalPendente: true,
+            acessoPortalConfiguradoEm: agora,
+          };
+          toast('Cliente cadastrado. O Supabase não retornou o usuário do portal; configure/recupere o acesso depois.', { icon: '⚠️' });
         }
-        portalAuthData = {
-          authUid,
-          acessoPortalAtivo: true,
-          acessoPortalConfiguradoEm: agora,
-        };
       } catch (authError) {
         console.error('Erro ao configurar acesso ao portal:', authError);
-        toast.error(authError?.message?.includes('already') || authError?.message?.includes('registered')
-          ? 'Este email já possui uma conta de acesso. Use recuperação de senha no portal do cliente.'
-          : 'Erro ao configurar senha de acesso ao portal');
-        return;
+        portalAuthData = {
+          acessoPortalAtivo: false,
+          acessoPortalPendente: false,
+          acessoPortalErro: authError?.message || 'Falha ao configurar acesso ao portal',
+        };
+        toast('Cliente será cadastrado sem acesso ao portal. A senha pode ser configurada depois.', { icon: '⚠️' });
       }
     }
 
@@ -1462,20 +1465,19 @@ function ModernClientes() {
                   <Alert severity={selectedCliente?.authUid ? 'info' : 'warning'}>
                     {selectedCliente?.authUid
                       ? 'Este cliente já possui acesso ao portal. Para trocar a senha, oriente o cliente a usar a opção de recuperação de senha no login do portal.'
-                      : 'Defina uma senha inicial para permitir que o cliente acesse o portal com o email cadastrado.'}
+                      : 'A senha do portal é opcional. Se não informar agora, o cliente será cadastrado normalmente e o acesso poderá ser configurado depois.'}
                   </Alert>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
-                    label={selectedCliente ? 'Nova senha inicial do portal' : 'Senha inicial do portal'}
+                    label={selectedCliente ? 'Nova senha inicial do portal (opcional)' : 'Senha inicial do portal (opcional)'}
                     type={showPortalPassword ? 'text' : 'password'}
                     value={formData.senhaPortal}
                     onChange={(e) => setFormData({ ...formData, senhaPortal: e.target.value })}
-                    required={!selectedCliente}
                     disabled={Boolean(selectedCliente?.authUid)}
                     size="small"
-                    helperText={selectedCliente?.authUid ? 'Conta de acesso já vinculada' : 'Mínimo de 6 caracteres'}
+                    helperText={selectedCliente?.authUid ? 'Conta de acesso já vinculada' : 'Opcional. Informe pelo menos 6 caracteres apenas se quiser liberar acesso ao portal agora.'}
                     InputProps={{
                       startAdornment: (<InputAdornment position="start"><LockIcon color="action" /></InputAdornment>),
                       endAdornment: (
@@ -1495,7 +1497,6 @@ function ModernClientes() {
                     type={showPortalPassword ? 'text' : 'password'}
                     value={formData.confirmarSenhaPortal}
                     onChange={(e) => setFormData({ ...formData, confirmarSenhaPortal: e.target.value })}
-                    required={!selectedCliente}
                     disabled={Boolean(selectedCliente?.authUid)}
                     error={Boolean(formData.confirmarSenhaPortal && formData.senhaPortal !== formData.confirmarSenhaPortal)}
                     helperText={formData.confirmarSenhaPortal && formData.senhaPortal !== formData.confirmarSenhaPortal ? 'As senhas não conferem' : ''}

@@ -401,15 +401,17 @@ export const AuthClienteProvider = ({ children }) => {
       const { empresaId, empresaNome } = ensureClienteTenantContext(dadosCliente);
 
       const cpfFormatado = dadosCliente.cpf;
-      
-      const clientesPorCpf = await firebaseService.query('clientes', [
-        { field: 'cpf', operator: '==', value: cpfFormatado },
-        { field: 'empresaId', operator: '==', value: empresaId }
-      ]);
 
-      if (clientesPorCpf && clientesPorCpf.length > 0) {
-        toast.error('Este CPF já está cadastrado');
-        return false;
+      if (cpfFormatado) {
+        const clientesPorCpf = await firebaseService.query('clientes', [
+          { field: 'cpf', operator: '==', value: cpfFormatado },
+          { field: 'empresaId', operator: '==', value: empresaId }
+        ]);
+
+        if (clientesPorCpf && clientesPorCpf.length > 0) {
+          toast.error('Este CPF já está cadastrado');
+          return false;
+        }
       }
 
       let userCredential;
@@ -425,13 +427,17 @@ export const AuthClienteProvider = ({ children }) => {
         return false;
       }
 
-      const user = userCredential.user;
+      const user = userCredential?.user || null;
+      const authUid = user?.uid || user?.id || null;
+      const clienteId = authUid
+        ? getClienteTenantDocumentId(empresaId, authUid)
+        : getClienteTenantDocumentId(empresaId, firebaseService.generateId('clientes'));
       const agora = new Date().toISOString();
       const hoje = new Date().toISOString().split('T')[0];
 
       const novoCliente = {
-        id: getClienteTenantDocumentId(empresaId, user.uid),
-        authUid: user.uid,
+        id: clienteId,
+        authUid,
         empresaId: empresaId,
         empresaNome: empresaNome,
         nome: dadosCliente.nome,
@@ -439,16 +445,35 @@ export const AuthClienteProvider = ({ children }) => {
         telefone: dadosCliente.telefone,
         cpf: cpfFormatado,
         dataNascimento: dadosCliente.dataNascimento || null,
+        genero: dadosCliente.genero || null,
+        cep: dadosCliente.cep || null,
+        logradouro: dadosCliente.logradouro || null,
+        numero: dadosCliente.numero || null,
+        complemento: dadosCliente.complemento || null,
+        bairro: dadosCliente.bairro || null,
+        cidade: dadosCliente.cidade || null,
+        estado: dadosCliente.estado || null,
+        endereco: {
+          cep: dadosCliente.cep || null,
+          logradouro: dadosCliente.logradouro || null,
+          numero: dadosCliente.numero || null,
+          complemento: dadosCliente.complemento || null,
+          bairro: dadosCliente.bairro || null,
+          cidade: dadosCliente.cidade || null,
+          estado: dadosCliente.estado || null,
+        },
         dataCadastro: hoje,
         totalGasto: 0,
         totalPontos: 0,
         nivelFidelidade: 'bronze',
         status: 'Regular',
         preferencias: {
-          notificacoes: true,
-          profissionalPreferido: '',
-          servicosPreferidos: []
+          notificacoes: dadosCliente.receberPromocoes !== false,
+          receberPromocoes: dadosCliente.receberPromocoes !== false,
+          profissionalPreferido: dadosCliente.profissionalPreferido || '',
+          servicosPreferidos: Array.isArray(dadosCliente.servicosPreferidos) ? dadosCliente.servicosPreferidos : []
         },
+        acessoPortalPendente: !authUid,
         createdAt: agora,
         updatedAt: agora
       };
