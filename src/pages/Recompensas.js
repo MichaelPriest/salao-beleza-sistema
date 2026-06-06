@@ -4,6 +4,7 @@ import {
   Box,
   Card,
   CardContent,
+  CardMedia,
   Typography,
   Grid,
   Button,
@@ -50,6 +51,7 @@ import {
   StepContent,
   Rating,
   LinearProgress,
+  Stack,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -87,6 +89,13 @@ import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from '../services/firebase';
 import { QRCodeSVG } from 'qrcode.react';
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
 // Tipos de recompensa
 const tiposRecompensa = [
@@ -514,6 +523,28 @@ function Recompensas() {
     return codigo;
   };
 
+  const handleImagemRecompensaChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem válido.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 1MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setFormData((current) => ({ ...current, imagem: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem da recompensa:', error);
+      toast.error('Erro ao carregar imagem da recompensa.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const limparFormulario = () => {
     setFormData({
       nome: '',
@@ -835,6 +866,15 @@ function Recompensas() {
                     overflow: 'hidden',
                     border: recompensa.destaque ? '2px solid #ffd700' : 'none',
                   }}>
+                    {recompensa.imagem && (
+                      <CardMedia
+                        component="img"
+                        height="160"
+                        image={recompensa.imagem}
+                        alt={recompensa.nome}
+                        sx={{ objectFit: 'cover', bgcolor: '#f5f5f5' }}
+                      />
+                    )}
                     {recompensa.destaque && (
                       <Box
                         sx={{
@@ -993,7 +1033,17 @@ function Recompensas() {
                     height: '100%',
                     border: '2px solid #ffd700',
                     background: 'linear-gradient(135deg, #fff9e6 0%, #ffffff 100%)',
+                    overflow: 'hidden',
                   }}>
+                    {recompensa.imagem && (
+                      <CardMedia
+                        component="img"
+                        height="160"
+                        image={recompensa.imagem}
+                        alt={recompensa.nome}
+                        sx={{ objectFit: 'cover', bgcolor: '#fff8e1' }}
+                      />
+                    )}
                     <CardContent>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                         <Avatar sx={{ bgcolor: tipoInfo.cor }}>
@@ -1189,6 +1239,26 @@ function Recompensas() {
                 rows={3}
                 size="small"
               />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                {formData.imagem ? (
+                  <Box component="img" src={formData.imagem} alt="Prévia da recompensa" sx={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />
+                ) : (
+                  <Box sx={{ width: 120, height: 80, borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
+                    Sem foto
+                  </Box>
+                )}
+                <Box sx={{ flex: 1 }}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar foto da recompensa
+                    <input type="file" accept="image/*" hidden onChange={handleImagemRecompensaChange} />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">A imagem é salva em base64 junto da recompensa. Tamanho máximo: 1MB.</Typography>
+                </Box>
+                {formData.imagem && <Button color="error" onClick={() => setFormData({ ...formData, imagem: '' })}>Remover</Button>}
+              </Stack>
             </Grid>
 
             <Grid item xs={12} md={6}>
