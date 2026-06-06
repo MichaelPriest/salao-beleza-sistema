@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseService, supabaseConfig } from '../services/firebase';
+import { buscarClientePortalNoTenant, vincularAuthClientePortal } from '../services/clientePortalLookupService';
 import { 
   getAuth, 
   signOut, 
@@ -111,66 +112,25 @@ export const AuthClienteProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const buscarClienteNoTenant = async (uid, email, empresaId = getTenantContext().empresaId) => {
+  const buscarClienteNoTenant = async (uid, email, empresaId = getTenantContext().empresaId, provider = 'email') => {
     if (!empresaId) {
       console.log('❌ Nenhum empresaId fornecido para busca');
       return null;
     }
 
-    console.log('🔍 Buscando cliente por:', { uid, email, empresaId });
-    
+    console.log('🔍 Buscando cliente do portal por:', { uid, email, empresaId, provider });
+
     try {
-      // Buscar por email (mais confiável)
-      if (email) {
-        const clientes = await firebaseService.query('clientes', [
-          { field: 'email', operator: '==', value: email },
-          { field: 'empresaId', operator: '==', value: empresaId }
-        ]);
-        
-        if (clientes && clientes.length > 0) {
-          console.log('✅ Cliente encontrado por email:', clientes[0].nome);
-          
-          // Atualizar authUid se necessário
-          const cliente = clientes[0];
-          if (!cliente.authUid || cliente.authUid !== uid) {
-            await firebaseService.update('clientes', cliente.id, {
-              authUid: uid,
-              googleUid: uid,
-              updatedAt: new Date().toISOString()
-            });
-            cliente.authUid = uid;
-            cliente.googleUid = uid;
-          }
-          
-          return cliente;
-        }
+      const clienteEncontrado = await buscarClientePortalNoTenant({ uid, email, empresaId });
+
+      if (!clienteEncontrado) {
+        console.log('❌ Nenhum cliente encontrado no tenant informado');
+        return null;
       }
-      
-      // Buscar por authUid
-      let clientes = await firebaseService.query('clientes', [
-        { field: 'authUid', operator: '==', value: uid },
-        { field: 'empresaId', operator: '==', value: empresaId }
-      ]);
-      
-      if (clientes && clientes.length > 0) {
-        console.log('✅ Cliente encontrado por authUid:', clientes[0].nome);
-        return clientes[0];
-      }
-      
-      // Buscar por googleUid
-      clientes = await firebaseService.query('clientes', [
-        { field: 'googleUid', operator: '==', value: uid },
-        { field: 'empresaId', operator: '==', value: empresaId }
-      ]);
-      
-      if (clientes && clientes.length > 0) {
-        console.log('✅ Cliente encontrado por googleUid:', clientes[0].nome);
-        return clientes[0];
-      }
-      
-      console.log('❌ Nenhum cliente encontrado');
-      return null;
-      
+
+      const clienteVinculado = await vincularAuthClientePortal(clienteEncontrado, { uid, provider });
+      console.log('✅ Cliente encontrado para login:', clienteVinculado.nome || clienteVinculado.email);
+      return clienteVinculado;
     } catch (error) {
       console.error('Erro ao buscar cliente:', error);
       return null;
@@ -195,7 +155,7 @@ export const AuthClienteProvider = ({ children }) => {
 
       console.log('🔍 AuthClienteProvider - Buscando cliente:', { uid, email, empresaId });
       
-      const clienteData = await buscarClienteNoTenant(uid, email, empresaId);
+      const clienteData = await buscarClienteNoTenant(uid, email, empresaId, 'email');
 
       if (clienteData) {
         console.log('✅ Cliente encontrado:', clienteData.nome);
@@ -226,7 +186,7 @@ export const AuthClienteProvider = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(getAuth(), email, senha);
       const user = userCredential.user;
       
-      const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId);
+      const clienteData = await buscarClienteNoTenant(user.uid, user.email, empresaId, 'email');
       
       if (!clienteData) {
         toast.error('Conta não encontrada para esta empresa');

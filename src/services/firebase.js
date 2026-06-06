@@ -549,7 +549,13 @@ const isDocumentVisibleInTenant = (collectionName, data) => {
 
   if (!isTenantScopedCollection(collectionName)) return true;
   if (!empresaId) return false;
-  if (!data.empresaId || data.empresaId !== empresaId) return false;
+
+  const documentEmpresaId = data.empresaId || data.empresa_id || data.tenantId || data.tenant_id || data.empresa?.id || null;
+  const idIndicaTenant = collectionName === 'clientes' && data.id && String(data.id).startsWith(`${empresaId}_`);
+
+  if (documentEmpresaId && String(documentEmpresaId) !== String(empresaId)) return false;
+  if (!documentEmpresaId && !idIndicaTenant) return false;
+
   if (unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
 
   return true;
