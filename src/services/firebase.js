@@ -819,8 +819,17 @@ export const onAuthStateChanged = (_auth, callback) => {
 };
 
 export const sendPasswordResetEmail = async (_auth, email, actionCodeSettings = {}) => {
-  const redirectTo = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
-  await authRequest(appendRedirectTo('recover', redirectTo), { email });
+  // Forçar o uso de hash no redirect URL
+  const baseRedirectUrl = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
+  
+  // Converter a URL normal para URL com hash
+  // Ex: https://dominio.com/cliente/recuperar-senha 
+  //  -> https://dominio.com/#/cliente/recuperar-senha
+  const hashUrl = baseRedirectUrl.replace(/\/(cliente\/[^?]+)/, '/#$1');
+  
+  console.log('📧 Enviando recuperação com redirect:', hashUrl);
+  
+  await authRequest(appendRedirectTo('recover', hashUrl), { email });
 };
 
 export const updatePassword = async (_auth, novaSenha) => {
