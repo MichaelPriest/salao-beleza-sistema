@@ -116,6 +116,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { firebaseService } from '../services/firebase';
+import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
 import { auditoriaService } from '../services/auditoriaService';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -477,6 +478,8 @@ function FluxoCaixa() {
         transacoesData,
         comissoesData,
         comprasData,
+        contasReceberData,
+        contasPagarData,
         caixaData, 
         clientesData, 
         fornecedoresData,
@@ -495,6 +498,14 @@ function FluxoCaixa() {
           console.error('Erro ao buscar compras:', err);
           return [];
         }),
+        firebaseService.getAll('contas_receber').catch(err => {
+          console.error('Erro ao buscar contas a receber:', err);
+          return [];
+        }),
+        firebaseService.getAll('contas_pagar').catch(err => {
+          console.error('Erro ao buscar contas a pagar:', err);
+          return [];
+        }),
         firebaseService.getAll('caixa').catch(err => {
           console.error('Erro ao buscar caixa:', err);
           return [];
@@ -509,6 +520,8 @@ function FluxoCaixa() {
       const transacoesArray = Array.isArray(transacoesData) ? transacoesData : [];
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       const comprasArray = Array.isArray(comprasData) ? comprasData : [];
+      const contasReceberArray = Array.isArray(contasReceberData) ? contasReceberData : [];
+      const contasPagarArray = Array.isArray(contasPagarData) ? contasPagarData : [];
       const clientesArray = Array.isArray(clientesData) ? clientesData : [];
       const fornecedoresArray = Array.isArray(fornecedoresData) ? fornecedoresData : [];
       const profissionaisArray = Array.isArray(profissionaisData) ? profissionaisData : [];
@@ -574,9 +587,14 @@ function FluxoCaixa() {
           arquivado: false,
         }));
 
+      const transacoesContasReceber = contasReceberParaTransacoes(contasReceberArray);
+      const transacoesContasPagar = contasPagarParaTransacoes(contasPagarArray);
+
       // Combinar todas as transações
       const todasTransacoes = [
         ...transacoesArray,
+        ...transacoesContasReceber,
+        ...transacoesContasPagar,
         ...transacoesComissoes,
         ...transacoesCompras
       ];
