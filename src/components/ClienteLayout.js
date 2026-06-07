@@ -78,6 +78,29 @@ const NOTIFICATION_ICONS = {
   default: <InfoIcon sx={{ color: '#2196f3' }} />,
 };
 
+const getClienteIds = (cliente, firebaseUser) => Array.from(new Set([
+  firebaseUser?.uid,
+  cliente?.id,
+  cliente?.uid,
+  cliente?.authUid,
+  cliente?.googleUid,
+  cliente?.email,
+].filter(Boolean)));
+
+const getAgendamentoServicoIds = (agendamento = {}) => Array.from(new Set([
+  agendamento.servicoId,
+  ...(agendamento.servicoIds || []),
+  ...(agendamento.servicosIds || []),
+  ...(agendamento.servicos || []).map((servico) => servico.id),
+].flat().filter(Boolean)));
+
+const formularioAtendeServico = (formulario = {}, servicoIds = []) => {
+  const ids = [formulario.servicoId, ...(formulario.servicoIds || []), ...(formulario.servicosIds || [])]
+    .flat()
+    .filter(Boolean);
+  return ids.some((id) => servicoIds.includes(id));
+};
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -111,36 +134,26 @@ function ClienteLayout() {
   // FUNÇÃO PARA CARREGAR NOTIFICAÇÕES
   // ==========================================
   const carregarNotificacoes = useCallback(async () => {
-    if (!cliente?.id) return [];
-    
+    const idsCliente = getClienteIds(cliente, firebaseUser);
+    if (idsCliente.length === 0) return [];
+
     try {
       setLoadingNotificacoes(true);
-      const uid = firebaseUser?.uid || cliente?.id;
-      console.log('🔍 Buscando notificações para cliente:', uid);
-      
-      // Buscar notificações do cliente
-      const data = await firebaseService.query('notificacoes_cliente', [
-        { field: 'clienteId', operator: '==', value: uid }
-      ]).catch(err => {
-        console.error('❌ Erro ao buscar notificações:', err);
-        return [];
-      });
-      
+      const data = await notificacoesPushService.buscarNotificacoes(idsCliente).catch(() => []);
+
       // Ocultar notificações do programa quando a fidelidade estiver desativada
       const tiposFidelidade = ['pontos', 'nivel', 'recompensa', 'resgate'];
       const notificacoesVisiveis = fidelidadeAtiva ? (data || []) : (data || []).filter((item) => !tiposFidelidade.includes(item.tipo));
 
       // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoesVisiveis.sort((a, b) =>
-        new Date(b.createdAt || b.data) - new Date(a.createdAt || a.data)
+        new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0)
       );
-      
-      console.log('✅ Notificações carregadas:', notificacoesOrdenadas.length);
-      
+
       setNotificacoes(notificacoesOrdenadas);
       const naoLidas = notificacoesOrdenadas.filter(n => !n.lida).length;
       setNotificacoesNaoLidas(naoLidas);
-      
+
       return notificacoesOrdenadas;
     } catch (error) {
       console.error('❌ Erro ao carregar notificações:', error);
@@ -154,45 +167,36 @@ function ClienteLayout() {
   // FUNÇÃO PARA VERIFICAR FORMULÁRIOS PENDENTES
   // ==========================================
   const verificarFormulariosPendentes = useCallback(async () => {
-    if (!cliente?.id) return 0;
-    
+    const idsCliente = getClienteIds(cliente, firebaseUser);
+    if (idsCliente.length === 0) return 0;
+
     try {
-      const uid = firebaseUser?.uid || cliente?.id;
-      
-      // Buscar agendamentos do cliente
-      const agendamentos = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: uid },
-        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
-      ]).catch(() => []);
-      
-      console.log(`📅 Total de agendamentos: ${agendamentos.length}`);
-      
+      const agendamentosPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: id }
+        ]).catch(() => [])
+      ));
+      const agendamentos = Array.from(new Map(agendamentosPorId.flat()
+        .filter((agendamento) => ['confirmado', 'pendente'].includes(agendamento.status))
+        .map((agendamento) => [agendamento.id, agendamento])).values());
+
+      const formularios = await firebaseService.getAll('formularios_anamnese').catch(() => []);
+      const respostasPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('respostas_anamnese', [
+          { field: 'clienteId', operator: '==', value: id }
+        ]).catch(() => [])
+      ));
+      const respostas = respostasPorId.flat();
+
       let pendentesCount = 0;
-      
       for (const agendamento of agendamentos) {
-        try {
-          // Verificar se o serviço tem formulário
-          const formularios = await firebaseService.query('formularios_anamnese', [
-            { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
-            { field: 'ativo', operator: '==', value: true }
-          ]).catch(() => []);
-          
-          if (formularios.length > 0) {
-            // Verificar se já existe resposta
-            const respostas = await firebaseService.query('respostas_anamnese', [
-              { field: 'agendamentoId', operator: '==', value: agendamento.id }
-            ]).catch(() => []);
-            
-            if (respostas.length === 0) {
-              pendentesCount++;
-            }
-          }
-        } catch (e) {
-          console.log('Erro ao verificar formulário:', e);
-        }
+        const servicoIds = getAgendamentoServicoIds(agendamento);
+        const formulariosDoServico = formularios.filter((formulario) => formulario.ativo !== false && formularioAtendeServico(formulario, servicoIds));
+        pendentesCount += formulariosDoServico.filter((formulario) => !respostas.some((resposta) =>
+          resposta.agendamentoId === agendamento.id && resposta.formularioId === formulario.id
+        )).length;
       }
-      
-      console.log(`📊 Formulários pendentes: ${pendentesCount}`);
+
       setFormulariosPendentes(pendentesCount);
       return pendentesCount;
     } catch (error) {
@@ -250,33 +254,36 @@ function ClienteLayout() {
   // ==========================================
   const irParaPrimeiroFormularioPendente = useCallback(async () => {
     try {
-      const uid = firebaseUser?.uid || cliente?.id;
-      
-      const agendamentos = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: uid },
-        { field: 'status', operator: 'in', value: ['confirmado', 'pendente'] }
-      ]).catch(() => []);
-      
-      agendamentos.sort((a, b) => a.data.localeCompare(b.data));
-      
+      const idsCliente = getClienteIds(cliente, firebaseUser);
+      const agendamentosPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: id }
+        ]).catch(() => [])
+      ));
+      const agendamentos = Array.from(new Map(agendamentosPorId.flat()
+        .filter((agendamento) => ['confirmado', 'pendente'].includes(agendamento.status))
+        .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')))
+        .map((agendamento) => [agendamento.id, agendamento])).values());
+      const formularios = await firebaseService.getAll('formularios_anamnese').catch(() => []);
+      const respostasPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('respostas_anamnese', [
+          { field: 'clienteId', operator: '==', value: id }
+        ]).catch(() => [])
+      ));
+      const respostas = respostasPorId.flat();
+
       for (const agendamento of agendamentos) {
-        const formularios = await firebaseService.query('formularios_anamnese', [
-          { field: 'servicoIds', operator: 'array-contains', value: agendamento.servicoId },
-          { field: 'ativo', operator: '==', value: true }
-        ]).catch(() => []);
-        
-        if (formularios.length > 0) {
-          const respostas = await firebaseService.query('respostas_anamnese', [
-            { field: 'agendamentoId', operator: '==', value: agendamento.id }
-          ]).catch(() => []);
-          
-          if (respostas.length === 0) {
-            navigate(`/cliente/agendamento/${agendamento.id}/anamnese`);
-            return;
-          }
+        const servicoIds = getAgendamentoServicoIds(agendamento);
+        const formulario = formularios.find((item) => item.ativo !== false && formularioAtendeServico(item, servicoIds) && !respostas.some((resposta) =>
+          resposta.agendamentoId === agendamento.id && resposta.formularioId === item.id
+        ));
+
+        if (formulario) {
+          navigate(`/cliente/agendamento/${agendamento.id}/anamnese?formularioId=${encodeURIComponent(formulario.id)}`);
+          return;
         }
       }
-      
+
       navigate('/cliente/anamnese');
     } catch (error) {
       console.error('Erro ao redirecionar:', error);

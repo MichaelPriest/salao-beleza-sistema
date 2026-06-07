@@ -430,14 +430,10 @@ function ClienteAnamneseLista() {
 
       // Mapear respostas por agendamento e formulário para não marcar todos os formulários
       // do agendamento como respondidos quando apenas um deles foi enviado.
-      const respostasPorAgendamento = {};
       const respostasPorAgendamentoFormulario = {};
       respostasData.forEach(resp => {
-        if (resp.agendamentoId) {
-          respostasPorAgendamento[resp.agendamentoId] = resp;
-          if (resp.formularioId) {
-            respostasPorAgendamentoFormulario[`${resp.agendamentoId}_${resp.formularioId}`] = resp;
-          }
+        if (resp.agendamentoId && resp.formularioId) {
+          respostasPorAgendamentoFormulario[`${resp.agendamentoId}_${resp.formularioId}`] = resp;
         }
       });
 
@@ -450,7 +446,7 @@ function ClienteAnamneseLista() {
         );
 
         for (const formulario of formulariosDoServico) {
-          const resposta = respostasPorAgendamentoFormulario[`${agendamento.id}_${formulario.id}`] || respostasPorAgendamento[agendamento.id];
+          const resposta = respostasPorAgendamentoFormulario[`${agendamento.id}_${formulario.id}`];
           
           const item = {
             id: `${agendamento.id}_${formulario.id}`,
@@ -498,7 +494,8 @@ function ClienteAnamneseLista() {
   };
 
   const handleResponder = (agendamentoId, formularioId) => {
-    navigate(`/cliente/agendamento/${agendamentoId}/anamnese`);
+    const query = formularioId ? `?formularioId=${encodeURIComponent(formularioId)}` : '';
+    navigate(`/cliente/agendamento/${agendamentoId}/anamnese${query}`);
   };
 
   const handleVisualizar = (respostaId) => {

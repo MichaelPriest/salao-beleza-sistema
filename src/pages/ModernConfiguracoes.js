@@ -149,6 +149,19 @@ const getEmpresaTabFromSearch = (search = '') => {
   return EMPRESA_TAB_INDEX[tab] ?? (Number.isNaN(parsedTab) ? 0 : parsedTab);
 };
 
+
+const getUsuarioAtual = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const usuarioEhSuperadmin = (usuario = {}) => ['superadmin', 'super_admin', 'saas_admin'].includes(String(usuario.cargo || usuario.role || usuario.perfil || '').toLowerCase())
+  || usuario.superadmin === true
+  || usuario.isSuperAdmin === true;
+
 function TabPanel({ children, value, index }) {
   return (
     <div hidden={value !== index}>
@@ -241,6 +254,8 @@ function ModernConfiguracoes() {
   const [showPassword, setShowPassword] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [usuarioAtual] = useState(() => getUsuarioAtual());
+  const isSuperadmin = usuarioEhSuperadmin(usuarioAtual);
   
   // Estados para limpeza de dados
   const [openCleanDialog, setOpenCleanDialog] = useState(false);
@@ -783,6 +798,10 @@ function ModernConfiguracoes() {
   // ============================================
 
   const handleOpenCleanDialog = () => {
+    if (!isSuperadmin) {
+      toast.error('A limpeza de dados é exclusiva para superadmin.');
+      return;
+    }
     setOpenCleanDialog(true);
     setCleanStep(0);
     setCleanResults(null);
@@ -811,6 +830,10 @@ function ModernConfiguracoes() {
 
   // 🔥 FUNÇÃO DE LIMPEZA CORRIGIDA - SEM toast.info
   const handleCleanData = async () => {
+    if (!isSuperadmin) {
+      toast.error('A limpeza de dados é exclusiva para superadmin.');
+      return;
+    }
     if (confirmText !== 'LIMPAR DADOS') {
       toast.error('Digite "LIMPAR DADOS" para confirmar');
       return;
@@ -1055,7 +1078,7 @@ function ModernConfiguracoes() {
             <Tab icon={<PaletteIcon />} label="Aparência" />
             <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
-            <Tab icon={<CleanIcon />} label="Limpeza" />
+            <Tab icon={<CleanIcon />} label="Limpeza" disabled={!isSuperadmin} />
             <Tab icon={<BusinessIcon />} label="SaaS, cobrança e unidades" />
           </Tabs>
 
@@ -2069,18 +2092,25 @@ function ModernConfiguracoes() {
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Alert 
-                  severity="warning" 
+                  severity={isSuperadmin ? 'warning' : 'info'}
                   sx={{ mb: 3 }}
                   icon={<WarningIcon />}
                 >
                   <strong>Área Restrita - Limpeza de Dados</strong>
                   <br />
-                  Esta operação irá remover permanentemente os dados das coleções selecionadas.
-                  A coleção <strong>usuários</strong> será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>.
-                  Recomenda-se fazer um backup antes de prosseguir.
+                  {isSuperadmin ? (
+                    <>
+                      Esta operação irá remover permanentemente os dados das coleções selecionadas.
+                      A coleção <strong>usuários</strong> será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>.
+                      Recomenda-se fazer um backup antes de prosseguir.
+                    </>
+                  ) : (
+                    <>Somente usuários superadmin podem acessar ou executar a limpeza de dados do sistema.</>
+                  )}
                 </Alert>
               </Grid>
 
+              {isSuperadmin && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3, bgcolor: '#fff3e0' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -2113,6 +2143,7 @@ function ModernConfiguracoes() {
                   </Typography>
                 </Paper>
               </Grid>
+              )}
             </Grid>
           </TabPanel>
         </CardContent>
