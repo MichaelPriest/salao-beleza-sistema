@@ -125,7 +125,7 @@ import {
   AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { firebaseService } from '../services/firebase';
+import firebaseService from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { Timestamp } from '../services/firebase';
 import { format } from 'date-fns';
