@@ -453,6 +453,20 @@ function ClienteAnamnese() {
     ...(origem.servicos || []).map((servico) => servico.id),
   ].flat().filter(Boolean)));
 
+  const getClienteIds = useCallback(() => Array.from(new Set([
+    firebaseUser?.uid,
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean))), [cliente, firebaseUser]);
+
+  const getServicoIds = (origem = {}) => Array.from(new Set([
+    origem.servicoId,
+    ...(origem.servicosIds || []),
+    ...(origem.servicoIds || []),
+    ...(origem.servicos || []).map((servico) => servico.id),
+  ].flat().filter(Boolean)));
+
   // ==========================================
   // FUNÇÕES DE BUSCA
   // ==========================================
