@@ -1,22 +1,82 @@
 // src/services/notificacoesService.js
 import { firebaseService } from './firebase';
 
+const parseUsuarioLocal = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const usuarioIds = (usuarioId, usuario = parseUsuarioLocal()) => Array.from(new Set([
+  usuarioId,
+  usuario?.id,
+  usuario?.uid,
+  usuario?.authUid,
+  usuario?.email,
+].filter(Boolean).map(String)));
+
+const notificacaoPertenceAoUsuario = (notificacao, ids, usuario = parseUsuarioLocal()) => {
+  const idsSet = new Set(ids);
+  const cargo = usuario?.cargo || usuario?.role || usuario?.perfil;
+
+  const camposDiretos = [
+    notificacao.usuarioId,
+    notificacao.userId,
+    notificacao.uid,
+    notificacao.destinatarioId,
+    notificacao.paraUsuarioId,
+    notificacao.adminId,
+    notificacao.profissionalId,
+    notificacao.email,
+  ].filter(Boolean).map(String);
+
+  const destinatarios = [
+    notificacao.destinatarios,
+    notificacao.destinatarioIds,
+    notificacao.usuarios,
+    notificacao.usuarioIds,
+  ].flatMap((lista) => Array.isArray(lista) ? lista : []).filter(Boolean).map(String);
+
+  const cargos = [notificacao.cargo, notificacao.perfil, notificacao.cargos, notificacao.roles]
+    .flatMap((lista) => Array.isArray(lista) ? lista : [lista])
+    .filter(Boolean)
+    .map(String);
+
+  const broadcast = notificacao.todos === true || notificacao.broadcast === true || notificacao.tipoDestinatario === 'todos';
+
+  return broadcast || [...camposDiretos, ...destinatarios].some((id) => idsSet.has(id)) || (cargo && cargos.includes(String(cargo)));
+};
+
 export const notificacoesService = {
   // Listar notificações de um usuário
   listar: async (usuarioId) => {
     try {
-      console.log('🔍 Buscando notificações para usuário:', usuarioId);
-      
-      const notificacoes = await firebaseService.query('notificacoes', [
-        { field: 'usuarioId', operator: '==', value: usuarioId }
-      ], 'data');
-      
+      const usuario = parseUsuarioLocal();
+      const ids = usuarioIds(usuarioId, usuario);
+      console.log('🔍 Buscando notificações para usuário:', ids);
+
+      if (ids.length === 0) return [];
+
+      const buscas = await Promise.all(ids.map((id) =>
+        firebaseService.query('notificacoes', [
+          { field: 'usuarioId', operator: '==', value: id }
+        ], 'data').catch(() => [])
+      ));
+
+      const todas = await firebaseService.getAll('notificacoes').catch(() => []);
+      let notificacoes = Array.from(new Map([
+        ...buscas.flat(),
+        ...todas.filter((notificacao) => notificacaoPertenceAoUsuario(notificacao, ids, usuario)),
+      ].map((item) => [item.id, item])).values());
+
       console.log('✅ Notificações encontradas:', notificacoes.length);
       
       // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoes.sort((a, b) => {
-        const dateA = a.data ? new Date(a.data) : new Date(0);
-        const dateB = b.data ? new Date(b.data) : new Date(0);
+        const dateA = a.createdAt || a.data ? new Date(a.createdAt || a.data) : new Date(0);
+        const dateB = b.createdAt || b.data ? new Date(b.createdAt || b.data) : new Date(0);
         return dateB - dateA;
       });
       
@@ -49,10 +109,7 @@ export const notificacoesService = {
   // Marcar todas como lidas
   marcarTodasComoLidas: async (usuarioId) => {
     try {
-      const notificacoesNaoLidas = await firebaseService.query('notificacoes', [
-        { field: 'usuarioId', operator: '==', value: usuarioId },
-        { field: 'lida', operator: '==', value: false }
-      ]);
+      const notificacoesNaoLidas = (await notificacoesService.listar(usuarioId)).filter((notif) => !notif.lida);
       
       const promises = notificacoesNaoLidas.map(notif => 
         firebaseService.update('notificacoes', notif.id, { 
@@ -91,9 +148,7 @@ export const notificacoesService = {
   // Excluir todas as notificações de um usuário
   excluirTodas: async (usuarioId) => {
     try {
-      const notificacoes = await firebaseService.query('notificacoes', [
-        { field: 'usuarioId', operator: '==', value: usuarioId }
-      ]);
+      const notificacoes = await notificacoesService.listar(usuarioId);
       
       const promises = notificacoes.map(notif => 
         firebaseService.delete('notificacoes', notif.id)
@@ -114,10 +169,7 @@ export const notificacoesService = {
   // Contar notificações não lidas
   contarNaoLidas: async (usuarioId) => {
     try {
-      const notificacoesNaoLidas = await firebaseService.query('notificacoes', [
-        { field: 'usuarioId', operator: '==', value: usuarioId },
-        { field: 'lida', operator: '==', value: false }
-      ]);
+      const notificacoesNaoLidas = (await notificacoesService.listar(usuarioId)).filter((notif) => !notif.lida);
       
       return notificacoesNaoLidas.length;
     } catch (error) {

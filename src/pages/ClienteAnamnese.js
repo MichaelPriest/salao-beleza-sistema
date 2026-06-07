@@ -124,7 +124,7 @@ import {
   FileUpload as FileUploadIcon,
   AttachFile as AttachFileIcon,
 } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { Timestamp } from '../services/firebase';
@@ -396,6 +396,22 @@ const FileUploadField = ({ perguntaId, value, onChange, disabled, accept = "*/*"
   );
 };
 
+
+const getFormularioKey = (formulario = {}, index = 0) => {
+  const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
+  if (explicitId) return String(explicitId);
+  const base = [
+    formulario.titulo,
+    formulario.nome,
+    formulario.nomeFormulario,
+    formulario.servicoId,
+    ...(formulario.servicoIds || []),
+    ...(formulario.servicosIds || []),
+  ].filter(Boolean).join('_');
+  const slug = base.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return slug || `formulario_${index}`;
+};
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -403,6 +419,7 @@ const FileUploadField = ({ perguntaId, value, onChange, disabled, accept = "*/*"
 function ClienteAnamnese() {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { atendimentoId, agendamentoId } = params;
@@ -420,6 +437,21 @@ function ClienteAnamnese() {
 
   const entityId = atendimentoId || agendamentoId;
   const entityType = atendimentoId ? 'atendimento' : 'agendamento';
+  const formularioIdSelecionado = searchParams.get('formularioId');
+
+  const getClienteIds = useCallback(() => Array.from(new Set([
+    firebaseUser?.uid,
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean))), [cliente, firebaseUser]);
+
+  const getServicoIds = (origem = {}) => Array.from(new Set([
+    origem.servicoId,
+    ...(origem.servicosIds || []),
+    ...(origem.servicoIds || []),
+    ...(origem.servicos || []).map((servico) => servico.id),
+  ].flat().filter(Boolean)));
 
   const getClienteIds = useCallback(() => Array.from(new Set([
     firebaseUser?.uid,
@@ -537,9 +569,33 @@ function ClienteAnamnese() {
         ]);
       }
 
-      if (respostasExistentes.length > 0) {
-        navigate(`/cliente/anamnese/${respostasExistentes[0].id}`);
-        return;
+      if (formularioIdSelecionado) {
+        const respostaDoFormulario = respostasExistentes.find((resposta) => resposta.formularioId === formularioIdSelecionado);
+        if (respostaDoFormulario) {
+          navigate(`/cliente/anamnese/${respostaDoFormulario.id}`);
+          return;
+        }
+      } else if (respostasExistentes.length > 0) {
+        const servicoIdsAtendimento = getServicoIds(atendimentoData);
+        const formulariosPorServicoExistentes = await Promise.all(servicoIdsAtendimento.flatMap((servicoId) => [
+          firebaseService.query('formularios_anamnese', [
+            { field: 'servicoIds', operator: 'array-contains', value: servicoId },
+            { field: 'ativo', operator: '==', value: true },
+          ]).catch(() => []),
+          firebaseService.query('formularios_anamnese', [
+            { field: 'servicosIds', operator: 'array-contains', value: servicoId },
+            { field: 'ativo', operator: '==', value: true },
+          ]).catch(() => []),
+        ]));
+        const formulariosExistentes = Array.from(new Map(formulariosPorServicoExistentes.flat().map((item, index) => [getFormularioKey(item, index), item])).values());
+        const todosRespondidos = formulariosExistentes.length > 0 && formulariosExistentes.every((formularioItem, formularioIndex) => {
+          const formularioId = getFormularioKey(formularioItem, formularioIndex);
+          return respostasExistentes.some((resposta) => resposta.formularioId === formularioId);
+        });
+        if (todosRespondidos || formulariosExistentes.length <= 1) {
+          navigate(`/cliente/anamnese/${respostasExistentes[0].id}`);
+          return;
+        }
       }
 
       const servicoIdsAtendimento = getServicoIds(atendimentoData);
@@ -553,13 +609,14 @@ function ClienteAnamnese() {
           { field: 'ativo', operator: '==', value: true },
         ]).catch(() => []),
       ]));
-      const formularios = Array.from(new Map(formulariosPorServico.flat().map((item) => [item.id, item])).values());
+      const formularios = Array.from(new Map(formulariosPorServico.flat().map((item, index) => [getFormularioKey(item, index), item])).values());
 
       if (formularios.length > 0) {
-        setFormulario(formularios[0]);
+        const formularioAtual = formularios.find((item, formularioIndex) => getFormularioKey(item, formularioIndex) === formularioIdSelecionado) || formularios[0];
+        setFormulario({ ...formularioAtual, id: getFormularioKey(formularioAtual, formularios.indexOf(formularioAtual)) });
 
         const respostasIniciais = {};
-        formularios[0].questoes?.forEach((q) => {
+        formularioAtual.questoes?.forEach((q) => {
           if (q.tipo === 'checkbox' || q.tipo === 'multiselect') {
             respostasIniciais[q.id] = [];
           } else {
@@ -574,7 +631,7 @@ function ClienteAnamnese() {
     } finally {
       setLoading(false);
     }
-  }, [entityId, entityType, navigate, buscarProfissionalNome, buscarServicoNome]);
+  }, [entityId, entityType, navigate, buscarProfissionalNome, buscarServicoNome, formularioIdSelecionado]);
 
   useEffect(() => {
     if (entityId) {

@@ -415,7 +415,7 @@ const RelatorioAgenda = React.forwardRef(({
                     </TableHead>
                     <TableBody>
                       {eventosOrdenados.map(evento => {
-                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
                         const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
@@ -572,13 +572,15 @@ function ModernAgendamentos() {
     const cliente = clientes.find(c => 
       c.id === clienteId || 
       c.uid === clienteId || 
-      c.googleUid === clienteId
+      c.authUid === clienteId ||
+      c.googleUid === clienteId ||
+      c.supabaseUid === clienteId
     );
     
     if (!cliente) return null;
     
     return {
-      id: cliente.id || cliente.uid || cliente.googleUid,
+      id: cliente.id || cliente.uid || cliente.authUid || cliente.googleUid,
       nome: cliente.nome || cliente.displayName || 'Cliente',
       telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
       email: cliente.email || '',
@@ -1765,7 +1767,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -1988,7 +1990,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -2278,7 +2280,7 @@ function ModernAgendamentos() {
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
         ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
