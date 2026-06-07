@@ -1,26 +1,10 @@
 // src/pages/ClienteRecompensas.js
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
-  Button,
-  Chip,
-  CardMedia,
-  CardActions,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Avatar,
-  Alert,
-  CircularProgress,
-  Divider,
-  Paper,
-  Tooltip,
-  IconButton,
+  Box, Card, CardContent, Typography, Grid, Button, Chip,
+  CardMedia, CardActions, Dialog, DialogTitle, DialogContent,
+  DialogActions, Avatar, Alert, CircularProgress, Divider, Paper,
+  Tooltip, IconButton,
 } from '@mui/material';
 import {
   CardGiftcard as GiftIcon,
@@ -32,18 +16,29 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { firebaseService } from '../services/firebase';
+import { supabaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
-
-const getPontosRecompensa = (recompensa = {}) => Number(
-  recompensa.pontosNecessarios ?? recompensa.pontos ?? recompensa.custoPontos ?? recompensa.valorPontos ?? 0
-);
+// Função segura para obter pontos
+const getPontosRecompensa = (recompensa = {}) => {
+  if (!recompensa || typeof recompensa !== 'object') {
+    console.warn('Recompensa inválida:', recompensa);
+    return 0;
+  }
+  return Number(
+    recompensa.pontosNecessarios ?? 
+    recompensa.pontos ?? 
+    recompensa.custoPontos ?? 
+    recompensa.valorPontos ?? 
+    0
+  );
+};
 
 const getQuantidadeDisponivel = (recompensa = {}) => {
+  if (!recompensa || typeof recompensa !== 'object') return 0;
   if (recompensa.ilimitado === true) return Infinity;
   const valor = recompensa.quantidadeDisponivel ?? recompensa.quantidade ?? recompensa.estoque ?? null;
-  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
+  return (valor === null || valor === undefined || valor === '') ? Infinity : Number(valor);
 };
 
 function ClienteRecompensas() {
@@ -57,7 +52,6 @@ function ClienteRecompensas() {
   const [recompensaSelecionada, setRecompensaSelecionada] = useState(null);
   const [resgatando, setResgatando] = useState(false);
 
-
   const getClienteIds = () => Array.from(new Set([
     firebaseUser?.uid,
     cliente?.id,
@@ -68,10 +62,10 @@ function ClienteRecompensas() {
   ].filter(Boolean)));
 
   const niveis = {
-    bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0 },
-    prata: { cor: '#c0c0c0', nome: 'Prata', minimo: 500 },
-    ouro: { cor: '#ffd700', nome: 'Ouro', minimo: 2000 },
-    platina: { cor: '#e5e4e2', nome: 'Platina', minimo: 5000 },
+    bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, corFundo: '#fff8f0' },
+    prata: { cor: '#c0c0c0', nome: 'Prata', minimo: 500, corFundo: '#f5f5f5' },
+    ouro: { cor: '#ffd700', nome: 'Ouro', minimo: 2000, corFundo: '#fffdf0' },
+    platina: { cor: '#e5e4e2', nome: 'Platina', minimo: 5000, corFundo: '#fafafa' },
   };
 
   useEffect(() => {
@@ -83,21 +77,27 @@ function ClienteRecompensas() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-
       const idsCliente = getClienteIds();
 
-      // Carregar pontuação do cliente por todos os vínculos do portal
-      const pontuacoesPorId = await Promise.all(idsCliente.map((id) =>
-        firebaseService.query('pontuacao', [
-          { field: 'clienteId', operator: '==', value: id }
-        ]).catch(() => [])
-      ));
-      const pontuacoes = Array.from(new Map(pontuacoesPorId.flat().map((item) => [item.id, item])).values());
+      // Carregar pontuação
+      let todasPontuacoes = [];
+      for (const id of idsCliente) {
+        try {
+          const pontuacoes = await supabaseService.query('pontuacao', [
+            { field: 'clienteId', operator: '==', value: id }
+          ]);
+          todasPontuacoes.push(...pontuacoes);
+        } catch (e) {
+          console.warn(`Erro ao buscar pontuação para ${id}:`, e);
+        }
+      }
 
-      const creditos = pontuacoes
+      const pontuacoesUnicas = Array.from(new Map(todasPontuacoes.map(p => [p.id, p])).values());
+      
+      const creditos = pontuacoesUnicas
         .filter(p => p.tipo === 'credito')
         .reduce((acc, p) => acc + (p.quantidade || 0), 0);
-      const debitos = pontuacoes
+      const debitos = pontuacoesUnicas
         .filter(p => p.tipo === 'debito')
         .reduce((acc, p) => acc + (p.quantidade || 0), 0);
       
@@ -111,31 +111,47 @@ function ClienteRecompensas() {
       else if (saldoAtual >= 500) nivelAtual = 'prata';
       setNivel(nivelAtual);
 
-      // Carregar recompensas disponíveis
-      const recompensasData = await firebaseService.query('recompensas', [
+      // Carregar recompensas - COM FILTRO DE VALIDAÇÃO
+      const recompensasData = await supabaseService.query('recompensas', [
         { field: 'ativo', operator: '==', value: true }
       ]);
 
-      // Filtrar por nível do cliente
+      // CORREÇÃO: Filtrar recompensas inválidas
+      const recompensasValidas = (recompensasData || [])
+        .filter(r => r && typeof r === 'object')
+        .filter(r => r.id && (r.nome || r.titulo))
+        .filter(r => r.ativo === true);
+
+      // Filtrar por nível
       const niveisOrdenados = ['bronze', 'prata', 'ouro', 'platina'];
       const indexNivelCliente = niveisOrdenados.indexOf(nivelAtual);
       
-      const recompensasFiltradas = (recompensasData || []).filter(r => {
-        const indexNivelRecompensa = niveisOrdenados.indexOf(r.nivelMinimo);
+      const recompensasFiltradas = recompensasValidas.filter(r => {
+        const indexNivelRecompensa = niveisOrdenados.indexOf(r.nivelMinimo || 'bronze');
         return indexNivelCliente >= indexNivelRecompensa;
       });
 
       setRecompensas(recompensasFiltradas);
 
-      const resgatesPorId = await Promise.all(idsCliente.map((id) =>
-        firebaseService.query('resgates_fidelidade', [
-          { field: 'clienteId', operator: '==', value: id }
-        ], 'data', 'desc').catch(() => [])
-      ));
-      const resgates = Array.from(new Map(resgatesPorId.flat().map((item) => [item.id, item])).values())
-        .filter((resgate) => !resgate.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(resgate.status))
+      // Carregar resgates ativos
+      let todosResgates = [];
+      for (const id of idsCliente) {
+        try {
+          const resgates = await supabaseService.query('resgates_fidelidade', [
+            { field: 'clienteId', operator: '==', value: id }
+          ], 'data', 'desc');
+          todosResgates.push(...resgates);
+        } catch (e) {
+          console.warn(`Erro ao buscar resgates para ${id}:`, e);
+        }
+      }
+
+      const resgatesUnicos = Array.from(new Map(todosResgates.map(r => [r.id, r])).values());
+      const resgatesAtivosFiltrados = resgatesUnicos
+        .filter(r => !r.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(r.status))
         .sort((a, b) => new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0));
-      setResgatesAtivos(resgates);
+      
+      setResgatesAtivos(resgatesAtivosFiltrados);
 
     } catch (error) {
       console.error('Erro ao carregar recompensas:', error);
@@ -146,8 +162,9 @@ function ClienteRecompensas() {
   };
 
   const handleResgatar = (recompensa) => {
-    if (saldo < getPontosRecompensa(recompensa)) {
-      toast.error('Saldo insuficiente');
+    const pontosNecessarios = getPontosRecompensa(recompensa);
+    if (saldo < pontosNecessarios) {
+      toast.error(`Saldo insuficiente. Você tem ${saldo} pontos, precisa de ${pontosNecessarios}`);
       return;
     }
     setRecompensaSelecionada(recompensa);
@@ -158,14 +175,20 @@ function ClienteRecompensas() {
     try {
       setResgatando(true);
 
-      // Verificar disponibilidade
-      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity &&
-          getQuantidadeDisponivel(recompensaSelecionada) <= 0) {
+      if (!recompensaSelecionada) {
+        toast.error('Recompensa não selecionada');
+        return;
+      }
+
+      const quantidadeDisponivel = getQuantidadeDisponivel(recompensaSelecionada);
+      if (quantidadeDisponivel !== Infinity && quantidadeDisponivel <= 0) {
         toast.error('Recompensa esgotada');
         return;
       }
 
-      // Registrar o resgate
+      const pontosGastos = getPontosRecompensa(recompensaSelecionada);
+      const codigo = 'RES' + Date.now() + Math.floor(Math.random() * 1000);
+      
       const resgateData = {
         clienteId: cliente.id,
         clienteAuthUid: firebaseUser?.uid || cliente.authUid || '',
@@ -173,47 +196,45 @@ function ClienteRecompensas() {
         googleUid: cliente.googleUid || '',
         clienteNome: cliente.nome,
         recompensaId: recompensaSelecionada.id,
-        recompensaNome: recompensaSelecionada.nome,
+        recompensaNome: recompensaSelecionada.nome || recompensaSelecionada.titulo,
         recompensaImagem: recompensaSelecionada.imagem || '',
-        pontosGastos: getPontosRecompensa(recompensaSelecionada),
+        pontosGastos: pontosGastos,
         data: new Date().toISOString(),
         status: 'disponivel',
-        codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
+        codigo: codigo,
         utilizado: false,
         validadeAte: recompensaSelecionada.validade || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        empresaId: cliente.empresaId,
+        unidadeId: cliente.unidadeId
       };
 
-      await firebaseService.add('resgates_fidelidade', resgateData);
-
-      // Registrar a movimentação de pontos
-      await firebaseService.add('pontuacao', {
+      await supabaseService.add('resgates_fidelidade', resgateData);
+      await supabaseService.add('pontuacao', {
         clienteId: cliente.id,
         clienteNome: cliente.nome,
-        quantidade: getPontosRecompensa(recompensaSelecionada),
+        quantidade: pontosGastos,
         tipo: 'debito',
         motivo: `Resgate: ${recompensaSelecionada.nome}`,
         data: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        empresaId: cliente.empresaId
       });
 
-      // Atualizar quantidade disponível se necessário
-      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity) {
-        const quantidadeAtual = getQuantidadeDisponivel(recompensaSelecionada);
-        await firebaseService.update('recompensas', recompensaSelecionada.id, {
-          quantidadeDisponivel: quantidadeAtual - 1,
-          quantidade: quantidadeAtual - 1,
+      if (quantidadeDisponivel !== Infinity) {
+        await supabaseService.update('recompensas', recompensaSelecionada.id, {
+          quantidadeDisponivel: quantidadeDisponivel - 1,
           updatedAt: new Date().toISOString()
         });
       }
 
-      toast.success(`Recompensa resgatada! Código: ${resgateData.codigo}`);
+      toast.success(`Recompensa resgatada! Código: ${codigo}`);
       setOpenResgateDialog(false);
       carregarDados();
 
     } catch (error) {
       console.error('Erro ao resgatar:', error);
-      toast.error('Erro ao resgatar recompensa');
+      toast.error('Erro ao resgatar recompensa: ' + error.message);
     } finally {
       setResgatando(false);
     }
@@ -229,7 +250,6 @@ function ClienteRecompensas() {
 
   return (
     <Box>
-      {/* Cabeçalho */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Recompensas
@@ -240,12 +260,12 @@ function ClienteRecompensas() {
       </Box>
 
       {/* Card de Saldo */}
-      <Card sx={{ mb: 4, bgcolor: niveis[nivel].corFundo || '#f5f5f5' }}>
+      <Card sx={{ mb: 4, bgcolor: niveis[nivel]?.corFundo || '#f5f5f5' }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: niveis[nivel].cor, width: 56, height: 56 }}>
+                <Avatar sx={{ bgcolor: niveis[nivel]?.cor || '#cd7f32', width: 56, height: 56 }}>
                   <TrophyIcon />
                 </Avatar>
                 <Box>
@@ -261,9 +281,9 @@ function ClienteRecompensas() {
             <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Chip
-                  label={`Nível ${nivel.toUpperCase()}`}
+                  label={`Nível ${nivel?.toUpperCase() || 'BRONZE'}`}
                   sx={{
-                    bgcolor: niveis[nivel].cor,
+                    bgcolor: niveis[nivel]?.cor || '#cd7f32',
                     color: nivel === 'ouro' ? '#000' : '#fff',
                     fontWeight: 600,
                     fontSize: '1rem',
@@ -276,7 +296,7 @@ function ClienteRecompensas() {
         </CardContent>
       </Card>
 
-      {/* Recompensas resgatadas para uso no salão */}
+      {/* Recompensas resgatadas */}
       <Card sx={{ mb: 4, border: '1px solid', borderColor: 'success.light' }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
@@ -334,64 +354,63 @@ function ClienteRecompensas() {
 
       {/* Lista de Recompensas */}
       <Grid container spacing={3}>
-        {recompensas.map((recompensa, index) => (
-          <Grid item xs={12} sm={6} md={4} key={recompensa.id}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardMedia
-                  component="img"
-                  height="140"
-                  image={recompensa.imagem || 'https://via.placeholder.com/300x140?text=Recompensa'}
-                  alt={recompensa.nome}
-                  sx={{ objectFit: 'cover' }}
-                />
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography gutterBottom variant="h6" component="div">
-                    {recompensa.nome}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                    {recompensa.descricao}
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <StarIcon sx={{ color: '#ff9800' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      {getPontosRecompensa(recompensa)}
+        {recompensas.map((recompensa, index) => {
+          const pontosNecessarios = getPontosRecompensa(recompensa);
+          const saldoSuficiente = saldo >= pontosNecessarios;
+          
+          return (
+            <Grid item xs={12} sm={6} md={4} key={recompensa.id}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardMedia
+                    component="img"
+                    height="140"
+                    image={recompensa.imagem || 'https://via.placeholder.com/300x140?text=Recompensa'}
+                    alt={recompensa.nome || recompensa.titulo}
+                    sx={{ objectFit: 'cover' }}
+                  />
+                  <CardContent sx={{ flexGrow: 1 }}>
+                    <Typography gutterBottom variant="h6" component="div">
+                      {recompensa.nome || recompensa.titulo}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      pontos
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      {recompensa.descricao}
                     </Typography>
-                  </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <StarIcon sx={{ color: '#ff9800' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
+                        {pontosNecessarios}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        pontos
+                      </Typography>
+                    </Box>
 
-                  {recompensa.tipo === 'desconto' && recompensa.valor && (
-                    <Chip
-                      label={`${recompensa.valor}% OFF`}
-                      size="small"
-                      color="success"
-                    />
-                  )}
-                </CardContent>
-                <CardActions>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    disabled={saldo < getPontosRecompensa(recompensa)}
-                    onClick={() => handleResgatar(recompensa)}
-                    sx={{
-                      bgcolor: saldo >= getPontosRecompensa(recompensa) ? '#ff9800' : undefined,
-                    }}
-                  >
-                    {saldo >= getPontosRecompensa(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
-                  </Button>
-                </CardActions>
-              </Card>
-            </motion.div>
-          </Grid>
-        ))}
+                    {recompensa.tipo === 'desconto' && recompensa.valor && (
+                      <Chip label={`${recompensa.valor}% OFF`} size="small" color="success" />
+                    )}
+                  </CardContent>
+                  <CardActions>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      disabled={!saldoSuficiente}
+                      onClick={() => handleResgatar(recompensa)}
+                      sx={{ bgcolor: saldoSuficiente ? '#ff9800' : undefined }}
+                    >
+                      {saldoSuficiente ? 'Resgatar' : 'Pontos insuficientes'}
+                    </Button>
+                  </CardActions>
+                </Card>
+              </motion.div>
+            </Grid>
+          );
+        })}
 
         {recompensas.length === 0 && (
           <Grid item xs={12}>
@@ -417,7 +436,7 @@ function ClienteRecompensas() {
           <Box sx={{ textAlign: 'center', py: 2 }}>
             <GiftIcon sx={{ fontSize: 48, color: '#ff9800', mb: 2 }} />
             <Typography variant="h6" gutterBottom>
-              {recompensaSelecionada?.nome}
+              {recompensaSelecionada?.nome || recompensaSelecionada?.titulo}
             </Typography>
             <Typography variant="body2" color="textSecondary" paragraph>
               {recompensaSelecionada?.descricao}
