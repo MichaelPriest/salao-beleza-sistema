@@ -135,7 +135,7 @@ import { NumericFormat } from 'react-number-format';
 import InputMask from 'react-input-mask';
 import SignatureCanvas from 'react-signature-canvas';
 
-// ============================================
+// ===========================================
 // COMPONENTES DE MÁSCARA
 // ============================================
 
