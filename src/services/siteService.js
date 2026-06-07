@@ -35,7 +35,7 @@ export const siteService = {
       const profissionais = empresaId
         ? await firebaseService.query('profissionais', [{ field: 'empresaId', operator: '==', value: empresaId }])
         : await firebaseService.getAll('profissionais');
-      return profissionais.filter(p => p.status === 'ativo');
+      return profissionais.filter(p => p.status !== 'inativo' && p.ativo !== false);
     } catch (error) {
       console.error('Erro ao buscar profissionais:', error);
       return [];

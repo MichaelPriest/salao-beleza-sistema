@@ -68,6 +68,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast'; // 🔥 IMPORTANTE: Importar o toast
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { QRCodeCanvas } from 'qrcode.react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -597,6 +598,7 @@ function ClienteDashboard() {
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   
   const { cliente, logout, loading: authLoading, firebaseUser } = useAuthCliente();
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
@@ -907,7 +909,7 @@ function ClienteDashboard() {
                 {cliente.nome?.split(' ')[0]}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                {nivelInfo.nome} • {saldo} pts
+                {fidelidadeAtiva ? `${nivelInfo.nome} • ${saldo} pts` : 'Portal do cliente'}
               </Typography>
             </Box>
           </Box>
@@ -948,7 +950,7 @@ function ClienteDashboard() {
                 <Typography variant="caption">Agend.</Typography>
               </Card>
             </Grid>
-            <Grid item xs={4}>
+            <Grid item xs={4} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
                 <StarIcon sx={{ color: '#ff9800', fontSize: 24 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -957,7 +959,7 @@ function ClienteDashboard() {
                 <Typography variant="caption">Pontos</Typography>
               </Card>
             </Grid>
-            <Grid item xs={4}>
+            <Grid item xs={4} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
                 <GiftIcon sx={{ color: '#4caf50', fontSize: 24 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -969,7 +971,7 @@ function ClienteDashboard() {
           </Grid>
 
           {/* Card de Fidelidade */}
-          <Card sx={{ mb: 2, bgcolor: nivelInfo.bg }}>
+          <Card sx={{ mb: 2, bgcolor: nivelInfo.bg, display: fidelidadeAtiva ? 'block' : 'none' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                 <TrophyIcon sx={{ fontSize: 40, color: nivelInfo.cor }} />
@@ -1014,8 +1016,8 @@ function ClienteDashboard() {
             >
               <Tab label="Agendamentos" icon={<EventIcon />} iconPosition="start" />
               <Tab label="Histórico" icon={<HistoryIcon />} iconPosition="start" />
-              <Tab label="Resgates" icon={<GiftIcon />} iconPosition="start" />
-              <Tab label="Indicações" icon={<PersonAddIcon />} iconPosition="start" />
+              <Tab sx={{ display: fidelidadeAtiva ? 'flex' : 'none' }} label="Resgates" icon={<GiftIcon />} iconPosition="start" />
+              <Tab sx={{ display: fidelidadeAtiva ? 'flex' : 'none' }} label="Indicações" icon={<PersonAddIcon />} iconPosition="start" />
             </Tabs>
           </Box>
 
@@ -1269,7 +1271,7 @@ function ClienteDashboard() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={3} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card sx={{ bgcolor: '#fff3e0', height: '100%' }}>
               <CardContent>
@@ -1287,7 +1289,7 @@ function ClienteDashboard() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={3} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card sx={{ bgcolor: '#e8f5e8', height: '100%' }}>
               <CardContent>
@@ -1305,7 +1307,7 @@ function ClienteDashboard() {
           </motion.div>
         </Grid>
 
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={3} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
               <CardContent>
@@ -1326,7 +1328,8 @@ function ClienteDashboard() {
 
       {/* Card de Fidelidade */}
       <Card sx={{ 
-        mb: 4, 
+        mb: 4,
+        display: fidelidadeAtiva ? 'block' : 'none',
         background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
       }}>
         <CardContent>
@@ -1375,8 +1378,8 @@ function ClienteDashboard() {
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
           <Tab label="Próximos Agendamentos" />
           <Tab label="Histórico" />
-          <Tab label="Resgates" />
-          <Tab label="Indicações" />
+          <Tab sx={{ display: fidelidadeAtiva ? 'flex' : 'none' }} label="Resgates" />
+          <Tab sx={{ display: fidelidadeAtiva ? 'flex' : 'none' }} label="Indicações" />
         </Tabs>
       </Box>
 
@@ -1423,7 +1426,7 @@ function ClienteDashboard() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={4} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Recompensas em Destaque</Typography>
@@ -1470,7 +1473,7 @@ function ClienteDashboard() {
                       <TableCell>Serviço</TableCell>
                       <TableCell>Profissional</TableCell>
                       <TableCell align="right">Valor</TableCell>
-                      <TableCell align="right">Pontos</TableCell>
+                      <TableCell sx={{ display: fidelidadeAtiva ? 'table-cell' : 'none' }} align="right">Pontos</TableCell>
                       <TableCell align="center">Status</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1483,7 +1486,7 @@ function ClienteDashboard() {
                           <TableCell>{atendimento.servicoNome}</TableCell>
                           <TableCell>{profissional?.nome || 'Profissional'}</TableCell>
                           <TableCell align="right">R$ {atendimento.valorTotal?.toFixed(2)}</TableCell>
-                          <TableCell align="right"><Chip size="small" label={`+${atendimento.pontosGanhos || 0}`} sx={{ bgcolor: '#fff3e0', color: '#ff9800' }} /></TableCell>
+                          <TableCell sx={{ display: fidelidadeAtiva ? 'table-cell' : 'none' }} align="right"><Chip size="small" label={`+${atendimento.pontosGanhos || 0}`} sx={{ bgcolor: '#fff3e0', color: '#ff9800' }} /></TableCell>
                           <TableCell align="center"><Chip size="small" label="Realizado" color="success" /></TableCell>
                         </TableRow>
                       );
