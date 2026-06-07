@@ -396,6 +396,22 @@ const FileUploadField = ({ perguntaId, value, onChange, disabled, accept = "*/*"
   );
 };
 
+
+const getFormularioKey = (formulario = {}, index = 0) => {
+  const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
+  if (explicitId) return String(explicitId);
+  const base = [
+    formulario.titulo,
+    formulario.nome,
+    formulario.nomeFormulario,
+    formulario.servicoId,
+    ...(formulario.servicoIds || []),
+    ...(formulario.servicosIds || []),
+  ].filter(Boolean).join('_');
+  const slug = base.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return slug || `formulario_${index}`;
+};
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -557,10 +573,11 @@ function ClienteAnamnese() {
             { field: 'ativo', operator: '==', value: true },
           ]).catch(() => []),
         ]));
-        const formulariosExistentes = Array.from(new Map(formulariosPorServicoExistentes.flat().map((item) => [item.id, item])).values());
-        const todosRespondidos = formulariosExistentes.length > 0 && formulariosExistentes.every((formularioItem) =>
-          respostasExistentes.some((resposta) => resposta.formularioId === formularioItem.id)
-        );
+        const formulariosExistentes = Array.from(new Map(formulariosPorServicoExistentes.flat().map((item, index) => [getFormularioKey(item, index), item])).values());
+        const todosRespondidos = formulariosExistentes.length > 0 && formulariosExistentes.every((formularioItem, formularioIndex) => {
+          const formularioId = getFormularioKey(formularioItem, formularioIndex);
+          return respostasExistentes.some((resposta) => resposta.formularioId === formularioId);
+        });
         if (todosRespondidos || formulariosExistentes.length <= 1) {
           navigate(`/cliente/anamnese/${respostasExistentes[0].id}`);
           return;
@@ -578,11 +595,11 @@ function ClienteAnamnese() {
           { field: 'ativo', operator: '==', value: true },
         ]).catch(() => []),
       ]));
-      const formularios = Array.from(new Map(formulariosPorServico.flat().map((item) => [item.id, item])).values());
+      const formularios = Array.from(new Map(formulariosPorServico.flat().map((item, index) => [getFormularioKey(item, index), item])).values());
 
       if (formularios.length > 0) {
-        const formularioAtual = formularios.find((item) => item.id === formularioIdSelecionado) || formularios[0];
-        setFormulario(formularioAtual);
+        const formularioAtual = formularios.find((item, formularioIndex) => getFormularioKey(item, formularioIndex) === formularioIdSelecionado) || formularios[0];
+        setFormulario({ ...formularioAtual, id: getFormularioKey(formularioAtual, formularios.indexOf(formularioAtual)) });
 
         const respostasIniciais = {};
         formularioAtual.questoes?.forEach((q) => {

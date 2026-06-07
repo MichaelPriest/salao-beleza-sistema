@@ -94,6 +94,22 @@ const getAgendamentoServicoIds = (agendamento = {}) => Array.from(new Set([
   ...(agendamento.servicos || []).map((servico) => servico.id),
 ].flat().filter(Boolean)));
 
+
+const getFormularioKey = (formulario = {}, index = 0) => {
+  const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
+  if (explicitId) return String(explicitId);
+  const base = [
+    formulario.titulo,
+    formulario.nome,
+    formulario.nomeFormulario,
+    formulario.servicoId,
+    ...(formulario.servicoIds || []),
+    ...(formulario.servicosIds || []),
+  ].filter(Boolean).join('_');
+  const slug = base.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return slug || `formulario_${index}`;
+};
+
 const formularioAtendeServico = (formulario = {}, servicoIds = []) => {
   const ids = [formulario.servicoId, ...(formulario.servicoIds || []), ...(formulario.servicosIds || [])]
     .flat()
@@ -192,9 +208,10 @@ function ClienteLayout() {
       for (const agendamento of agendamentos) {
         const servicoIds = getAgendamentoServicoIds(agendamento);
         const formulariosDoServico = formularios.filter((formulario) => formulario.ativo !== false && formularioAtendeServico(formulario, servicoIds));
-        pendentesCount += formulariosDoServico.filter((formulario) => !respostas.some((resposta) =>
-          resposta.agendamentoId === agendamento.id && resposta.formularioId === formulario.id
-        )).length;
+        pendentesCount += formulariosDoServico.filter((formulario, formularioIndex) => {
+          const formularioId = getFormularioKey(formulario, formularioIndex);
+          return !respostas.some((resposta) => resposta.agendamentoId === agendamento.id && resposta.formularioId === formularioId);
+        }).length;
       }
 
       setFormulariosPendentes(pendentesCount);
@@ -274,12 +291,16 @@ function ClienteLayout() {
 
       for (const agendamento of agendamentos) {
         const servicoIds = getAgendamentoServicoIds(agendamento);
-        const formulario = formularios.find((item) => item.ativo !== false && formularioAtendeServico(item, servicoIds) && !respostas.some((resposta) =>
-          resposta.agendamentoId === agendamento.id && resposta.formularioId === item.id
-        ));
+        const formulario = formularios.find((item, formularioIndex) => {
+          const formularioId = getFormularioKey(item, formularioIndex);
+          return item.ativo !== false && formularioAtendeServico(item, servicoIds) && !respostas.some((resposta) =>
+            resposta.agendamentoId === agendamento.id && resposta.formularioId === formularioId
+          );
+        });
 
         if (formulario) {
-          navigate(`/cliente/agendamento/${agendamento.id}/anamnese?formularioId=${encodeURIComponent(formulario.id)}`);
+          const formularioId = getFormularioKey(formulario, formularios.indexOf(formulario));
+          navigate(`/cliente/agendamento/${agendamento.id}/anamnese?formularioId=${encodeURIComponent(formularioId)}`);
           return;
         }
       }

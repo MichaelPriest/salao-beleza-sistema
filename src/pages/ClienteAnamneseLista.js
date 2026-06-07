@@ -343,6 +343,25 @@ const MobileFilterDrawer = ({ open, onClose, filterType, setFilterType }) => {
   );
 };
 
+
+const getFormularioKey = (formulario = {}, index = 0) => {
+  const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
+  if (explicitId) return String(explicitId);
+  const base = [
+    formulario.titulo,
+    formulario.nome,
+    formulario.nomeFormulario,
+    formulario.servicoId,
+    ...(formulario.servicoIds || []),
+    ...(formulario.servicosIds || []),
+  ].filter(Boolean).join('_');
+  const slug = base.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return slug || `formulario_${index}`;
+};
+
+const getFormularioTitulo = (formulario = {}, index = 0) =>
+  formulario.titulo || formulario.nome || formulario.nomeFormulario || `Formulário ${index + 1}`;
+
 function ClienteAnamneseLista() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -445,15 +464,16 @@ function ClienteAnamneseLista() {
           formularioAtendeServico(f, servicoIdsAgendamento) && f.ativo !== false
         );
 
-        for (const formulario of formulariosDoServico) {
-          const resposta = respostasPorAgendamentoFormulario[`${agendamento.id}_${formulario.id}`];
+        for (const [formularioIndex, formulario] of formulariosDoServico.entries()) {
+          const formularioId = getFormularioKey(formulario, formularioIndex);
+          const resposta = respostasPorAgendamentoFormulario[`${agendamento.id}_${formularioId}`];
           
           const item = {
-            id: `${agendamento.id}_${formulario.id}`,
+            id: `${agendamento.id}_${formularioId}`,
             agendamentoId: agendamento.id,
-            formularioId: formulario.id,
-            formularioTitulo: formulario.titulo,
-            formularioDescricao: formulario.descricao,
+            formularioId,
+            formularioTitulo: getFormularioTitulo(formulario, formularioIndex),
+            formularioDescricao: formulario.descricao || formulario.observacoes || '',
             servicoId: servicoIdsAgendamento[0],
             servicoNome: agendamento.servicosNomes || servicoIdsAgendamento.map((servicoId) => servicosData.find(s => s.id === servicoId)?.nome).filter(Boolean).join(', ') || 'Serviço',
             dataAgendamento: agendamento.data,

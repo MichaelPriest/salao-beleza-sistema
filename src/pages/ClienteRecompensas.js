@@ -35,6 +35,17 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
+
+const getPontosRecompensa = (recompensa = {}) => Number(
+  recompensa.pontosNecessarios ?? recompensa.pontos ?? recompensa.custoPontos ?? recompensa.valorPontos ?? 0
+);
+
+const getQuantidadeDisponivel = (recompensa = {}) => {
+  if (recompensa.ilimitado === true) return Infinity;
+  const valor = recompensa.quantidadeDisponivel ?? recompensa.quantidade ?? recompensa.estoque ?? null;
+  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
+};
+
 function ClienteRecompensas() {
   const { cliente, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
@@ -135,7 +146,7 @@ function ClienteRecompensas() {
   };
 
   const handleResgatar = (recompensa) => {
-    if (saldo < recompensa.pontosNecessarios) {
+    if (saldo < getPontosRecompensa(recompensa)) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -148,8 +159,8 @@ function ClienteRecompensas() {
       setResgatando(true);
 
       // Verificar disponibilidade
-      if (recompensaSelecionada.quantidadeDisponivel !== null && 
-          recompensaSelecionada.quantidadeDisponivel <= 0) {
+      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity &&
+          getQuantidadeDisponivel(recompensaSelecionada) <= 0) {
         toast.error('Recompensa esgotada');
         return;
       }
@@ -164,7 +175,7 @@ function ClienteRecompensas() {
         recompensaId: recompensaSelecionada.id,
         recompensaNome: recompensaSelecionada.nome,
         recompensaImagem: recompensaSelecionada.imagem || '',
-        pontosGastos: recompensaSelecionada.pontosNecessarios,
+        pontosGastos: getPontosRecompensa(recompensaSelecionada),
         data: new Date().toISOString(),
         status: 'disponivel',
         codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
@@ -179,7 +190,7 @@ function ClienteRecompensas() {
       await firebaseService.add('pontuacao', {
         clienteId: cliente.id,
         clienteNome: cliente.nome,
-        quantidade: recompensaSelecionada.pontosNecessarios,
+        quantidade: getPontosRecompensa(recompensaSelecionada),
         tipo: 'debito',
         motivo: `Resgate: ${recompensaSelecionada.nome}`,
         data: new Date().toISOString(),
@@ -187,9 +198,11 @@ function ClienteRecompensas() {
       });
 
       // Atualizar quantidade disponível se necessário
-      if (recompensaSelecionada.quantidadeDisponivel !== null) {
+      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity) {
+        const quantidadeAtual = getQuantidadeDisponivel(recompensaSelecionada);
         await firebaseService.update('recompensas', recompensaSelecionada.id, {
-          quantidadeDisponivel: recompensaSelecionada.quantidadeDisponivel - 1,
+          quantidadeDisponivel: quantidadeAtual - 1,
+          quantidade: quantidadeAtual - 1,
           updatedAt: new Date().toISOString()
         });
       }
@@ -347,7 +360,7 @@ function ClienteRecompensas() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <StarIcon sx={{ color: '#ff9800' }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      {recompensa.pontosNecessarios}
+                      {getPontosRecompensa(recompensa)}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       pontos
@@ -366,13 +379,13 @@ function ClienteRecompensas() {
                   <Button
                     fullWidth
                     variant="contained"
-                    disabled={saldo < recompensa.pontosNecessarios}
+                    disabled={saldo < getPontosRecompensa(recompensa)}
                     onClick={() => handleResgatar(recompensa)}
                     sx={{
-                      bgcolor: saldo >= recompensa.pontosNecessarios ? '#ff9800' : undefined,
+                      bgcolor: saldo >= getPontosRecompensa(recompensa) ? '#ff9800' : undefined,
                     }}
                   >
-                    {saldo >= recompensa.pontosNecessarios ? 'Resgatar' : 'Pontos insuficientes'}
+                    {saldo >= getPontosRecompensa(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
                   </Button>
                 </CardActions>
               </Card>
@@ -413,12 +426,12 @@ function ClienteRecompensas() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Pontos necessários:</Typography>
               <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                {recompensaSelecionada?.pontosNecessarios}
+                {getPontosRecompensa(recompensaSelecionada)}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography>Seu saldo:</Typography>
-              <Typography sx={{ fontWeight: 600, color: saldo >= (recompensaSelecionada?.pontosNecessarios || 0) ? '#4caf50' : '#f44336' }}>
+              <Typography sx={{ fontWeight: 600, color: saldo >= getPontosRecompensa(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
                 {saldo}
               </Typography>
             </Box>
