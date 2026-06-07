@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { supabaseService } from '../services/firebase';
+import firebaseService from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
 // Função segura para obter pontos
