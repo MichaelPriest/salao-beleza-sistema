@@ -188,6 +188,7 @@ import ClienteAnamnese from './pages/ClienteAnamnese';
 import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
 import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
+import ClienteChamados from './pages/ClienteChamados';
 
 // Páginas de Erro
 import Page404 from './pages/404';
