@@ -112,7 +112,22 @@ const TENANT_ROOT_COLLECTIONS = new Set(['empresas']);
 const safeLocalStorage = {
   getItem: (key) => (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)),
   setItem: (key, value) => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      const quotaExceeded = error?.name === 'QuotaExceededError' || error?.code === 22 || String(error?.message || '').toLowerCase().includes('quota');
+      if (!quotaExceeded) throw error;
+      console.warn(`⚠️ localStorage sem espaço para ${key}. Limpando cache transitório e tentando novamente.`, error);
+      Object.keys(localStorage)
+        .filter((storageKey) => storageKey.startsWith('cache_') || storageKey.startsWith('temp_'))
+        .forEach((storageKey) => localStorage.removeItem(storageKey));
+      try {
+        localStorage.setItem(key, value);
+      } catch (retryError) {
+        console.warn(`⚠️ Não foi possível persistir ${key} no localStorage. O contexto seguirá em memória.`, retryError);
+      }
+    }
   },
   removeItem: (key) => {
     if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
@@ -330,6 +345,36 @@ const sanitizeForSupabase = (value) => {
   return value;
 };
 
+
+const compactTenantStorage = (value = {}, fallback = {}) => {
+  if (!value && !fallback) return null;
+  const source = value || {};
+  const base = fallback || {};
+  const compact = {
+    id: source.id || source.empresaId || base.id || base.empresaId || null,
+    empresaId: source.empresaId || source.id || base.empresaId || base.id || null,
+    nome: source.nome || source.razaoSocial || source.nomeFantasia || base.nome || base.empresaNome || '',
+    slug: source.slug || source.slugPublico || base.slug || '',
+    planoId: source.planoId || source.plano?.id || base.planoId || null,
+    planoNome: source.planoNome || source.plano?.nome || base.planoNome || '',
+    multiUnidade: source.multiUnidade ?? source.plano?.multiUnidade ?? base.multiUnidade ?? false,
+  };
+  return Object.fromEntries(Object.entries(compact).filter(([, item]) => item !== null && item !== undefined && item !== ''));
+};
+
+const compactUnitStorage = (value = {}, fallback = {}) => {
+  if (!value && !fallback) return null;
+  const source = value || {};
+  const base = fallback || {};
+  const compact = {
+    id: source.id || source.unidadeId || base.id || base.unidadeId || null,
+    unidadeId: source.unidadeId || source.id || base.unidadeId || base.id || null,
+    empresaId: source.empresaId || base.empresaId || null,
+    nome: source.nome || source.nomeUnidade || base.nome || base.unidadeNome || '',
+  };
+  return Object.fromEntries(Object.entries(compact).filter(([, item]) => item !== null && item !== undefined && item !== ''));
+};
+
 export const getTenantContext = () => {
   try {
     const empresa = JSON.parse(safeLocalStorage.getItem(TENANT_STORAGE_KEY) || 'null');
@@ -346,17 +391,17 @@ export const getTenantContext = () => {
 };
 
 export const setTenantContext = ({ empresaId, empresa, unidadeId, unidade } = {}) => {
-  const empresaContext = empresa || (empresaId ? { id: empresaId } : null);
+  const empresaContext = compactTenantStorage(empresa, empresaId ? { id: empresaId, empresaId } : null);
   const hasUnitSelection = Boolean(unidade || unidadeId);
-  const unidadeContext = unidade || (unidadeId ? { id: unidadeId, empresaId: empresaContext?.id || empresaId } : null);
+  const unidadeContext = compactUnitStorage(unidade, unidadeId ? { id: unidadeId, unidadeId, empresaId: empresaContext?.id || empresaId } : null);
 
-  if (empresaContext) {
+  if (empresaContext?.id || empresaContext?.empresaId) {
     safeLocalStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(empresaContext));
   }
 
   // Quando a unidade vem vazia/nula, o contexto passa a representar "todas as unidades".
   // Isso remove a unidade anterior para que coleções por unidade sejam filtradas apenas por empresa.
-  if (hasUnitSelection && unidadeContext) {
+  if (hasUnitSelection && (unidadeContext?.id || unidadeContext?.unidadeId)) {
     safeLocalStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unidadeContext));
   } else {
     safeLocalStorage.removeItem(UNIT_STORAGE_KEY);
