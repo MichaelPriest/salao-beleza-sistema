@@ -439,21 +439,7 @@ function ClienteAnamnese() {
   const entityType = atendimentoId ? 'atendimento' : 'agendamento';
   const formularioIdSelecionado = searchParams.get('formularioId');
 
-  const getClienteIds = useCallback(() => Array.from(new Set([
-    firebaseUser?.uid,
-    cliente?.id,
-    cliente?.authUid,
-    cliente?.googleUid,
-  ].filter(Boolean))), [cliente, firebaseUser]);
-
-  const getServicoIds = (origem = {}) => Array.from(new Set([
-    origem.servicoId,
-    ...(origem.servicosIds || []),
-    ...(origem.servicoIds || []),
-    ...(origem.servicos || []).map((servico) => servico.id),
-  ].flat().filter(Boolean)));
-
-  const getClienteIds = useCallback(() => Array.from(new Set([
+  const getClienteIdsAtuais = useCallback(() => Array.from(new Set([
     firebaseUser?.uid,
     cliente?.id,
     cliente?.authUid,
@@ -749,7 +735,7 @@ function ClienteAnamnese() {
     try {
       setEnviando(true);
 
-      const uid = getClienteIds()[0];
+      const uid = getClienteIdsAtuais()[0];
       if (!uid) {
         toast.error('Cliente não identificado. Faça login novamente.');
         return;
