@@ -492,6 +492,77 @@ function Recompensas() {
     }
   };
 
+  const handleImagemRecompensaChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem válido.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 1MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setFormData((current) => ({ ...current, imagem: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem da recompensa:', error);
+      toast.error('Erro ao carregar imagem da recompensa.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const limparFormulario = () => {
+    setFormData({
+      nome: '',
+      descricao: '',
+      tipo: 'desconto',
+      categoria: 'cabelo',
+      pontos: 100,
+      valor: 0,
+      quantidade: 0,
+      ilimitado: false,
+      ativo: true,
+      destaque: false,
+      validade: '',
+      imagem: '',
+      termos: '',
+    });
+    setSelectedRecompensa(null);
+  };
+
+  const abrirEditar = (recompensa) => {
+    setSelectedRecompensa(recompensa);
+    setFormData({
+      nome: recompensa.nome || '',
+      descricao: recompensa.descricao || '',
+      tipo: recompensa.tipo || 'desconto',
+      categoria: recompensa.categoria || 'cabelo',
+      pontos: recompensa.pontos || 100,
+      valor: recompensa.valor || 0,
+      quantidade: recompensa.quantidade || 0,
+      ilimitado: recompensa.ilimitado || false,
+      ativo: recompensa.ativo !== false,
+      destaque: recompensa.destaque || false,
+      validade: recompensa.validade || '',
+      imagem: recompensa.imagem || '',
+      termos: recompensa.termos || '',
+    });
+    setOpenEditarDialog(true);
+  };
+
+  const abrirResgatar = (recompensa) => {
+    setSelectedRecompensaResgate(recompensa);
+    setResgateForm({
+      clienteId: usuario?.clienteId || '',
+      clienteNome: usuario?.nome || '',
+      observacoes: '',
+    });
+    setOpenResgatarDialog(true);
+  };
+
   const recompensasFiltradas = recompensas.filter(r => {
     const matchesSearch = r.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          r.descricao?.toLowerCase().includes(searchTerm.toLowerCase());
