@@ -36,13 +36,15 @@ import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
 
-const getPontosRecompensa = (recompensa = {}) => Number(
-  recompensa.pontosNecessarios ?? recompensa.pontos ?? recompensa.custoPontos ?? recompensa.valorPontos ?? 0
-);
+const getPontosRecompensa = (recompensa) => {
+  const dados = recompensa || {};
+  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
+};
 
-const getQuantidadeDisponivel = (recompensa = {}) => {
-  if (recompensa.ilimitado === true) return Infinity;
-  const valor = recompensa.quantidadeDisponivel ?? recompensa.quantidade ?? recompensa.estoque ?? null;
+const getQuantidadeDisponivel = (recompensa) => {
+  const dados = recompensa || {};
+  if (dados.ilimitado === true) return Infinity;
+  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
   return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
 };
 
@@ -155,6 +157,11 @@ function ClienteRecompensas() {
   };
 
   const confirmarResgate = async () => {
+    if (!recompensaSelecionada) {
+      toast.error('Selecione uma recompensa para resgatar.');
+      return;
+    }
+
     try {
       setResgatando(true);
 
