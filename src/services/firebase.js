@@ -34,6 +34,7 @@ const TENANT_SCOPED_COLLECTIONS = new Set([
   'caixa',
   'campanhas',
   'categorias_produtos',
+  'chamados_suporte',
   'clientes',
   'cloud_config',
   'comissoes',
@@ -82,16 +83,25 @@ const UNIT_SCOPED_COLLECTIONS = new Set([
   'atendimentos',
   'ausencias',
   'caixa',
+  'campanhas',
+  'categorias_produtos',
+  'clientes',
+  'comissoes',
   'compras',
   'contas_pagar',
   'contas_receber',
   'disponibilidades',
+  'avaliacoes',
+  'cupons',
   'entradas',
   'itens_venda',
+  'fornecedores',
   'movimentacoes_estoque',
   'orcamentos',
   'pagamentos',
   'produtos',
+  'profissionais',
+  'servicos',
   'transacoes'
 ]);
 
@@ -102,7 +112,22 @@ const TENANT_ROOT_COLLECTIONS = new Set(['empresas']);
 const safeLocalStorage = {
   getItem: (key) => (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)),
   setItem: (key, value) => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      const quotaExceeded = error?.name === 'QuotaExceededError' || error?.code === 22 || String(error?.message || '').toLowerCase().includes('quota');
+      if (!quotaExceeded) throw error;
+      console.warn(`⚠️ localStorage sem espaço para ${key}. Limpando cache transitório e tentando novamente.`, error);
+      Object.keys(localStorage)
+        .filter((storageKey) => storageKey.startsWith('cache_') || storageKey.startsWith('temp_'))
+        .forEach((storageKey) => localStorage.removeItem(storageKey));
+      try {
+        localStorage.setItem(key, value);
+      } catch (retryError) {
+        console.warn(`⚠️ Não foi possível persistir ${key} no localStorage. O contexto seguirá em memória.`, retryError);
+      }
+    }
   },
   removeItem: (key) => {
     if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
@@ -320,6 +345,36 @@ const sanitizeForSupabase = (value) => {
   return value;
 };
 
+
+const compactTenantStorage = (value = {}, fallback = {}) => {
+  if (!value && !fallback) return null;
+  const source = value || {};
+  const base = fallback || {};
+  const compact = {
+    id: source.id || source.empresaId || base.id || base.empresaId || null,
+    empresaId: source.empresaId || source.id || base.empresaId || base.id || null,
+    nome: source.nome || source.razaoSocial || source.nomeFantasia || base.nome || base.empresaNome || '',
+    slug: source.slug || source.slugPublico || base.slug || '',
+    planoId: source.planoId || source.plano?.id || base.planoId || null,
+    planoNome: source.planoNome || source.plano?.nome || base.planoNome || '',
+    multiUnidade: source.multiUnidade ?? source.plano?.multiUnidade ?? base.multiUnidade ?? false,
+  };
+  return Object.fromEntries(Object.entries(compact).filter(([, item]) => item !== null && item !== undefined && item !== ''));
+};
+
+const compactUnitStorage = (value = {}, fallback = {}) => {
+  if (!value && !fallback) return null;
+  const source = value || {};
+  const base = fallback || {};
+  const compact = {
+    id: source.id || source.unidadeId || base.id || base.unidadeId || null,
+    unidadeId: source.unidadeId || source.id || base.unidadeId || base.id || null,
+    empresaId: source.empresaId || base.empresaId || null,
+    nome: source.nome || source.nomeUnidade || base.nome || base.unidadeNome || '',
+  };
+  return Object.fromEntries(Object.entries(compact).filter(([, item]) => item !== null && item !== undefined && item !== ''));
+};
+
 export const getTenantContext = () => {
   try {
     const empresa = JSON.parse(safeLocalStorage.getItem(TENANT_STORAGE_KEY) || 'null');
@@ -336,15 +391,20 @@ export const getTenantContext = () => {
 };
 
 export const setTenantContext = ({ empresaId, empresa, unidadeId, unidade } = {}) => {
-  const empresaContext = empresa || (empresaId ? { id: empresaId } : null);
-  const unidadeContext = unidade || (unidadeId ? { id: unidadeId, empresaId: empresaContext?.id || empresaId } : null);
+  const empresaContext = compactTenantStorage(empresa, empresaId ? { id: empresaId, empresaId } : null);
+  const hasUnitSelection = Boolean(unidade || unidadeId);
+  const unidadeContext = compactUnitStorage(unidade, unidadeId ? { id: unidadeId, unidadeId, empresaId: empresaContext?.id || empresaId } : null);
 
-  if (empresaContext) {
+  if (empresaContext?.id || empresaContext?.empresaId) {
     safeLocalStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(empresaContext));
   }
 
-  if (unidadeContext) {
+  // Quando a unidade vem vazia/nula, o contexto passa a representar "todas as unidades".
+  // Isso remove a unidade anterior para que coleções por unidade sejam filtradas apenas por empresa.
+  if (hasUnitSelection && (unidadeContext?.id || unidadeContext?.unidadeId)) {
     safeLocalStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unidadeContext));
+  } else {
+    safeLocalStorage.removeItem(UNIT_STORAGE_KEY);
   }
 
   return getTenantContext();
@@ -373,18 +433,27 @@ const getLocalUsuario = () => {
   }
 };
 
-const isPlatformAdmin = () => {
-  const usuario = getLocalUsuario();
-  return Boolean(
-    usuario?.isSaasAdmin ||
-    usuario?.adminSaas ||
-    usuario?.tipoUsuario === 'saas_admin' ||
-    usuario?.tipoUsuario === 'plataforma' ||
-    PLATFORM_ROLES.includes(usuario?.cargo) ||
-    PLATFORM_ROLES.includes(usuario?.role) ||
-    usuario?.permissoes?.includes('admin_saas')
-  );
+const hasPlatformAdminRole = (usuario = getLocalUsuario()) => Boolean(
+  usuario?.isSaasAdmin ||
+  usuario?.adminSaas ||
+  usuario?.tipoUsuario === 'saas_admin' ||
+  usuario?.tipoUsuario === 'plataforma' ||
+  PLATFORM_ROLES.includes(usuario?.cargo) ||
+  PLATFORM_ROLES.includes(usuario?.role) ||
+  usuario?.permissoes?.includes('admin_saas')
+);
+
+const isPlatformArea = () => {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.startsWith('/saas-admin') || window.location.pathname.startsWith('/selecionar-empresa');
 };
+
+const isActingAsTenantAdmin = () => {
+  const usuario = getLocalUsuario();
+  return Boolean(hasPlatformAdminRole(usuario) && usuario?.tenantAssumidoPorSuperadmin && getTenantContext().empresaId && !isPlatformArea());
+};
+
+const isPlatformAdmin = () => hasPlatformAdminRole() && !isActingAsTenantAdmin();
 
 const getNoTenantCondition = () => ({ field: 'empresaId', operator: '==', value: '__tenant_nao_selecionado__' });
 const isTenantScopedCollection = (collectionName) => TENANT_SCOPED_COLLECTIONS.has(collectionName);
@@ -431,6 +500,10 @@ const mergeTenantConditions = (collectionName, conditions = []) => {
 
   if (!isTenantScopedCollection(collectionName)) return conditions;
 
+  if (collectionName === 'usuarios' && hasCondition(conditions, 'email')) {
+    return conditions;
+  }
+
   const { empresaId, unidadeId } = getTenantContext();
   const conditionsWithoutTenant = conditions.filter((condition) => condition.field !== 'empresaId' && condition.field !== 'unidadeId');
 
@@ -448,7 +521,40 @@ const mergeTenantConditions = (collectionName, conditions = []) => {
   return scopedConditions;
 };
 
+const NOTIFICATION_COLLECTIONS = new Set(['notificacoes', 'notificacoes_cliente']);
+
+const normalizeNotificationData = (collectionName, data = {}) => {
+  if (!NOTIFICATION_COLLECTIONS.has(collectionName)) return data;
+
+  const agora = new Date().toISOString();
+  const tenant = getTenantContext();
+  const detalhes = data.detalhes || data.dados || {};
+  const usuarioId = data.usuarioId || data.userId || data.destinatarioId || (collectionName === 'notificacoes_cliente' ? data.clienteId : null);
+  const clienteId = data.clienteId || (collectionName === 'notificacoes_cliente' ? usuarioId : null);
+
+  return {
+    tipo: data.tipo || 'info',
+    titulo: data.titulo || 'Notificação',
+    mensagem: data.mensagem || data.descricao || '',
+    link: data.link || (collectionName === 'notificacoes_cliente' ? '/cliente/notificacoes' : '/notificacoes'),
+    prioridade: data.prioridade || 'media',
+    ...data,
+    usuarioId,
+    ...(clienteId ? { clienteId } : {}),
+    lida: Boolean(data.lida),
+    data: data.data || data.createdAt || agora,
+    createdAt: data.createdAt || data.data || agora,
+    updatedAt: data.updatedAt || agora,
+    detalhes,
+    empresaId: data.empresaId || detalhes.empresaId || tenant.empresaId || null,
+    empresaNome: data.empresaNome || detalhes.empresaNome || tenant.empresa?.nome || '',
+    unidadeId: data.unidadeId || detalhes.unidadeId || tenant.unidadeId || null,
+    unidadeNome: data.unidadeNome || detalhes.unidadeNome || tenant.unidade?.nome || '',
+  };
+};
+
 const applyTenantMetadata = (collectionName, data = {}) => {
+  data = normalizeNotificationData(collectionName, data);
   if (!isTenantScopedCollection(collectionName) || isPlatformAdmin()) return data;
 
   const { empresaId, unidadeId } = getTenantContext();
@@ -488,7 +594,13 @@ const isDocumentVisibleInTenant = (collectionName, data) => {
 
   if (!isTenantScopedCollection(collectionName)) return true;
   if (!empresaId) return false;
-  if (!data.empresaId || data.empresaId !== empresaId) return false;
+
+  const documentEmpresaId = data.empresaId || data.empresa_id || data.tenantId || data.tenant_id || data.empresa?.id || null;
+  const idIndicaTenant = collectionName === 'clientes' && data.id && String(data.id).startsWith(`${empresaId}_`);
+
+  if (documentEmpresaId && String(documentEmpresaId) !== String(empresaId)) return false;
+  if (!documentEmpresaId && !idIndicaTenant) return false;
+
   if (unidadeId && isUnitScopedCollection(collectionName) && data.unidadeId && data.unidadeId !== unidadeId) return false;
 
   return true;
@@ -530,7 +642,7 @@ const operatorMap = {
 };
 
 // FUNÇÃO CORRIGIDA - buildQueryString
-const buildQueryString = (collectionName, conditions = [], orderByField = null) => {
+const buildQueryString = (collectionName, conditions = [], orderByField = null, { jsonData = true } = {}) => {
   const params = new URLSearchParams();
   params.append('select', '*');
   
@@ -540,20 +652,19 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
     .filter(({ field, value }) => field && value !== undefined && value !== null)
     .forEach(({ field, operator = '==', value }) => {
       const supabaseOperator = operatorMap[operator] || operator;
-      // CORREÇÃO: Usar a sintaxe correta para campos JSONB
-      const jsonField = `data->>${field}`;
+      const filterField = jsonData ? `data->>${field}` : field;
       
       if (supabaseOperator === 'in' && Array.isArray(value)) {
-        params.append(jsonField, `in.(${value.map(encodeFilterValue).join(',')})`);
+        params.append(filterField, `in.(${value.map(encodeFilterValue).join(',')})`);
       } else if (supabaseOperator === 'cs') {
-        params.append(`data->${field}`, `cs.${JSON.stringify(Array.isArray(value) ? value : [value])}`);
+        params.append(jsonData ? `data->${field}` : field, `cs.${JSON.stringify(Array.isArray(value) ? value : [value])}`);
       } else {
-        params.append(jsonField, `${supabaseOperator}.${encodeFilterValue(value)}`);
+        params.append(filterField, `${supabaseOperator}.${encodeFilterValue(value)}`);
       }
     });
 
   if (orderByField) {
-    params.append('order', `data->>${orderByField}`);
+    params.append('order', jsonData ? `data->>${orderByField}` : orderByField);
   }
   
   const queryString = params.toString();
@@ -562,21 +673,17 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null) 
   return queryString;
 };
 
-const getRestTableName = (collectionName) => collectionName; // Usar diretamente o nome da tabela
-const getDocumentFilter = (collectionName, id) => `document_id=eq.${encodeURIComponent(id)}`;
-const getUpsertConflict = () => 'document_id';
-
-const buildDocumentPayload = (collectionName, documentId, documentData) => {
-  return {
-    document_id: documentId,
-    data: documentData
-  };
+const isSchemaCacheColumnError = (error) => {
+  const message = String(error?.message || error?.details?.message || error?.details?.hint || '');
+  return /schema cache|column/i.test(message) && /data|document_id/i.test(message);
 };
 
 const toDocument = (row) => {
   if (!row) return null;
-  // Retorna os dados com o id sendo o document_id
-  return { id: row.document_id, ...(row.data || {}) };
+  if (Object.prototype.hasOwnProperty.call(row, 'data') || Object.prototype.hasOwnProperty.call(row, 'document_id')) {
+    return { id: row.document_id || row.data?.id, ...(row.data || {}) };
+  }
+  return { id: row.id || row.document_id, ...row };
 };
 
 const toDocuments = (rows = []) => rows.map(toDocument).filter(Boolean);
@@ -696,6 +803,13 @@ export const createUserWithEmailAndPassword = async (_auth, email, password, met
     setStoredSession(session);
   }
   return { user: toAuthUser(session.user) };
+};
+
+export const createAuthUserWithoutSession = async (email, password, metadata = {}) => {
+  const redirectTo = getRedirectUrl(DEFAULT_CONFIRM_REDIRECT_PATH);
+  const session = await authRequest(appendRedirectTo('signup', redirectTo), { email, password, data: metadata });
+  const user = session?.user || (session?.id && session?.email ? session : null);
+  return { user: toAuthUser(user), session };
 };
 
 export const signOut = async () => {
@@ -836,8 +950,16 @@ export const firebaseService = {
         const empresa = await firebaseService.getById(collectionName, empresaId);
         return empresa ? [empresa] : [];
       }
-      const queryString = buildQueryString(collectionName, getTenantConditions(collectionName));
-      const result = await supabaseFetch(`/rest/v1/${collectionName}?${queryString}`);
+      const tenantConditions = getTenantConditions(collectionName);
+      const queryString = buildQueryString(collectionName, tenantConditions);
+      let result;
+      try {
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${queryString}`);
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const directQueryString = buildQueryString(collectionName, tenantConditions, null, { jsonData: false });
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${directQueryString}`);
+      }
       return toDocuments(result);
     } catch (error) {
       console.error(`Erro ao buscar ${collectionName} no Supabase:`, error);
@@ -847,20 +969,30 @@ export const firebaseService = {
 
   getById: async (collectionName, id) => {
     try {
-      // Busca por document_id
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-      let documentData = toDocument(rows?.[0]) || null;
-      
-      // Se não encontrar, busca pelo authUid dentro do JSON
-      if (!documentData) {
-        const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?data->>authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-        documentData = toDocument(rowsByAuth?.[0]) || null;
-      }
-      
-      // Se não encontrar, busca pelo googleUid
-      if (!documentData) {
-        const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?data->>googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
-        documentData = toDocument(rowsByGoogle?.[0]) || null;
+      let documentData = null;
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+        documentData = toDocument(rows?.[0]) || null;
+        if (!documentData) {
+          const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?data->>authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByAuth?.[0]) || null;
+        }
+        if (!documentData) {
+          const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?data->>googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByGoogle?.[0]) || null;
+        }
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+        documentData = toDocument(rows?.[0]) || null;
+        if (!documentData) {
+          const rowsByAuth = await supabaseFetch(`/rest/v1/${collectionName}?authUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByAuth?.[0]) || null;
+        }
+        if (!documentData) {
+          const rowsByGoogle = await supabaseFetch(`/rest/v1/${collectionName}?googleUid=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+          documentData = toDocument(rowsByGoogle?.[0]) || null;
+        }
       }
       
       if (canReadDocumentByIdWithoutTenant(collectionName, id)) return documentData;
@@ -883,15 +1015,20 @@ export const firebaseService = {
         createdAt: tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const payload = {
-        document_id: documentId,
-        data: documentData
-      };
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
+          method: 'POST',
+          body: JSON.stringify({ document_id: documentId, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}`, {
+          method: 'POST',
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id: documentId, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao adicionar em ${collectionName} no Supabase:`, error);
       throw error;
@@ -911,15 +1048,22 @@ export const firebaseService = {
         createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          document_id: id,
-          data: documentData
-        })
-      });
-      return toDocument(rows?.[0]) || { id, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify({ document_id: id, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao salvar em ${collectionName} no Supabase:`, error);
       throw error;
@@ -942,15 +1086,22 @@ export const firebaseService = {
         createdAt: current?.createdAt || tenantData?.createdAt || Timestamp.now(),
         updatedAt: Timestamp.now()
       });
-      const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({
-          document_id: id,
-          data: documentData
-        })
-      });
-      return toDocument(rows?.[0]) || { id, ...documentData };
+      try {
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=document_id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify({ document_id: id, data: documentData })
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const rows = await supabaseFetch(`/rest/v1/${collectionName}?on_conflict=id`, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+          body: JSON.stringify(documentData)
+        });
+        return toDocument(rows?.[0]) || { id, ...documentData };
+      }
     } catch (error) {
       console.error(`Erro ao atualizar ${collectionName} no Supabase:`, error);
       throw error;
@@ -964,7 +1115,12 @@ export const firebaseService = {
       if (!current && (isTenantScopedCollection(collectionName) || isTenantRootCollection(collectionName)) && !isPlatformAdmin()) {
         throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
       }
-      await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      try {
+        await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        await supabaseFetch(`/rest/v1/${collectionName}?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      }
       return id;
     } catch (error) {
       console.error(`Erro ao excluir de ${collectionName} no Supabase:`, error);
@@ -983,7 +1139,14 @@ export const firebaseService = {
       const url = `/rest/v1/${collectionName}?${queryString}`;
       console.log('🔍 URL:', url);
       
-      const result = await supabaseFetch(url);
+      let result;
+      try {
+        result = await supabaseFetch(url);
+      } catch (wrapperError) {
+        if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+        const directQueryString = buildQueryString(collectionName, scopedConditions, orderByField, { jsonData: false });
+        result = await supabaseFetch(`/rest/v1/${collectionName}?${directQueryString}`);
+      }
       const documents = toDocuments(result);
       
       console.log('✅ firebaseService.query - Resultado:', documents.length, 'documentos');
