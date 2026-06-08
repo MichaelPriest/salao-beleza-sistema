@@ -34,19 +34,12 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import {
+  getPontosRecompensa,
+  getQuantidadeDisponivel,
+  resgateFidelidadeService,
+} from '../services/resgateFidelidadeService';
 
-
-const getPontosRecompensa = (recompensa) => {
-  const dados = recompensa || {};
-  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
-};
-
-const getQuantidadeDisponivel = (recompensa) => {
-  const dados = recompensa || {};
-  if (dados.ilimitado === true) return Infinity;
-  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
-  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
-};
 
 function ClienteRecompensas() {
   const { cliente, firebaseUser } = useAuthCliente();
@@ -172,47 +165,14 @@ function ClienteRecompensas() {
         return;
       }
 
-      // Registrar o resgate
-      const resgateData = {
-        clienteId: cliente.id,
-        clienteAuthUid: firebaseUser?.uid || cliente.authUid || '',
-        authUid: firebaseUser?.uid || cliente.authUid || '',
-        googleUid: cliente.googleUid || '',
-        clienteNome: cliente.nome,
-        recompensaId: recompensaSelecionada.id,
-        recompensaNome: recompensaSelecionada.nome,
-        recompensaImagem: recompensaSelecionada.imagem || '',
-        pontosGastos: getPontosRecompensa(recompensaSelecionada),
-        data: new Date().toISOString(),
-        status: 'disponivel',
-        codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
-        utilizado: false,
-        validadeAte: recompensaSelecionada.validade || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        createdAt: new Date().toISOString()
-      };
-
-      await firebaseService.add('resgates_fidelidade', resgateData);
-
-      // Registrar a movimentação de pontos
-      await firebaseService.add('pontuacao', {
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        quantidade: getPontosRecompensa(recompensaSelecionada),
-        tipo: 'debito',
-        motivo: `Resgate: ${recompensaSelecionada.nome}`,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+      const resgateData = await resgateFidelidadeService.criar({
+        cliente,
+        firebaseUser,
+        recompensa: recompensaSelecionada,
+        observacoes: 'Resgate solicitado pelo portal do cliente',
+        usuarioId: firebaseUser?.uid || cliente?.id || 'cliente',
+        usuarioNome: cliente?.nome || 'Cliente',
       });
-
-      // Atualizar quantidade disponível se necessário
-      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity) {
-        const quantidadeAtual = getQuantidadeDisponivel(recompensaSelecionada);
-        await firebaseService.update('recompensas', recompensaSelecionada.id, {
-          quantidadeDisponivel: quantidadeAtual - 1,
-          quantidade: quantidadeAtual - 1,
-          updatedAt: new Date().toISOString()
-        });
-      }
 
       toast.success(`Recompensa resgatada! Código: ${resgateData.codigo}`);
       setOpenResgateDialog(false);

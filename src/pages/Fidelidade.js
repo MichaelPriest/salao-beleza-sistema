@@ -88,6 +88,7 @@ import { Timestamp } from '../services/firebase';
 import { fidelidadeConfigService } from '../services/fidelidadeConfigService';
 import { notificarFidelidadeConfigAtualizada } from '../hooks/useFidelidadeAtiva';
 import { auditoriaService } from '../services/auditoriaService';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -861,57 +862,15 @@ function Fidelidade() {
         return;
       }
 
-      const resgate = {
+      await resgateFidelidadeService.criar({
         clienteId: selectedCliente.id,
         clienteNome: selectedCliente.nome,
-        recompensaId: recompensa.id,
-        recompensaNome: recompensa.nome,
+        cliente: selectedCliente,
+        recompensa,
         pontosGastos: pontosNecessarios,
-        data: new Date().toISOString(),
-        status: 'resgatado',
-        utilizado: false,
+        status: 'disponivel',
         usuarioId: usuario?.uid || 'sistema',
         usuarioNome: usuario?.nome || 'Sistema',
-        createdAt: Timestamp.now(),
-      };
-
-      await firebaseService.add('resgates_fidelidade', resgate);
-
-      // Atualizar quantidade da recompensa se não for ilimitada
-      if (!recompensa.ilimitado && recompensa.quantidade > 0) {
-        await firebaseService.update('recompensas', recompensa.id, {
-          quantidade: recompensa.quantidade - 1,
-          updatedAt: Timestamp.now(),
-        });
-      }
-
-      // Registrar débito dos pontos
-      const debito = {
-        clienteId: selectedCliente.id,
-        clienteNome: selectedCliente.nome,
-        quantidade: pontosNecessarios,
-        tipo: 'debito',
-        motivo: `Resgate: ${recompensa.nome}`,
-        data: new Date().toISOString(),
-        usuarioId: usuario?.uid || 'sistema',
-        usuarioNome: usuario?.nome || 'Sistema',
-        createdAt: Timestamp.now(),
-      };
-      await firebaseService.add('pontuacao', debito);
-
-      // Registrar na auditoria
-      await auditoriaService.registrar('resgate_recompensa', {
-        entidade: 'resgates_fidelidade',
-        detalhes: `Resgate de ${recompensa.nome} por ${selectedCliente.nome}`,
-        dados: {
-          clienteId: selectedCliente.id,
-          clienteNome: selectedCliente.nome,
-          recompensaId: recompensa.id,
-          recompensaNome: recompensa.nome,
-          pontosGastos: pontosNecessarios,
-          saldoAnterior: selectedCliente.saldo,
-          saldoNovo: selectedCliente.saldo - pontosNecessarios
-        }
       });
 
       mostrarSnackbar(`Recompensa "${recompensa.nome}" resgatada!`);
