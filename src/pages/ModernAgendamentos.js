@@ -415,7 +415,7 @@ const RelatorioAgenda = React.forwardRef(({
                     </TableHead>
                     <TableBody>
                       {eventosOrdenados.map(evento => {
-                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
                         const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
@@ -572,13 +572,15 @@ function ModernAgendamentos() {
     const cliente = clientes.find(c => 
       c.id === clienteId || 
       c.uid === clienteId || 
-      c.googleUid === clienteId
+      c.authUid === clienteId ||
+      c.googleUid === clienteId ||
+      c.supabaseUid === clienteId
     );
     
     if (!cliente) return null;
     
     return {
-      id: cliente.id || cliente.uid || cliente.googleUid,
+      id: cliente.id || cliente.uid || cliente.authUid || cliente.googleUid,
       nome: cliente.nome || cliente.displayName || 'Cliente',
       telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
       email: cliente.email || '',
@@ -1436,14 +1438,31 @@ function ModernAgendamentos() {
         return;
       }
 
-      const servicosLista = agendamento.servicos || [];
+      const clienteData = getClienteData(agendamento.clienteId);
+      const profissionalData = getProfissionalData(agendamento.profissionalId);
+      const servicosLista = (agendamento.servicos && agendamento.servicos.length > 0)
+        ? agendamento.servicos
+        : (agendamento.servicoIds || agendamento.servicosIds || [agendamento.servicoId]).filter(Boolean).map((servicoId) => {
+          const servico = servicosMemo.find((item) => item.id === servicoId) || {};
+          return {
+            id: servicoId,
+            nome: servico.nome || agendamento.servicoNome || 'Serviço',
+            preco: Number(servico.preco || agendamento.valor || agendamento.valorTotal || 0),
+            duracao: servico.duracao || agendamento.duracao || null,
+          };
+        });
       const primeiroServico = servicosLista[0] || {};
+      const atendimentoId = firebaseService.generateId('atendimentos');
 
       const novoAtendimento = {
+        id: atendimentoId,
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
+        clienteNome: clienteData?.nome || agendamento.clienteNome || 'Cliente',
         profissionalId: agendamento.profissionalId,
-        servicoId: primeiroServico.id,
+        profissionalNome: profissionalData?.nome || agendamento.profissionalNome || 'Profissional',
+        servicoId: primeiroServico.id || agendamento.servicoId || null,
+        servicoNome: primeiroServico.nome || agendamento.servicoNome || 'Serviço',
         servicos: servicosLista,
         data: agendamento.data,
         horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1457,7 +1476,7 @@ function ModernAgendamentos() {
           principal: s.id === primeiroServico.id
         })),
         itensProduto: [],
-        valorTotal: agendamento.valorTotal || 0,
+        valorTotal: Number(agendamento.valorTotal || agendamento.valor || primeiroServico.preco || 0),
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         iniciadoPor: usuario?.nome || 'Sistema',
@@ -1465,15 +1484,17 @@ function ModernAgendamentos() {
       };
 
       const atendimentoCriado = await firebaseService.add('atendimentos', novoAtendimento);
+      const atendimentoCriadoId = atendimentoCriado?.id || atendimentoId;
       
       await atualizar(agendamento.id, { 
         status: 'em_andamento',
+        atendimentoId: atendimentoCriadoId,
         updatedAt: Timestamp.now()
       });
 
       await auditoriaService.registrar('iniciar_atendimento', {
         entidade: 'atendimentos',
-        entidadeId: atendimentoCriado.id,
+        entidadeId: atendimentoCriadoId,
         detalhes: `Atendimento iniciado a partir do agendamento ${agendamento.id}`,
         dados: {
           agendamentoId: agendamento.id,
@@ -1488,7 +1509,7 @@ function ModernAgendamentos() {
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
       
-      navigate(`/atendimento/${atendimentoCriado.id}`);
+      navigate(`/atendimento/${atendimentoCriadoId}`);
       
     } catch (error) {
       console.error('Erro ao iniciar atendimento:', error);
@@ -1746,7 +1767,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -1969,7 +1990,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -2259,7 +2280,7 @@ function ModernAgendamentos() {
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
         ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);

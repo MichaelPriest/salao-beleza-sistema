@@ -1,5 +1,6 @@
 // src/pages/ModernConfiguracoes.js
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -101,6 +102,8 @@ import { firebaseService } from '../services/firebase';
 import { masks, MaskedInput } from '../utils/plugins';
 import { backupService } from '../services/backupService';
 import { collection, getDocs, deleteDoc, doc, writeBatch, db } from '../services/firebase';
+import SaasGestao from './SaasGestao';
+import { notificarFidelidadeConfigAtualizada } from '../hooks/useFidelidadeAtiva';
 
 // Componente de loading personalizado
 const LoadingSpinner = () => (
@@ -113,6 +116,51 @@ const LoadingSpinner = () => (
     </motion.div>
   </Box>
 );
+
+
+const CONFIG_TAB_INDEX = {
+  salao: 0,
+  horario: 1,
+  notificacoes: 2,
+  aparencia: 3,
+  fidelidade: 4,
+  backup: 5,
+  limpeza: 6,
+  empresa: 7,
+};
+
+const EMPRESA_TAB_INDEX = {
+  dados: 0,
+  empresa: 0,
+  unidades: 1,
+  assinatura: 3,
+  cobranca: 4,
+  site: 5,
+};
+
+const getConfigTabFromSearch = (search = '') => {
+  const tab = new URLSearchParams(search).get('tab');
+  return CONFIG_TAB_INDEX[tab] ?? 0;
+};
+
+const getEmpresaTabFromSearch = (search = '') => {
+  const tab = new URLSearchParams(search).get('empresaTab');
+  const parsedTab = Number(tab || 0);
+  return EMPRESA_TAB_INDEX[tab] ?? (Number.isNaN(parsedTab) ? 0 : parsedTab);
+};
+
+
+const getUsuarioAtual = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || '{}');
+  } catch {
+    return {};
+  }
+};
+
+const usuarioEhSuperadmin = (usuario = {}) => ['superadmin', 'super_admin', 'saas_admin'].includes(String(usuario.cargo || usuario.role || usuario.perfil || '').toLowerCase())
+  || usuario.superadmin === true
+  || usuario.isSuperAdmin === true;
 
 function TabPanel({ children, value, index }) {
   return (
@@ -194,16 +242,20 @@ const ConfiguracaoNivel = ({ nivel, dados, onUpdate }) => {
 };
 
 function ModernConfiguracoes() {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(() => getConfigTabFromSearch(window.location.search));
+  const [empresaInitialTab, setEmpresaInitialTab] = useState(() => getEmpresaTabFromSearch(window.location.search));
   const [config, setConfig] = useState(null);
   const [backup, setBackup] = useState(null);
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [usuarioAtual] = useState(() => getUsuarioAtual());
+  const isSuperadmin = usuarioEhSuperadmin(usuarioAtual);
   
   // Estados para limpeza de dados
   const [openCleanDialog, setOpenCleanDialog] = useState(false);
@@ -368,6 +420,13 @@ function ModernConfiguracoes() {
     carregarConfiguracoes();
   }, []);
 
+  useEffect(() => {
+    const nextTab = getConfigTabFromSearch(location.search);
+    const nextEmpresaTab = getEmpresaTabFromSearch(location.search);
+    setTabValue(nextTab);
+    setEmpresaInitialTab(nextEmpresaTab);
+  }, [location.search]);
+
   // Carregar configurações de fidelidade
   useEffect(() => {
     const carregarFidelidadeConfig = async () => {
@@ -511,6 +570,7 @@ function ModernConfiguracoes() {
         });
       }
       
+      notificarFidelidadeConfigAtualizada(fidelidadeConfig);
       mostrarSnackbar('Configurações de fidelidade salvas!', 'success');
     } catch (error) {
       console.error('Erro ao salvar fidelidade:', error);
@@ -561,7 +621,8 @@ function ModernConfiguracoes() {
   };
 
   const aplicarTema = (tema) => {
-    if (tema?.modoEscuro) {
+    const modoEscuroAtivo = Boolean(tema?.modoEscuro);
+    if (modoEscuroAtivo) {
       document.body.classList.add('modo-escuro');
     } else {
       document.body.classList.remove('modo-escuro');
@@ -569,6 +630,8 @@ function ModernConfiguracoes() {
     
     document.documentElement.style.setProperty('--cor-primaria', tema?.corPrimaria || '#9c27b0');
     document.documentElement.style.setProperty('--cor-secundaria', tema?.corSecundaria || '#ff4081');
+    localStorage.setItem('modoEscuro', String(modoEscuroAtivo));
+    window.dispatchEvent(new CustomEvent('temaAtualizado', { detail: { modoEscuro: modoEscuroAtivo, tema } }));
   };
 
   const handleLogoUpload = (event) => {
@@ -735,6 +798,10 @@ function ModernConfiguracoes() {
   // ============================================
 
   const handleOpenCleanDialog = () => {
+    if (!isSuperadmin) {
+      toast.error('A limpeza de dados é exclusiva para superadmin.');
+      return;
+    }
     setOpenCleanDialog(true);
     setCleanStep(0);
     setCleanResults(null);
@@ -763,6 +830,10 @@ function ModernConfiguracoes() {
 
   // 🔥 FUNÇÃO DE LIMPEZA CORRIGIDA - SEM toast.info
   const handleCleanData = async () => {
+    if (!isSuperadmin) {
+      toast.error('A limpeza de dados é exclusiva para superadmin.');
+      return;
+    }
     if (confirmText !== 'LIMPAR DADOS') {
       toast.error('Digite "LIMPAR DADOS" para confirmar');
       return;
@@ -991,28 +1062,32 @@ function ModernConfiguracoes() {
           <Tabs
             value={tabValue}
             onChange={(e, v) => setTabValue(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
               borderBottom: 1,
               borderColor: 'divider',
-              bgcolor: '#faf5ff',
-              '& .MuiTab-root': { fontWeight: 600 },
+              bgcolor: 'background.paper',
+              '& .MuiTab-root': { fontWeight: 600, minHeight: 64 },
             }}
           >
-            <Tab icon={<BusinessIcon />} label="Salão" />
+            <Tab icon={<BusinessIcon />} label="Salão/Empresa" />
             <Tab icon={<TimeIcon />} label="Horário" />
             <Tab icon={<NotificationsIcon />} label="Notificações" />
             <Tab icon={<PaletteIcon />} label="Aparência" />
             <Tab icon={<TrophyIcon />} label="Fidelidade" />
             <Tab icon={<BackupIcon />} label="Backup" />
-            <Tab icon={<CleanIcon />} label="Limpeza" />
+            <Tab icon={<CleanIcon />} label="Limpeza" disabled={!isSuperadmin} />
+            <Tab icon={<BusinessIcon />} label="SaaS, cobrança e unidades" />
           </Tabs>
 
-          {/* Dados do Salão */}
+          {/* Dados do Salão e Empresa */}
           <TabPanel value={tabValue} index={0}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: '#9c27b0' }}>
-                  Logo do Salão
+                  Logo do Salão/Empresa
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
                   <Avatar
@@ -1240,6 +1315,11 @@ function ModernConfiguracoes() {
                 />
               </Grid>
             </Grid>
+          </TabPanel>
+
+          {/* Gestão SaaS da empresa */}
+          <TabPanel value={tabValue} index={7}>
+            <SaasGestao initialTab={empresaInitialTab} embedded />
           </TabPanel>
 
           {/* Horário de Funcionamento */}
@@ -2012,18 +2092,25 @@ function ModernConfiguracoes() {
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Alert 
-                  severity="warning" 
+                  severity={isSuperadmin ? 'warning' : 'info'}
                   sx={{ mb: 3 }}
                   icon={<WarningIcon />}
                 >
                   <strong>Área Restrita - Limpeza de Dados</strong>
                   <br />
-                  Esta operação irá remover permanentemente os dados das coleções selecionadas.
-                  A coleção <strong>usuários</strong> será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>.
-                  Recomenda-se fazer um backup antes de prosseguir.
+                  {isSuperadmin ? (
+                    <>
+                      Esta operação irá remover permanentemente os dados das coleções selecionadas.
+                      A coleção <strong>usuários</strong> será preservada, mantendo apenas o usuário <strong>{USUARIO_PRESERVADO}</strong>.
+                      Recomenda-se fazer um backup antes de prosseguir.
+                    </>
+                  ) : (
+                    <>Somente usuários superadmin podem acessar ou executar a limpeza de dados do sistema.</>
+                  )}
                 </Alert>
               </Grid>
 
+              {isSuperadmin && (
               <Grid item xs={12}>
                 <Paper sx={{ p: 3, bgcolor: '#fff3e0' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -2056,6 +2143,7 @@ function ModernConfiguracoes() {
                   </Typography>
                 </Paper>
               </Grid>
+              )}
             </Grid>
           </TabPanel>
         </CardContent>

@@ -46,6 +46,16 @@ function TabPanel({ children, value, index }) {
   );
 }
 
+
+const getClienteIds = (cliente, firebaseUser) => Array.from(new Set([
+  firebaseUser?.uid,
+  cliente?.id,
+  cliente?.uid,
+  cliente?.authUid,
+  cliente?.googleUid,
+  cliente?.email,
+].filter(Boolean)));
+
 function ClienteNotificacoes() {
   const navigate = useNavigate();
   const { cliente, firebaseUser } = useAuthCliente();
@@ -56,15 +66,15 @@ function ClienteNotificacoes() {
 
   useEffect(() => {
     carregarNotificacoes();
-  }, []);
+  }, [cliente, firebaseUser]);
 
   const carregarNotificacoes = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const uid = firebaseUser?.uid || cliente?.id;
-      if (!uid) {
+      const uid = getClienteIds(cliente, firebaseUser);
+      if (uid.length === 0) {
         setError('Usuário não identificado');
         return;
       }
@@ -90,7 +100,7 @@ function ClienteNotificacoes() {
   };
 
   const handleMarcarTodasComoLidas = async () => {
-    const uid = firebaseUser?.uid || cliente?.id;
+    const uid = getClienteIds(cliente, firebaseUser);
     const success = await notificacoesPushService.marcarTodasComoLidas(uid);
     if (success) {
       setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
