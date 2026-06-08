@@ -49,6 +49,50 @@ const notificacaoPertenceAoUsuario = (notificacao, ids, usuario = parseUsuarioLo
   return broadcast || [...camposDiretos, ...destinatarios].some((id) => idsSet.has(id)) || (cargo && cargos.includes(String(cargo)));
 };
 
+const deduplicarNotificacoes = (notificacoes) => Array.from(new Map(
+  (notificacoes || []).filter(Boolean).map((item) => [item.id || `${item.tipo}-${item.data}-${item.titulo}`, item])
+).values());
+
+const consultarNotificacoesPorCampos = async (ids, usuario) => {
+  const campos = [
+    'usuarioId',
+    'userId',
+    'uid',
+    'destinatarioId',
+    'paraUsuarioId',
+    'adminId',
+    'profissionalId',
+    'email',
+  ];
+
+  const cargo = usuario?.cargo || usuario?.role || usuario?.perfil;
+  const consultasUsuario = ids.flatMap((id) => campos.map((field) => firebaseService.query('notificacoes', [
+    { field, operator: '==', value: id },
+  ], 'data').catch(() => [])));
+
+  const consultasGerais = [
+    firebaseService.query('notificacoes', [{ field: 'todos', operator: '==', value: true }], 'data').catch(() => []),
+    firebaseService.query('notificacoes', [{ field: 'broadcast', operator: '==', value: true }], 'data').catch(() => []),
+    firebaseService.query('notificacoes', [{ field: 'tipoDestinatario', operator: '==', value: 'todos' }], 'data').catch(() => []),
+  ];
+
+  if (cargo) {
+    consultasGerais.push(
+      firebaseService.query('notificacoes', [{ field: 'cargo', operator: '==', value: cargo }], 'data').catch(() => []),
+      firebaseService.query('notificacoes', [{ field: 'perfil', operator: '==', value: cargo }], 'data').catch(() => [])
+    );
+  }
+
+  const consultas = await Promise.all([...consultasUsuario, ...consultasGerais]);
+
+  return consultas.flat();
+};
+
+const getAllNotificacoesFiltradas = async (ids, usuario) => {
+  const todas = await firebaseService.getAll('notificacoes').catch(() => []);
+  return todas.filter((notificacao) => notificacaoPertenceAoUsuario(notificacao, ids, usuario));
+};
+
 export const notificacoesService = {
   // Listar notificações de um usuário
   listar: async (usuarioId) => {
@@ -59,27 +103,30 @@ export const notificacoesService = {
 
       if (ids.length === 0) return [];
 
-      const buscas = await Promise.all(ids.map((id) =>
-        firebaseService.query('notificacoes', [
-          { field: 'usuarioId', operator: '==', value: id }
-        ], 'data').catch(() => [])
-      ));
+      const consultasDiretas = await consultarNotificacoesPorCampos(ids, usuario);
+      const notificacoesDiretas = consultasDiretas.filter((notificacao) =>
+        notificacaoPertenceAoUsuario(notificacao, ids, usuario)
+      );
 
-      const todas = await firebaseService.getAll('notificacoes').catch(() => []);
-      let notificacoes = Array.from(new Map([
-        ...buscas.flat(),
-        ...todas.filter((notificacao) => notificacaoPertenceAoUsuario(notificacao, ids, usuario)),
-      ].map((item) => [item.id, item])).values());
+      let notificacoes = deduplicarNotificacoes([
+        ...consultasDiretas,
+        ...notificacoesDiretas,
+      ]);
+
+      // Fallback controlado: só busca a coleção inteira se nenhuma consulta indexada retornou dados.
+      if (notificacoes.length === 0) {
+        notificacoes = deduplicarNotificacoes(await getAllNotificacoesFiltradas(ids, usuario));
+      }
 
       console.log('✅ Notificações encontradas:', notificacoes.length);
-      
+
       // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoes.sort((a, b) => {
         const dateA = a.createdAt || a.data ? new Date(a.createdAt || a.data) : new Date(0);
         const dateB = b.createdAt || b.data ? new Date(b.createdAt || b.data) : new Date(0);
         return dateB - dateA;
       });
-      
+
       return notificacoesOrdenadas;
     } catch (error) {
       console.error('❌ Erro ao listar notificações:', error);
@@ -90,15 +137,15 @@ export const notificacoesService = {
   // Marcar notificação como lida
   marcarComoLida: async (id) => {
     try {
-      await firebaseService.update('notificacoes', id, { 
+      await firebaseService.update('notificacoes', id, {
         lida: true,
         updatedAt: new Date().toISOString()
       });
       console.log('✅ Notificação marcada como lida:', id);
-      
+
       // Disparar evento para atualizar header
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao marcar notificação:', error);
@@ -110,19 +157,19 @@ export const notificacoesService = {
   marcarTodasComoLidas: async (usuarioId) => {
     try {
       const notificacoesNaoLidas = (await notificacoesService.listar(usuarioId)).filter((notif) => !notif.lida);
-      
-      const promises = notificacoesNaoLidas.map(notif => 
-        firebaseService.update('notificacoes', notif.id, { 
+
+      const promises = notificacoesNaoLidas.map(notif =>
+        firebaseService.update('notificacoes', notif.id, {
           lida: true,
           updatedAt: new Date().toISOString()
         })
       );
-      
+
       await Promise.all(promises);
       console.log(`✅ ${notificacoesNaoLidas.length} notificações marcadas como lidas`);
-      
+
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao marcar todas como lidas:', error);
@@ -135,9 +182,9 @@ export const notificacoesService = {
     try {
       await firebaseService.delete('notificacoes', id);
       console.log('✅ Notificação excluída:', id);
-      
+
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao excluir notificação:', error);
@@ -149,16 +196,16 @@ export const notificacoesService = {
   excluirTodas: async (usuarioId) => {
     try {
       const notificacoes = await notificacoesService.listar(usuarioId);
-      
-      const promises = notificacoes.map(notif => 
+
+      const promises = notificacoes.map(notif =>
         firebaseService.delete('notificacoes', notif.id)
       );
-      
+
       await Promise.all(promises);
       console.log(`✅ ${notificacoes.length} notificações excluídas`);
-      
+
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao excluir todas:', error);
@@ -170,7 +217,7 @@ export const notificacoesService = {
   contarNaoLidas: async (usuarioId) => {
     try {
       const notificacoesNaoLidas = (await notificacoesService.listar(usuarioId)).filter((notif) => !notif.lida);
-      
+
       return notificacoesNaoLidas.length;
     } catch (error) {
       console.error('❌ Erro ao contar notificações:', error);
@@ -182,7 +229,7 @@ export const notificacoesService = {
   criar: async (dados) => {
     try {
       const agora = new Date();
-      
+
       const novaNotificacao = {
         ...dados,
         lida: false,
@@ -190,16 +237,16 @@ export const notificacoesService = {
         createdAt: agora.toISOString(),
         updatedAt: agora.toISOString()
       };
-      
+
       console.log('📝 Criando notificação:', novaNotificacao);
-      
+
       const result = await firebaseService.add('notificacoes', novaNotificacao);
       console.log('✅ Notificação criada com ID:', result.id);
-      
+
       // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));
       window.dispatchEvent(new CustomEvent('notificacoesAtualizadas'));
-      
+
       return { ...novaNotificacao, id: result.id };
     } catch (error) {
       console.error('❌ Erro ao criar notificação:', error);
@@ -214,9 +261,9 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE FORMULÁRIO PENDENTE PARA FUNCIONÁRIO
   notificarFormularioPendente: async (agendamento, usuarioId) => {
     try {
-      console.log('📨 Criando notificação de formulário pendente para funcionário:', { 
-        agendamentoId: agendamento.id, 
-        usuarioId 
+      console.log('📨 Criando notificação de formulário pendente para funcionário:', {
+        agendamentoId: agendamento.id,
+        usuarioId
       });
 
       const [cliente, profissional, servico] = await Promise.all([
@@ -268,9 +315,9 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE FORMULÁRIO RESPONDIDO PARA PROFISSIONAL
   notificarFormularioRespondido: async (resposta, usuarioId) => {
     try {
-      console.log('📨 Criando notificação de formulário respondido para profissional:', { 
-        respostaId: resposta.id, 
-        usuarioId 
+      console.log('📨 Criando notificação de formulário respondido para profissional:', {
+        respostaId: resposta.id,
+        usuarioId
       });
 
       const [cliente, profissional] = await Promise.all([
@@ -322,9 +369,9 @@ export const notificacoesService = {
   // 🔥 NOTIFICAÇÃO DE LEMBRETE PARA CLIENTE PREENCHER FORMULÁRIO
   notificarClienteFormularioPendente: async (agendamento, clienteId) => {
     try {
-      console.log('📨 Criando notificação para cliente sobre formulário pendente:', { 
-        agendamentoId: agendamento.id, 
-        clienteId 
+      console.log('📨 Criando notificação para cliente sobre formulário pendente:', {
+        agendamentoId: agendamento.id,
+        clienteId
       });
 
       const [servico] = await Promise.all([
@@ -412,7 +459,7 @@ export const notificacoesService = {
   notificarAgendamento: async (agendamento, usuarioId) => {
     try {
       console.log('📨 Criando notificação de agendamento:', { agendamentoId: agendamento.id, usuarioId });
-      
+
       const [cliente, profissional, servico] = await Promise.all([
         firebaseService.getById('clientes', agendamento.clienteId).catch(() => null),
         firebaseService.getById('profissionais', agendamento.profissionalId).catch(() => null),
