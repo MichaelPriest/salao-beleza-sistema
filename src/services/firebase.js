@@ -248,14 +248,31 @@ const appendRedirectTo = (endpoint, redirectTo) => {
   return `${endpoint}${separator}redirect_to=${encodeURIComponent(redirectTo)}`;
 };
 
+// ============================================================
+// FUNÇÃO CORRIGIDA - buildSessionFromUrl
+// Agora lida corretamente com URLs que contêm múltiplos hashes
+// ============================================================
 const buildSessionFromUrl = () => {
   if (typeof window === 'undefined') return null;
 
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  // CORREÇÃO: Pega o último hash da URL (onde os parâmetros do Supabase estão)
+  const fullHash = window.location.hash;
+  const lastHashIndex = fullHash.lastIndexOf('#');
+  
+  // Se tem dois hashes, pega a parte após o último
+  // Ex: "#/cliente/recuperar-senha#access_token=xxx" -> "access_token=xxx"
+  const paramsString = lastHashIndex > 0 && lastHashIndex !== fullHash.indexOf('#')
+    ? fullHash.substring(lastHashIndex + 1)
+    : fullHash.substring(1);
+  
+  const hashParams = new URLSearchParams(paramsString);
   const searchParams = new URLSearchParams(window.location.search);
   const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
 
   if (!accessToken) return null;
+
+  console.log('🔐 buildSessionFromUrl - Token encontrado:', accessToken.substring(0, 50) + '...');
+  console.log('🔐 buildSessionFromUrl - Type:', hashParams.get('type') || searchParams.get('type'));
 
   return {
     access_token: accessToken,
@@ -270,8 +287,17 @@ const buildSessionFromUrl = () => {
 
 const clearAuthParamsFromUrl = () => {
   if (typeof window === 'undefined') return;
-  const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.search.replace(/[?&](access_token|refresh_token|token_type|expires_in|type)=[^&]*/g, '').replace(/^&/, '?')}`;
-  window.history.replaceState({}, document.title, cleanUrl.replace(/[?&]$/, ''));
+  
+  // Limpa apenas os parâmetros de autenticação do hash
+  const currentHash = window.location.hash;
+  const hashWithoutParams = currentHash.split('?')[0].split('#')[0];
+  
+  // Remove os parâmetros de autenticação
+  const cleanHash = hashWithoutParams.replace(/[?&](access_token|refresh_token|token_type|expires_in|type)=[^&]*/g, '');
+  
+  if (cleanHash !== currentHash.split('?')[0]) {
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}${cleanHash}`);
+  }
 };
 
 const supabaseFetch = async (path, options = {}) => {
@@ -869,9 +895,27 @@ export const onAuthStateChanged = (_auth, callback) => {
   return () => authListeners.delete(listener);
 };
 
+// ============================================================
+// FUNÇÃO CORRIGIDA - sendPasswordResetEmail
+// Agora gera URLs com o formato correto para HashRouter
+// ============================================================
 export const sendPasswordResetEmail = async (_auth, email, actionCodeSettings = {}) => {
-  const redirectTo = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
-  await authRequest(appendRedirectTo('recover', redirectTo), { email });
+  // Forçar o uso de hash no redirect URL
+  const baseRedirectUrl = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
+  
+  // Converter a URL normal para URL com hash
+  // Ex: https://dominio.com/cliente/recuperar-senha 
+  //  -> https://dominio.com/#/cliente/recuperar-senha
+  let hashUrl = baseRedirectUrl.replace(/\/(cliente\/[^?]+)/, '/#$1');
+  
+  // Garantir que não há parâmetros duplicados
+  if (!hashUrl.includes('?')) {
+    hashUrl = hashUrl.replace(/#$/, '');
+  }
+  
+  console.log('📧 Enviando recuperação com redirect:', hashUrl);
+  
+  await authRequest(appendRedirectTo('recover', hashUrl), { email });
 };
 
 export const updatePassword = async (_auth, novaSenha) => {
