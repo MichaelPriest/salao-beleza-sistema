@@ -75,7 +75,6 @@ import {
   Assessment as AssessmentIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
-  ReceiptLong as ReceiptLongIcon,
   ReceiptOutlined as ReceiptOutlinedIcon,
   
   // Compras
@@ -142,6 +141,7 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  HelpCenter as HelpCenterIcon,
   Close as CloseIcon,
   EmojiEvents as EmojiEventsIcon,
   CardGiftcard as CardGiftcardIcon,
@@ -170,9 +170,13 @@ import {
   Checklist as ChecklistIcon,
   FormatListBulleted as ListBulletedIcon,
   Ballot as BallotIcon,
+  SwapHoriz as SwapHorizIcon,
+  SupportAgent as SupportAgentIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { motion, AnimatePresence } from 'framer-motion';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, getTenantContext } from '../services/firebase';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
@@ -361,6 +365,13 @@ const menuGroups = [
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
+      {
+        text: 'Caixa',
+        icon: <PointOfSaleIcon />,
+        path: '/financeiro/caixa',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente', 'atendente']
+      },
       { 
         text: 'Compras', 
         icon: <AddShoppingCartIcon />, 
@@ -496,6 +507,14 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
+        text: 'Acessar empresa',
+        icon: <SwapHorizIcon />,
+        path: '/selecionar-empresa',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
         text: 'Planos e Assinaturas',
         icon: <WorkspacePremiumIcon />,
         path: '/saas-admin/assinaturas',
@@ -507,6 +526,14 @@ const menuGroups = [
         text: 'Cobranças SaaS',
         icon: <ReceiptLongIcon />,
         path: '/saas-admin/cobrancas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Chamados das Empresas',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
@@ -536,35 +563,35 @@ const menuGroups = [
       {
         text: 'Empresa',
         icon: <BusinessIcon />,
-        path: '/empresa',
+        path: '/configuracoes?tab=empresa&empresaTab=dados',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Unidades',
         icon: <ApartmentIcon />,
-        path: '/empresa/unidades',
+        path: '/configuracoes?tab=empresa&empresaTab=unidades',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Assinatura',
         icon: <WorkspacePremiumIcon />,
-        path: '/empresa/assinatura',
+        path: '/configuracoes?tab=empresa&empresaTab=assinatura',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Cobrança SaaS',
         icon: <PaymentsIcon />,
-        path: '/empresa/cobranca',
+        path: '/configuracoes?tab=empresa&empresaTab=cobranca',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Página inicial',
         icon: <LanguageIcon />,
-        path: '/empresa/site',
+        path: '/configuracoes?tab=empresa&empresaTab=site',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
@@ -589,6 +616,19 @@ const menuGroups = [
         cargos: ['admin', 'gerente']
       },
       { 
+        text: 'Manual do Sistema',
+        icon: <HelpCenterIcon />,
+        path: '/manual',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
+      },
+      {
+        text: 'Suporte SaaS',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
+        permission: 'visualizar_chamados',
+        cargos: ['admin', 'gerente']
+      },
+      {
         text: 'Backup', 
         icon: <BackupIcon />, 
         path: '/backup', 
@@ -642,6 +682,8 @@ export const extraIcons = {
   checklist: <ChecklistIcon />,
   listBulleted: <ListBulletedIcon />,
   ballot: <BallotIcon />,
+  swapHoriz: <SwapHorizIcon />,
+  supportAgent: <SupportAgentIcon />,
   business: <BusinessIcon />,
   apartment: <ApartmentIcon />,
   workspacePremium: <WorkspacePremiumIcon />,
@@ -710,7 +752,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             border: '3px solid white',
             boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
             bgcolor: '#ffffff',
-            color: '#9c27b0',
+            color: theme.palette.primary.main,
             fontWeight: 'bold',
           }}
         >
@@ -757,13 +799,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             mx: 1,
             backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
             '&:hover': {
-              backgroundColor: alpha('#9c27b0', 0.04),
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
             },
           }}
         >
           <ListItemIcon sx={{ 
             minWidth: 40, 
-            color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+            color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
           }}>
             {group.icon}
           </ListItemIcon>
@@ -781,8 +823,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         <Collapse in={isOpen} timeout="auto" unmountOnExit>
           <List component="div" disablePadding>
             {group.items.map((item) => {
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/' && location.pathname.startsWith(item.path));
+              const itemPath = item.path?.split('?')[0] || '';
+              const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+              const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
               return (
                 <motion.div
@@ -803,13 +847,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
                       ml: 2,
                       mr: 1,
                       borderRadius: 2,
-                      backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                      color: isActive ? '#9c27b0' : 'text.primary',
+                      backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                      color: isActive ? theme.palette.primary.main : 'text.primary',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                       '& .MuiListItemIcon-root': {
-                        color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                        color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         minWidth: 36,
                       },
                     }}
@@ -872,10 +916,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -908,6 +952,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
 
 // Componente Desktop Sidebar (mantido igual)
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
+  const theme = useTheme();
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -935,9 +980,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         '& .MuiDrawer-paper': {
           width: collapsed ? 80 : 300,
           boxSizing: 'border-box',
-          backgroundColor: '#ffffff',
-          borderRight: 'none',
-          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+          backgroundColor: theme.palette.background.paper,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          boxShadow: theme.palette.mode === 'dark' ? '4px 0 20px rgba(0,0,0,0.25)' : '4px 0 20px rgba(0,0,0,0.05)',
           overflowX: 'hidden',
           transition: theme => theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -960,9 +1005,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         {!collapsed ? (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpaIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                Beauty<span style={{ color: '#ff4081' }}>Pro</span>
+              <SpaIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
+                Beauty<span style={{ color: theme.palette.secondary.main }}>Pro</span>
               </Typography>
             </Box>
             <Tooltip title="Recolher menu" placement="right">
@@ -996,7 +1041,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                 alignItems: 'center',
                 gap: 2,
                 p: collapsed ? 1 : 2,
-                backgroundColor: alpha('#9c27b0', 0.04),
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 borderRadius: 3,
                 justifyContent: collapsed ? 'center' : 'flex-start',
               }}
@@ -1042,10 +1087,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -1066,7 +1111,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       borderRadius: 2,
                       backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                     }}
                   >
@@ -1087,8 +1132,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {group.items.map((item) => {
-                        const isActive = location.pathname === item.path ||
-                          (item.path !== '/' && location.pathname.startsWith(item.path));
+                        const itemPath = item.path?.split('?')[0] || '';
+                        const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                        const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                          (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
                         return (
                           <motion.div
@@ -1105,13 +1152,13 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                                 py: 0.8,
                                 borderRadius: '0 20px 20px 0',
                                 mr: 1,
-                                backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                                color: isActive ? '#9c27b0' : 'text.primary',
+                                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                                color: isActive ? theme.palette.primary.main : 'text.primary',
                                 '&:hover': {
-                                  backgroundColor: alpha('#9c27b0', 0.04),
+                                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
                                 },
                                 '& .MuiListItemIcon-root': {
-                                  color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                                  color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                                   minWidth: 36,
                                 },
                               }}
@@ -1147,10 +1194,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       sx={{
                         width: 48,
                         height: 48,
-                        backgroundColor: groupActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                        color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+                        backgroundColor: groupActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                        color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         '&:hover': {
-                          backgroundColor: alpha('#9c27b0', 0.04),
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
                         },
                       }}
                     >
@@ -1158,8 +1205,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                     </IconButton>
                   </Tooltip>
 
-                  {group.items.slice(0, 2).map((item) => {
-                    const isActive = location.pathname === item.path;
+                  {group.items.map((item) => {
+                    const itemPath = item.path?.split('?')[0] || '';
+                    const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                    const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
                     return (
                       <Tooltip key={item.text} title={item.text} placement="right">
                         <IconButton
@@ -1169,10 +1218,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                           sx={{
                             width: 40,
                             height: 40,
-                            backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                            color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                            backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                            color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                             '&:hover': {
-                              backgroundColor: alpha('#9c27b0', 0.04),
+                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
                             },
                           }}
                         >
@@ -1187,21 +1236,6 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       </Tooltip>
                     );
                   })}
-
-                  {group.items.length > 2 && (
-                    <Tooltip title={`+${group.items.length - 2} mais`} placement="right">
-                      <IconButton
-                        size="small"
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          color: alpha('#000', 0.38),
-                        }}
-                      >
-                        <ExpandMoreIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
               )}
             </Box>
@@ -1233,6 +1267,7 @@ function ModernSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
   const [recursosPlano, setRecursosPlano] = useState([]);
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1331,8 +1366,8 @@ function ModernSidebar() {
     if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
     if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
     if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
-    if (path.includes('/empresa/unidades')) return 'multiunidades';
-    if (path.includes('/empresa/site')) return 'site_publico';
+    if (path.includes('/empresa/unidades') || path.includes('empresaTab=unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site') || path.includes('empresaTab=site')) return 'site_publico';
     return null;
   };
 
@@ -1347,11 +1382,17 @@ function ModernSidebar() {
     if (!usuario) return false;
 
     if (!recursoLiberadoNoPlano(item)) return false;
+    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) {
+      const podeConfigurarFidelidade = item.path === '/fidelidade' && ['admin', 'gerente'].includes(usuario.cargo);
+      if (!podeConfigurarFidelidade) return false;
+    }
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);
     }
     
+    if (isSaasPlatformAdmin(usuario) && getTenantContext().empresaId) return true;
+
     // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
     
@@ -1388,10 +1429,12 @@ function ModernSidebar() {
   };
 
   const isGroupActive = (group) => {
-    return group.items.some(item =>
-      location.pathname === item.path ||
-      (item.path !== '/' && location.pathname.startsWith(item.path))
-    );
+    return group.items.some(item => {
+      const itemPath = item.path?.split('?')[0] || '';
+      const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+      return (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+        (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
+    });
   };
 
   // Abrir grupo automaticamente se um item estiver ativo
@@ -1410,7 +1453,7 @@ function ModernSidebar() {
     if (changed) {
       setOpenGroups(newOpenGroups);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups

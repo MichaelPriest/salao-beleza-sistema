@@ -333,6 +333,23 @@ function ClienteAgendamentos() {
     '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
   ];
 
+  const getClienteIdsBusca = () => ([
+    cliente?.id,
+    cliente?.uid,
+    cliente?.authUid,
+    cliente?.googleUid,
+    firebaseUser?.uid,
+  ].filter(Boolean));
+
+  const calcularHorarioFim = (horario, duracaoTotal = 60) => {
+    if (!horario) return '';
+    const [hora, minuto] = horario.split(':').map(Number);
+    const data = new Date();
+    data.setHours(hora || 0, minuto || 0, 0, 0);
+    data.setMinutes(data.getMinutes() + Number(duracaoTotal || 60));
+    return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   useEffect(() => {
     if (cliente) {
       carregarDados();
@@ -343,22 +360,30 @@ function ClienteAgendamentos() {
     try {
       setLoading(true);
       
-      const uid = firebaseUser?.uid || cliente?.id;
-      
-      if (!uid) {
+      const clienteIds = getClienteIdsBusca();
+
+      if (clienteIds.length === 0) {
         toast.error('Erro ao identificar o cliente');
         return;
       }
-      
-      const [agendamentosData, servicosData, profissionaisData] = await Promise.all([
-        firebaseService.query('agendamentos', [
-          { field: 'clienteId', operator: '==', value: uid }
-        ], 'data', 'desc'),
+
+      const [todosAgendamentos, servicosData, profissionaisData] = await Promise.all([
+        firebaseService.getAll('agendamentos').catch(() => []),
         firebaseService.getAll('servicos'),
         firebaseService.getAll('profissionais')
       ]);
+
+      const agendamentosCliente = (todosAgendamentos || [])
+        .filter((agendamento) => clienteIds.some((id) => [
+          agendamento.clienteId,
+          agendamento.clienteUid,
+          agendamento.clienteAuthUid,
+          agendamento.authUid,
+          agendamento.googleUid,
+        ].filter(Boolean).map(String).includes(String(id))))
+        .sort((a, b) => `${b.data || ''} ${b.horario || b.horaInicio || ''}`.localeCompare(`${a.data || ''} ${a.horario || a.horaInicio || ''}`));
       
-      setAgendamentos(agendamentosData || []);
+      setAgendamentos(agendamentosCliente);
       setServicos(servicosData || []);
       setProfissionais(profissionaisData || []);
       
@@ -420,31 +445,54 @@ function ClienteAgendamentos() {
         return;
       }
 
-      const uid = firebaseUser?.uid || cliente?.id;
+      const clienteIdPrincipal = cliente?.id || firebaseUser?.uid;
+      const authUid = firebaseUser?.uid || cliente?.authUid || cliente?.uid || null;
       const profissional = profissionais.find(p => p.id === formData.profissionalId);
+      const servicosNormalizados = selectedServicos.map(s => ({
+        id: s.id,
+        nome: s.nome,
+        preco: Number(s.preco || 0),
+        duracao: Number(s.duracao || 60)
+      }));
+      const servicoIds = servicosNormalizados.map(s => s.id);
+      const duracaoTotal = servicosNormalizados.reduce((total, servico) => total + Number(servico.duracao || 60), 0);
+      const primeiroServico = servicosNormalizados[0] || {};
+      const servicoOriginal = servicos.find(s => s.id === primeiroServico.id);
+      const unidadeId = cliente?.unidadeId || profissional?.unidadeId || servicoOriginal?.unidadeId || null;
 
       const novoAgendamento = {
-        clienteId: uid,
+        empresaId: cliente?.empresaId || null,
+        unidadeId,
+        unidadeNome: cliente?.unidadeNome || profissional?.unidadeNome || servicoOriginal?.unidadeNome || null,
+        clienteId: clienteIdPrincipal,
+        clienteUid: cliente?.uid || null,
+        clienteAuthUid: authUid,
+        authUid,
+        googleUid: cliente?.googleUid || null,
         clienteNome: cliente.nome,
         clienteEmail: cliente.email,
         clienteTelefone: cliente.telefone,
-        servicos: selectedServicos.map(s => ({
-          id: s.id,
-          nome: s.nome,
-          preco: s.preco,
-          duracao: s.duracao
-        })),
-        servicosIds: selectedServicos.map(s => s.id),
-        servicosNomes: selectedServicos.map(s => s.nome).join(', '),
-        quantidadeServicos: selectedServicos.length,
+        servicos: servicosNormalizados,
+        servicoId: primeiroServico.id || null,
+        servicoNome: primeiroServico.nome || '',
+        servicoIds,
+        servicosIds: servicoIds,
+        servicosNomes: servicosNormalizados.map(s => s.nome).join(', '),
+        quantidadeServicos: servicosNormalizados.length,
         valorTotal: calcularTotal(),
+        valor: calcularTotal(),
+        preco: Number(primeiroServico.preco || 0),
+        duracao: duracaoTotal,
         profissionalId: formData.profissionalId || null,
         profissionalNome: profissional?.nome || null,
         data: formData.data,
         horario: formData.horario,
+        horaInicio: formData.horario,
+        horaFim: calcularHorarioFim(formData.horario, duracaoTotal),
         observacoes: formData.observacoes,
         status: 'pendente',
         origem: 'cliente',
+        origemPortalCliente: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };

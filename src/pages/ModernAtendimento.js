@@ -838,15 +838,38 @@ function ModernAtendimento() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      
-      const atendimentoData = await firebaseService.getById('atendimentos', id);
+
+      let atendimentoData = await firebaseService.getById('atendimentos', id).catch(() => null);
+      if (!atendimentoData) {
+        const atendimentosPorAgendamento = await firebaseService.query('atendimentos', [
+          { field: 'agendamentoId', operator: '==', value: id }
+        ]).catch(() => []);
+        atendimentoData = atendimentosPorAgendamento?.[0] || null;
+      }
+
+      if (!atendimentoData) {
+        throw new Error('Atendimento não encontrado');
+      }
+
       setAtendimento(atendimentoData);
       setObservacoes(atendimentoData.observacoes || '');
 
-      const [clienteData, profissionalData] = await Promise.all([
-        firebaseService.getById('clientes', atendimentoData.clienteId),
-        firebaseService.getById('profissionais', atendimentoData.profissionalId)
+      const [clienteDataRaw, profissionalDataRaw] = await Promise.all([
+        atendimentoData.clienteId ? firebaseService.getById('clientes', atendimentoData.clienteId).catch(() => null) : Promise.resolve(null),
+        atendimentoData.profissionalId ? firebaseService.getById('profissionais', atendimentoData.profissionalId).catch(() => null) : Promise.resolve(null)
       ]);
+
+      const clienteData = clienteDataRaw || {
+        id: atendimentoData.clienteId || 'cliente_nao_identificado',
+        nome: atendimentoData.clienteNome || atendimentoData.cliente?.nome || 'Cliente',
+        telefone: atendimentoData.clienteTelefone || atendimentoData.cliente?.telefone || '',
+        email: atendimentoData.clienteEmail || atendimentoData.cliente?.email || ''
+      };
+      const profissionalData = profissionalDataRaw || {
+        id: atendimentoData.profissionalId || 'profissional_nao_identificado',
+        nome: atendimentoData.profissionalNome || atendimentoData.profissional?.nome || 'Profissional',
+        especialidade: atendimentoData.profissionalEspecialidade || atendimentoData.profissional?.especialidade || ''
+      };
 
       setCliente(clienteData);
       setProfissional(profissionalData);
@@ -854,12 +877,12 @@ function ModernAtendimento() {
       if (atendimentoData.itensServico && atendimentoData.itensServico.length > 0) {
         setItensServico(atendimentoData.itensServico);
       } else if (atendimentoData.servicoId) {
-        const servicoData = await firebaseService.getById('servicos', atendimentoData.servicoId);
+        const servicoData = await firebaseService.getById('servicos', atendimentoData.servicoId).catch(() => null);
         setItensServico([{
-          id: servicoData.id,
-          nome: servicoData.nome,
-          preco: servicoData.preco,
-          duracao: servicoData.duracao,
+          id: servicoData?.id || atendimentoData.servicoId,
+          nome: servicoData?.nome || atendimentoData.servicoNome || 'Serviço',
+          preco: Number(servicoData?.preco || atendimentoData.valorTotal || 0),
+          duracao: servicoData?.duracao || null,
           principal: true
         }]);
       }
@@ -2244,7 +2267,7 @@ function ModernAtendimento() {
     );
   }
 
-  if (!atendimento || !cliente || !profissional) {
+  if (!atendimento) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error" action={

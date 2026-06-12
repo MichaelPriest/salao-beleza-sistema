@@ -565,8 +565,8 @@ function GerenciarFidelidade() {
       setResgates(resgatesData || []);
       setRecompensas(recompensasData || []);
 
-      // Registrar acesso na auditoria
-      await auditoriaService.registrar('acesso_gerenciar_fidelidade', {
+      // Auditoria não deve impedir o carregamento da página administrativa.
+      auditoriaService.registrar('acesso_gerenciar_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Acesso à página de gerenciamento de fidelidade',
         dados: {
@@ -574,7 +574,7 @@ function GerenciarFidelidade() {
           totalRecompensas: recompensasData?.length || 0,
           totalResgates: resgatesData?.length || 0
         }
-      });
+      }).catch((auditError) => console.warn('Auditoria de acesso ao gerenciamento de fidelidade falhou:', auditError));
 
       console.log('📊 Dados carregados:', {
         clientes: clientesData?.length || 0,
@@ -588,10 +588,10 @@ function GerenciarFidelidade() {
       console.error('❌ Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados', 'error');
       
-      await auditoriaService.registrarErro(error, { 
+      auditoriaService.registrarErro(error, {
         acao: 'carregar_gerenciar_fidelidade',
         detalhes: 'Erro ao carregar dados de fidelidade'
-      });
+      }).catch((auditError) => console.warn('Auditoria do erro de gerenciamento de fidelidade falhou:', auditError));
     } finally {
       setLoading(false);
     }

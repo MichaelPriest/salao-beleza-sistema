@@ -27,6 +27,7 @@ import {
   Badge,
   FormControl,
   FormControlLabel,
+  Switch,
   FormLabel,
   Radio,
   RadioGroup,
@@ -84,6 +85,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from '../services/firebase';
+import { fidelidadeConfigService } from '../services/fidelidadeConfigService';
+import { notificarFidelidadeConfigAtualizada } from '../hooks/useFidelidadeAtiva';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -589,6 +592,7 @@ function Fidelidade() {
     tipo: 'credito',
   });
   const [config, setConfig] = useState({
+    ativo: true,
     pontosPorReal: 1,
     pontosAniversario: 50,
     pontosIndicacao: 100,
@@ -638,17 +642,17 @@ function Fidelidade() {
     try {
       setLoading(true);
       
-      // Registrar acesso na auditoria
-      await auditoriaService.registrar('acesso_fidelidade', {
+      // Auditoria não deve bloquear a abertura da página de fidelidade.
+      auditoriaService.registrar('acesso_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Acesso à página de fidelidade',
         usuarioId: usuario?.uid || 'sistema',
         usuarioNome: usuario?.nome || 'Sistema'
-      });
+      }).catch((auditError) => console.warn('Auditoria de acesso à fidelidade falhou:', auditError));
 
       // Carregar configurações
       if (configuracoes && configuracoes.length > 0) {
-        setConfig(configuracoes[0]);
+        setConfig((prev) => ({ ...prev, ...configuracoes[0], ativo: configuracoes[0].ativo !== false }));
       }
 
       // Carregar recompensas do Firebase
@@ -721,10 +725,10 @@ function Fidelidade() {
         mostrarSnackbar('Erro ao carregar dados de fidelidade', 'error');
       }
       
-      await auditoriaService.registrarErro(error, { 
+      auditoriaService.registrarErro(error, {
         acao: 'carregar_fidelidade',
         detalhes: 'Erro ao carregar dados de fidelidade'
-      });
+      }).catch((auditError) => console.warn('Auditoria do erro de fidelidade falhou:', auditError));
     } finally {
       setLoading(false);
     }
@@ -1042,6 +1046,12 @@ function Fidelidade() {
           </Zoom>
         )}
       </Box>
+
+      {config.ativo === false && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          O programa de fidelidade está desativado. Esta tela continua liberada para administração, mas os clientes não verão pontos, recompensas ou indicações até que o módulo seja reativado.
+        </Alert>
+      )}
 
       {/* Cards de Níveis Mobile */}
       <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: 3 }}>
@@ -1379,6 +1389,18 @@ function Fidelidade() {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.ativo !== false}
+                    onChange={(e) => setConfig({ ...config, ativo: e.target.checked })}
+                    color="secondary"
+                  />
+                }
+                label={config.ativo !== false ? 'Programa ativo para clientes' : 'Programa desativado para clientes'}
+              />
+            </Grid>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="Pontos por Real"
@@ -1431,15 +1453,19 @@ function Fidelidade() {
           <Button onClick={() => setOpenConfigDialog(false)}>Cancelar</Button>
           <Button 
             onClick={async () => {
-              // Salvar configurações
-              if (configuracoes && configuracoes.length > 0) {
-                await firebaseService.update('config_fidelidade', configuracoes[0].id, config);
-                mostrarSnackbar('Configurações salvas!');
-              } else {
-                await firebaseService.add('config_fidelidade', config);
-                mostrarSnackbar('Configurações criadas!');
+              try {
+                const configAtual = configuracoes && configuracoes.length > 0
+                  ? { ...config, id: configuracoes[0].id }
+                  : config;
+                const configSalva = await fidelidadeConfigService.salvar(configAtual);
+                setConfig({ ...configSalva, ativo: configSalva.ativo !== false });
+                notificarFidelidadeConfigAtualizada(configSalva);
+                mostrarSnackbar(configSalva.ativo !== false ? 'Fidelidade ativada e configurações salvas!' : 'Fidelidade desativada e configurações salvas!');
+                setOpenConfigDialog(false);
+              } catch (error) {
+                console.error('Erro ao salvar configurações de fidelidade:', error);
+                mostrarSnackbar('Erro ao salvar configurações de fidelidade', 'error');
               }
-              setOpenConfigDialog(false);
             }}
             variant="contained"
             sx={{ bgcolor: '#9c27b0' }}

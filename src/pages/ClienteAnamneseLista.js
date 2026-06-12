@@ -343,6 +343,25 @@ const MobileFilterDrawer = ({ open, onClose, filterType, setFilterType }) => {
   );
 };
 
+
+const getFormularioKey = (formulario = {}, index = 0) => {
+  const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
+  if (explicitId) return String(explicitId);
+  const base = [
+    formulario.titulo,
+    formulario.nome,
+    formulario.nomeFormulario,
+    formulario.servicoId,
+    ...(formulario.servicoIds || []),
+    ...(formulario.servicosIds || []),
+  ].filter(Boolean).join('_');
+  const slug = base.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return slug || `formulario_${index}`;
+};
+
+const getFormularioTitulo = (formulario = {}, index = 0) =>
+  formulario.titulo || formulario.nome || formulario.nomeFormulario || `Formulário ${index + 1}`;
+
 function ClienteAnamneseLista() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -362,6 +381,25 @@ function ClienteAnamneseLista() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
+  const getClienteIds = () => Array.from(new Set([
+    firebaseUser?.uid,
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean)));
+
+  const getAgendamentoServicoIds = (agendamento = {}) => Array.from(new Set([
+    agendamento.servicoId,
+    ...(agendamento.servicosIds || []),
+    ...(agendamento.servicoIds || []),
+    ...(agendamento.servicos || []).map((servico) => servico.id),
+  ].flat().filter(Boolean)));
+
+  const formularioAtendeServico = (formulario, servicoIds = []) => {
+    const idsFormulario = formulario.servicoIds || formulario.servicosIds || [];
+    return idsFormulario.some((servicoId) => servicoIds.includes(servicoId));
+  };
+
   useEffect(() => {
     if (cliente) {
       carregarDados();
@@ -372,25 +410,31 @@ function ClienteAnamneseLista() {
     try {
       setLoading(true);
       
-      const uid = firebaseUser?.uid || cliente?.id;
+      const idsCliente = getClienteIds();
       
-      if (!uid) {
+      if (idsCliente.length === 0) {
         console.error('ID do cliente não encontrado');
         return;
       }
 
-      // Buscar agendamentos do cliente
-      const agendamentosData = await firebaseService.query('agendamentos', [
-        { field: 'clienteId', operator: '==', value: uid }
-      ], 'data', 'desc');
+      // Buscar agendamentos do cliente usando todos os vínculos possíveis do portal.
+      const agendamentosPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('agendamentos', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'data', 'desc')
+      ));
+      const agendamentosData = Array.from(new Map(agendamentosPorId.flat().map((item) => [item.id, item])).values());
 
       // Buscar todos os formulários
       const formulariosData = await firebaseService.getAll('formularios_anamnese');
 
-      // Buscar respostas do cliente
-      const respostasData = await firebaseService.query('respostas_anamnese', [
-        { field: 'clienteId', operator: '==', value: uid }
-      ], 'respondidoEm', 'desc');
+      // Buscar respostas do cliente usando todos os vínculos possíveis do portal.
+      const respostasPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('respostas_anamnese', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'respondidoEm', 'desc')
+      ));
+      const respostasData = Array.from(new Map(respostasPorId.flat().map((item) => [item.id, item])).values());
 
       // Buscar serviços
       const servicosData = await firebaseService.getAll('servicos');
@@ -403,32 +447,35 @@ function ClienteAnamneseLista() {
       const pendentes = [];
       const respondidos = [];
 
-      // Mapear respostas por agendamento
-      const respostasPorAgendamento = {};
+      // Mapear respostas por agendamento e formulário para não marcar todos os formulários
+      // do agendamento como respondidos quando apenas um deles foi enviado.
+      const respostasPorAgendamentoFormulario = {};
       respostasData.forEach(resp => {
-        if (resp.agendamentoId) {
-          respostasPorAgendamento[resp.agendamentoId] = resp;
+        if (resp.agendamentoId && resp.formularioId) {
+          respostasPorAgendamentoFormulario[`${resp.agendamentoId}_${resp.formularioId}`] = resp;
         }
       });
 
       // Verificar cada agendamento
       for (const agendamento of agendamentosData || []) {
-        // Buscar formulários associados ao serviço do agendamento
+        // Buscar formulários associados a qualquer serviço do agendamento.
+        const servicoIdsAgendamento = getAgendamentoServicoIds(agendamento);
         const formulariosDoServico = formulariosData.filter(f => 
-          f.servicoIds?.includes(agendamento.servicoId) && f.ativo !== false
+          formularioAtendeServico(f, servicoIdsAgendamento) && f.ativo !== false
         );
 
-        for (const formulario of formulariosDoServico) {
-          const resposta = respostasPorAgendamento[agendamento.id];
+        for (const [formularioIndex, formulario] of formulariosDoServico.entries()) {
+          const formularioId = getFormularioKey(formulario, formularioIndex);
+          const resposta = respostasPorAgendamentoFormulario[`${agendamento.id}_${formularioId}`];
           
           const item = {
-            id: `${agendamento.id}_${formulario.id}`,
+            id: `${agendamento.id}_${formularioId}`,
             agendamentoId: agendamento.id,
-            formularioId: formulario.id,
-            formularioTitulo: formulario.titulo,
-            formularioDescricao: formulario.descricao,
-            servicoId: agendamento.servicoId,
-            servicoNome: servicosData.find(s => s.id === agendamento.servicoId)?.nome || 'Serviço',
+            formularioId,
+            formularioTitulo: getFormularioTitulo(formulario, formularioIndex),
+            formularioDescricao: formulario.descricao || formulario.observacoes || '',
+            servicoId: servicoIdsAgendamento[0],
+            servicoNome: agendamento.servicosNomes || servicoIdsAgendamento.map((servicoId) => servicosData.find(s => s.id === servicoId)?.nome).filter(Boolean).join(', ') || 'Serviço',
             dataAgendamento: agendamento.data,
             horarioAgendamento: agendamento.horario,
             status: resposta ? 'respondido' : 'pendente',
@@ -467,7 +514,8 @@ function ClienteAnamneseLista() {
   };
 
   const handleResponder = (agendamentoId, formularioId) => {
-    navigate(`/cliente/agendamento/${agendamentoId}/anamnese`);
+    const query = formularioId ? `?formularioId=${encodeURIComponent(formularioId)}` : '';
+    navigate(`/cliente/agendamento/${agendamentoId}/anamnese${query}`);
   };
 
   const handleVisualizar = (respostaId) => {
