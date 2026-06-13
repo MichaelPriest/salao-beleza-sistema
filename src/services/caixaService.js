@@ -29,6 +29,34 @@ export const formatarMoedaCaixa = (valor) => Number(valor || 0).toLocaleString('
 
 const agoraIso = () => new Date().toISOString();
 
+const criarTransacaoParaMovimento = async (movimento) => {
+  if (movimento.transacaoId || movimento.criarTransacao === false) return null;
+
+  const valor = moedaParaNumero(movimento.valor);
+  if (valor <= 0 || movimento.tipo === 'abertura') return null;
+
+  const isSaida = TIPOS_SAIDA.has(movimento.tipo);
+  const transacao = {
+    tipo: isSaida ? 'despesa' : 'receita',
+    descricao: movimento.descricao || caixaService.tipoLabel(movimento.tipo),
+    valor,
+    data: new Date().toISOString().split('T')[0],
+    dataVencimento: new Date().toISOString().split('T')[0],
+    categoria: movimento.tipo === 'sangria' ? 'Sangria de Caixa' : movimento.tipo === 'reforco' ? 'Reforço de Caixa' : 'Caixa',
+    formaPagamento: movimento.formaPagamento || 'dinheiro',
+    status: 'pago',
+    dataPagamento: agoraIso(),
+    origem: 'caixa',
+    caixaId: movimento.caixaId,
+    caixaMovimentoId: movimento.id,
+    referenciaId: movimento.id,
+    referenciaTipo: 'caixa',
+    observacoes: movimento.observacao || `Movimento de caixa: ${caixaService.tipoLabel(movimento.tipo)}`,
+  };
+
+  return firebaseService.add('transacoes', transacao);
+};
+
 export const caixaService = {
   tipoLabel: (tipo) => ({
     abertura: 'Abertura',
@@ -112,12 +140,26 @@ export const caixaService = {
     });
   },
 
-  registrarMovimento: async ({ caixaId, tipo, valor, formaPagamento = 'dinheiro', descricao = '', observacao = '' }) => {
+  registrarMovimento: async ({
+    caixaId,
+    tipo,
+    valor,
+    formaPagamento = 'dinheiro',
+    descricao = '',
+    observacao = '',
+    origem = 'caixa',
+    referenciaId = null,
+    referenciaTipo = null,
+    atendimentoId = null,
+    clienteId = null,
+    transacaoId = null,
+    criarTransacao = true,
+  }) => {
     if (!caixaId) throw new Error('Abra um caixa antes de registrar movimentos.');
     const valorNumerico = moedaParaNumero(valor);
     if (valorNumerico <= 0) throw new Error('Informe um valor maior que zero.');
 
-    return firebaseService.add('caixa', {
+    const movimento = await firebaseService.add('caixa', {
       tipoRegistro: 'movimentacao',
       caixaId,
       tipo,
@@ -125,8 +167,74 @@ export const caixaService = {
       formaPagamento,
       descricao,
       observacao,
+      origem,
+      referenciaId,
+      referenciaTipo,
+      atendimentoId,
+      clienteId,
+      transacaoId,
+      criarTransacao,
       data: agoraIso(),
     });
+
+    const transacaoCriadaId = await criarTransacaoParaMovimento({ ...movimento, criarTransacao }).catch((error) => {
+      console.warn('Não foi possível integrar movimento do caixa ao financeiro:', error);
+      return null;
+    });
+
+    if (transacaoCriadaId) {
+      await firebaseService.update('caixa', movimento.id, { transacaoId: transacaoCriadaId }).catch(() => null);
+      return { ...movimento, transacaoId: transacaoCriadaId };
+    }
+
+    return movimento;
+  },
+
+  sincronizarRecebimentoAtendimento: async ({ pagamento, atendimentoId, clienteId, clienteNome, transacaoId }) => {
+    const caixaAberto = await caixaService.obterCaixaAberto();
+    if (!caixaAberto || !pagamento?.id) return null;
+
+    const existentes = await firebaseService.query('caixa', [
+      { field: 'referenciaId', operator: '==', value: pagamento.id },
+      { field: 'referenciaTipo', operator: '==', value: 'pagamento_atendimento' },
+    ]).catch(() => []);
+
+    const movimentoExistente = existentes.find((item) => item.tipoRegistro === 'movimentacao');
+    const dadosMovimento = {
+      tipo: 'recebimento',
+      valor: pagamento.valor,
+      formaPagamento: pagamento.formaPagamento || 'dinheiro',
+      descricao: `Recebimento atendimento - ${clienteNome || 'Cliente'}`,
+      observacao: pagamento.observacoes || `Pagamento do atendimento ${atendimentoId}`,
+      origem: 'atendimento',
+      referenciaId: pagamento.id,
+      referenciaTipo: 'pagamento_atendimento',
+      atendimentoId,
+      clienteId,
+      transacaoId,
+      criarTransacao: false,
+    };
+
+    if (movimentoExistente) {
+      await firebaseService.update('caixa', movimentoExistente.id, dadosMovimento);
+      return { ...movimentoExistente, ...dadosMovimento };
+    }
+
+    return caixaService.registrarMovimento({ caixaId: caixaAberto.id, ...dadosMovimento });
+  },
+
+  removerMovimentosPorReferencia: async ({ referenciaId, referenciaTipo }) => {
+    if (!referenciaId) return 0;
+    const movimentos = await firebaseService.query('caixa', [
+      { field: 'referenciaId', operator: '==', value: referenciaId },
+      ...(referenciaTipo ? [{ field: 'referenciaTipo', operator: '==', value: referenciaTipo }] : []),
+    ]).catch(() => []);
+
+    await Promise.all((movimentos || [])
+      .filter((item) => item.tipoRegistro === 'movimentacao')
+      .map((item) => firebaseService.delete('caixa', item.id)));
+
+    return movimentos.length;
   },
 
   fecharCaixa: async (caixaId, { valorConferido, observacao = '' } = {}) => {

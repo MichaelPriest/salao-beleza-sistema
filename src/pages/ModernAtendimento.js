@@ -94,6 +94,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { cupomService } from '../services/cupomService';
+import { caixaService } from '../services/caixaService';
 import { Timestamp } from '../services/firebase';
 
 // Lista de unidades de medida
@@ -1274,6 +1275,18 @@ function ModernAtendimento() {
 
       const transacaoId = await firebaseService.add('transacoes', transacao);
 
+      if (pagamento.id) {
+        await caixaService.sincronizarRecebimentoAtendimento({
+          pagamento,
+          atendimentoId: id,
+          clienteId: cliente?.id || null,
+          clienteNome: cliente?.nome || 'Cliente',
+          transacaoId,
+        }).catch((error) => {
+          console.warn('Não foi possível registrar o recebimento no caixa aberto:', error);
+        });
+      }
+
       await registrarAuditoria(
         'criar_transacao',
         transacaoId,
@@ -1377,7 +1390,21 @@ function ModernAtendimento() {
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
         pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
         setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
-        
+
+        const transacoesPagamento = await firebaseService.query('transacoes', [
+          { field: 'atendimentoId', operator: '==', value: id }
+        ]).catch(() => []);
+        const transacaoRelacionada = transacoesPagamento.find((transacao) => transacao.origem === 'atendimento');
+        await caixaService.sincronizarRecebimentoAtendimento({
+          pagamento: pagamentoSalvo,
+          atendimentoId: id,
+          clienteId: cliente?.id || null,
+          clienteNome: cliente?.nome || 'Cliente',
+          transacaoId: transacaoRelacionada?.id || null,
+        }).catch((error) => {
+          console.warn('Não foi possível atualizar o recebimento no caixa:', error);
+        });
+
         await registrarAuditoria(
           'atualizar_pagamento',
           pagamentoEditando.id,
@@ -1440,6 +1467,11 @@ function ModernAtendimento() {
         for (const transacao of transacoes) {
           await firebaseService.delete('transacoes', transacao.id);
         }
+
+        await caixaService.removerMovimentosPorReferencia({
+          referenciaId: pagamentoId,
+          referenciaTipo: 'pagamento_atendimento',
+        });
 
         await firebaseService.delete('pagamentos', pagamentoId);
         pagamentosProcessadosRef.current.delete(pagamentoId);
