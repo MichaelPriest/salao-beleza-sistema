@@ -359,6 +359,23 @@ function ClienteAgendamentos() {
     return getMotivoIndisponibilidade(formData.profissionalId, formData.data, horario) === null;
   };
 
+  const getClienteIdsBusca = () => ([
+    cliente?.id,
+    cliente?.uid,
+    cliente?.authUid,
+    cliente?.googleUid,
+    firebaseUser?.uid,
+  ].filter(Boolean));
+
+  const calcularHorarioFim = (horario, duracaoTotal = 60) => {
+    if (!horario) return '';
+    const [hora, minuto] = horario.split(':').map(Number);
+    const data = new Date();
+    data.setHours(hora || 0, minuto || 0, 0, 0);
+    data.setMinutes(data.getMinutes() + Number(duracaoTotal || 60));
+    return data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   useEffect(() => {
     if (cliente) {
       carregarDados();

@@ -100,6 +100,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
@@ -435,7 +436,9 @@ const RecompensaMobileCard = ({ recompensa, onEditar, onExcluir }) => {
 };
 
 // Componente de Item de Resgate Mobile
-const ResgateItem = ({ resgate, cliente }) => {
+const ResgateItem = ({ resgate, cliente, onUtilizar, onCancelar }) => {
+  const status = String(resgate.status || (resgate.utilizado ? 'utilizado' : 'disponivel')).toLowerCase();
+  const ativo = !resgate.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(status);
   return (
     <ListItem divider>
       <ListItemAvatar>
@@ -466,10 +469,24 @@ const ResgateItem = ({ resgate, cliente }) => {
           </Typography>
           <Chip
             size="small"
-            label={resgate.status || 'Resgatado'}
-            color={resgate.status === 'cancelado' ? 'error' : 'success'}
+            label={status === 'disponivel' ? 'Disponível' : (resgate.status || 'Resgatado')}
+            color={status === 'cancelado' ? 'error' : status === 'utilizado' ? 'default' : 'success'}
             sx={{ height: 20, fontSize: '0.65rem' }}
           />
+          {ativo && (
+            <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, justifyContent: 'flex-end' }}>
+              <Tooltip title="Marcar como utilizado">
+                <IconButton size="small" color="success" onClick={() => onUtilizar(resgate)}>
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Cancelar e estornar pontos">
+                <IconButton size="small" color="error" onClick={() => onCancelar(resgate)}>
+                  <BlockIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
         </Box>
       </ListItemSecondaryAction>
     </ListItem>
@@ -742,6 +759,48 @@ function GerenciarFidelidade() {
         acao: 'salvar_pontos_fidelidade',
         dados: pontosForm
       });
+    }
+  };
+
+  const getUsuarioAtual = () => {
+    try {
+      return JSON.parse(localStorage.getItem('usuario') || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  const handleUtilizarResgate = async (resgate) => {
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.utilizar(resgate.id, {
+        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+      });
+      mostrarSnackbar('Recompensa marcada como utilizada!');
+      await carregarDados();
+    } catch (error) {
+      console.error('Erro ao utilizar resgate:', error);
+      mostrarSnackbar('Erro ao marcar recompensa como utilizada', 'error');
+    }
+  };
+
+  const handleCancelarResgate = async (resgate) => {
+    if (!window.confirm(`Cancelar o resgate ${resgate.codigo || ''} e estornar os pontos do cliente?`)) return;
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.cancelar(resgate.id, {
+        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        motivo: 'Cancelado pelo gerenciamento de fidelidade',
+        estornarPontos: true,
+      });
+      mostrarSnackbar('Resgate cancelado e pontos estornados!');
+      await carregarDados();
+    } catch (error) {
+      console.error('Erro ao cancelar resgate:', error);
+      mostrarSnackbar('Erro ao cancelar resgate', 'error');
     }
   };
 
@@ -1474,9 +1533,11 @@ function GerenciarFidelidade() {
                     const cliente = clientes.find(c => c.id === resgate.clienteId);
                     return (
                       <ResgateItem
-                        key={index}
+                        key={resgate.id || index}
                         resgate={resgate}
                         cliente={cliente}
+                        onUtilizar={handleUtilizarResgate}
+                        onCancelar={handleCancelarResgate}
                       />
                     );
                   })}
