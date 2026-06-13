@@ -101,7 +101,6 @@ const UNIT_SCOPED_COLLECTIONS = new Set([
   'pagamentos',
   'produtos',
   'profissionais',
-  'servicos',
   'transacoes'
 ]);
 
@@ -632,6 +631,34 @@ const isDocumentVisibleInTenant = (collectionName, data) => {
   return true;
 };
 
+const isDocumentWritableInCurrentTenant = (collectionName, data) => {
+  if (!data || isPlatformAdmin()) return Boolean(data);
+  if (!isTenantScopedCollection(collectionName)) return true;
+
+  const { empresaId } = getTenantContext();
+  if (!empresaId) return false;
+
+  const documentEmpresaId = data.empresaId || data.empresa_id || data.tenantId || data.tenant_id || data.empresa?.id || null;
+  const idIndicaTenant = collectionName === 'clientes' && data.id && String(data.id).startsWith(`${empresaId}_`);
+
+  // Documentos antigos importados sem empresaId podem ser reassociados ao tenant atual no primeiro salvamento.
+  if (!documentEmpresaId && !idIndicaTenant) return true;
+  return String(documentEmpresaId || empresaId) === String(empresaId) || idIndicaTenant;
+};
+
+const getByIdUnscoped = async (collectionName, id) => {
+  let documentData = null;
+  try {
+    const rows = await supabaseFetch(`/rest/v1/${collectionName}?document_id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+    documentData = toDocument(rows?.[0]) || null;
+  } catch (wrapperError) {
+    if (!isSchemaCacheColumnError(wrapperError)) throw wrapperError;
+    const rows = await supabaseFetch(`/rest/v1/${collectionName}?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+    documentData = toDocument(rows?.[0]) || null;
+  }
+  return documentData;
+};
+
 const canReadDocumentByIdWithoutTenant = (collectionName, id) => {
   const sessionUserId = getStoredSession()?.user?.id;
   return collectionName === 'usuarios' && sessionUserId && id === sessionUserId;
@@ -1118,11 +1145,19 @@ export const firebaseService = {
     try {
       assertPlatformWriteAccess(collectionName);
       assertTenantRootWrite(collectionName, id, data);
-      const current = await firebaseService.getById(collectionName, id).catch(() => null);
+      let current = await firebaseService.getById(collectionName, id).catch(() => null);
       if (!current && (isTenantScopedCollection(collectionName) || isTenantRootCollection(collectionName)) && !isPlatformAdmin()) {
-        throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
+        const unscoped = await getByIdUnscoped(collectionName, id).catch(() => null);
+        if (!isDocumentWritableInCurrentTenant(collectionName, unscoped)) {
+          throw new Error(`Documento ${collectionName}/${id} fora do tenant atual ou inexistente.`);
+        }
+        current = unscoped;
       }
-      const tenantData = applyTenantMetadata(collectionName, data);
+      const dataParaAtualizar = {
+        ...data,
+        ...(current?.unidadeId && data?.unidadeId === undefined ? { unidadeId: current.unidadeId } : {}),
+      };
+      const tenantData = applyTenantMetadata(collectionName, dataParaAtualizar);
       const documentData = sanitizeForSupabase({
         ...(current || {}),
         ...tenantData,

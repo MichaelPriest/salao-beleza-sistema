@@ -53,6 +53,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon,
   Apartment as ApartmentIcon,
+  PointOfSale as PointOfSaleIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,6 +62,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService, getTenantContext, setTenantContext } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 import { notificacoesService } from '../services/notificacoesService';
+import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 
 // 🔥 FUNÇÃO PARA OBTER DATA E HORA NO HORÁRIO DE BRASÍLIA
 const getBrasiliaTime = () => {
@@ -328,6 +330,7 @@ function ModernHeader() {
   const [unidades, setUnidades] = useState([]);
   const [unidadeAtualId, setUnidadeAtualId] = useState('');
   const [loadingUnidades, setLoadingUnidades] = useState(false);
+  const [caixaResumo, setCaixaResumo] = useState({ caixaAberto: null, totais: null, loading: true });
   
   // 🔥 REFS PARA CONTROLE
   const isMounted = useRef(true);
@@ -426,6 +429,53 @@ function ModernHeader() {
       window.removeEventListener('usuarioAtualizado', handleUsuarioAtualizado);
     };
   }, []);
+
+
+  const carregarStatusCaixa = useCallback(async () => {
+    try {
+      setCaixaResumo(prev => ({ ...prev, loading: true }));
+      const resumo = await caixaService.carregarResumoAtual();
+      if (!isMounted.current) return;
+      setCaixaResumo({ caixaAberto: resumo.caixaAberto || null, totais: resumo.totais || null, loading: false });
+    } catch (error) {
+      console.warn('Header - não foi possível carregar status do caixa:', error);
+      if (isMounted.current) setCaixaResumo({ caixaAberto: null, totais: null, loading: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!usuario?.id && !usuario?.uid) return undefined;
+    carregarStatusCaixa();
+    const interval = setInterval(carregarStatusCaixa, 30000);
+    window.addEventListener('caixaAtualizado', carregarStatusCaixa);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('caixaAtualizado', carregarStatusCaixa);
+    };
+  }, [usuario, carregarStatusCaixa]);
+
+  const renderCaixaStatusChip = (compact = false) => {
+    const aberto = Boolean(caixaResumo.caixaAberto);
+    const label = caixaResumo.loading
+      ? 'Caixa...'
+      : aberto
+        ? `Caixa aberto${compact ? '' : ` • ${formatarMoedaCaixa(caixaResumo.totais?.saldoAtual || 0)}`}`
+        : 'Caixa fechado';
+
+    return (
+      <Tooltip title={aberto ? 'Caixa aberto no Financeiro > Dashboard' : 'Caixa fechado: abra no Financeiro > Dashboard para receber pagamentos'}>
+        <Chip
+          size="small"
+          icon={<PointOfSaleIcon fontSize="small" />}
+          label={label}
+          color={aberto ? 'success' : 'error'}
+          variant={aberto ? 'filled' : 'outlined'}
+          onClick={() => navigate('/financeiro')}
+          sx={{ fontWeight: 700, cursor: 'pointer', display: compact ? 'inline-flex' : { xs: 'none', md: 'inline-flex' } }}
+        />
+      </Tooltip>
+    );
+  };
 
   // 🔥 FUNÇÃO CORRIGIDA PARA CARREGAR NOTIFICAÇÕES
   const carregarNotificacoes = useCallback(async (force = false) => {
@@ -1091,6 +1141,8 @@ function ModernHeader() {
                 <SearchIcon />
               </IconButton>
 
+              {renderCaixaStatusChip(true)}
+
               {/* Notificações */}
               <IconButton color="inherit" onClick={handleNotificationsOpen}>
                 <Badge badgeContent={unreadCount} color="secondary" max={9}>
@@ -1358,6 +1410,25 @@ function ModernHeader() {
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <RelogioDigital isMobile={false} />
+          {renderCaixaStatusChip(false)}
+
+          {unidades.length > 1 && (
+            <TextField
+              select
+              size="small"
+              value={unidadeAtualId}
+              onChange={handleTrocarUnidade}
+              disabled={loadingUnidades}
+              label="Unidade"
+              sx={{ minWidth: 190, display: { xs: 'none', lg: 'block' } }}
+              InputProps={{ startAdornment: <ApartmentIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> }}
+            >
+              <MenuItem value="">Todas as unidades</MenuItem>
+              {unidades.map((unidade) => (
+                <MenuItem key={unidade.id} value={unidade.id}>{unidade.nome}</MenuItem>
+              ))}
+            </TextField>
+          )}
 
           {unidades.length > 1 && (
             <TextField

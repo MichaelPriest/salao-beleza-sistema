@@ -94,6 +94,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { cupomService } from '../services/cupomService';
+import { caixaService } from '../services/caixaService';
 import { Timestamp } from '../services/firebase';
 
 // Lista de unidades de medida
@@ -307,14 +308,14 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
                 Cupom válido!
               </Typography>
             </Box>
-            
+
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {cupomEncontrado.codigo}
             </Typography>
-            
+
             <Typography variant="body2" color="textSecondary" gutterBottom>
-              {cupomEncontrado.descricao || 
-                (cupomEncontrado.tipo === 'percentual' 
+              {cupomEncontrado.descricao ||
+                (cupomEncontrado.tipo === 'percentual'
                   ? `${cupomEncontrado.valor}% de desconto`
                   : cupomEncontrado.tipo === 'fixo'
                     ? `R$ ${cupomEncontrado.valor?.toFixed(2)} de desconto`
@@ -350,14 +351,14 @@ const ValidadorCupom = ({ valorTotal, itensServico, cliente, onCupomValido }) =>
 function ModernAtendimento() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   // Refs para controle de duplicidade
   const processandoRef = useRef(false);
   const ultimaAcaoRef = useRef({ tipo: '', timestamp: 0, hash: '' });
   const pagamentosProcessadosRef = useRef(new Set());
   const pontosProcessadosRef = useRef(new Set());
   const cuponsProcessadosRef = useRef(new Set());
-  
+
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -366,43 +367,43 @@ function ModernAtendimento() {
   const [profissional, setProfissional] = useState(null);
   const [observacoes, setObservacoes] = useState('');
   const [usuario, setUsuario] = useState(null);
-  
+
   // Configurações de fidelidade
   const [fidelidadeConfig, setFidelidadeConfig] = useState(null);
   const [pontosCliente, setPontosCliente] = useState(0);
   const [nivelCliente, setNivelCliente] = useState('bronze');
   const [pontosGanhos, setPontosGanhos] = useState(0);
   const [bonusAplicados, setBonusAplicados] = useState([]);
-  
+
   // Configurações do sistema
   const [configuracoes, setConfiguracoes] = useState(null);
-  
+
   // Estado para cupons
   const [cuponsAplicados, setCuponsAplicados] = useState([]);
   const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
   const [descontoTotalCupons, setDescontoTotalCupons] = useState(0);
   const [cuponsProximosExpiracao, setCuponsProximosExpiracao] = useState([]);
-  
+
   // 🔥 ESTADOS PARA ANAMNESE
   const [respostasAnamnese, setRespostasAnamnese] = useState(null);
   const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
-  
+
   // Itens do atendimento - ARRAYS
   const [itensServico, setItensServico] = useState([]);
   const [itensProduto, setItensProduto] = useState([]);
-  
+
   // Controles para adicionar itens
   const [servicoSelecionado, setServicoSelecionado] = useState(null);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidadeProduto, setQuantidadeProduto] = useState(1);
-  
+
   // Controle para item sem cobrança
   const [itemSemCobranca, setItemSemCobranca] = useState(false);
-  
+
   // Busca nos selects
   const [buscaServico, setBuscaServico] = useState('');
   const [buscaProduto, setBuscaProduto] = useState('');
-  
+
   // Pagamentos - ARRAY
   const [pagamentos, setPagamentos] = useState([]);
   const [openPagamentoDialog, setOpenPagamentoDialog] = useState(false);
@@ -445,14 +446,14 @@ function ModernAtendimento() {
     try {
       const agora = Date.now();
       const hash = gerarHashAcao(tipo, dados);
-      
-      if (ultimaAcaoRef.current.tipo === tipo && 
-          ultimaAcaoRef.current.hash === hash && 
+
+      if (ultimaAcaoRef.current.tipo === tipo &&
+          ultimaAcaoRef.current.hash === hash &&
           agora - ultimaAcaoRef.current.timestamp < intervaloMs) {
         console.warn(`⚠️ Ação duplicada detectada: ${tipo}`);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       return false;
@@ -486,13 +487,13 @@ function ModernAtendimento() {
         if (typeof obj !== 'object') return obj;
         if (obj instanceof Date) return obj.toISOString();
         if (obj instanceof Timestamp) return obj.toDate().toISOString();
-        
+
         const limpo = {};
-        
+
         Object.keys(obj).forEach(key => {
           try {
             const valor = obj[key];
-            
+
             if (valor === undefined || valor === null) {
               // Ignora undefined/null
               return;
@@ -519,13 +520,13 @@ function ModernAtendimento() {
             // Ignora erros ao processar chave
           }
         });
-        
+
         return limpo;
       };
 
       const usuarioId = usuario?.id || 'sistema';
       const usuarioNome = usuario?.nome || 'Sistema';
-      
+
       // 🔥 Garantir que todos os dados são seguros
       const dadosSeguros = {
         ...dados,
@@ -565,7 +566,7 @@ function ModernAtendimento() {
         dadosSeguros.quantidadeServicos = dadosSeguros.itensServico.length;
         delete dadosSeguros.itensServico;
       }
-      
+
       if (dadosSeguros.itensProduto !== undefined && Array.isArray(dadosSeguros.itensProduto)) {
         dadosSeguros.quantidadeProdutos = dadosSeguros.itensProduto.length;
         delete dadosSeguros.itensProduto;
@@ -586,7 +587,7 @@ function ModernAtendimento() {
       }, 2).substring(0, 500)); // Limita log para não poluir
 
       await firebaseService.add('auditoria', auditoriaData);
-      
+
       registrarAcaoProcessada('auditoria', { acao, entidadeId });
     } catch (error) {
       console.error('❌ Erro ao registrar auditoria (não crítico):', error);
@@ -620,14 +621,14 @@ function ModernAtendimento() {
     cuponsAplicados.forEach(cupom => {
       if (cupom.tipo === 'percentual') {
         let valorDesconto = (subtotal * cupom.valor) / 100;
-        
+
         if (cupom.valorMaximoDesconto && valorDesconto > cupom.valorMaximoDesconto) {
           valorDesconto = cupom.valorMaximoDesconto;
         }
-        
+
         descontoTotal += valorDesconto;
         cupom.valorDescontoCalculado = valorDesconto;
-        
+
       } else if (cupom.tipo === 'fixo') {
         descontoTotal += cupom.valor;
         cupom.valorDescontoCalculado = cupom.valor;
@@ -807,13 +808,13 @@ function ModernAtendimento() {
   // 🔥 FUNÇÃO PARA CARREGAR RESPOSTAS DA ANAMNESE
   const carregarRespostasAnamnese = async () => {
     if (!id) return;
-    
+
     try {
       // Buscar respostas associadas ao atendimento
       const respostas = await firebaseService.query('respostas_anamnese', [
         { field: 'atendimentoId', operator: '==', value: id }
       ]);
-      
+
       if (respostas.length > 0) {
         setRespostasAnamnese(respostas[0]);
         console.log('✅ Respostas de anamnese carregadas:', respostas[0]);
@@ -823,7 +824,7 @@ function ModernAtendimento() {
           const respostasAgendamento = await firebaseService.query('respostas_anamnese', [
             { field: 'agendamentoId', operator: '==', value: atendimento.agendamentoId }
           ]);
-          
+
           if (respostasAgendamento.length > 0) {
             setRespostasAnamnese(respostasAgendamento[0]);
             console.log('✅ Respostas de anamnese carregadas via agendamento:', respostasAgendamento[0]);
@@ -903,7 +904,7 @@ function ModernAtendimento() {
         { field: 'atendimentoId', operator: '==', value: id }
       ]);
       setPagamentos(pagamentosData || []);
-      
+
       // Preencher set de pagamentos processados
       pagamentosData.forEach(p => {
         if (p.id) pagamentosProcessadosRef.current.add(p.id);
@@ -914,7 +915,7 @@ function ModernAtendimento() {
         'acesso_atendimento',
         id,
         `Acesso ao atendimento`,
-        { 
+        {
           clienteId: clienteData?.id,
           clienteNome: clienteData?.nome,
           profissionalId: profissionalData?.id,
@@ -953,12 +954,12 @@ function ModernAtendimento() {
   // FUNÇÕES DE MANIPULAÇÃO DE ITENS
   // ============================================
 
-  const servicosFiltrados = servicosDisponiveis.filter(servico => 
+  const servicosFiltrados = servicosDisponiveis.filter(servico =>
     servico.nome?.toLowerCase().includes(buscaServico.toLowerCase()) ||
     servico.categoria?.toLowerCase().includes(buscaServico.toLowerCase())
   );
 
-  const produtosFiltrados = produtosDisponiveis.filter(produto => 
+  const produtosFiltrados = produtosDisponiveis.filter(produto =>
     produto.nome?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.categoria?.toLowerCase().includes(buscaProduto.toLowerCase()) ||
     produto.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
@@ -1000,7 +1001,7 @@ function ModernAtendimento() {
     }
 
     const quantidadeDisponivel = calcularQuantidadeDisponivel(produtoSelecionado, quantidadeProduto);
-    
+
     if (quantidadeProduto > quantidadeDisponivel) {
       toast.error(
         `Quantidade indisponível. Disponível: ${quantidadeDisponivel} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
@@ -1011,12 +1012,12 @@ function ModernAtendimento() {
     const quantidadeEstoque = converterParaEstoque(produtoSelecionado, quantidadeProduto);
 
     const produtoExistente = itensProduto.find(item => item.id === produtoSelecionado.id);
-    
+
     if (produtoExistente) {
-      setItensProduto(itensProduto.map(item => 
-        item.id === produtoSelecionado.id 
-          ? { 
-              ...item, 
+      setItensProduto(itensProduto.map(item =>
+        item.id === produtoSelecionado.id
+          ? {
+              ...item,
               quantidadeVenda: item.quantidadeVenda + quantidadeProduto,
               quantidadeEstoque: item.quantidadeEstoque + quantidadeEstoque,
               semCobranca: item.semCobranca
@@ -1045,8 +1046,8 @@ function ModernAtendimento() {
     });
 
     registrarMovimentacaoEstoque(
-      produtoSelecionado, 
-      quantidadeEstoque, 
+      produtoSelecionado,
+      quantidadeEstoque,
       produtoSelecionado.unidadeEstoque,
       itemSemCobranca ? 'uso_sem_cobranca' : 'venda'
     );
@@ -1056,8 +1057,8 @@ function ModernAtendimento() {
     setItemSemCobranca(false);
     setBuscaProduto('');
     toast.success(
-      itemSemCobranca 
-        ? `Produto adicionado (sem cobrança)! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}` 
+      itemSemCobranca
+        ? `Produto adicionado (sem cobrança)! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
         : `Produto adicionado! ${quantidadeProduto} ${getUnidadeSimbolo(produtoSelecionado.unidadeVenda)}`
     );
   };
@@ -1090,7 +1091,7 @@ function ModernAtendimento() {
 
   const handleRemoverProduto = (index) => {
     const itemRemovido = itensProduto[index];
-    
+
     if (itemRemovido) {
       firebaseService.getById('produtos', itemRemovido.id).then(produto => {
         const novaQuantidade = (produto.quantidadeEstoque || 0) + itemRemovido.quantidadeEstoque;
@@ -1098,10 +1099,10 @@ function ModernAtendimento() {
           quantidadeEstoque: novaQuantidade,
           updatedAt: Timestamp.now()
         });
-        
+
         registrarMovimentacaoEstoque(
-          produto, 
-          itemRemovido.quantidadeEstoque, 
+          produto,
+          itemRemovido.quantidadeEstoque,
           itemRemovido.unidadeEstoque,
           'devolucao'
         );
@@ -1130,10 +1131,10 @@ function ModernAtendimento() {
     setCuponsAplicados([...cuponsAplicados, cupom]);
     cuponsProcessadosRef.current.add(cupom.id);
     setMostrarValidadorCupom(false);
-    
+
     toast.success(`Cupom ${cupom.codigo} aplicado com sucesso!`);
     registrarAcaoProcessada('aplicar_cupom', { cupomId: cupom.id });
-    
+
     registrarAuditoria(
       'aplicar_cupom',
       id,
@@ -1144,7 +1145,7 @@ function ModernAtendimento() {
 
   const handleRemoverCupom = (index) => {
     const cupomRemovido = cuponsAplicados[index];
-    
+
     if (verificarDuplicidade('remover_cupom', { cupomId: cupomRemovido.id })) {
       toast.error('Operação já foi processada. Aguarde um momento.');
       return;
@@ -1153,10 +1154,10 @@ function ModernAtendimento() {
     const novosCupons = cuponsAplicados.filter((_, i) => i !== index);
     setCuponsAplicados(novosCupons);
     cuponsProcessadosRef.current.delete(cupomRemovido.id);
-    
+
     toast.info(`Cupom ${cupomRemovido.codigo} removido`);
     registrarAcaoProcessada('remover_cupom', { cupomId: cupomRemovido.id });
-    
+
     registrarAuditoria(
       'remover_cupom',
       id,
@@ -1168,10 +1169,10 @@ function ModernAtendimento() {
   const verificarCuponsProximosExpiracao = async () => {
     try {
       if (!cliente?.id) return;
-      
+
       const cupons = await cupomService.verificarCuponsExpirados(cliente.id);
       setCuponsProximosExpiracao(cupons);
-      
+
       if (cupons.length > 0) {
         toast.info(`${cupons.length} cupom(ns) próximo(s) de expirar!`, {
           icon: '⏰',
@@ -1207,9 +1208,9 @@ function ModernAtendimento() {
     try {
       processandoRef.current = true;
       setSaving(true);
-      
+
       const valorTotal = calcularValorTotal();
-      
+
       const dadosAtendimento = {
         observacoes,
         itensServico: itensServico,
@@ -1227,17 +1228,17 @@ function ModernAtendimento() {
         'confirmar_atendimento',
         id,
         `Atendimento confirmado`,
-        { 
-          valorTotal, 
-          quantidadeServicos: itensServico.length, 
-          quantidadeProdutos: itensProduto.length 
+        {
+          valorTotal,
+          quantidadeServicos: itensServico.length,
+          quantidadeProdutos: itensProduto.length
         }
       );
 
       setActiveStep(1);
       toast.success('Atendimento confirmado!');
       registrarAcaoProcessada('confirmar_atendimento', { id });
-      
+
     } catch (error) {
       console.error('Erro ao confirmar atendimento:', error);
       toast.error('Erro ao confirmar atendimento');
@@ -1273,6 +1274,18 @@ function ModernAtendimento() {
       };
 
       const transacaoId = await firebaseService.add('transacoes', transacao);
+
+      if (pagamento.id) {
+        await caixaService.sincronizarRecebimentoAtendimento({
+          pagamento,
+          atendimentoId: id,
+          clienteId: cliente?.id || null,
+          clienteNome: cliente?.nome || 'Cliente',
+          transacaoId,
+        }).catch((error) => {
+          console.warn('Não foi possível registrar o recebimento no caixa aberto:', error);
+        });
+      }
 
       await registrarAuditoria(
         'criar_transacao',
@@ -1349,8 +1362,14 @@ function ModernAtendimento() {
         return;
       }
 
+      const caixaAberto = await caixaService.obterCaixaAberto();
+      if (!caixaAberto) {
+        toast.error('Abra o caixa no Financeiro > Dashboard antes de finalizar pagamentos.');
+        return;
+      }
+
       const agora = Timestamp.now();
-      
+
       const pagamentoData = {
         atendimentoId: id,
         clienteId: cliente.id,
@@ -1368,7 +1387,7 @@ function ModernAtendimento() {
 
       if (pagamentoEditando) {
         const valorAlterado = Math.abs(pagamentoEditando.valor - pagamentoData.valor) > 0.01;
-        
+
         if (!valorAlterado) {
           toast.error('Nenhuma alteração no valor do pagamento');
           return;
@@ -1377,18 +1396,32 @@ function ModernAtendimento() {
         await firebaseService.update('pagamentos', pagamentoEditando.id, pagamentoData);
         pagamentoSalvo = { ...pagamentoData, id: pagamentoEditando.id };
         setPagamentos(pagamentos.map(p => p.id === pagamentoEditando.id ? pagamentoSalvo : p));
-        
+
+        const transacoesPagamento = await firebaseService.query('transacoes', [
+          { field: 'atendimentoId', operator: '==', value: id }
+        ]).catch(() => []);
+        const transacaoRelacionada = transacoesPagamento.find((transacao) => transacao.origem === 'atendimento');
+        await caixaService.sincronizarRecebimentoAtendimento({
+          pagamento: pagamentoSalvo,
+          atendimentoId: id,
+          clienteId: cliente?.id || null,
+          clienteNome: cliente?.nome || 'Cliente',
+          transacaoId: transacaoRelacionada?.id || null,
+        }).catch((error) => {
+          console.warn('Não foi possível atualizar o recebimento no caixa:', error);
+        });
+
         await registrarAuditoria(
           'atualizar_pagamento',
           pagamentoEditando.id,
           `Pagamento atualizado`,
           { valor: pagamentoData.valor, formaPagamento: pagamentoData.formaPagamento }
         );
-        
+
         toast.success('Pagamento atualizado!');
       } else {
-        const pagamentoExistente = pagamentos.find(p => 
-          Math.abs(p.valor - pagamentoData.valor) < 0.01 && 
+        const pagamentoExistente = pagamentos.find(p =>
+          Math.abs(p.valor - pagamentoData.valor) < 0.01 &&
           p.formaPagamento === pagamentoData.formaPagamento
         );
 
@@ -1400,14 +1433,14 @@ function ModernAtendimento() {
         pagamentoSalvo = await firebaseService.add('pagamentos', pagamentoData);
         pagamentosProcessadosRef.current.add(pagamentoSalvo.id);
         setPagamentos([...pagamentos, pagamentoSalvo]);
-        
+
         await registrarAuditoria(
           'criar_pagamento',
           pagamentoSalvo.id,
           `Pagamento registrado`,
           { valor: pagamentoData.valor, formaPagamento: pagamentoData.formaPagamento }
         );
-        
+
         toast.success('Pagamento registrado!');
 
         await criarTransacaoFinanceira(pagamentoSalvo);
@@ -1415,7 +1448,7 @@ function ModernAtendimento() {
 
       handleClosePagamentoDialog();
       registrarAcaoProcessada('salvar_pagamento', dadosPagamento);
-      
+
     } catch (error) {
       console.error('Erro ao salvar pagamento:', error);
       toast.error('Erro ao salvar pagamento');
@@ -1441,20 +1474,25 @@ function ModernAtendimento() {
           await firebaseService.delete('transacoes', transacao.id);
         }
 
+        await caixaService.removerMovimentosPorReferencia({
+          referenciaId: pagamentoId,
+          referenciaTipo: 'pagamento_atendimento',
+        });
+
         await firebaseService.delete('pagamentos', pagamentoId);
         pagamentosProcessadosRef.current.delete(pagamentoId);
         setPagamentos(pagamentos.filter(p => p.id !== pagamentoId));
-        
+
         await registrarAuditoria(
           'remover_pagamento',
           pagamentoId,
           `Pagamento removido`,
           { atendimentoId: id }
         );
-        
+
         toast.success('Pagamento e transações removidos!');
         registrarAcaoProcessada('remover_pagamento', { pagamentoId });
-        
+
       } catch (error) {
         console.error('Erro ao remover pagamento:', error);
         toast.error('Erro ao remover pagamento');
@@ -1481,7 +1519,7 @@ function ModernAtendimento() {
         valorDesconto: cupom.valorDescontoCalculado || 0,
         valorTotal: calcularValorTotal(),
       });
-      
+
       cuponsProcessadosRef.current.add(cupom.id);
       console.log(`✅ Uso do cupom ${cupom.codigo} registrado`);
     } catch (error) {
@@ -1508,7 +1546,7 @@ function ModernAtendimento() {
 
     try {
       const pontosKey = `${id}_${cliente.id}`;
-      
+
       // Verificar se já processou estes pontos
       if (pontosProcessadosRef.current.has(pontosKey)) {
         console.log('🔄 Pontos já foram processados para este atendimento');
@@ -1538,10 +1576,10 @@ function ModernAtendimento() {
       };
 
       await firebaseService.add('pontuacao', pontuacaoData);
-      
+
       // Marcar como processado
       pontosProcessadosRef.current.add(pontosKey);
-      
+
       // Atualizar estado local
       setPontosCliente(prev => {
         const novoSaldo = prev + pontosGanhos;
@@ -1554,9 +1592,9 @@ function ModernAtendimento() {
         'adicionar_pontos_fidelidade',
         cliente.id,
         `${pontosGanhos} pontos adicionados por atendimento`,
-        { 
-          atendimentoId: id, 
-          pontos: pontosGanhos, 
+        {
+          atendimentoId: id,
+          pontos: pontosGanhos,
           nivel: nivelCliente,
           bonus: bonusAplicados
         }
@@ -1569,7 +1607,7 @@ function ModernAtendimento() {
       });
 
       console.log('✅ Pontos de fidelidade adicionados com sucesso:', pontosGanhos);
-      
+
     } catch (error) {
       console.error('❌ Erro ao adicionar pontos de fidelidade:', error);
       toast.error('Erro ao adicionar pontos de fidelidade');
@@ -1584,7 +1622,7 @@ function ModernAtendimento() {
 
     try {
       const configFidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
-      const config = configFidelidade[0] || { 
+      const config = configFidelidade[0] || {
         pontosIndicacao: 100,
         bonusIndicacao: 100
       };
@@ -1685,17 +1723,17 @@ function ModernAtendimento() {
     try {
       processandoRef.current = true;
       setSaving(true);
-      
+
       const valorTotal = calcularValorTotal();
       const totalPago = calcularTotalPago();
       const saldoRestante = valorTotal - totalPago;
       const MARGEM_ERRO = 0.01;
-  
+
       if (Math.abs(saldoRestante) > MARGEM_ERRO) {
         toast.error(`Valor total ainda não foi pago! Restante: R$ ${saldoRestante.toFixed(2)}`);
         return;
       }
-  
+
       console.log('🔥 FINALIZANDO ATENDIMENTO - INÍCIO');
       console.log('📊 Dados do atendimento:', {
         valorTotal,
@@ -1706,10 +1744,10 @@ function ModernAtendimento() {
         itensProduto: itensProduto.length,
         cupons: cuponsAplicados.length
       });
-  
+
       // 1. Buscar o agendamento associado
       let agendamentoId = null;
-      
+
       if (atendimento.agendamentoId) {
         agendamentoId = atendimento.agendamentoId;
       } else {
@@ -1718,7 +1756,7 @@ function ModernAtendimento() {
           { field: 'data', operator: '==', value: atendimento.data },
           { field: 'status', operator: '==', value: 'agendado' }
         ]);
-  
+
         const servicoId = atendimento.servicoId || itensServico[0]?.id;
         const agendamentoCorrespondente = agendamentos.find(ag => {
           if (ag.servicos && Array.isArray(ag.servicos)) {
@@ -1726,12 +1764,12 @@ function ModernAtendimento() {
           }
           return ag.servicoId === servicoId;
         });
-  
+
         if (agendamentoCorrespondente) {
           agendamentoId = agendamentoCorrespondente.id;
         }
       }
-  
+
       // 2. Atualizar o atendimento
       const dadosAtendimento = {
         status: 'finalizado',
@@ -1744,22 +1782,22 @@ function ModernAtendimento() {
         pontosGanhos: fidelidadeConfig?.ativo ? pontosGanhos : 0,
         updatedAt: Timestamp.now()
       };
-  
+
       if (agendamentoId) {
         dadosAtendimento.agendamentoId = agendamentoId;
       }
-  
+
       await firebaseService.update('atendimentos', id, dadosAtendimento);
-  
+
       // 3. Registrar uso dos cupons
       for (const cupom of cuponsAplicados) {
         await registrarUsoCupom(cupom);
       }
-  
+
       // 4. Atualizar agendamento
       if (agendamentoId) {
         const agendamentoAtual = await firebaseService.getById('agendamentos', agendamentoId);
-        
+
         if (agendamentoAtual) {
           const dadosAgendamento = {
             status: 'finalizado',
@@ -1767,7 +1805,7 @@ function ModernAtendimento() {
             atendimentoId: id,
             updatedAt: Timestamp.now()
           };
-  
+
           if (agendamentoAtual.servicos && Array.isArray(agendamentoAtual.servicos)) {
             const servicoRealizado = atendimento.servicoId || itensServico[0]?.id;
             dadosAgendamento.servicosRealizados = agendamentoAtual.servicos.map(s => ({
@@ -1775,17 +1813,17 @@ function ModernAtendimento() {
               realizado: s.id === servicoRealizado
             }));
           }
-  
+
           await firebaseService.update('agendamentos', agendamentoId, dadosAgendamento);
         }
       }
-  
+
       // 5. Registrar comissão
       const profissional = await firebaseService.getById('profissionais', atendimento.profissionalId);
       const servicoPrincipal = itensServico.find(item => item.principal) || itensServico[0];
       const percentual = profissional?.comissao || 40;
       const valorComissao = (calcularTotalServicos() * percentual) / 100;
-  
+
       const comissaoData = {
         atendimentoId: id,
         profissionalId: atendimento.profissionalId,
@@ -1800,13 +1838,13 @@ function ModernAtendimento() {
         dataRegistro: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-  
+
       if (agendamentoId) {
         comissaoData.agendamentoId = agendamentoId;
       }
-  
+
       await firebaseService.add('comissoes', comissaoData);
-  
+
       // 🔥 6. ADICIONAR PONTOS DE FIDELIDADE (AGORA ANTES DE PROCESSAR INDICAÇÃO)
       if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
         console.log('🎯 Chamando adicionarPontosFidelidade com:', {
@@ -1821,10 +1859,10 @@ function ModernAtendimento() {
           existeConfig: !!fidelidadeConfig
         });
       }
-  
+
       // 7. Processar indicação (após pontos)
       await processarIndicacao();
-  
+
       // 8. Atualizar cliente
       await firebaseService.update('clientes', cliente.id, {
         ultimaVisita: new Date().toISOString().split('T')[0],
@@ -1837,10 +1875,10 @@ function ModernAtendimento() {
         'finalizar_atendimento',
         id,
         `Atendimento finalizado`,
-        { 
-          valorTotal, 
+        {
+          valorTotal,
           descontoTotal: descontoTotalCupons,
-          quantidadeServicos: itensServico.length, 
+          quantidadeServicos: itensServico.length,
           quantidadeProdutos: itensProduto.length,
           quantidadeCupons: cuponsAplicados.length,
           quantidadePagamentos: pagamentos.length,
@@ -1851,11 +1889,11 @@ function ModernAtendimento() {
           profissionalNome: profissional?.nome
         }
       );
-  
+
       setActiveStep(3);
       toast.success('Atendimento finalizado com sucesso!');
       registrarAcaoProcessada('finalizar_atendimento', { id });
-      
+
     } catch (error) {
       console.error('❌ Erro ao finalizar atendimento:', error);
       toast.error('Erro ao finalizar atendimento');
@@ -1876,18 +1914,18 @@ function ModernAtendimento() {
     const data = new Date();
     const produtosCobrados = itensProduto.filter(p => !p.semCobranca);
     const produtosCortesia = itensProduto.filter(p => p.semCobranca);
-    
+
     const linha = formato === 'html' ? '<hr/>' : '\n' + '═'.repeat(40) + '\n';
     const linhaDupla = formato === 'html' ? '<hr style="border-top: 2px solid #000"/>' : '\n' + '█'.repeat(40) + '\n';
     const negritoInicio = formato === 'html' ? '<strong>' : '*';
     const negritoFim = formato === 'html' ? '</strong>' : '*';
     const quebraLinha = formato === 'html' ? '<br/>' : '\n';
-    
+
     let texto = '';
-    
+
     // Cabeçalho com Logo (apenas para HTML)
     texto += formato === 'html' ? '<div style="font-family: monospace; padding: 20px; max-width: 400px; margin: 0 auto;">' : '';
-    
+
     if (formato === 'html' && configuracoes?.salao?.logo) {
       texto += `
         <div style="text-align: center; margin-bottom: 20px;">
@@ -1895,9 +1933,9 @@ function ModernAtendimento() {
         </div>
       `;
     }
-    
+
     texto += `${linhaDupla}`;
-    
+
     // Nome da empresa com estilo
     if (formato === 'html') {
       texto += `<div style="text-align: center; font-size: 18px; font-weight: bold; margin: 5px 0;">${configuracoes?.salao?.nome || 'BeautyPro'}</div>`;
@@ -1906,18 +1944,18 @@ function ModernAtendimento() {
       texto += `${' '.repeat(8)}${negritoInicio}${configuracoes?.salao?.nome || 'BeautyPro'}${negritoFim}${quebraLinha}`;
       texto += `${' '.repeat(6)}ATENDIMENTO #${id.slice(-6)}${quebraLinha}`;
     }
-    
+
     texto += `${linha}`;
-    
+
     // Informações do estabelecimento
     if (configuracoes?.salao) {
       if (formato === 'html') {
         texto += `<div style="font-size: 11px;">`;
       }
-      
+
       if (configuracoes.salao.cnpj) texto += `CNPJ: ${configuracoes.salao.cnpj}${quebraLinha}`;
       if (configuracoes.salao.ie) texto += `IE: ${configuracoes.salao.ie}${quebraLinha}`;
-      
+
       // Endereço
       if (configuracoes.salao.endereco) {
         const end = configuracoes.salao.endereco;
@@ -1930,7 +1968,7 @@ function ModernAtendimento() {
         ].filter(Boolean).join(', ');
         if (enderecoCompleto) texto += `${enderecoCompleto}${quebraLinha}`;
       }
-      
+
       // Contato
       if (configuracoes.salao.contato) {
         const cont = configuracoes.salao.contato;
@@ -1938,19 +1976,19 @@ function ModernAtendimento() {
         if (cont.whatsapp) texto += `WhatsApp: ${cont.whatsapp}${quebraLinha}`;
         if (cont.email) texto += `Email: ${cont.email}${quebraLinha}`;
       }
-      
+
       if (formato === 'html') {
         texto += `</div>`;
       }
     }
     texto += `${linha}`;
-    
+
     // Data e hora
     texto += `Data: ${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR')}${quebraLinha}`;
     texto += `Cliente: ${cliente?.nome || 'Não informado'}${quebraLinha}`;
     texto += `Profissional: ${profissional?.nome || 'Não informado'}${quebraLinha}`;
     texto += `${linha}`;
-    
+
     // Serviços
     texto += `${negritoInicio}SERVIÇOS REALIZADOS:${negritoFim}${quebraLinha}`;
     itensServico.forEach((item, idx) => {
@@ -1958,7 +1996,7 @@ function ModernAtendimento() {
       texto += `   R$ ${item.preco?.toFixed(2)}${quebraLinha}`;
     });
     texto += `${linha}`;
-    
+
     // Produtos cobrados
     if (produtosCobrados.length > 0) {
       texto += `${negritoInicio}PRODUTOS:${negritoFim}${quebraLinha}`;
@@ -1969,7 +2007,7 @@ function ModernAtendimento() {
       });
       texto += `${linha}`;
     }
-    
+
     // Produtos cortesia
     if (produtosCortesia.length > 0) {
       texto += `${negritoInicio}CORTESIA:${negritoFim}${quebraLinha}`;
@@ -1979,7 +2017,7 @@ function ModernAtendimento() {
       });
       texto += `${linha}`;
     }
-    
+
     // Cupons aplicados
     if (cuponsAplicados.length > 0) {
       texto += `${negritoInicio}CUPONS APLICADOS:${negritoFim}${quebraLinha}`;
@@ -1989,7 +2027,7 @@ function ModernAtendimento() {
       });
       texto += `${linha}`;
     }
-    
+
     // Resumo financeiro
     texto += `${negritoInicio}RESUMO:${negritoFim}${quebraLinha}`;
     texto += `Subtotal: R$ ${subtotal.toFixed(2)}${quebraLinha}`;
@@ -1998,12 +2036,12 @@ function ModernAtendimento() {
     }
     texto += `${negritoInicio}Total: R$ ${valorTotal.toFixed(2)}${negritoFim}${quebraLinha}`;
     texto += `Pago: R$ ${totalPago.toFixed(2)}${quebraLinha}`;
-    
+
     if (Math.abs(valorTotal - totalPago) > 0.01) {
       texto += `Restante: R$ ${(valorTotal - totalPago).toFixed(2)}${quebraLinha}`;
     }
     texto += `${linha}`;
-    
+
     // Pagamentos
     texto += `${negritoInicio}PAGAMENTOS:${negritoFim}${quebraLinha}`;
     pagamentos.forEach((p, idx) => {
@@ -2013,7 +2051,7 @@ function ModernAtendimento() {
       texto += `: R$ ${p.valor?.toFixed(2)}${quebraLinha}`;
     });
     texto += `${linha}`;
-    
+
     // 🔥 FIDELIDADE - AGORA MOSTRANDO OS PONTOS GANHOS
     if (fidelidadeConfig?.ativo && pontosGanhos > 0) {
       texto += `${negritoInicio}FIDELIDADE:${negritoFim}${quebraLinha}`;
@@ -2026,15 +2064,15 @@ function ModernAtendimento() {
       }
       texto += `${linha}`;
     }
-    
+
     // Rodapé
     if (formato === 'html') {
       texto += `<div style="text-align: center; margin-top: 20px;">`;
     }
-    
+
     texto += `${negritoInicio}AGRADECEMOS A PREFERÊNCIA!${negritoFim}${quebraLinha}`;
     texto += `Volte sempre!${quebraLinha}`;
-    
+
     // Redes sociais
     if (configuracoes?.salao?.contato) {
       const cont = configuracoes.salao.contato;
@@ -2042,7 +2080,7 @@ function ModernAtendimento() {
       if (cont.instagram) redes.push(`Instagram: @${cont.instagram.replace('@', '')}`);
       if (cont.facebook) redes.push(`Facebook: ${cont.facebook}`);
       if (cont.site) redes.push(`Site: ${cont.site}`);
-      
+
       if (redes.length > 0) {
         texto += `${linha}`;
         redes.forEach(rede => {
@@ -2050,17 +2088,17 @@ function ModernAtendimento() {
         });
       }
     }
-    
+
     if (formato === 'html') {
       texto += `</div>`;
     }
-    
+
     texto += `${linhaDupla}`;
-    
+
     if (formato === 'html') {
       texto += '</div>';
     }
-    
+
     return texto;
   };
 
@@ -2069,7 +2107,7 @@ function ModernAtendimento() {
       toast.error('Comprovante já foi enviado recentemente. Aguarde um momento.');
       return;
     }
-  
+
     try {
       if (metodo === 'whatsapp') {
         const numero = cliente?.telefone?.replace(/\D/g, '') || '';
@@ -2077,38 +2115,38 @@ function ModernAtendimento() {
           toast.error('Cliente não possui telefone cadastrado');
           return;
         }
-        
+
         const mensagem = gerarTextoComprovante('texto');
         window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank');
-        
+
         await registrarAuditoria(
           'enviar_comprovante_whatsapp',
           id,
           `Comprovante enviado por WhatsApp`,
           { clienteId: cliente?.id, clienteNome: cliente?.nome }
         );
-        
+
         toast.success('WhatsApp aberto para envio!');
         registrarAcaoProcessada('enviar_comprovante', { metodo });
-        
+
       } else if (metodo === 'email') {
         toast.success('Comprovante enviado por email!');
         registrarAcaoProcessada('enviar_comprovante', { metodo });
-        
+
       } else if (metodo === 'print') {
         const janelaImpressao = window.open('', '_blank');
         const corPrimaria = configuracoes?.tema?.corPrimaria || '#9c27b0';
         const corSecundaria = configuracoes?.tema?.corSecundaria || '#ff4081';
         const fonte = configuracoes?.tema?.fonte || 'Courier New';
-        
+
         janelaImpressao.document.write(`
           <html>
             <head>
               <title>Comprovante de Atendimento #${id.slice(-6)}</title>
               <style>
-                body { 
-                  font-family: '${fonte}', monospace; 
-                  padding: 20px; 
+                body {
+                  font-family: '${fonte}', monospace;
+                  padding: 20px;
                   background: #fff;
                   color: #333;
                   display: flex;
@@ -2180,16 +2218,16 @@ function ModernAtendimento() {
                   text-align: right;
                 }
                 @media print {
-                  body { 
-                    padding: 0; 
+                  body {
+                    padding: 0;
                     background: white;
                   }
                   .container {
                     box-shadow: none;
                     padding: 10px;
                   }
-                  button { 
-                    display: none; 
+                  button {
+                    display: none;
                   }
                 }
               </style>
@@ -2223,7 +2261,7 @@ function ModernAtendimento() {
           </html>
         `);
         janelaImpressao.document.close();
-        
+
         registrarAcaoProcessada('enviar_comprovante', { metodo });
       }
     } catch (error) {
@@ -2333,9 +2371,9 @@ function ModernAtendimento() {
               {cuponsProximosExpiracao.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   {cuponsProximosExpiracao.map((cupom, idx) => (
-                    <Alert 
-                      key={idx} 
-                      severity="warning" 
+                    <Alert
+                      key={idx}
+                      severity="warning"
                       icon={<TimerIcon />}
                       sx={{ mb: 1 }}
                     >
@@ -2411,7 +2449,7 @@ function ModernAtendimento() {
                       Fidelidade
                     </Typography>
                   </Box>
-                  
+
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2" color="textSecondary">
                       Nível atual:
@@ -2438,8 +2476,8 @@ function ModernAtendimento() {
 
                   {/* 🔥 MOSTRAR PONTOS A GANHAR COM DESTAQUE */}
                   {pontosGanhos > 0 && atendimento.status !== 'finalizado' && (
-                    <Box sx={{ 
-                      display: 'flex', 
+                    <Box sx={{
+                      display: 'flex',
                       justifyContent: 'space-between',
                       p: 1,
                       bgcolor: '#e8f5e8',
@@ -2458,8 +2496,8 @@ function ModernAtendimento() {
 
                   {/* 🔥 MOSTRAR PONTOS GANHOS SE JÁ FINALIZADO */}
                   {pontosGanhos > 0 && atendimento.status === 'finalizado' && (
-                    <Box sx={{ 
-                      display: 'flex', 
+                    <Box sx={{
+                      display: 'flex',
                       justifyContent: 'space-between',
                       p: 1,
                       bgcolor: '#e8f5e8',
@@ -2573,7 +2611,7 @@ function ModernAtendimento() {
                   <Typography variant="body2">Subtotal:</Typography>
                   <Typography variant="body2">R$ {subtotal.toFixed(2)}</Typography>
                 </Box>
-                
+
                 {descontoTotalCupons > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: '#4caf50' }}>
                     <Typography variant="body2">Descontos:</Typography>
@@ -2682,7 +2720,7 @@ function ModernAtendimento() {
                     </Typography>
 
                     <Alert severity="info" sx={{ mb: 3 }}>
-                      {atendimento.status === 'em_andamento' 
+                      {atendimento.status === 'em_andamento'
                         ? 'Atendimento já está em andamento. Você pode adicionar observações antes de prosseguir.'
                         : 'Verifique os dados e adicione observações sobre o atendimento.'}
                     </Alert>
@@ -2785,9 +2823,9 @@ function ModernAtendimento() {
                             inputValue={buscaServico}
                             onInputChange={(e, newValue) => setBuscaServico(newValue)}
                             renderInput={(params) => (
-                              <TextField 
-                                {...params} 
-                                label="Buscar serviço..." 
+                              <TextField
+                                {...params}
+                                label="Buscar serviço..."
                                 size="small"
                                 placeholder="Digite para buscar..."
                               />
@@ -2827,7 +2865,7 @@ function ModernAtendimento() {
                         <Grid item xs={12} md={4}>
                           <Autocomplete
                             options={produtosFiltrados}
-                            getOptionLabel={(option) => 
+                            getOptionLabel={(option) =>
                               `${option.nome} - R$ ${option.precoVenda?.toFixed(2)}`
                             }
                             value={produtoSelecionado}
@@ -2835,9 +2873,9 @@ function ModernAtendimento() {
                             inputValue={buscaProduto}
                             onInputChange={(e, newValue) => setBuscaProduto(newValue)}
                             renderInput={(params) => (
-                              <TextField 
-                                {...params} 
-                                label="Buscar produto..." 
+                              <TextField
+                                {...params}
+                                label="Buscar produto..."
                                 size="small"
                                 placeholder="Digite para buscar..."
                               />
@@ -2849,8 +2887,8 @@ function ModernAtendimento() {
                                   <Box>
                                     <Typography variant="body2">{option.nome}</Typography>
                                     <Typography variant="caption" color="textSecondary">
-                                      R$ {option.precoVenda?.toFixed(2)} | 
-                                      Estoque: {option.quantidadeEstoque} {getUnidadeSimbolo(option.unidadeEstoque)} 
+                                      R$ {option.precoVenda?.toFixed(2)} |
+                                      Estoque: {option.quantidadeEstoque} {getUnidadeSimbolo(option.unidadeEstoque)}
                                       ({disponivel} {getUnidadeSimbolo(option.unidadeVenda)})
                                     </Typography>
                                   </Box>
@@ -2918,10 +2956,10 @@ function ModernAtendimento() {
                                   <TableCell>
                                     {item.nome}
                                     {item.principal && (
-                                      <Chip 
-                                        label="Principal" 
-                                        size="small" 
-                                        sx={{ ml: 1, bgcolor: '#9c27b0', color: 'white', height: 20 }} 
+                                      <Chip
+                                        label="Principal"
+                                        size="small"
+                                        sx={{ ml: 1, bgcolor: '#9c27b0', color: 'white', height: 20 }}
                                       />
                                     )}
                                   </TableCell>
@@ -3098,15 +3136,15 @@ function ModernAtendimento() {
                                   <TableCell>{pagamento.parcelas > 1 ? `${pagamento.parcelas}x` : '-'}</TableCell>
                                   <TableCell>{formatarDataFirebase(pagamento.data)}</TableCell>
                                   <TableCell align="center">
-                                    <IconButton 
-                                      size="small" 
+                                    <IconButton
+                                      size="small"
                                       onClick={() => handleOpenPagamentoDialog(pagamento)}
                                       disabled={saving || processandoRef.current}
                                     >
                                       <EditIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton 
-                                      size="small" 
+                                    <IconButton
+                                      size="small"
                                       onClick={() => handleRemoverPagamento(pagamento.id)}
                                       disabled={saving || processandoRef.current}
                                     >
@@ -3132,11 +3170,11 @@ function ModernAtendimento() {
                         disabled={saving || processandoRef.current || Math.abs(calcularSaldoRestante()) > 0.01 || atendimento.status === 'finalizado'}
                         sx={{
                           background: Math.abs(calcularSaldoRestante()) <= 0.01 && atendimento.status !== 'finalizado'
-                            ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)' 
+                            ? 'linear-gradient(45deg, #4caf50 30%, #45a049 90%)'
                             : 'grey',
                           '&:hover': {
                             background: Math.abs(calcularSaldoRestante()) <= 0.01 && atendimento.status !== 'finalizado'
-                              ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)' 
+                              ? 'linear-gradient(45deg, #45a049 30%, #4caf50 90%)'
                               : 'grey',
                           },
                         }}
@@ -3164,11 +3202,11 @@ function ModernAtendimento() {
                       )}
                       {/* 🔥 MOSTRAR PONTOS GANHOS NO ALERTA DE SUCESSO */}
                       {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
-                        <Box sx={{ 
-                          mt: 2, 
-                          p: 1.5, 
-                          bgcolor: '#fff3cd', 
-                          border: '1px solid #ffeeba', 
+                        <Box sx={{
+                          mt: 2,
+                          p: 1.5,
+                          bgcolor: '#fff3cd',
+                          border: '1px solid #ffeeba',
                           borderRadius: 1,
                           display: 'flex',
                           alignItems: 'center',
@@ -3209,7 +3247,7 @@ function ModernAtendimento() {
                             {profissional?.nome}
                           </Typography>
                         </Grid>
-                        
+
                         <Grid item xs={6}>
                           <Typography variant="body2" color="textSecondary">
                             Data:
@@ -3333,9 +3371,9 @@ function ModernAtendimento() {
                         {fidelidadeConfig?.ativo && pontosGanhos > 0 && (
                           <Grid item xs={12}>
                             <Divider sx={{ my: 1 }} />
-                            <Box sx={{ 
-                              p: 2, 
-                              bgcolor: '#faf5ff', 
+                            <Box sx={{
+                              p: 2,
+                              bgcolor: '#faf5ff',
                               borderRadius: 1,
                               border: '1px solid #9c27b0'
                             }}>
@@ -3454,11 +3492,11 @@ function ModernAtendimento() {
                   onChange={(e) => setPagamentoForm({ ...pagamentoForm, formaPagamento: e.target.value })}
                 >
                   {FORMAS_PAGAMENTO.map(fp => (
-                    <FormControlLabel 
+                    <FormControlLabel
                       key={fp.value}
-                      value={fp.value} 
-                      control={<Radio />} 
-                      label={`${fp.icon} ${fp.label}`} 
+                      value={fp.value}
+                      control={<Radio />}
+                      label={`${fp.icon} ${fp.label}`}
                     />
                   ))}
                 </RadioGroup>
@@ -3585,7 +3623,7 @@ function ModernAtendimento() {
             <Typography variant="h6" gutterBottom>
               Respostas:
             </Typography>
-            
+
             {respostasAnamnese?.respostas?.map((resposta, index) => (
               <Accordion key={index} defaultExpanded={index === 0}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>

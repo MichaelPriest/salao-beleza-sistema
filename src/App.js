@@ -58,15 +58,15 @@ export const isSameDayBrasilia = (date1, date2) => {
 // Hook customizado para usar horário de Brasília
 export const useBrasiliaTime = () => {
   const [currentTime, setCurrentTime] = useState(dayjs().tz(BRASILIA_TIMEZONE));
-  
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(dayjs().tz(BRASILIA_TIMEZONE));
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, []);
-  
+
   return {
     currentTime,
     format: (date, formatStr = 'DD/MM/YYYY HH:mm:ss') => formatBrasiliaTime(date, formatStr),
@@ -285,10 +285,10 @@ firebaseService.update = async function(collectionName, id, data) {
 
 // Componente de Loading
 const AppLoading = () => (
-  <Box sx={{ 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  <Box sx={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
     height: '100vh',
     bgcolor: '#faf5ff'
   }}>
@@ -301,15 +301,15 @@ const SistemaLayout = ({ children, theme }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
     <Box sx={{ display: 'flex', flex: 1 }}>
       <ModernSidebar />
-      <Box sx={{ 
-        flexGrow: 1, 
-        display: 'flex', 
+      <Box sx={{
+        flexGrow: 1,
+        display: 'flex',
         flexDirection: 'column',
         width: { xs: '100%', md: 'calc(100% - 300px)' },
       }}>
         <ModernHeader />
-        <Box component="main" sx={{ 
-          flexGrow: 1, 
+        <Box component="main" sx={{
+          flexGrow: 1,
           p: { xs: 2, md: 3 },
           backgroundColor: theme.palette.background.default,
           overflow: 'auto'
@@ -343,7 +343,7 @@ function App() {
       try {
         console.log('🔄 Carregando configurações do Firebase...');
         const configData = await firebaseService.getAll('configuracoes');
-        
+
         if (configData && configData.length > 0) {
           const config = configData[0];
           setConfiguracoes(config);
@@ -393,7 +393,7 @@ function App() {
         <DadosProvider>
           <AuthProvider>
             <GlobalLoading />
-            <Toaster 
+            <Toaster
               position="top-right"
               toastOptions={{
                 style: {
@@ -405,7 +405,7 @@ function App() {
               }}
             />
             <GlobalSnackbar />
-            
+
             <Router>
               <Routes>
                 {/* Rotas Públicas com Footer */}
@@ -449,7 +449,7 @@ function App() {
                     <Manutencao />
                   </SimpleLayout>
                 } />
-                
+
                 {/* Rotas do Cliente */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
@@ -458,7 +458,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 {/* 🔥 ROTA DE CALLBACK DO GOOGLE - IMPORTANTE */}
                 <Route path="/cliente/auth/callback" element={
                   <AuthClienteProvider>
@@ -467,7 +467,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -475,13 +475,13 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 {/* Rota para cadastro via indicação */}
-                <Route 
-                  path="/cadastro" 
-                  element={<CadastroIndicacao />} 
+                <Route
+                  path="/cadastro"
+                  element={<CadastroIndicacao />}
                 />
-                
+
                 {/* Rota para cadastro complementar após login Google */}
                 <Route path="/cliente/cadastro-complementar" element={
                   <AuthClienteProvider>
@@ -490,7 +490,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -498,7 +498,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
@@ -519,7 +519,7 @@ function App() {
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                 </Route>
-                
+
                 {/* Rotas do Sistema com Sidebar e Footer */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
@@ -908,7 +908,7 @@ function App() {
                   <SimpleLayout>
                     <PoliticaPrivacidade />
                   </SimpleLayout>
-                } />                
+                } />
                 {/* Rota 404 com Footer */}
                 <Route path="*" element={
                   <SimpleLayout>
