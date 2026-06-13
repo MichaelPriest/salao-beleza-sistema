@@ -13,6 +13,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [caixaPerguntadoNestaSessao, setCaixaPerguntadoNestaSessao] = useState(false);
 
   useEffect(() => {
     // 🔥 CORREÇÃO CRÍTICA: Verificar se está na área do cliente
@@ -105,6 +106,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         console.log('👋 AuthContext - Usuário deslogado');
         setUser(null);
+        setCaixaPerguntadoNestaSessao(false);
         localStorage.removeItem('usuario');
         clearTenantContext();
       }
@@ -113,6 +115,20 @@ export const AuthProvider = ({ children }) => {
 
     return () => unsubscribe();
   }, []);
+
+
+  useEffect(() => {
+    if (loading || !user || user.isCliente || caixaPerguntadoNestaSessao) return undefined;
+
+    const timer = setTimeout(() => {
+      caixaService.perguntarAberturaAoEntrar().catch((error) => {
+        console.warn('Não foi possível verificar abertura de caixa após entrada no sistema:', error);
+      });
+      setCaixaPerguntadoNestaSessao(true);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [loading, user, caixaPerguntadoNestaSessao]);
 
   // 🔥 FUNÇÃO PARA OBTER IP DO USUÁRIO
   const obterIp = async () => {
@@ -173,9 +189,6 @@ export const AuthProvider = ({ children }) => {
 
           // 🔥 REGISTRAR LOGIN NA AUDITORIA
           await auditoriaService.registrarLogin(usuarioCompleto);
-          await caixaService.perguntarAberturaAoEntrar().catch((error) => {
-            console.warn('Não foi possível verificar abertura de caixa no login:', error);
-          });
 
           return usuarioCompleto;
         } else {
@@ -211,9 +224,6 @@ export const AuthProvider = ({ children }) => {
 
       // 🔥 REGISTRAR LOGIN NA AUDITORIA
       await auditoriaService.registrarLogin(usuarioCompleto);
-      await caixaService.perguntarAberturaAoEntrar().catch((error) => {
-        console.warn('Não foi possível verificar abertura de caixa no login:', error);
-      });
 
       return usuarioCompleto;
     } catch (error) {
@@ -264,6 +274,7 @@ export const AuthProvider = ({ children }) => {
 
       await signOut(auth);
       setUser(null);
+      setCaixaPerguntadoNestaSessao(false);
       localStorage.removeItem('usuario');
       toast.success('Logout realizado com sucesso!');
     } catch (error) {

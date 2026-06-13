@@ -292,6 +292,25 @@ const formasPagamento = [
   { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
 ];
 
+
+const MOTIVOS_TRANSACAO = [
+  { value: 'venda_servico', label: 'Venda de serviço', tipo: 'receita', categoria: 'Serviços', descricao: 'Recebimento de serviço' },
+  { value: 'venda_produto', label: 'Venda de produto', tipo: 'receita', categoria: 'Produtos', descricao: 'Recebimento de produto' },
+  { value: 'recebimento_cliente', label: 'Recebimento de cliente', tipo: 'receita', categoria: 'Clientes', descricao: 'Recebimento de cliente' },
+  { value: 'reforco_caixa', label: 'Reforço de caixa', tipo: 'receita', categoria: 'Reforço de Caixa', descricao: 'Reforço de caixa', caixaTipo: 'reforco' },
+  { value: 'outra_receita', label: 'Outra receita', tipo: 'receita', categoria: 'Outras receitas', descricao: 'Receita manual' },
+  { value: 'sangria_caixa', label: 'Sangria de caixa', tipo: 'despesa', categoria: 'Sangria de Caixa', descricao: 'Sangria de caixa', caixaTipo: 'sangria' },
+  { value: 'retirada_caixa', label: 'Retirada do caixa', tipo: 'despesa', categoria: 'Retirada de Caixa', descricao: 'Retirada do caixa', caixaTipo: 'retirada' },
+  { value: 'despesa_operacional', label: 'Despesa operacional', tipo: 'despesa', categoria: 'Despesas operacionais', descricao: 'Despesa operacional', caixaTipo: 'despesa' },
+  { value: 'compra_estoque', label: 'Compra de estoque', tipo: 'despesa', categoria: 'Compras de estoque', descricao: 'Compra de estoque' },
+  { value: 'pagamento_fornecedor', label: 'Pagamento a fornecedor', tipo: 'despesa', categoria: 'Fornecedores', descricao: 'Pagamento a fornecedor' },
+  { value: 'pagamento_comissao', label: 'Pagamento de comissão', tipo: 'despesa', categoria: 'Comissões', descricao: 'Pagamento de comissão' },
+  { value: 'transferencia_contas', label: 'Transferência entre contas', tipo: 'transferencia', categoria: 'Transferências', descricao: 'Transferência entre contas' },
+  { value: 'aplicacao_investimento', label: 'Aplicação / investimento', tipo: 'investimento', categoria: 'Investimentos', descricao: 'Aplicação financeira' },
+];
+
+const getMotivoTransacao = (value) => MOTIVOS_TRANSACAO.find((motivo) => motivo.value === value) || null;
+
 const periodosRepeticao = [
   { value: 'nao', label: 'Não repetir' },
   { value: 'diario', label: 'Diariamente' },
@@ -412,6 +431,7 @@ function ModernFinanceiro() {
     data: formatarDataBrasilia(new Date()),
     dataVencimento: formatarDataBrasilia(new Date()),
     categoria: '',
+    motivoTransacao: '',
     formaPagamento: 'dinheiro',
     status: 'pendente',
     clienteId: '',
@@ -1223,6 +1243,8 @@ function ModernFinanceiro() {
         data: String(formData.data),
         dataVencimento: formData.dataVencimento ? String(formData.dataVencimento) : null,
         categoria: formData.categoria ? String(formData.categoria) : null,
+        motivoTransacao: formData.motivoTransacao ? String(formData.motivoTransacao) : null,
+        motivoTransacaoLabel: getMotivoTransacao(formData.motivoTransacao)?.label || null,
         formaPagamento: String(formData.formaPagamento),
         status: String(formData.status),
         clienteId: formData.clienteId ? String(formData.clienteId) : null,
@@ -1240,17 +1262,58 @@ function ModernFinanceiro() {
         updatedAt: new Date().toISOString(),
       };
 
+      const motivoSelecionado = getMotivoTransacao(formData.motivoTransacao);
+      let caixaAbertoParaMovimento = null;
+
       if (formData.status === 'pago') {
         dadosParaSalvar.dataPagamento = new Date().toISOString();
+        if (motivoSelecionado?.caixaTipo) {
+          caixaAbertoParaMovimento = await caixaService.obterCaixaAberto();
+          if (!caixaAbertoParaMovimento) {
+            mostrarSnackbar('Abra o caixa antes de salvar uma transação paga de sangria, reforço, retirada ou despesa do caixa.', 'error');
+            return;
+          }
+        }
       }
 
       if (transacaoEditando) {
         await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        if (motivoSelecionado?.caixaTipo && caixaAbertoParaMovimento) {
+          await caixaService.removerMovimentosPorReferencia({ referenciaId: transacaoEditando.id, referenciaTipo: 'transacao_manual' }).catch(() => 0);
+          await caixaService.registrarMovimento({
+            caixaId: caixaAbertoParaMovimento.id,
+            tipo: motivoSelecionado.caixaTipo,
+            valor: valorNumerico,
+            formaPagamento: formData.formaPagamento,
+            descricao: dadosParaSalvar.descricao,
+            observacao: dadosParaSalvar.observacoes || motivoSelecionado.label,
+            origem: 'financeiro',
+            referenciaId: transacaoEditando.id,
+            referenciaTipo: 'transacao_manual',
+            transacaoId: transacaoEditando.id,
+            criarTransacao: false,
+          });
+        }
         await registrarAuditoria('editar_transacao', transacaoEditando.id, 'Transação editada');
         mostrarSnackbar('Transação atualizada com sucesso!');
       } else {
         dadosParaSalvar.createdAt = new Date().toISOString();
         const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
+        if (motivoSelecionado?.caixaTipo && caixaAbertoParaMovimento) {
+          await caixaService.registrarMovimento({
+            caixaId: caixaAbertoParaMovimento.id,
+            tipo: motivoSelecionado.caixaTipo,
+            valor: valorNumerico,
+            formaPagamento: formData.formaPagamento,
+            descricao: dadosParaSalvar.descricao,
+            observacao: dadosParaSalvar.observacoes || motivoSelecionado.label,
+            origem: 'financeiro',
+            referenciaId: novoId,
+            referenciaTipo: 'transacao_manual',
+            transacaoId: novoId,
+            criarTransacao: false,
+          });
+        }
         await registrarAuditoria('criar_transacao', novoId, 'Nova transação criada');
         mostrarSnackbar('Transação criada com sucesso!');
       }
@@ -1322,6 +1385,7 @@ function ModernFinanceiro() {
         data: transacao.data || formatarDataBrasilia(new Date()),
         dataVencimento: transacao.dataVencimento || formatarDataBrasilia(new Date()),
         categoria: transacao.categoria || '',
+        motivoTransacao: transacao.motivoTransacao || '',
         formaPagamento: transacao.formaPagamento || 'dinheiro',
         status: transacao.status || 'pendente',
         clienteId: transacao.clienteId || '',
@@ -1350,6 +1414,7 @@ function ModernFinanceiro() {
         data: formatarDataBrasilia(new Date()),
         dataVencimento: formatarDataBrasilia(new Date()),
         categoria: '',
+        motivoTransacao: '',
         formaPagamento: 'dinheiro',
         status: 'pendente',
         clienteId: '',
@@ -1396,6 +1461,25 @@ function ModernFinanceiro() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'motivoTransacao') {
+      const motivo = getMotivoTransacao(value);
+      setFormData(prev => ({
+        ...prev,
+        motivoTransacao: value,
+        tipo: motivo?.tipo || prev.tipo,
+        categoria: motivo?.categoria || prev.categoria,
+        descricao: !prev.descricao?.trim() || MOTIVOS_TRANSACAO.some((item) => item.descricao === prev.descricao)
+          ? (motivo?.descricao || prev.descricao)
+          : prev.descricao,
+      }));
+      return;
+    }
+
+    if (name === 'tipo') {
+      setFormData(prev => ({ ...prev, tipo: value, motivoTransacao: '' }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -2380,6 +2464,18 @@ function ModernFinanceiro() {
                   <MenuItem value="despesa">💸 Despesa</MenuItem>
                   <MenuItem value="transferencia">🔄 Transferência</MenuItem>
                   <MenuItem value="investimento">📈 Investimento</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Motivo</InputLabel>
+                <Select name="motivoTransacao" value={formData.motivoTransacao} label="Motivo" onChange={handleInputChange}>
+                  <MenuItem value="">Selecionar motivo</MenuItem>
+                  {MOTIVOS_TRANSACAO.filter((motivo) => motivo.tipo === formData.tipo).map((motivo) => (
+                    <MenuItem key={motivo.value} value={motivo.value}>{motivo.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>

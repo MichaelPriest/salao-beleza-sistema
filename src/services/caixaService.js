@@ -34,6 +34,12 @@ const isMovimentoCaixa = (item) => item?.tipoRegistro === 'movimentacao';
 const dataAberturaCaixa = (item) => item?.abertoEm || item?.dataAbertura || item?.createdAt;
 const valorAberturaCaixa = (item) => moedaParaNumero(item?.valorAbertura ?? item?.saldoInicial ?? 0);
 
+const notificarCaixaAtualizado = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('caixaAtualizado'));
+  }
+};
+
 const criarTransacaoParaMovimento = async (movimento) => {
   if (movimento.transacaoId || movimento.criarTransacao === false) return null;
 
@@ -139,13 +145,15 @@ export const caixaService = {
     const valor = moedaParaNumero(valorAbertura);
     if (valor < 0) throw new Error('Valor de abertura inválido.');
 
-    return firebaseService.add('caixa', {
+    const id = await firebaseService.add('caixa', {
       tipoRegistro: 'sessao',
       status: 'aberto',
       valorAbertura: valor,
       observacaoAbertura: observacao,
       abertoEm: agoraIso(),
     });
+    notificarCaixaAtualizado();
+    return id;
   },
 
   registrarMovimento: async ({
@@ -192,9 +200,11 @@ export const caixaService = {
 
     if (transacaoCriadaId) {
       await firebaseService.update('caixa', movimento.id, { transacaoId: transacaoCriadaId }).catch(() => null);
+      notificarCaixaAtualizado();
       return { ...movimento, transacaoId: transacaoCriadaId };
     }
 
+    notificarCaixaAtualizado();
     return movimento;
   },
 
@@ -225,6 +235,7 @@ export const caixaService = {
 
     if (movimentoExistente) {
       await firebaseService.update('caixa', movimentoExistente.id, dadosMovimento);
+      notificarCaixaAtualizado();
       return { ...movimentoExistente, ...dadosMovimento };
     }
 
@@ -242,6 +253,7 @@ export const caixaService = {
       .filter((item) => item.tipoRegistro === 'movimentacao')
       .map((item) => firebaseService.delete('caixa', item.id)));
 
+    notificarCaixaAtualizado();
     return movimentos.length;
   },
 
@@ -256,7 +268,7 @@ export const caixaService = {
     const valorFinal = moedaParaNumero(valorConferido ?? totais.saldoAtual);
     const fechadoEm = agoraIso();
 
-    return firebaseService.update('caixa', caixaId, {
+    const resultado = await firebaseService.update('caixa', caixaId, {
       status: 'fechado',
       fechadoEm,
       dataFechamento: fechadoEm,
@@ -270,7 +282,10 @@ export const caixaService = {
       totalSangrias: totais.sangrias,
       totalReforcos: totais.reforcos,
       totalMovimentos: movimentos.length,
+      totais,
     });
+    notificarCaixaAtualizado();
+    return resultado;
   },
 
   perguntarAberturaAoEntrar: async () => {
