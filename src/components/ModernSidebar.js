@@ -28,44 +28,44 @@ import {
   // Dashboard
   Dashboard as DashboardIcon,
   DashboardCustomize as DashboardCustomizeIcon,
-  
+
   // Notificações
   Notifications as NotificationsIcon,
   NotificationsActive as NotificationsActiveIcon,
-  
+
   // Agendamentos
   CalendarMonth as CalendarIcon,
   EventAvailable as EventAvailableIcon,
   EventBusy as EventBusyIcon,
   DateRange as DateRangeIcon,
   Schedule as ScheduleIcon,
-  
+
   // Atendimentos
   Receipt as ReceiptIcon,
   Assignment as AssignmentIcon,
   AssignmentTurnedIn as AssignmentTurnedInIcon,
-  
+
   // Clientes
   People as PeopleIcon,
   PersonAdd as PersonAddIcon,
   PersonSearch as PersonSearchIcon,
   Group as GroupIcon,
-  
+
   // Histórico
   History as HistoryIcon,
   Restore as RestoreIcon,
   Timeline as TimelineIcon,
-  
+
   // Profissionais
   Person as PersonIcon,
   Badge as BadgeIcon,
   Groups as GroupsIcon,
-  
+
   // Serviços
   ContentCut as CutIcon,
   Build as BuildIcon,
   Handyman as HandymanIcon,
-  
+
   // Financeiro
   AttachMoney as MoneyIcon,
   AccountBalance as AccountBalanceIcon,
@@ -76,38 +76,38 @@ import {
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
   ReceiptOutlined as ReceiptOutlinedIcon,
-  
+
   // Compras
   ShoppingCart as ShoppingCartIcon,
   AddShoppingCart as AddShoppingCartIcon,
   RemoveShoppingCart as RemoveShoppingCartIcon,
-  
+
   // Relatórios
   Summarize as SummarizeIcon,
   Description as DescriptionIcon,
   FilePresent as FilePresentIcon,
-  
+
   // Estoque
   Inventory as InventoryIcon,
   Inventory2 as Inventory2Icon,
   Warehouse as WarehouseIcon,
   Storage as StorageIcon,
-  
+
   // Entradas
   Input as InputIcon,
   MoveToInbox as MoveToInboxIcon,
   Unarchive as UnarchiveIcon,
-  
+
   // Fornecedores
   LocalShipping as LocalShippingIcon,
   DeliveryDining as DeliveryDiningIcon,
   Factory as FactoryIcon,
-  
+
   // Usuários
   AdminPanelSettings as AdminIcon,
   ManageAccounts as ManageAccountsIcon,
   Security as SecurityIcon,
-  
+
   // Configurações
   Settings as SettingsIcon,
   SettingsApplications as SettingsApplicationsIcon,
@@ -117,14 +117,14 @@ import {
   WorkspacePremium as WorkspacePremiumIcon,
   Payments as PaymentsIcon,
   Language as LanguageIcon,
-  
+
   // Ícones de navegação
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Menu as MenuIcon,
-  
+
   // Ícones adicionais
   Spa as SpaIcon,
   PriceCheck as PriceCheckIcon,
@@ -148,22 +148,22 @@ import {
   Loyalty as LoyaltyIcon,
   Stars as StarsIcon,
   Redeem as RedeemIcon,
-  
+
   // Ícones para cupons
   LocalOffer as TagIcon,
   Sell as SellIcon,
-  
+
   // Ícones para relatórios adicionais
   ShowChart as ShowChartIcon,
   Equalizer as EqualizerIcon,
   Analytics as AnalyticsIcon,
-  
+
   // Ícones para campanhas
   Campaign as CampaignIcon,
-  
+
   // Ícones para categorias
   Category as CategoryIcon,
-  
+
   // 🔥 NOVOS ÍCONES PARA ANAMNESE
   Quiz as QuizIcon,
   QuestionAnswer as QuestionAnswerIcon,
@@ -187,20 +187,20 @@ const menuGroups = [
     title: 'INÍCIO',
     icon: <DashboardCustomizeIcon />,
     items: [
-      { 
-        text: 'Dashboard', 
-        icon: <DashboardIcon />, 
-        path: '/dashboard', 
+      {
+        text: 'Dashboard',
+        icon: <DashboardIcon />,
+        path: '/dashboard',
         permission: 'visualizar_dashboard',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
-      { 
-        text: 'Notificações', 
-        icon: <NotificationsActiveIcon />, 
-        path: '/notificacoes', 
+      {
+        text: 'Notificações',
+        icon: <NotificationsActiveIcon />,
+        path: '/notificacoes',
         permission: 'visualizar_notificacoes',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'],
-        badge: 'unread' 
+        badge: 'unread'
       },
     ],
   },
@@ -208,24 +208,24 @@ const menuGroups = [
     title: 'AGENDA E ATENDIMENTOS',
     icon: <EventAvailableIcon />,
     items: [
-      { 
-        text: 'Agenda', 
-        icon: <DateRangeIcon />, 
-        path: '/agendamentos', 
+      {
+        text: 'Agenda',
+        icon: <DateRangeIcon />,
+        path: '/agendamentos',
         permission: 'gerenciar_agendamentos',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
-      { 
-        text: 'Atendimentos', 
-        icon: <AssignmentTurnedInIcon />, 
-        path: '/atendimentos', 
+      {
+        text: 'Atendimentos',
+        icon: <AssignmentTurnedInIcon />,
+        path: '/atendimentos',
         permission: 'gerenciar_atendimentos',
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
-      { 
-        text: 'Histórico de Atendimentos', 
-        icon: <HistoryIcon />, 
-        path: '/historico', 
+      {
+        text: 'Histórico de Atendimentos',
+        icon: <HistoryIcon />,
+        path: '/historico',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
@@ -235,31 +235,31 @@ const menuGroups = [
     title: 'CLIENTES E FIDELIDADE',
     icon: <PersonSearchIcon />,
     items: [
-      { 
-        text: 'Clientes', 
-        icon: <GroupIcon />, 
-        path: '/clientes', 
+      {
+        text: 'Clientes',
+        icon: <GroupIcon />,
+        path: '/clientes',
         permission: 'gerenciar_clientes',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Fidelidade', 
-        icon: <EmojiEventsIcon />, 
-        path: '/fidelidade', 
+      {
+        text: 'Fidelidade',
+        icon: <EmojiEventsIcon />,
+        path: '/fidelidade',
         permission: 'visualizar_fidelidade',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
-      { 
-        text: 'Recompensas', 
-        icon: <CardGiftcardIcon />, 
-        path: '/fidelidade/recompensas', 
+      {
+        text: 'Recompensas',
+        icon: <CardGiftcardIcon />,
+        path: '/fidelidade/recompensas',
         permission: 'visualizar_fidelidade',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
-      { 
-        text: 'Indicações', 
-        icon: <RedeemIcon />, 
-        path: '/indicacoes', 
+      {
+        text: 'Indicações',
+        icon: <RedeemIcon />,
+        path: '/indicacoes',
         permission: 'gerenciar_indicacoes',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
@@ -269,31 +269,31 @@ const menuGroups = [
     title: 'PROFISSIONAIS E SERVIÇOS',
     icon: <GroupsIcon />,
     items: [
-      { 
-        text: 'Profissionais', 
-        icon: <BadgeIcon />, 
-        path: '/profissionais', 
+      {
+        text: 'Profissionais',
+        icon: <BadgeIcon />,
+        path: '/profissionais',
         permission: 'gerenciar_profissionais',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Serviços', 
-        icon: <HandymanIcon />, 
-        path: '/servicos', 
+      {
+        text: 'Serviços',
+        icon: <HandymanIcon />,
+        path: '/servicos',
         permission: 'gerenciar_servicos',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Comissões', 
-        icon: <MoneyIcon />, 
-        path: '/minhas-comissoes', 
+      {
+        text: 'Comissões',
+        icon: <MoneyIcon />,
+        path: '/minhas-comissoes',
         permission: 'visualizar_comissoes',
         cargos: ['admin', 'gerente', 'profissional']
       },
-      { 
-        text: 'Disponibilidade', 
-        icon: <ScheduleIcon />, 
-        path: '/disponibilidade', 
+      {
+        text: 'Disponibilidade',
+        icon: <ScheduleIcon />,
+        path: '/disponibilidade',
         permission: 'gerenciar_disponibilidade',
         cargos: ['admin', 'gerente', 'profissional']
       },
@@ -303,31 +303,31 @@ const menuGroups = [
     title: 'ESTOQUE E PRODUTOS',
     icon: <Inventory2Icon />,
     items: [
-      { 
-        text: 'Produtos', 
-        icon: <StorageIcon />, 
-        path: '/estoque', 
+      {
+        text: 'Produtos',
+        icon: <StorageIcon />,
+        path: '/estoque',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Categorias', 
-        icon: <CategoryIcon />, 
-        path: '/categorias-produtos', 
+      {
+        text: 'Categorias',
+        icon: <CategoryIcon />,
+        path: '/categorias-produtos',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Entradas', 
-        icon: <MoveToInboxIcon />, 
-        path: '/entradas', 
+      {
+        text: 'Entradas',
+        icon: <MoveToInboxIcon />,
+        path: '/entradas',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Fornecedores', 
-        icon: <FactoryIcon />, 
-        path: '/fornecedores', 
+      {
+        text: 'Fornecedores',
+        icon: <FactoryIcon />,
+        path: '/fornecedores',
         permission: 'gerenciar_compras',
         cargos: ['admin', 'gerente']
       },
@@ -337,52 +337,45 @@ const menuGroups = [
     title: 'FINANCEIRO',
     icon: <AccountBalanceWalletIcon />,
     items: [
-      { 
-        text: 'Dashboard', 
-        icon: <BarChartIcon />, 
-        path: '/financeiro', 
-        permission: 'financeiro',
-        cargos: ['admin', 'gerente']
-      },
-      { 
-        text: 'Contas a Receber', 
-        icon: <TrendingUpIcon />, 
-        path: '/financeiro/receber', 
-        permission: 'financeiro',
-        cargos: ['admin', 'gerente']
-      },
-      { 
-        text: 'Contas a Pagar', 
-        icon: <TrendingDownIcon />, 
-        path: '/financeiro/pagar', 
-        permission: 'financeiro',
-        cargos: ['admin', 'gerente']
-      },
-      { 
-        text: 'Fluxo de Caixa', 
-        icon: <TimelineIcon />, 
-        path: '/financeiro/fluxo', 
+      {
+        text: 'Dashboard',
+        icon: <BarChartIcon />,
+        path: '/financeiro',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
       {
-        text: 'Caixa',
-        icon: <PointOfSaleIcon />,
-        path: '/financeiro/caixa',
+        text: 'Contas a Receber',
+        icon: <TrendingUpIcon />,
+        path: '/financeiro/receber',
         permission: 'financeiro',
-        cargos: ['admin', 'gerente', 'atendente']
+        cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Compras', 
-        icon: <AddShoppingCartIcon />, 
-        path: '/compras', 
+      {
+        text: 'Contas a Pagar',
+        icon: <TrendingDownIcon />,
+        path: '/financeiro/pagar',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Fluxo de Caixa',
+        icon: <TimelineIcon />,
+        path: '/financeiro/fluxo',
+        permission: 'financeiro',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Compras',
+        icon: <AddShoppingCartIcon />,
+        path: '/compras',
         permission: 'gerenciar_compras',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Relatórios', 
-        icon: <SummarizeIcon />, 
-        path: '/relatorios', 
+      {
+        text: 'Relatórios',
+        icon: <SummarizeIcon />,
+        path: '/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -392,24 +385,24 @@ const menuGroups = [
     title: 'MARKETING E PROMOÇÕES',
     icon: <SellIcon />,
     items: [
-      { 
-        text: 'Cupons de Desconto', 
-        icon: <TagIcon />, 
-        path: '/cupons', 
+      {
+        text: 'Cupons de Desconto',
+        icon: <TagIcon />,
+        path: '/cupons',
         permission: 'gerenciar_cupons',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Campanhas', 
-        icon: <CampaignIcon />, 
-        path: '/campanhas', 
+      {
+        text: 'Campanhas',
+        icon: <CampaignIcon />,
+        path: '/campanhas',
         permission: 'gerenciar_cupons',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Análise de Cupons', 
-        icon: <AnalyticsIcon />, 
-        path: '/analise-cupons', 
+      {
+        text: 'Análise de Cupons',
+        icon: <AnalyticsIcon />,
+        path: '/analise-cupons',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -422,31 +415,31 @@ const menuGroups = [
     title: 'ANAMNESE E FORMULÁRIOS',
     icon: <ChecklistIcon />,
     items: [
-      { 
-        text: 'Formulários', 
-        icon: <AssignmentIcon />, 
-        path: '/anamnese/formularios', 
+      {
+        text: 'Formulários',
+        icon: <AssignmentIcon />,
+        path: '/anamnese/formularios',
         permission: 'gerenciar_anamnese',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Respostas', 
-        icon: <QuestionAnswerIcon />, 
-        path: '/anamnese/respostas', 
+      {
+        text: 'Respostas',
+        icon: <QuestionAnswerIcon />,
+        path: '/anamnese/respostas',
         permission: 'visualizar_anamnese',
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
-      { 
-        text: 'Modelos', 
-        icon: <BallotIcon />, 
-        path: '/anamnese/modelos', 
+      {
+        text: 'Modelos',
+        icon: <BallotIcon />,
+        path: '/anamnese/modelos',
         permission: 'gerenciar_anamnese',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Relatórios', 
-        icon: <ListBulletedIcon />, 
-        path: '/anamnese/relatorios', 
+      {
+        text: 'Relatórios',
+        icon: <ListBulletedIcon />,
+        path: '/anamnese/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -456,31 +449,31 @@ const menuGroups = [
     title: 'RELATÓRIOS E ANÁLISES',
     icon: <AssessmentIcon />,
     items: [
-      { 
-        text: 'Relatórios Gerenciais', 
-        icon: <SummarizeIcon />, 
-        path: '/relatorios', 
+      {
+        text: 'Relatórios Gerenciais',
+        icon: <SummarizeIcon />,
+        path: '/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Análise de Vendas', 
-        icon: <ShowChartIcon />, 
-        path: '/analise-vendas', 
+      {
+        text: 'Análise de Vendas',
+        icon: <ShowChartIcon />,
+        path: '/analise-vendas',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Performance', 
-        icon: <EqualizerIcon />, 
-        path: '/performance', 
+      {
+        text: 'Performance',
+        icon: <EqualizerIcon />,
+        path: '/performance',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Auditoria', 
-        icon: <SecurityIcon />, 
-        path: '/auditoria', 
+      {
+        text: 'Auditoria',
+        icon: <SecurityIcon />,
+        path: '/auditoria',
         permission: 'visualizar_relatorios',
         cargos: ['admin']
       },
@@ -601,21 +594,21 @@ const menuGroups = [
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
-      { 
-        text: 'Usuários', 
-        icon: <AdminIcon />, 
-        path: '/usuarios', 
+      {
+        text: 'Usuários',
+        icon: <AdminIcon />,
+        path: '/usuarios',
         permission: 'gerenciar_usuarios',
         cargos: ['admin']
       },
-      { 
-        text: 'Configurações', 
-        icon: <TuneIcon />, 
-        path: '/configuracoes', 
+      {
+        text: 'Configurações',
+        icon: <TuneIcon />,
+        path: '/configuracoes',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
-      { 
+      {
         text: 'Manual do Sistema',
         icon: <HelpCenterIcon />,
         path: '/manual',
@@ -629,16 +622,16 @@ const menuGroups = [
         cargos: ['admin', 'gerente']
       },
       {
-        text: 'Backup', 
-        icon: <BackupIcon />, 
-        path: '/backup', 
+        text: 'Backup',
+        icon: <BackupIcon />,
+        path: '/backup',
         permission: 'gerenciar_backup',
         cargos: ['admin']
       },
-      { 
-        text: 'Logs do Sistema', 
-        icon: <InfoIcon />, 
-        path: '/logs', 
+      {
+        text: 'Logs do Sistema',
+        icon: <InfoIcon />,
+        path: '/logs',
         permission: 'visualizar_logs',
         cargos: ['admin']
       },
@@ -694,7 +687,7 @@ export const extraIcons = {
 // Componente Mobile Sidebar (mantido igual)
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
-  
+
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -742,7 +735,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
           backgroundColor: 'rgba(255,255,255,0.05)',
         }}
       />
-      
+
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative', zIndex: 1 }}>
         <Avatar
           src={temFotoValida() ? fotoUrl : undefined}
@@ -803,8 +796,8 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             },
           }}
         >
-          <ListItemIcon sx={{ 
-            minWidth: 40, 
+          <ListItemIcon sx={{
+            minWidth: 40,
             color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
           }}>
             {group.icon}
@@ -1390,22 +1383,22 @@ function ModernSidebar() {
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);
     }
-    
+
     if (isSaasPlatformAdmin(usuario) && getTenantContext().empresaId) return true;
 
     // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
-    
+
     // Verificar se o cargo do usuário está na lista de cargos permitidos para o item
     if (item.cargos && Array.isArray(item.cargos)) {
       return item.cargos.includes(usuario.cargo);
     }
-    
+
     // Fallback para o sistema antigo de permissões
     if (item.permission) {
       return usuario.permissoes?.includes(item.permission) || false;
     }
-    
+
     return true;
   };
 

@@ -103,7 +103,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 // Função utilitária para formatar data com segurança
 const formatDate = (date, formatString = 'dd/MM/yyyy') => {
   if (!date) return '—';
-  
+
   try {
     const dateObj = date?.toDate ? date.toDate() : new Date(date);
     if (!isValid(dateObj)) return '—';
@@ -144,9 +144,9 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
       exit={{ opacity: 0, x: -100 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
     >
-      <Card 
-        sx={{ 
-          mb: 1.5, 
+      <Card
+        sx={{
+          mb: 1.5,
           borderRadius: 2,
           border: '1px solid',
           borderColor: 'divider',
@@ -156,18 +156,18 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar 
-              sx={{ 
-                bgcolor: comissao.status === 'pago' ? '#4caf50' : 
+            <Avatar
+              sx={{
+                bgcolor: comissao.status === 'pago' ? '#4caf50' :
                          comissao.status === 'cancelado' ? '#f44336' : '#ff9800',
                 width: 48,
                 height: 48,
               }}
             >
-              {comissao.status === 'pago' ? <CheckCircleIcon /> : 
+              {comissao.status === 'pago' ? <CheckCircleIcon /> :
                comissao.status === 'cancelado' ? <WarningIcon /> : <PendingIcon />}
             </Avatar>
-            
+
             <Box sx={{ flex: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -177,7 +177,7 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
                   <MoreVertIcon fontSize="small" />
                 </IconButton>
               </Box>
-              
+
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 {isAdmin && comissao.profissionalNome && (
                   <Chip
@@ -187,17 +187,17 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
                     sx={{ height: 20, fontSize: '0.65rem' }}
                   />
                 )}
-                
+
                 <Chip
                   size="small"
                   label={`${comissao.percentual}%`}
                   sx={{ height: 20, fontSize: '0.65rem', bgcolor: '#f3e5f5' }}
                 />
-                
+
                 <Chip
                   size="small"
                   label={comissao.status}
-                  color={comissao.status === 'pago' ? 'success' : 
+                  color={comissao.status === 'pago' ? 'success' :
                          comissao.status === 'cancelado' ? 'error' : 'warning'}
                   sx={{ height: 20, fontSize: '0.65rem' }}
                 />
@@ -213,9 +213,9 @@ const ComissaoMobileCard = ({ comissao, isAdmin, onDetalhes }) => {
               </Box>
 
               <Collapse in={expanded}>
-                <Box sx={{ 
-                  mt: 2, 
-                  pt: 2, 
+                <Box sx={{
+                  mt: 2,
+                  pt: 2,
                   borderTop: '1px solid',
                   borderColor: 'divider',
                   display: 'flex',
@@ -250,9 +250,9 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
       exit={{ opacity: 0, x: -100 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
     >
-      <Card 
-        sx={{ 
-          mb: 1.5, 
+      <Card
+        sx={{
+          mb: 1.5,
           borderRadius: 2,
           border: '1px solid',
           borderColor: 'divider',
@@ -262,9 +262,9 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar 
+            <Avatar
               src={atendimento.cliente?.foto}
-              sx={{ 
+              sx={{
                 bgcolor: '#9c27b0',
                 width: 48,
                 height: 48,
@@ -272,7 +272,7 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
             >
               {!atendimento.cliente?.foto && (atendimento.cliente?.nome?.charAt(0) || 'C')}
             </Avatar>
-            
+
             <Box sx={{ flex: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -281,12 +281,12 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
                 <Chip
                   size="small"
                   label={atendimento.status || 'Pendente'}
-                  color={atendimento.status === 'finalizado' ? 'success' : 
+                  color={atendimento.status === 'finalizado' ? 'success' :
                          atendimento.status === 'cancelado' ? 'error' : 'warning'}
                   sx={{ height: 20, fontSize: '0.65rem' }}
                 />
               </Box>
-              
+
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <EventIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
@@ -298,8 +298,8 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {atendimento.servicos?.map(s => s.nome).join(', ') || 
-                   atendimento.itensServico?.map(s => s.nome).join(', ') || 
+                  {atendimento.servicos?.map(s => s.nome).join(', ') ||
+                   atendimento.itensServico?.map(s => s.nome).join(', ') ||
                    'Serviço'}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ color: '#4caf50', fontWeight: 600 }}>
@@ -327,14 +327,14 @@ const AtendimentoMobileCard = ({ atendimento, onDetalhes }) => {
 };
 
 // Componente para impressão - VERSÃO OTIMIZADA
-const RelatorioComissoes = React.forwardRef(({ 
-  dados, 
-  profissional, 
-  periodo, 
+const RelatorioComissoes = React.forwardRef(({
+  dados,
+  profissional,
+  periodo,
   filtros,
   configuracoes,
   isAdmin,
-  tipo = 'completo' 
+  tipo = 'completo'
 }, ref) => {
   const formatarMoeda = (valor) => {
     try {
@@ -368,10 +368,10 @@ const RelatorioComissoes = React.forwardRef(({
   };
 
   return (
-    <Box ref={ref} sx={{ 
-      p: 3, 
+    <Box ref={ref} sx={{
+      p: 3,
       fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-      maxWidth: '1000px', 
+      maxWidth: '1000px',
       margin: '0 auto',
       backgroundColor: '#ffffff',
       color: '#1e293b',
@@ -379,17 +379,17 @@ const RelatorioComissoes = React.forwardRef(({
       lineHeight: 1.4
     }}>
       {/* HEADER COMPACTO */}
-      <Box sx={{ 
-        mb: 2, 
-        pb: 1.5, 
+      <Box sx={{
+        mb: 2,
+        pb: 1.5,
         borderBottom: '2px solid #9c27b0',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
         <Box>
-          <Typography sx={{ 
-            fontWeight: 700, 
+          <Typography sx={{
+            fontWeight: 700,
             color: '#0f172a',
             fontSize: '16px',
             lineHeight: 1.2
@@ -402,10 +402,10 @@ const RelatorioComissoes = React.forwardRef(({
             </Typography>
           )}
         </Box>
-        
+
         <Box sx={{ textAlign: 'right' }}>
-          <Typography sx={{ 
-            fontWeight: 600, 
+          <Typography sx={{
+            fontWeight: 600,
             color: '#9c27b0',
             fontSize: '12px',
             textTransform: 'uppercase'
@@ -419,14 +419,14 @@ const RelatorioComissoes = React.forwardRef(({
       </Box>
 
       {/* INFO RÁPIDA */}
-      <Box sx={{ 
-        display: 'flex', 
+      <Box sx={{
+        display: 'flex',
         gap: 2,
         mb: 2,
         flexWrap: 'wrap'
       }}>
-        <Box sx={{ 
-          display: 'flex', 
+        <Box sx={{
+          display: 'flex',
           alignItems: 'center',
           gap: 0.5,
           bgcolor: '#f1f5f9',
@@ -440,9 +440,9 @@ const RelatorioComissoes = React.forwardRef(({
             <span style={{ color: '#0f172a', fontWeight: 600 }}>{getNomeProfissional()}</span>
           </Typography>
         </Box>
-        
-        <Box sx={{ 
-          display: 'flex', 
+
+        <Box sx={{
+          display: 'flex',
           alignItems: 'center',
           gap: 0.5,
           bgcolor: '#f1f5f9',
@@ -460,16 +460,16 @@ const RelatorioComissoes = React.forwardRef(({
 
       {/* CARDS DE RESUMO */}
       <Box sx={{ mb: 2 }}>
-        <Typography sx={{ 
-          fontWeight: 600, 
-          mb: 1, 
+        <Typography sx={{
+          fontWeight: 600,
+          mb: 1,
           color: '#0f172a',
           fontSize: '12px',
           display: 'flex',
           alignItems: 'center',
           gap: 0.5
         }}>
-          <span style={{ 
+          <span style={{
             display: 'inline-block',
             width: 3,
             height: 14,
@@ -479,11 +479,11 @@ const RelatorioComissoes = React.forwardRef(({
           }} />
           Resumo do Período
         </Typography>
-        
+
         <Grid container spacing={1}>
           <Grid item xs={4}>
-            <Paper sx={{ 
-              p: 1.5, 
+            <Paper sx={{
+              p: 1.5,
               bgcolor: '#f8fafc',
               borderRadius: 2,
               border: '1px solid #e2e8f0'
@@ -491,8 +491,8 @@ const RelatorioComissoes = React.forwardRef(({
               <Typography sx={{ color: '#64748b', fontSize: '9px', textTransform: 'uppercase', mb: 0.5 }}>
                 Total Comissões
               </Typography>
-              <Typography sx={{ 
-                color: '#059669', 
+              <Typography sx={{
+                color: '#059669',
                 fontWeight: 700,
                 fontSize: '14px'
               }}>
@@ -500,10 +500,10 @@ const RelatorioComissoes = React.forwardRef(({
               </Typography>
             </Paper>
           </Grid>
-          
+
           <Grid item xs={4}>
-            <Paper sx={{ 
-              p: 1.5, 
+            <Paper sx={{
+              p: 1.5,
               bgcolor: '#f8fafc',
               borderRadius: 2,
               border: '1px solid #e2e8f0'
@@ -511,8 +511,8 @@ const RelatorioComissoes = React.forwardRef(({
               <Typography sx={{ color: '#64748b', fontSize: '9px', textTransform: 'uppercase', mb: 0.5 }}>
                 A Receber
               </Typography>
-              <Typography sx={{ 
-                color: '#d97706', 
+              <Typography sx={{
+                color: '#d97706',
                 fontWeight: 700,
                 fontSize: '14px'
               }}>
@@ -520,10 +520,10 @@ const RelatorioComissoes = React.forwardRef(({
               </Typography>
             </Paper>
           </Grid>
-          
+
           <Grid item xs={4}>
-            <Paper sx={{ 
-              p: 1.5, 
+            <Paper sx={{
+              p: 1.5,
               bgcolor: '#f8fafc',
               borderRadius: 2,
               border: '1px solid #e2e8f0'
@@ -531,8 +531,8 @@ const RelatorioComissoes = React.forwardRef(({
               <Typography sx={{ color: '#64748b', fontSize: '9px', textTransform: 'uppercase', mb: 0.5 }}>
                 Recebido
               </Typography>
-              <Typography sx={{ 
-                color: '#059669', 
+              <Typography sx={{
+                color: '#059669',
                 fontWeight: 700,
                 fontSize: '14px'
               }}>
@@ -546,16 +546,16 @@ const RelatorioComissoes = React.forwardRef(({
       {/* TABELA DE ATENDIMENTOS */}
       {dados.atendimentos.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Typography sx={{ 
-            fontWeight: 600, 
-            mb: 1, 
+          <Typography sx={{
+            fontWeight: 600,
+            mb: 1,
             color: '#0f172a',
             fontSize: '12px',
             display: 'flex',
             alignItems: 'center',
             gap: 0.5
           }}>
-            <span style={{ 
+            <span style={{
               display: 'inline-block',
               width: 3,
               height: 14,
@@ -565,15 +565,15 @@ const RelatorioComissoes = React.forwardRef(({
             }} />
             Atendimentos no Período
           </Typography>
-          
-          <TableContainer component={Paper} sx={{ 
+
+          <TableContainer component={Paper} sx={{
             borderRadius: 2,
             border: '1px solid #e2e8f0',
             overflow: 'hidden'
           }}>
             <Table size="small" sx={{ fontSize: '10px' }}>
               <TableHead>
-                <TableRow sx={{ 
+                <TableRow sx={{
                   bgcolor: '#f8fafc',
                   '& th': {
                     fontWeight: 600,
@@ -595,9 +595,9 @@ const RelatorioComissoes = React.forwardRef(({
               </TableHead>
               <TableBody>
                 {dados.atendimentos.map((atendimento, index) => (
-                  <TableRow 
+                  <TableRow
                     key={index}
-                    sx={{ 
+                    sx={{
                       '&:nth-of-type(even)': { bgcolor: '#faf9ff' },
                       '& td': {
                         borderBottom: '1px solid #e2e8f0',
@@ -609,7 +609,7 @@ const RelatorioComissoes = React.forwardRef(({
                   >
                     <TableCell>{formatarData(atendimento.data)}</TableCell>
                     <TableCell>
-                      <span style={{ 
+                      <span style={{
                         display: 'inline-block',
                         maxWidth: '80px',
                         overflow: 'hidden',
@@ -620,7 +620,7 @@ const RelatorioComissoes = React.forwardRef(({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span style={{ 
+                      <span style={{
                         display: 'inline-block',
                         maxWidth: '100px',
                         overflow: 'hidden',
@@ -660,16 +660,16 @@ const RelatorioComissoes = React.forwardRef(({
       {/* TABELA DE COMISSÕES */}
       {dados.comissoes.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Typography sx={{ 
-            fontWeight: 600, 
-            mb: 1, 
+          <Typography sx={{
+            fontWeight: 600,
+            mb: 1,
             color: '#0f172a',
             fontSize: '12px',
             display: 'flex',
             alignItems: 'center',
             gap: 0.5
           }}>
-            <span style={{ 
+            <span style={{
               display: 'inline-block',
               width: 3,
               height: 14,
@@ -679,15 +679,15 @@ const RelatorioComissoes = React.forwardRef(({
             }} />
             Detalhamento das Comissões
           </Typography>
-          
-          <TableContainer component={Paper} sx={{ 
+
+          <TableContainer component={Paper} sx={{
             borderRadius: 2,
             border: '1px solid #e2e8f0',
             overflow: 'hidden'
           }}>
             <Table size="small" sx={{ fontSize: '10px' }}>
               <TableHead>
-                <TableRow sx={{ 
+                <TableRow sx={{
                   bgcolor: '#f8fafc',
                   '& th': {
                     fontWeight: 600,
@@ -710,9 +710,9 @@ const RelatorioComissoes = React.forwardRef(({
               </TableHead>
               <TableBody>
                 {dados.comissoes.map((comissao, index) => (
-                  <TableRow 
+                  <TableRow
                     key={index}
-                    sx={{ 
+                    sx={{
                       '&:nth-of-type(even)': { bgcolor: '#faf9ff' },
                       '& td': {
                         borderBottom: '1px solid #e2e8f0',
@@ -724,7 +724,7 @@ const RelatorioComissoes = React.forwardRef(({
                   >
                     <TableCell>{formatarData(comissao.data)}</TableCell>
                     <TableCell>
-                      <span style={{ 
+                      <span style={{
                         display: 'inline-block',
                         maxWidth: '80px',
                         overflow: 'hidden',
@@ -758,12 +758,12 @@ const RelatorioComissoes = React.forwardRef(({
                         borderRadius: 10,
                         fontSize: '8px',
                         fontWeight: 600,
-                        backgroundColor: comissao.status === 'pago' ? '#ecfdf5' : 
+                        backgroundColor: comissao.status === 'pago' ? '#ecfdf5' :
                                        comissao.status === 'cancelado' ? '#fef2f2' : '#fffbeb',
-                        color: comissao.status === 'pago' ? '#059669' : 
+                        color: comissao.status === 'pago' ? '#059669' :
                                comissao.status === 'cancelado' ? '#dc2626' : '#d97706',
                         border: '1px solid',
-                        borderColor: comissao.status === 'pago' ? '#a7f3d0' : 
+                        borderColor: comissao.status === 'pago' ? '#a7f3d0' :
                                     comissao.status === 'cancelado' ? '#fecaca' : '#fed7aa'
                       }}>
                         {comissao.status}
@@ -781,9 +781,9 @@ const RelatorioComissoes = React.forwardRef(({
       )}
 
       {/* RODAPÉ COMPACTO */}
-      <Box sx={{ 
-        mt: 2, 
-        pt: 1.5, 
+      <Box sx={{
+        mt: 2,
+        pt: 1.5,
         borderTop: '1px dashed #cbd5e1',
         display: 'flex',
         justifyContent: 'space-between',
@@ -799,7 +799,7 @@ const RelatorioComissoes = React.forwardRef(({
             Documento não fiscal • Gerado automaticamente
           </Typography>
         </Box>
-        
+
         <Box sx={{ textAlign: 'right' }}>
           <Typography sx={{ fontSize: '8px' }}>
             Período: {periodo}
@@ -830,18 +830,18 @@ function MinhasComissoes() {
   const [profissional, setProfissional] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tabValue, setTabValue] = useState(0);
-  
+
   // Filtros
   const [filtroMes, setFiltroMes] = useState(new Date().getMonth() + 1);
   const [filtroAno, setFiltroAno] = useState(new Date().getFullYear());
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [filtroBusca, setFiltroBusca] = useState('');
   const [filtroProfissional, setFiltroProfissional] = useState('todos');
-  
+
   // Paginação
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(isMobile ? 5 : 10);
-  
+
   // Dialogs
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [itemSelecionado, setItemSelecionado] = useState(null);
@@ -906,7 +906,7 @@ function MinhasComissoes() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      
+
       console.log('🔄 Carregando dados de comissões...');
 
       // Carregar configurações primeiro
@@ -916,19 +916,19 @@ function MinhasComissoes() {
         console.log('Configurações carregadas:', configuracoesArray[0].salao?.nomeFantasia);
         setConfiguracoes(configuracoesArray[0]);
       }
-      
+
       // Carregar usuário logado
       let usuarioLogado = null;
       let profissionalId = null;
       let profissionalNome = '';
       let usuarioTipo = 'profissional';
-      
+
       try {
         const usuarioStr = localStorage.getItem('usuario');
         if (usuarioStr) {
           usuarioLogado = JSON.parse(usuarioStr);
           usuarioTipo = usuarioLogado?.cargo || 'profissional';
-          
+
           if (usuarioTipo === 'admin') {
             profissionalId = usuarioLogado?.profissionalId || null;
             profissionalNome = usuarioLogado?.nome || 'Administrador';
@@ -969,11 +969,9 @@ function MinhasComissoes() {
       console.log('Clientes carregados:', clientesArray.length);
       setClientes(clientesArray);
 
-      // Carregar comissões
-      await carregarComissoes(isAdminUser ? null : profissionalId);
-      
-      // Carregar atendimentos (depois de ter clientes e comissões)
-      await carregarAtendimentos(isAdminUser ? null : profissionalId);
+      // Carregar comissões e atendimentos com os dados recém-carregados para não depender do setState assíncrono
+      const comissoesCarregadas = await carregarComissoes(isAdminUser ? null : profissionalId);
+      await carregarAtendimentos(isAdminUser ? null : profissionalId, clientesArray, comissoesCarregadas);
 
       // Registrar acesso na auditoria
       await auditoriaService.registrar('acesso_minhas_comissoes', {
@@ -990,8 +988,8 @@ function MinhasComissoes() {
     } catch (error) {
       console.error('❌ Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+
+      await auditoriaService.registrarErro(error, {
         acao: 'carregar_minhas_comissoes'
       });
     } finally {
@@ -1005,16 +1003,16 @@ function MinhasComissoes() {
       const comissoesData = await firebaseService.getAll('comissoes');
       const comissoesArray = Array.isArray(comissoesData) ? comissoesData : [];
       console.log('Comissões totais:', comissoesArray.length);
-      
+
       let comissoesFiltradas = comissoesArray;
-      
+
       if (profissionalId) {
-        comissoesFiltradas = comissoesArray.filter(c => 
+        comissoesFiltradas = comissoesArray.filter(c =>
           c && c.profissionalId === profissionalId
         );
         console.log('Comissões filtradas pelo profissional:', comissoesFiltradas.length);
       } else if (isAdmin && filtroProfissional !== 'todos') {
-        comissoesFiltradas = comissoesArray.filter(c => 
+        comissoesFiltradas = comissoesArray.filter(c =>
           c && c.profissionalId === filtroProfissional
         );
       }
@@ -1054,38 +1052,40 @@ function MinhasComissoes() {
 
       console.log('Comissões processadas:', comissoesFiltradas.length);
       setComissoes(comissoesFiltradas);
+      return comissoesFiltradas;
     } catch (error) {
       console.error('Erro ao carregar comissões:', error);
       setComissoes([]);
+      return [];
     }
   };
 
-  const carregarAtendimentos = async (profissionalId) => {
+  const carregarAtendimentos = async (profissionalId, clientesBase = clientes, comissoesBase = comissoes) => {
     try {
       console.log('📊 Carregando atendimentos...');
       const atendimentosData = await firebaseService.getAll('atendimentos');
       const atendimentosArray = Array.isArray(atendimentosData) ? atendimentosData : [];
       console.log('Atendimentos totais:', atendimentosArray.length);
-      
+
       // Filtrar apenas atendimentos finalizados
       let atendimentosFiltrados = atendimentosArray.filter(a => a && a.status === 'finalizado');
       console.log('Atendimentos finalizados:', atendimentosFiltrados.length);
-      
+
       if (profissionalId) {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          const temProfissional = 
+          const temProfissional =
             (a.itensServico && a.itensServico.some(item => item && item.profissionalId === profissionalId)) ||
             (a.servicos && a.servicos.some(s => s && s.profissionalId === profissionalId));
-          
+
           return temProfissional;
         });
         console.log('Atendimentos filtrados pelo profissional:', atendimentosFiltrados.length);
       } else if (isAdmin && filtroProfissional !== 'todos') {
         atendimentosFiltrados = atendimentosFiltrados.filter(a => {
-          const temProfissional = 
+          const temProfissional =
             (a.itensServico && a.itensServico.some(item => item && item.profissionalId === filtroProfissional)) ||
             (a.servicos && a.servicos.some(s => s && s.profissionalId === filtroProfissional));
-          
+
           return temProfissional;
         });
       }
@@ -1100,30 +1100,51 @@ function MinhasComissoes() {
       }
 
       // Processar atendimentos com dados do cliente e comissões
+      const clientesDisponiveis = Array.isArray(clientesBase) ? clientesBase : [];
+      const comissoesDisponiveis = Array.isArray(comissoesBase) ? comissoesBase : [];
       const atendimentosProcessados = atendimentosFiltrados.map(atendimento => {
-        // Buscar cliente pelo ID
-        const cliente = clientes.find(c => c && c.id === atendimento.clienteId);
-        
+        // Buscar cliente por múltiplos formatos usados pelo agendamento/atendimento
+        const clienteIds = [
+          atendimento.clienteId,
+          atendimento.cliente?.id,
+          atendimento.clienteUid,
+          atendimento.clienteAuthUid,
+          atendimento.authUid,
+          atendimento.googleUid,
+        ].filter(Boolean).map(String);
+        const clienteEmail = atendimento.clienteEmail || atendimento.emailCliente || atendimento.cliente?.email;
+        const cliente = clientesDisponiveis.find(c => c && (
+          clienteIds.includes(String(c.id)) ||
+          clienteIds.includes(String(c.uid)) ||
+          clienteIds.includes(String(c.authUid)) ||
+          clienteIds.includes(String(c.googleUid)) ||
+          (clienteEmail && c.email && String(c.email).toLowerCase() === String(clienteEmail).toLowerCase())
+        ));
+        const clienteFallback = atendimento.cliente || {
+          nome: atendimento.clienteNome || atendimento.nomeCliente || atendimento.cliente?.nome || 'Cliente não identificado',
+          foto: atendimento.clienteFoto || atendimento.cliente?.foto || null,
+        };
+
         // Buscar todas as comissões deste atendimento
-        const comissoesDoAtendimento = comissoes.filter(c => 
+        const comissoesDoAtendimento = comissoesDisponiveis.filter(c =>
           c && c.atendimentoId === atendimento.id
         );
-        
+
         // Se for profissional específico, filtrar as comissões dele
-        const comissoesDoProfissional = profissionalId 
+        const comissoesDoProfissional = profissionalId
           ? comissoesDoAtendimento.filter(c => c.profissionalId === profissionalId)
           : comissoesDoAtendimento;
-        
+
         // Calcular comissão total
         const comissaoTotal = comissoesDoProfissional.reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-        
+
         // Verificar se todas as comissões estão pagas
-        const todasPagas = comissoesDoProfissional.length > 0 && 
+        const todasPagas = comissoesDoProfissional.length > 0 &&
                           comissoesDoProfissional.every(c => c.status === 'pago');
-        
+
         return {
           ...atendimento,
-          cliente: cliente || { nome: 'Cliente não encontrado', foto: null },
+          cliente: cliente || clienteFallback,
           valorTotal: Number(atendimento.valorTotal) || 0,
           comissaoTotal: comissaoTotal,
           comissaoPaga: todasPagas,
@@ -1148,15 +1169,15 @@ function MinhasComissoes() {
       const totalPeriodo = comissoes
         .filter(c => c && c.status !== 'cancelado')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-      
+
       const aReceber = comissoes
         .filter(c => c && c.status === 'pendente')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-      
+
       const recebido = comissoes
         .filter(c => c && c.status === 'pago')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
-      
+
       const cancelado = comissoes
         .filter(c => c && c.status === 'cancelado')
         .reduce((acc, c) => acc + (Number(c.valor) || 0), 0);
@@ -1215,12 +1236,12 @@ function MinhasComissoes() {
 
       comissoes.forEach(c => {
         if (!c) return;
-        
+
         const data = new Date(c.dataRegistro || c.createdAt || c.data || 0);
         const mes = data.getMonth() + 1;
         const ano = data.getFullYear();
         const chave = `${ano}-${mes}`;
-        
+
         if (!mesesDados[chave]) {
           mesesDados[chave] = {
             mes,
@@ -1229,7 +1250,7 @@ function MinhasComissoes() {
             total: 0
           };
         }
-        
+
         if (c.status !== 'cancelado') {
           mesesDados[chave].quantidade++;
           mesesDados[chave].total += Number(c.valor) || 0;
@@ -1296,24 +1317,24 @@ function MinhasComissoes() {
   const handlePrint = () => {
     try {
       mostrarSnackbar('Preparando impressão...', 'info');
-      
+
       // Criar uma nova janela para impressão
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
         mostrarSnackbar('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
         return;
       }
-      
+
       // Obter o conteúdo do relatório
       const content = relatorioRef.current;
       if (!content) {
         mostrarSnackbar('Conteúdo não disponível para impressão', 'error');
         return;
       }
-      
+
       // Clonar o conteúdo para não afetar o original
       const contentClone = content.cloneNode(true);
-      
+
       // Coletar estilos da página
       const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
       let stylesHTML = '';
@@ -1324,7 +1345,7 @@ function MinhasComissoes() {
           stylesHTML += style.outerHTML;
         }
       });
-      
+
       // Criar o HTML para impressão com formatação otimizada
       const printHTML = `
         <!DOCTYPE html>
@@ -1337,15 +1358,15 @@ function MinhasComissoes() {
                 size: A4;
                 margin: 2cm;
               }
-              body { 
-                font-family: Arial, sans-serif; 
+              body {
+                font-family: Arial, sans-serif;
                 margin: 0;
                 padding: 20px;
                 background: white;
               }
               @media print {
-                body { 
-                  margin: 0; 
+                body {
+                  margin: 0;
                   padding: 0;
                   -webkit-print-color-adjust: exact;
                   print-color-adjust: exact;
@@ -1374,11 +1395,11 @@ function MinhasComissoes() {
           </body>
         </html>
       `;
-      
+
       // Escrever o conteúdo na nova janela
       printWindow.document.write(printHTML);
       printWindow.document.close();
-      
+
       // Aguardar carregamento dos recursos e imprimir
       printWindow.onload = () => {
         setTimeout(() => {
@@ -1397,12 +1418,12 @@ function MinhasComissoes() {
           totalComissoes: comissoesFiltradas.length
         }
       });
-      
+
     } catch (error) {
       console.error('Erro na impressão:', error);
       mostrarSnackbar('Erro ao imprimir', 'error');
-      
-      auditoriaService.registrarErro(error, { 
+
+      auditoriaService.registrarErro(error, {
         acao: 'imprimir_relatorio_comissoes'
       });
     }
@@ -1411,22 +1432,22 @@ function MinhasComissoes() {
   const handleExportPDF = async () => {
     try {
       mostrarSnackbar('Gerando PDF...', 'info');
-      
+
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
-      
+
       // Título com logo (simulado)
       doc.setFontSize(20);
       doc.setTextColor(156, 39, 176);
       doc.text(configuracoes?.salao?.nomeFantasia || 'Relatório de Comissões', pageWidth / 2, 20, { align: 'center' });
-      
+
       doc.setFontSize(16);
       doc.setTextColor(0, 0, 0);
       doc.text('Relatório de Comissões', pageWidth / 2, 30, { align: 'center' });
-      
+
       doc.setFontSize(12);
       doc.setTextColor(100, 100, 100);
-      
+
       // Nome do profissional correto
       let nomeProfissional = profissional?.nome || 'Todos os Profissionais';
       if (isAdmin && filtroProfissional !== 'todos') {
@@ -1437,22 +1458,22 @@ function MinhasComissoes() {
       } else if (isAdmin && filtroProfissional === 'todos') {
         nomeProfissional = 'Todos os Profissionais';
       }
-      
+
       doc.text(`Profissional: ${nomeProfissional}`, pageWidth / 2, 40, { align: 'center' });
-      
+
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`;
       doc.setFontSize(10);
       doc.text(`Período: ${periodo}`, pageWidth / 2, 48, { align: 'center' });
       doc.text(`Emitido em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 56, { align: 'center' });
-      
+
       let yPos = 65;
-      
+
       if (exportOptions.incluirResumo && resumo) {
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.text('Resumo do Período', 14, yPos);
         yPos += 8;
-        
+
         const resumoData = [
           ['Total de Comissões', formatarMoeda(resumo.totalPeriodo)],
           ['A Receber', formatarMoeda(resumo.aReceber)],
@@ -1461,7 +1482,7 @@ function MinhasComissoes() {
           ['Comissões Pagas', resumo.quantidadePaga.toString()],
           ['Comissões Pendentes', resumo.quantidadePendente.toString()],
         ];
-        
+
         autoTable(doc, {
           startY: yPos,
           head: [['Descrição', 'Valor']],
@@ -1470,16 +1491,16 @@ function MinhasComissoes() {
           headStyles: { fillColor: [156, 39, 176] },
           margin: { left: 14, right: 14 },
         });
-        
+
         yPos = doc.lastAutoTable.finalY + 10;
       }
-      
+
       if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.text('Atendimentos no Período', 14, yPos);
         yPos += 8;
-        
+
         const atendimentosData = atendimentosFiltrados.slice(0, 20).map(a => [
           formatDate(a.data),
           a.cliente?.nome || '—',
@@ -1488,7 +1509,7 @@ function MinhasComissoes() {
           formatarMoeda(a.comissaoTotal),
           a.comissaoPaga ? 'Pago' : 'Pendente'
         ]);
-        
+
         autoTable(doc, {
           startY: yPos,
           head: [['Data', 'Cliente', 'Serviços', 'Valor', 'Comissão', 'Status']],
@@ -1498,16 +1519,16 @@ function MinhasComissoes() {
           margin: { left: 14, right: 14 },
           styles: { fontSize: 8 },
         });
-        
+
         yPos = doc.lastAutoTable.finalY + 10;
       }
-      
+
       if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
         doc.text('Detalhamento das Comissões', 14, yPos);
         yPos += 8;
-        
+
         const comissoesData = comissoesFiltradas.slice(0, 20).map(c => [
           formatDate(c.data),
           c.servicoNome,
@@ -1517,7 +1538,7 @@ function MinhasComissoes() {
           c.status,
           c.dataPagamento ? formatDate(c.dataPagamento) : '—'
         ]);
-        
+
         autoTable(doc, {
           startY: yPos,
           head: [['Data', 'Serviço', '%', 'Valor Base', 'Comissão', 'Status', 'Pagamento']],
@@ -1528,7 +1549,7 @@ function MinhasComissoes() {
           styles: { fontSize: 8 },
         });
       }
-      
+
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.pdf`;
       doc.save(fileName);
 
@@ -1541,14 +1562,14 @@ function MinhasComissoes() {
           totalComissoes: comissoesFiltradas.length
         }
       });
-      
+
       mostrarSnackbar('PDF gerado com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+
+      await auditoriaService.registrarErro(error, {
         acao: 'exportar_pdf_comissoes'
       });
     }
@@ -1557,10 +1578,10 @@ function MinhasComissoes() {
   const handleExportExcel = async () => {
     try {
       mostrarSnackbar('Gerando planilha...', 'info');
-      
+
       const wb = XLSX.utils.book_new();
       const periodo = `${meses.find(m => m.value === filtroMes)?.label} ${filtroAno}`;
-      
+
       // Nome do profissional correto
       let nomeProfissional = profissional?.nome || 'Todos os Profissionais';
       if (isAdmin && filtroProfissional !== 'todos') {
@@ -1571,7 +1592,7 @@ function MinhasComissoes() {
       } else if (isAdmin && filtroProfissional === 'todos') {
         nomeProfissional = 'Todos os Profissionais';
       }
-      
+
       if (exportOptions.incluirResumo && resumo) {
         const resumoData = [
           ['Resumo do Período'],
@@ -1588,11 +1609,11 @@ function MinhasComissoes() {
           ['Comissões Canceladas', resumo.quantidadeCancelada || 0],
           ['Total de Atendimentos', atendimentosFiltrados.length],
         ];
-        
+
         const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
         XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
       }
-      
+
       if (exportOptions.incluirAtendimentos && atendimentosFiltrados.length > 0) {
         const atendimentosData = [
           ['Data', 'Hora', 'Cliente', 'Serviços', 'Valor Total', 'Comissão Total', 'Status'],
@@ -1606,11 +1627,11 @@ function MinhasComissoes() {
             a.comissaoPaga ? 'Pago' : 'Pendente'
           ])
         ];
-        
+
         const wsAtendimentos = XLSX.utils.aoa_to_sheet(atendimentosData);
         XLSX.utils.book_append_sheet(wb, wsAtendimentos, 'Atendimentos');
       }
-      
+
       if (exportOptions.incluirComissoes && comissoesFiltradas.length > 0) {
         const comissoesData = [
           ['Data', 'Serviço', 'Percentual', 'Valor Base', 'Comissão', 'Status', 'Data Pagamento'],
@@ -1624,11 +1645,11 @@ function MinhasComissoes() {
             c.dataPagamento ? formatDate(c.dataPagamento) : ''
           ])
         ];
-        
+
         const wsComissoes = XLSX.utils.aoa_to_sheet(comissoesData);
         XLSX.utils.book_append_sheet(wb, wsComissoes, 'Comissões');
       }
-      
+
       if (exportOptions.incluirServicos && resumo?.porServico && resumo.porServico.length > 0) {
         const servicosData = [
           ['Serviço', 'Quantidade', 'Total', '% do Total'],
@@ -1639,11 +1660,11 @@ function MinhasComissoes() {
             ((item.valor / resumo.totalPeriodo) * 100).toFixed(1)
           ])
         ];
-        
+
         const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
         XLSX.utils.book_append_sheet(wb, wsServicos, 'Resumo por Serviço');
       }
-      
+
       const infoData = [
         ['Informações do Relatório'],
         [''],
@@ -1652,10 +1673,10 @@ function MinhasComissoes() {
         ['Data de Emissão', new Date().toLocaleString('pt-BR')],
         ['Status', filtroStatus !== 'todos' ? filtroStatus : 'Todos'],
       ];
-      
+
       const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
       XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
-      
+
       const fileName = `comissoes_${periodo.replace('/', '_')}_${new Date().getTime()}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
@@ -1668,14 +1689,14 @@ function MinhasComissoes() {
           totalComissoes: comissoesFiltradas.length
         }
       });
-      
+
       mostrarSnackbar('Planilha gerada com sucesso!', 'success');
       handleCloseRelatorio();
     } catch (error) {
       console.error('Erro ao gerar Excel:', error);
       mostrarSnackbar('Erro ao gerar planilha', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+
+      await auditoriaService.registrarErro(error, {
         acao: 'exportar_excel_comissoes'
       });
     }
@@ -1684,7 +1705,7 @@ function MinhasComissoes() {
   const comissoesFiltradas = useMemo(() => {
     return comissoes.filter(c => {
       if (!filtroBusca || !c) return true;
-      
+
       const termo = filtroBusca.toLowerCase();
       return (
         (c.servicoNome && c.servicoNome.toLowerCase().includes(termo)) ||
@@ -1697,7 +1718,7 @@ function MinhasComissoes() {
   const atendimentosFiltrados = useMemo(() => {
     return atendimentos.filter(a => {
       if (!filtroBusca || !a) return true;
-      
+
       const termo = filtroBusca.toLowerCase();
       return (
         (a.cliente?.nome && a.cliente.nome.toLowerCase().includes(termo)) ||
@@ -1733,7 +1754,7 @@ function MinhasComissoes() {
           <Skeleton variant="text" width={200} height={40} />
           <Skeleton variant="circular" width={40} height={40} />
         </Box>
-        
+
         <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: 3 }}>
           {[1, 2, 3, 4].map((i) => (
             <Grid item xs={12} sm={6} md={3} key={i}>
@@ -1743,9 +1764,9 @@ function MinhasComissoes() {
         </Grid>
 
         <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 2, mb: 2 }} />
-        
+
         <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 2, mb: 2 }} />
-        
+
         {[1, 2, 3].map((i) => (
           <Skeleton key={i} variant="rectangular" height={isMobile ? 120 : 60} sx={{ borderRadius: 2, mb: 2 }} />
         ))}
@@ -1765,24 +1786,24 @@ function MinhasComissoes() {
   }
 
   return (
-    <Box sx={{ 
+    <Box sx={{
       p: isMobile ? 2 : 3,
       pb: isMobile ? 10 : 3,
       minHeight: '100vh',
       bgcolor: '#f5f5f5'
     }}>
       {/* Cabeçalho Mobile */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         mb: 3
       }}>
         <Box>
-          <Typography 
-            variant={isMobile ? "h5" : "h4"} 
-            sx={{ 
-              fontWeight: 700, 
+          <Typography
+            variant={isMobile ? "h5" : "h4"}
+            sx={{
+              fontWeight: 700,
               color: '#9c27b0',
               fontSize: isMobile ? '1.5rem' : '2.125rem'
             }}
@@ -1790,17 +1811,17 @@ function MinhasComissoes() {
             {isAdmin ? 'Comissões' : 'Minhas Comissões'}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            {isAdmin && filtroProfissional !== 'todos' 
-              ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+            {isAdmin && filtroProfissional !== 'todos'
+              ? profissionais.find(p => p.id === filtroProfissional)?.nome
               : profissional?.nome || 'Carregando...'}
           </Typography>
         </Box>
-        
+
         <Zoom in={true}>
           <Fab
             size="small"
             onClick={handleOpenRelatorio}
-            sx={{ 
+            sx={{
               bgcolor: '#4caf50',
               '&:hover': { bgcolor: '#388e3c' },
             }}
@@ -1956,23 +1977,23 @@ function MinhasComissoes() {
           }}
           sx={{ ml: 1 }}
         />
-        
-        <IconButton 
+
+        <IconButton
           onClick={() => setOpenFilterDrawer(true)}
-          sx={{ 
+          sx={{
             mx: 1,
-            color: filtroMes !== new Date().getMonth() + 1 || 
-                   filtroAno !== new Date().getFullYear() || 
-                   filtroStatus !== 'todos' || 
+            color: filtroMes !== new Date().getMonth() + 1 ||
+                   filtroAno !== new Date().getFullYear() ||
+                   filtroStatus !== 'todos' ||
                    (isAdmin && filtroProfissional !== 'todos') ? '#9c27b0' : 'text.secondary'
           }}
         >
-          <Badge 
-            variant="dot" 
+          <Badge
+            variant="dot"
             color="primary"
-            invisible={filtroMes === new Date().getMonth() + 1 && 
-                       filtroAno === new Date().getFullYear() && 
-                       filtroStatus === 'todos' && 
+            invisible={filtroMes === new Date().getMonth() + 1 &&
+                       filtroAno === new Date().getFullYear() &&
+                       filtroStatus === 'todos' &&
                        (!isAdmin || filtroProfissional === 'todos')}
           >
             <FilterListIcon />
@@ -2004,23 +2025,23 @@ function MinhasComissoes() {
             }
           }}
         >
-          <Tab 
-            icon={<PercentIcon sx={{ fontSize: isMobile ? 18 : 24 }} />} 
-            label="Comissões" 
+          <Tab
+            icon={<PercentIcon sx={{ fontSize: isMobile ? 18 : 24 }} />}
+            label="Comissões"
             iconPosition="start"
           />
-          <Tab 
+          <Tab
             icon={
               <Badge badgeContent={atendimentos.length} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: '0.6rem', height: 16, minWidth: 16 } }}>
                 <EventIcon sx={{ fontSize: isMobile ? 18 : 24 }} />
               </Badge>
-            } 
-            label="Atendimentos" 
+            }
+            label="Atendimentos"
             iconPosition="start"
           />
-          <Tab 
-            icon={<PieChartIcon sx={{ fontSize: isMobile ? 18 : 24 }} />} 
-            label="Serviços" 
+          <Tab
+            icon={<PieChartIcon sx={{ fontSize: isMobile ? 18 : 24 }} />}
+            label="Serviços"
             iconPosition="start"
           />
         </Tabs>
@@ -2096,7 +2117,7 @@ function MinhasComissoes() {
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
                   Comissões por Serviço
                 </Typography>
-                
+
                 {resumo.porServico.map((item, index) => (
                   <Box key={index} sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -2225,7 +2246,7 @@ function MinhasComissoes() {
               fullWidth
               variant={filtroStatus === 'pendente' ? 'contained' : 'outlined'}
               onClick={() => setFiltroStatus('pendente')}
-              sx={{ 
+              sx={{
                 justifyContent: 'flex-start',
                 color: filtroStatus === 'pendente' ? 'white' : '#ff9800',
                 borderColor: '#ff9800',
@@ -2239,7 +2260,7 @@ function MinhasComissoes() {
               fullWidth
               variant={filtroStatus === 'pago' ? 'contained' : 'outlined'}
               onClick={() => setFiltroStatus('pago')}
-              sx={{ 
+              sx={{
                 justifyContent: 'flex-start',
                 color: filtroStatus === 'pago' ? 'white' : '#4caf50',
                 borderColor: '#4caf50',
@@ -2253,7 +2274,7 @@ function MinhasComissoes() {
               fullWidth
               variant={filtroStatus === 'cancelado' ? 'contained' : 'outlined'}
               onClick={() => setFiltroStatus('cancelado')}
-              sx={{ 
+              sx={{
                 justifyContent: 'flex-start',
                 color: filtroStatus === 'cancelado' ? 'white' : '#f44336',
                 borderColor: '#f44336',
@@ -2307,15 +2328,15 @@ function MinhasComissoes() {
       </SwipeableDrawer>
 
       {/* Dialog de Detalhes */}
-      <Dialog 
-        open={openDetalhesDialog} 
+      <Dialog
+        open={openDetalhesDialog}
         onClose={handleCloseDetalhes}
         fullScreen={isMobile}
-        maxWidth="md" 
+        maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ 
-          bgcolor: '#9c27b0', 
+        <DialogTitle sx={{
+          bgcolor: '#9c27b0',
           color: 'white',
           display: 'flex',
           alignItems: 'center',
@@ -2339,7 +2360,7 @@ function MinhasComissoes() {
                 <Typography variant="h6" sx={{ color: '#9c27b0', mb: 2 }}>
                   {itemSelecionado.servicoNome}
                 </Typography>
-                
+
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="caption" color="textSecondary">Data</Typography>
@@ -2349,7 +2370,7 @@ function MinhasComissoes() {
                     <Typography variant="caption" color="textSecondary">Profissional</Typography>
                     <Typography variant="body2">{itemSelecionado.profissionalNome || '—'}</Typography>
                   </Grid>
-                  
+
                   <Grid item xs={6}>
                     <Typography variant="caption" color="textSecondary">Valor Base</Typography>
                     <Typography variant="body2">{formatarMoeda(itemSelecionado.valorAtendimento)}</Typography>
@@ -2358,11 +2379,11 @@ function MinhasComissoes() {
                     <Typography variant="caption" color="textSecondary">Percentual</Typography>
                     <Typography variant="body2">{itemSelecionado.percentual}%</Typography>
                   </Grid>
-                  
+
                   <Grid item xs={12}>
                     <Divider sx={{ my: 1 }} />
                   </Grid>
-                  
+
                   <Grid item xs={6}>
                     <Typography variant="subtitle2">Comissão</Typography>
                     <Typography variant="h5" sx={{ color: '#4caf50' }}>
@@ -2376,7 +2397,7 @@ function MinhasComissoes() {
                       color={itemSelecionado.status === 'pago' ? 'success' : 'warning'}
                     />
                   </Grid>
-                  
+
                   {itemSelecionado.dataPagamento && (
                     <Grid item xs={12}>
                       <Typography variant="caption" color="textSecondary">Data de Pagamento</Typography>
@@ -2393,11 +2414,11 @@ function MinhasComissoes() {
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#f5f5f5', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Avatar 
+                      <Avatar
                         src={itemSelecionado.cliente?.foto}
                         sx={{ width: 48, height: 48, bgcolor: '#9c27b0' }}
                       >
-                        {!itemSelecionado.cliente?.foto && 
+                        {!itemSelecionado.cliente?.foto &&
                          (itemSelecionado.cliente?.nome?.charAt(0) || 'C')}
                       </Avatar>
                       <Box>
@@ -2413,12 +2434,12 @@ function MinhasComissoes() {
                     <Typography variant="subtitle2" gutterBottom>
                       Serviços Realizados
                     </Typography>
-                    
+
                     {(itemSelecionado.servicos || itemSelecionado.itensServico || []).map((servico, idx) => {
-                      const comissaoServico = itemSelecionado.comissoes?.find(c => 
+                      const comissaoServico = itemSelecionado.comissoes?.find(c =>
                         c.servicoId === (servico.servicoId || servico.id)
                       );
-                      
+
                       return (
                         <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                           <Typography variant="body2">{servico.nome}</Typography>
@@ -2479,11 +2500,11 @@ function MinhasComissoes() {
       </Dialog>
 
       {/* Dialog de Exportação */}
-      <Dialog 
-        open={openRelatorioDialog} 
+      <Dialog
+        open={openRelatorioDialog}
         onClose={handleCloseRelatorio}
         fullScreen={isMobile}
-        maxWidth="md" 
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
@@ -2497,7 +2518,7 @@ function MinhasComissoes() {
             <Typography variant="subtitle1" gutterBottom>
               Opções de Exportação
             </Typography>
-            
+
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>
                 <Card variant="outlined" sx={{ p: 2 }}>
@@ -2507,12 +2528,12 @@ function MinhasComissoes() {
                   <Typography variant="caption" color="textSecondary" gutterBottom display="block">
                     Exportar como documento PDF
                   </Typography>
-                  
+
                   <FormControl component="fieldset" sx={{ mt: 1 }}>
                     <FormLabel component="legend" sx={{ fontSize: '0.8rem' }}>Incluir:</FormLabel>
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirResumo}
                           onChange={handleExportOptionChange}
                           name="incluirResumo"
@@ -2523,7 +2544,7 @@ function MinhasComissoes() {
                     />
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirAtendimentos}
                           onChange={handleExportOptionChange}
                           name="incluirAtendimentos"
@@ -2534,7 +2555,7 @@ function MinhasComissoes() {
                     />
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirComissoes}
                           onChange={handleExportOptionChange}
                           name="incluirComissoes"
@@ -2544,7 +2565,7 @@ function MinhasComissoes() {
                       label={<Typography variant="caption">Comissões</Typography>}
                     />
                   </FormControl>
-                  
+
                   <Button
                     fullWidth
                     variant="contained"
@@ -2568,12 +2589,12 @@ function MinhasComissoes() {
                   <Typography variant="caption" color="textSecondary" gutterBottom display="block">
                     Exportar como planilha Excel
                   </Typography>
-                  
+
                   <FormControl component="fieldset" sx={{ mt: 1 }}>
                     <FormLabel component="legend" sx={{ fontSize: '0.8rem' }}>Incluir:</FormLabel>
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirResumo}
                           onChange={handleExportOptionChange}
                           name="incluirResumo"
@@ -2584,7 +2605,7 @@ function MinhasComissoes() {
                     />
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirAtendimentos}
                           onChange={handleExportOptionChange}
                           name="incluirAtendimentos"
@@ -2595,7 +2616,7 @@ function MinhasComissoes() {
                     />
                     <FormControlLabel
                       control={
-                        <Checkbox 
+                        <Checkbox
                           checked={exportOptions.incluirComissoes}
                           onChange={handleExportOptionChange}
                           name="incluirComissoes"
@@ -2605,7 +2626,7 @@ function MinhasComissoes() {
                       label={<Typography variant="caption">Comissões</Typography>}
                     />
                   </FormControl>
-                  
+
                   <Button
                     fullWidth
                     variant="contained"
@@ -2651,8 +2672,8 @@ function MinhasComissoes() {
                   Período: {meses.find(m => m.value === filtroMes)?.label} / {filtroAno}
                 </Typography>
                 <Typography variant="caption" display="block">
-                  Profissional: {isAdmin && filtroProfissional !== 'todos' 
-                    ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+                  Profissional: {isAdmin && filtroProfissional !== 'todos'
+                    ? profissionais.find(p => p.id === filtroProfissional)?.nome
                     : (profissional?.nome || 'Todos')}
                 </Typography>
                 <Typography variant="caption" display="block">
@@ -2681,13 +2702,13 @@ function MinhasComissoes() {
           }}
           profissional={profissional}
           periodo={`${meses.find(m => m.value === filtroMes)?.label} / ${filtroAno}`}
-          filtros={{ 
-            mes: filtroMes, 
-            ano: filtroAno, 
+          filtros={{
+            mes: filtroMes,
+            ano: filtroAno,
             status: filtroStatus,
             profissionalId: filtroProfissional,
-            profissionalNome: isAdmin && filtroProfissional !== 'todos' 
-              ? profissionais.find(p => p.id === filtroProfissional)?.nome 
+            profissionalNome: isAdmin && filtroProfissional !== 'todos'
+              ? profissionais.find(p => p.id === filtroProfissional)?.nome
               : null
           }}
           configuracoes={configuracoes}
@@ -2737,20 +2758,20 @@ function MinhasComissoes() {
             }}
           >
             <BottomNavigationAction label="Início" icon={<AttachMoneyIcon />} />
-            <BottomNavigationAction 
-              label="Filtros" 
+            <BottomNavigationAction
+              label="Filtros"
               icon={
-                <Badge 
-                  variant="dot" 
+                <Badge
+                  variant="dot"
                   color="primary"
-                  invisible={filtroMes === new Date().getMonth() + 1 && 
-                             filtroAno === new Date().getFullYear() && 
-                             filtroStatus === 'todos' && 
+                  invisible={filtroMes === new Date().getMonth() + 1 &&
+                             filtroAno === new Date().getFullYear() &&
+                             filtroStatus === 'todos' &&
                              (!isAdmin || filtroProfissional === 'todos')}
                 >
                   <FilterListIcon />
                 </Badge>
-              } 
+              }
             />
             <BottomNavigationAction label="Exportar" icon={<DownloadIcon />} />
           </BottomNavigation>
@@ -2762,9 +2783,9 @@ function MinhasComissoes() {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ 
-          vertical: isMobile ? 'top' : 'bottom', 
-          horizontal: 'center' 
+        anchorOrigin={{
+          vertical: isMobile ? 'top' : 'bottom',
+          horizontal: 'center'
         }}
       >
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>

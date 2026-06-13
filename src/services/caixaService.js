@@ -29,6 +29,11 @@ export const formatarMoedaCaixa = (valor) => Number(valor || 0).toLocaleString('
 
 const agoraIso = () => new Date().toISOString();
 
+const isSessaoCaixa = (item) => item?.tipoRegistro === 'sessao' || (!item?.tipoRegistro && (item?.dataAbertura || item?.abertoEm || item?.saldoInicial !== undefined));
+const isMovimentoCaixa = (item) => item?.tipoRegistro === 'movimentacao';
+const dataAberturaCaixa = (item) => item?.abertoEm || item?.dataAbertura || item?.createdAt;
+const valorAberturaCaixa = (item) => moedaParaNumero(item?.valorAbertura ?? item?.saldoInicial ?? 0);
+
 const criarTransacaoParaMovimento = async (movimento) => {
   if (movimento.transacaoId || movimento.criarTransacao === false) return null;
 
@@ -77,18 +82,23 @@ export const caixaService = {
   obterCaixaAberto: async () => {
     const registros = await caixaService.listarRegistros();
     return registros
-      .filter((item) => item.tipoRegistro === 'sessao' && item.status === 'aberto')
-      .sort((a, b) => new Date(b.abertoEm || b.createdAt) - new Date(a.abertoEm || a.createdAt))[0] || null;
+      .filter((item) => isSessaoCaixa(item) && item.status === 'aberto')
+      .sort((a, b) => new Date(dataAberturaCaixa(b) || 0) - new Date(dataAberturaCaixa(a) || 0))[0] || null;
   },
 
   listarMovimentos: async (caixaId) => {
     if (!caixaId) return [];
     const registros = await caixaService.listarRegistros();
-    return registros.filter((item) => item.tipoRegistro === 'movimentacao' && item.caixaId === caixaId);
+    const caixaSessao = registros.find((item) => item.id === caixaId);
+    const movimentosDiretos = registros.filter((item) => isMovimentoCaixa(item) && item.caixaId === caixaId);
+    const movimentosLegados = Array.isArray(caixaSessao?.movimentacoes)
+      ? caixaSessao.movimentacoes.map((movimento) => ({ ...movimento, tipoRegistro: 'movimentacao', caixaId }))
+      : [];
+    return [...movimentosDiretos, ...movimentosLegados];
   },
 
   calcularTotais: (caixaAberto, movimentos = []) => {
-    const valorAbertura = moedaParaNumero(caixaAberto?.valorAbertura);
+    const valorAbertura = valorAberturaCaixa(caixaAberto);
     const totais = movimentos.reduce((acc, movimento) => {
       const valor = moedaParaNumero(movimento.valor);
       if (TIPOS_SAIDA.has(movimento.tipo)) {
@@ -114,12 +124,10 @@ export const caixaService = {
   carregarResumoAtual: async () => {
     const registros = await caixaService.listarRegistros();
     const historico = registros
-      .filter((item) => item.tipoRegistro === 'sessao')
-      .sort((a, b) => new Date(b.abertoEm || b.createdAt) - new Date(a.abertoEm || a.createdAt));
+      .filter(isSessaoCaixa)
+      .sort((a, b) => new Date(dataAberturaCaixa(b) || 0) - new Date(dataAberturaCaixa(a) || 0));
     const caixaAberto = historico.find((item) => item.status === 'aberto') || null;
-    const movimentos = caixaAberto
-      ? registros.filter((item) => item.tipoRegistro === 'movimentacao' && item.caixaId === caixaAberto.id)
-      : [];
+    const movimentos = caixaAberto ? await caixaService.listarMovimentos(caixaAberto.id) : [];
     const totais = caixaService.calcularTotais(caixaAberto, movimentos);
     return { caixaAberto, movimentos, historico, totais };
   },
@@ -239,19 +247,22 @@ export const caixaService = {
 
   fecharCaixa: async (caixaId, { valorConferido, observacao = '' } = {}) => {
     const caixa = await firebaseService.getById('caixa', caixaId);
-    if (!caixa || caixa.tipoRegistro !== 'sessao' || caixa.status !== 'aberto') {
+    if (!caixa || !isSessaoCaixa(caixa) || caixa.status !== 'aberto') {
       throw new Error('Caixa aberto não encontrado.');
     }
 
     const movimentos = await caixaService.listarMovimentos(caixaId);
     const totais = caixaService.calcularTotais(caixa, movimentos);
-    const valorFinal = moedaParaNumero(valorConferido);
+    const valorFinal = moedaParaNumero(valorConferido ?? totais.saldoAtual);
+    const fechadoEm = agoraIso();
 
     return firebaseService.update('caixa', caixaId, {
       status: 'fechado',
-      fechadoEm: agoraIso(),
+      fechadoEm,
+      dataFechamento: fechadoEm,
       saldoEsperado: totais.saldoAtual,
       saldoFinal: valorFinal,
+      saldoAtual: valorFinal,
       diferenca: valorFinal - totais.saldoAtual,
       observacaoFechamento: observacao,
       totalEntradas: totais.entradas,
@@ -259,6 +270,27 @@ export const caixaService = {
       totalSangrias: totais.sangrias,
       totalReforcos: totais.reforcos,
       totalMovimentos: movimentos.length,
+    });
+  },
+
+  perguntarAberturaAoEntrar: async () => {
+    if (typeof window === 'undefined') return null;
+    const caixaAberto = await caixaService.obterCaixaAberto();
+    if (caixaAberto) return caixaAberto;
+    if (!window.confirm('Não há caixa aberto. Deseja abrir o caixa agora?')) return null;
+    return caixaService.abrirCaixa({ valorAbertura: 0, observacao: 'Abertura solicitada no login' });
+  },
+
+  perguntarFechamentoAoSair: async () => {
+    if (typeof window === 'undefined') return null;
+    const resumo = await caixaService.carregarResumoAtual();
+    if (!resumo.caixaAberto) return null;
+    if (!window.confirm(`Existe um caixa aberto com saldo esperado de ${formatarMoedaCaixa(resumo.totais.saldoAtual)}. Deseja fechar antes de sair?`)) {
+      return resumo.caixaAberto;
+    }
+    return caixaService.fecharCaixa(resumo.caixaAberto.id, {
+      valorConferido: resumo.totais.saldoAtual,
+      observacao: 'Fechamento solicitado no logout',
     });
   },
 };
