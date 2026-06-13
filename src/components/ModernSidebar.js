@@ -28,44 +28,44 @@ import {
   // Dashboard
   Dashboard as DashboardIcon,
   DashboardCustomize as DashboardCustomizeIcon,
-  
+
   // Notificações
   Notifications as NotificationsIcon,
   NotificationsActive as NotificationsActiveIcon,
-  
+
   // Agendamentos
   CalendarMonth as CalendarIcon,
   EventAvailable as EventAvailableIcon,
   EventBusy as EventBusyIcon,
   DateRange as DateRangeIcon,
   Schedule as ScheduleIcon,
-  
+
   // Atendimentos
   Receipt as ReceiptIcon,
   Assignment as AssignmentIcon,
   AssignmentTurnedIn as AssignmentTurnedInIcon,
-  
+
   // Clientes
   People as PeopleIcon,
   PersonAdd as PersonAddIcon,
   PersonSearch as PersonSearchIcon,
   Group as GroupIcon,
-  
+
   // Histórico
   History as HistoryIcon,
   Restore as RestoreIcon,
   Timeline as TimelineIcon,
-  
+
   // Profissionais
   Person as PersonIcon,
   Badge as BadgeIcon,
   Groups as GroupsIcon,
-  
+
   // Serviços
   ContentCut as CutIcon,
   Build as BuildIcon,
   Handyman as HandymanIcon,
-  
+
   // Financeiro
   AttachMoney as MoneyIcon,
   AccountBalance as AccountBalanceIcon,
@@ -75,40 +75,39 @@ import {
   Assessment as AssessmentIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
-  ReceiptLong as ReceiptLongIcon,
   ReceiptOutlined as ReceiptOutlinedIcon,
-  
+
   // Compras
   ShoppingCart as ShoppingCartIcon,
   AddShoppingCart as AddShoppingCartIcon,
   RemoveShoppingCart as RemoveShoppingCartIcon,
-  
+
   // Relatórios
   Summarize as SummarizeIcon,
   Description as DescriptionIcon,
   FilePresent as FilePresentIcon,
-  
+
   // Estoque
   Inventory as InventoryIcon,
   Inventory2 as Inventory2Icon,
   Warehouse as WarehouseIcon,
   Storage as StorageIcon,
-  
+
   // Entradas
   Input as InputIcon,
   MoveToInbox as MoveToInboxIcon,
   Unarchive as UnarchiveIcon,
-  
+
   // Fornecedores
   LocalShipping as LocalShippingIcon,
   DeliveryDining as DeliveryDiningIcon,
   Factory as FactoryIcon,
-  
+
   // Usuários
   AdminPanelSettings as AdminIcon,
   ManageAccounts as ManageAccountsIcon,
   Security as SecurityIcon,
-  
+
   // Configurações
   Settings as SettingsIcon,
   SettingsApplications as SettingsApplicationsIcon,
@@ -118,14 +117,14 @@ import {
   WorkspacePremium as WorkspacePremiumIcon,
   Payments as PaymentsIcon,
   Language as LanguageIcon,
-  
+
   // Ícones de navegação
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Menu as MenuIcon,
-  
+
   // Ícones adicionais
   Spa as SpaIcon,
   PriceCheck as PriceCheckIcon,
@@ -142,37 +141,42 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Info as InfoIcon,
+  HelpCenter as HelpCenterIcon,
   Close as CloseIcon,
   EmojiEvents as EmojiEventsIcon,
   CardGiftcard as CardGiftcardIcon,
   Loyalty as LoyaltyIcon,
   Stars as StarsIcon,
   Redeem as RedeemIcon,
-  
+
   // Ícones para cupons
   LocalOffer as TagIcon,
   Sell as SellIcon,
-  
+
   // Ícones para relatórios adicionais
   ShowChart as ShowChartIcon,
   Equalizer as EqualizerIcon,
   Analytics as AnalyticsIcon,
-  
+
   // Ícones para campanhas
   Campaign as CampaignIcon,
-  
+
   // Ícones para categorias
   Category as CategoryIcon,
-  
+
   // 🔥 NOVOS ÍCONES PARA ANAMNESE
   Quiz as QuizIcon,
   QuestionAnswer as QuestionAnswerIcon,
   Checklist as ChecklistIcon,
   FormatListBulleted as ListBulletedIcon,
   Ballot as BallotIcon,
+  SwapHoriz as SwapHorizIcon,
+  SupportAgent as SupportAgentIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { motion, AnimatePresence } from 'framer-motion';
-import { firebaseService } from '../services/firebase';
+import { firebaseService, getTenantContext } from '../services/firebase';
+import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
@@ -183,20 +187,20 @@ const menuGroups = [
     title: 'INÍCIO',
     icon: <DashboardCustomizeIcon />,
     items: [
-      { 
-        text: 'Dashboard', 
-        icon: <DashboardIcon />, 
-        path: '/dashboard', 
+      {
+        text: 'Dashboard',
+        icon: <DashboardIcon />,
+        path: '/dashboard',
         permission: 'visualizar_dashboard',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
-      { 
-        text: 'Notificações', 
-        icon: <NotificationsActiveIcon />, 
-        path: '/notificacoes', 
+      {
+        text: 'Notificações',
+        icon: <NotificationsActiveIcon />,
+        path: '/notificacoes',
         permission: 'visualizar_notificacoes',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente'],
-        badge: 'unread' 
+        badge: 'unread'
       },
     ],
   },
@@ -204,24 +208,24 @@ const menuGroups = [
     title: 'AGENDA E ATENDIMENTOS',
     icon: <EventAvailableIcon />,
     items: [
-      { 
-        text: 'Agenda', 
-        icon: <DateRangeIcon />, 
-        path: '/agendamentos', 
+      {
+        text: 'Agenda',
+        icon: <DateRangeIcon />,
+        path: '/agendamentos',
         permission: 'gerenciar_agendamentos',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
-      { 
-        text: 'Atendimentos', 
-        icon: <AssignmentTurnedInIcon />, 
-        path: '/atendimentos', 
+      {
+        text: 'Atendimentos',
+        icon: <AssignmentTurnedInIcon />,
+        path: '/atendimentos',
         permission: 'gerenciar_atendimentos',
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
-      { 
-        text: 'Histórico de Atendimentos', 
-        icon: <HistoryIcon />, 
-        path: '/historico', 
+      {
+        text: 'Histórico de Atendimentos',
+        icon: <HistoryIcon />,
+        path: '/historico',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
@@ -231,31 +235,31 @@ const menuGroups = [
     title: 'CLIENTES E FIDELIDADE',
     icon: <PersonSearchIcon />,
     items: [
-      { 
-        text: 'Clientes', 
-        icon: <GroupIcon />, 
-        path: '/clientes', 
+      {
+        text: 'Clientes',
+        icon: <GroupIcon />,
+        path: '/clientes',
         permission: 'gerenciar_clientes',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Fidelidade', 
-        icon: <EmojiEventsIcon />, 
-        path: '/fidelidade', 
+      {
+        text: 'Fidelidade',
+        icon: <EmojiEventsIcon />,
+        path: '/fidelidade',
         permission: 'visualizar_fidelidade',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
-      { 
-        text: 'Recompensas', 
-        icon: <CardGiftcardIcon />, 
-        path: '/fidelidade/recompensas', 
+      {
+        text: 'Recompensas',
+        icon: <CardGiftcardIcon />,
+        path: '/fidelidade/recompensas',
         permission: 'visualizar_fidelidade',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
-      { 
-        text: 'Indicações', 
-        icon: <RedeemIcon />, 
-        path: '/indicacoes', 
+      {
+        text: 'Indicações',
+        icon: <RedeemIcon />,
+        path: '/indicacoes',
         permission: 'gerenciar_indicacoes',
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
@@ -265,31 +269,31 @@ const menuGroups = [
     title: 'PROFISSIONAIS E SERVIÇOS',
     icon: <GroupsIcon />,
     items: [
-      { 
-        text: 'Profissionais', 
-        icon: <BadgeIcon />, 
-        path: '/profissionais', 
+      {
+        text: 'Profissionais',
+        icon: <BadgeIcon />,
+        path: '/profissionais',
         permission: 'gerenciar_profissionais',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Serviços', 
-        icon: <HandymanIcon />, 
-        path: '/servicos', 
+      {
+        text: 'Serviços',
+        icon: <HandymanIcon />,
+        path: '/servicos',
         permission: 'gerenciar_servicos',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Comissões', 
-        icon: <MoneyIcon />, 
-        path: '/minhas-comissoes', 
+      {
+        text: 'Comissões',
+        icon: <MoneyIcon />,
+        path: '/minhas-comissoes',
         permission: 'visualizar_comissoes',
         cargos: ['admin', 'gerente', 'profissional']
       },
-      { 
-        text: 'Disponibilidade', 
-        icon: <ScheduleIcon />, 
-        path: '/disponibilidade', 
+      {
+        text: 'Disponibilidade',
+        icon: <ScheduleIcon />,
+        path: '/disponibilidade',
         permission: 'gerenciar_disponibilidade',
         cargos: ['admin', 'gerente', 'profissional']
       },
@@ -299,31 +303,31 @@ const menuGroups = [
     title: 'ESTOQUE E PRODUTOS',
     icon: <Inventory2Icon />,
     items: [
-      { 
-        text: 'Produtos', 
-        icon: <StorageIcon />, 
-        path: '/estoque', 
+      {
+        text: 'Produtos',
+        icon: <StorageIcon />,
+        path: '/estoque',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente', 'atendente']
       },
-      { 
-        text: 'Categorias', 
-        icon: <CategoryIcon />, 
-        path: '/categorias-produtos', 
+      {
+        text: 'Categorias',
+        icon: <CategoryIcon />,
+        path: '/categorias-produtos',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Entradas', 
-        icon: <MoveToInboxIcon />, 
-        path: '/entradas', 
+      {
+        text: 'Entradas',
+        icon: <MoveToInboxIcon />,
+        path: '/entradas',
         permission: 'gerenciar_estoque',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Fornecedores', 
-        icon: <FactoryIcon />, 
-        path: '/fornecedores', 
+      {
+        text: 'Fornecedores',
+        icon: <FactoryIcon />,
+        path: '/fornecedores',
         permission: 'gerenciar_compras',
         cargos: ['admin', 'gerente']
       },
@@ -333,45 +337,45 @@ const menuGroups = [
     title: 'FINANCEIRO',
     icon: <AccountBalanceWalletIcon />,
     items: [
-      { 
-        text: 'Dashboard', 
-        icon: <BarChartIcon />, 
-        path: '/financeiro', 
+      {
+        text: 'Dashboard',
+        icon: <BarChartIcon />,
+        path: '/financeiro',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Contas a Receber', 
-        icon: <TrendingUpIcon />, 
-        path: '/financeiro/receber', 
+      {
+        text: 'Contas a Receber',
+        icon: <TrendingUpIcon />,
+        path: '/financeiro/receber',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Contas a Pagar', 
-        icon: <TrendingDownIcon />, 
-        path: '/financeiro/pagar', 
+      {
+        text: 'Contas a Pagar',
+        icon: <TrendingDownIcon />,
+        path: '/financeiro/pagar',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Fluxo de Caixa', 
-        icon: <TimelineIcon />, 
-        path: '/financeiro/fluxo', 
+      {
+        text: 'Fluxo de Caixa',
+        icon: <TimelineIcon />,
+        path: '/financeiro/fluxo',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Compras', 
-        icon: <AddShoppingCartIcon />, 
-        path: '/compras', 
+      {
+        text: 'Compras',
+        icon: <AddShoppingCartIcon />,
+        path: '/compras',
         permission: 'gerenciar_compras',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Relatórios', 
-        icon: <SummarizeIcon />, 
-        path: '/relatorios', 
+      {
+        text: 'Relatórios',
+        icon: <SummarizeIcon />,
+        path: '/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -381,24 +385,24 @@ const menuGroups = [
     title: 'MARKETING E PROMOÇÕES',
     icon: <SellIcon />,
     items: [
-      { 
-        text: 'Cupons de Desconto', 
-        icon: <TagIcon />, 
-        path: '/cupons', 
+      {
+        text: 'Cupons de Desconto',
+        icon: <TagIcon />,
+        path: '/cupons',
         permission: 'gerenciar_cupons',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Campanhas', 
-        icon: <CampaignIcon />, 
-        path: '/campanhas', 
+      {
+        text: 'Campanhas',
+        icon: <CampaignIcon />,
+        path: '/campanhas',
         permission: 'gerenciar_cupons',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Análise de Cupons', 
-        icon: <AnalyticsIcon />, 
-        path: '/analise-cupons', 
+      {
+        text: 'Análise de Cupons',
+        icon: <AnalyticsIcon />,
+        path: '/analise-cupons',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -411,31 +415,31 @@ const menuGroups = [
     title: 'ANAMNESE E FORMULÁRIOS',
     icon: <ChecklistIcon />,
     items: [
-      { 
-        text: 'Formulários', 
-        icon: <AssignmentIcon />, 
-        path: '/anamnese/formularios', 
+      {
+        text: 'Formulários',
+        icon: <AssignmentIcon />,
+        path: '/anamnese/formularios',
         permission: 'gerenciar_anamnese',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Respostas', 
-        icon: <QuestionAnswerIcon />, 
-        path: '/anamnese/respostas', 
+      {
+        text: 'Respostas',
+        icon: <QuestionAnswerIcon />,
+        path: '/anamnese/respostas',
         permission: 'visualizar_anamnese',
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
-      { 
-        text: 'Modelos', 
-        icon: <BallotIcon />, 
-        path: '/anamnese/modelos', 
+      {
+        text: 'Modelos',
+        icon: <BallotIcon />,
+        path: '/anamnese/modelos',
         permission: 'gerenciar_anamnese',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Relatórios', 
-        icon: <ListBulletedIcon />, 
-        path: '/anamnese/relatorios', 
+      {
+        text: 'Relatórios',
+        icon: <ListBulletedIcon />,
+        path: '/anamnese/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
@@ -445,31 +449,31 @@ const menuGroups = [
     title: 'RELATÓRIOS E ANÁLISES',
     icon: <AssessmentIcon />,
     items: [
-      { 
-        text: 'Relatórios Gerenciais', 
-        icon: <SummarizeIcon />, 
-        path: '/relatorios', 
+      {
+        text: 'Relatórios Gerenciais',
+        icon: <SummarizeIcon />,
+        path: '/relatorios',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Análise de Vendas', 
-        icon: <ShowChartIcon />, 
-        path: '/analise-vendas', 
+      {
+        text: 'Análise de Vendas',
+        icon: <ShowChartIcon />,
+        path: '/analise-vendas',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Performance', 
-        icon: <EqualizerIcon />, 
-        path: '/performance', 
+      {
+        text: 'Performance',
+        icon: <EqualizerIcon />,
+        path: '/performance',
         permission: 'visualizar_relatorios',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Auditoria', 
-        icon: <SecurityIcon />, 
-        path: '/auditoria', 
+      {
+        text: 'Auditoria',
+        icon: <SecurityIcon />,
+        path: '/auditoria',
         permission: 'visualizar_relatorios',
         cargos: ['admin']
       },
@@ -496,6 +500,14 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
+        text: 'Acessar empresa',
+        icon: <SwapHorizIcon />,
+        path: '/selecionar-empresa',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
         text: 'Planos e Assinaturas',
         icon: <WorkspacePremiumIcon />,
         path: '/saas-admin/assinaturas',
@@ -507,6 +519,14 @@ const menuGroups = [
         text: 'Cobranças SaaS',
         icon: <ReceiptLongIcon />,
         path: '/saas-admin/cobrancas',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Chamados das Empresas',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
@@ -536,35 +556,35 @@ const menuGroups = [
       {
         text: 'Empresa',
         icon: <BusinessIcon />,
-        path: '/empresa',
+        path: '/configuracoes?tab=empresa&empresaTab=dados',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Unidades',
         icon: <ApartmentIcon />,
-        path: '/empresa/unidades',
+        path: '/configuracoes?tab=empresa&empresaTab=unidades',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Assinatura',
         icon: <WorkspacePremiumIcon />,
-        path: '/empresa/assinatura',
+        path: '/configuracoes?tab=empresa&empresaTab=assinatura',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Cobrança SaaS',
         icon: <PaymentsIcon />,
-        path: '/empresa/cobranca',
+        path: '/configuracoes?tab=empresa&empresaTab=cobranca',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
       {
         text: 'Página inicial',
         icon: <LanguageIcon />,
-        path: '/empresa/site',
+        path: '/configuracoes?tab=empresa&empresaTab=site',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
@@ -574,31 +594,44 @@ const menuGroups = [
     title: 'ADMINISTRAÇÃO',
     icon: <ManageAccountsIcon />,
     items: [
-      { 
-        text: 'Usuários', 
-        icon: <AdminIcon />, 
-        path: '/usuarios', 
+      {
+        text: 'Usuários',
+        icon: <AdminIcon />,
+        path: '/usuarios',
         permission: 'gerenciar_usuarios',
         cargos: ['admin']
       },
-      { 
-        text: 'Configurações', 
-        icon: <TuneIcon />, 
-        path: '/configuracoes', 
+      {
+        text: 'Configurações',
+        icon: <TuneIcon />,
+        path: '/configuracoes',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
-      { 
-        text: 'Backup', 
-        icon: <BackupIcon />, 
-        path: '/backup', 
+      {
+        text: 'Manual do Sistema',
+        icon: <HelpCenterIcon />,
+        path: '/manual',
+        cargos: ['admin', 'gerente', 'atendente', 'profissional']
+      },
+      {
+        text: 'Suporte SaaS',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
+        permission: 'visualizar_chamados',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Backup',
+        icon: <BackupIcon />,
+        path: '/backup',
         permission: 'gerenciar_backup',
         cargos: ['admin']
       },
-      { 
-        text: 'Logs do Sistema', 
-        icon: <InfoIcon />, 
-        path: '/logs', 
+      {
+        text: 'Logs do Sistema',
+        icon: <InfoIcon />,
+        path: '/logs',
         permission: 'visualizar_logs',
         cargos: ['admin']
       },
@@ -642,6 +675,8 @@ export const extraIcons = {
   checklist: <ChecklistIcon />,
   listBulleted: <ListBulletedIcon />,
   ballot: <BallotIcon />,
+  swapHoriz: <SwapHorizIcon />,
+  supportAgent: <SupportAgentIcon />,
   business: <BusinessIcon />,
   apartment: <ApartmentIcon />,
   workspacePremium: <WorkspacePremiumIcon />,
@@ -652,7 +687,7 @@ export const extraIcons = {
 // Componente Mobile Sidebar (mantido igual)
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
-  
+
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -700,7 +735,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
           backgroundColor: 'rgba(255,255,255,0.05)',
         }}
       />
-      
+
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative', zIndex: 1 }}>
         <Avatar
           src={temFotoValida() ? fotoUrl : undefined}
@@ -710,7 +745,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             border: '3px solid white',
             boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
             bgcolor: '#ffffff',
-            color: '#9c27b0',
+            color: theme.palette.primary.main,
             fontWeight: 'bold',
           }}
         >
@@ -757,13 +792,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             mx: 1,
             backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
             '&:hover': {
-              backgroundColor: alpha('#9c27b0', 0.04),
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
             },
           }}
         >
-          <ListItemIcon sx={{ 
-            minWidth: 40, 
-            color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+          <ListItemIcon sx={{
+            minWidth: 40,
+            color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
           }}>
             {group.icon}
           </ListItemIcon>
@@ -781,8 +816,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         <Collapse in={isOpen} timeout="auto" unmountOnExit>
           <List component="div" disablePadding>
             {group.items.map((item) => {
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/' && location.pathname.startsWith(item.path));
+              const itemPath = item.path?.split('?')[0] || '';
+              const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+              const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
               return (
                 <motion.div
@@ -803,13 +840,13 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
                       ml: 2,
                       mr: 1,
                       borderRadius: 2,
-                      backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                      color: isActive ? '#9c27b0' : 'text.primary',
+                      backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                      color: isActive ? theme.palette.primary.main : 'text.primary',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                       '& .MuiListItemIcon-root': {
-                        color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                        color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         minWidth: 36,
                       },
                     }}
@@ -872,10 +909,10 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -908,6 +945,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
 
 // Componente Desktop Sidebar (mantido igual)
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
+  const theme = useTheme();
   const getInitials = (name) => {
     if (!name) return 'U';
     return name
@@ -935,9 +973,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         '& .MuiDrawer-paper': {
           width: collapsed ? 80 : 300,
           boxSizing: 'border-box',
-          backgroundColor: '#ffffff',
-          borderRight: 'none',
-          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
+          backgroundColor: theme.palette.background.paper,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          boxShadow: theme.palette.mode === 'dark' ? '4px 0 20px rgba(0,0,0,0.25)' : '4px 0 20px rgba(0,0,0,0.05)',
           overflowX: 'hidden',
           transition: theme => theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -960,9 +998,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         {!collapsed ? (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpaIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                Beauty<span style={{ color: '#ff4081' }}>Pro</span>
+              <SpaIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
+                Beauty<span style={{ color: theme.palette.secondary.main }}>Pro</span>
               </Typography>
             </Box>
             <Tooltip title="Recolher menu" placement="right">
@@ -996,7 +1034,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                 alignItems: 'center',
                 gap: 2,
                 p: collapsed ? 1 : 2,
-                backgroundColor: alpha('#9c27b0', 0.04),
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 borderRadius: 3,
                 justifyContent: collapsed ? 'center' : 'flex-start',
               }}
@@ -1042,10 +1080,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
             width: '4px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#9c27b0',
+            background: theme.palette.primary.main,
             borderRadius: '4px',
           },
         }}
@@ -1066,7 +1104,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       borderRadius: 2,
                       backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
                       '&:hover': {
-                        backgroundColor: alpha('#9c27b0', 0.04),
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
                       },
                     }}
                   >
@@ -1087,8 +1125,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                   <Collapse in={isOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
                       {group.items.map((item) => {
-                        const isActive = location.pathname === item.path ||
-                          (item.path !== '/' && location.pathname.startsWith(item.path));
+                        const itemPath = item.path?.split('?')[0] || '';
+                        const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                        const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                          (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
 
                         return (
                           <motion.div
@@ -1105,13 +1145,13 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                                 py: 0.8,
                                 borderRadius: '0 20px 20px 0',
                                 mr: 1,
-                                backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                                color: isActive ? '#9c27b0' : 'text.primary',
+                                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                                color: isActive ? theme.palette.primary.main : 'text.primary',
                                 '&:hover': {
-                                  backgroundColor: alpha('#9c27b0', 0.04),
+                                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
                                 },
                                 '& .MuiListItemIcon-root': {
-                                  color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                                  color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                                   minWidth: 36,
                                 },
                               }}
@@ -1147,10 +1187,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       sx={{
                         width: 48,
                         height: 48,
-                        backgroundColor: groupActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                        color: groupActive ? '#9c27b0' : alpha('#000', 0.54),
+                        backgroundColor: groupActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                        color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
                         '&:hover': {
-                          backgroundColor: alpha('#9c27b0', 0.04),
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
                         },
                       }}
                     >
@@ -1158,8 +1198,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                     </IconButton>
                   </Tooltip>
 
-                  {group.items.slice(0, 2).map((item) => {
-                    const isActive = location.pathname === item.path;
+                  {group.items.map((item) => {
+                    const itemPath = item.path?.split('?')[0] || '';
+                    const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+                    const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
                     return (
                       <Tooltip key={item.text} title={item.text} placement="right">
                         <IconButton
@@ -1169,10 +1211,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                           sx={{
                             width: 40,
                             height: 40,
-                            backgroundColor: isActive ? alpha('#9c27b0', 0.08) : 'transparent',
-                            color: isActive ? '#9c27b0' : alpha('#000', 0.54),
+                            backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                            color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                             '&:hover': {
-                              backgroundColor: alpha('#9c27b0', 0.04),
+                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
                             },
                           }}
                         >
@@ -1187,21 +1229,6 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       </Tooltip>
                     );
                   })}
-
-                  {group.items.length > 2 && (
-                    <Tooltip title={`+${group.items.length - 2} mais`} placement="right">
-                      <IconButton
-                        size="small"
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          color: alpha('#000', 0.38),
-                        }}
-                      >
-                        <ExpandMoreIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
               )}
             </Box>
@@ -1233,6 +1260,7 @@ function ModernSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState({});
   const [recursosPlano, setRecursosPlano] = useState([]);
+  const { fidelidadeAtiva } = useFidelidadeAtiva();
 
   // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
@@ -1331,8 +1359,8 @@ function ModernSidebar() {
     if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
     if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
     if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
-    if (path.includes('/empresa/unidades')) return 'multiunidades';
-    if (path.includes('/empresa/site')) return 'site_publico';
+    if (path.includes('/empresa/unidades') || path.includes('empresaTab=unidades')) return 'multiunidades';
+    if (path.includes('/empresa/site') || path.includes('empresaTab=site')) return 'site_publico';
     return null;
   };
 
@@ -1347,24 +1375,30 @@ function ModernSidebar() {
     if (!usuario) return false;
 
     if (!recursoLiberadoNoPlano(item)) return false;
+    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) {
+      const podeConfigurarFidelidade = item.path === '/fidelidade' && ['admin', 'gerente'].includes(usuario.cargo);
+      if (!podeConfigurarFidelidade) return false;
+    }
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);
     }
-    
+
+    if (isSaasPlatformAdmin(usuario) && getTenantContext().empresaId) return true;
+
     // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
-    
+
     // Verificar se o cargo do usuário está na lista de cargos permitidos para o item
     if (item.cargos && Array.isArray(item.cargos)) {
       return item.cargos.includes(usuario.cargo);
     }
-    
+
     // Fallback para o sistema antigo de permissões
     if (item.permission) {
       return usuario.permissoes?.includes(item.permission) || false;
     }
-    
+
     return true;
   };
 
@@ -1388,10 +1422,12 @@ function ModernSidebar() {
   };
 
   const isGroupActive = (group) => {
-    return group.items.some(item =>
-      location.pathname === item.path ||
-      (item.path !== '/' && location.pathname.startsWith(item.path))
-    );
+    return group.items.some(item => {
+      const itemPath = item.path?.split('?')[0] || '';
+      const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
+      return (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+        (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
+    });
   };
 
   // Abrir grupo automaticamente se um item estiver ativo
@@ -1410,7 +1446,7 @@ function ModernSidebar() {
     if (changed) {
       setOpenGroups(newOpenGroups);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups

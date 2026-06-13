@@ -29,9 +29,12 @@ const pageTitles = {
   '/perfil': 'Perfil',
   '/notificacoes': 'Notificações',
   '/configuracoes': 'Configurações',
+  '/manual': 'Manual do Sistema',
+  '/selecionar-empresa': 'Selecionar Empresa',
+  '/chamados': 'Chamados SaaS',
   '/minhas-comissoes': 'Minhas Comissões',
   '/importar-servicos': 'Importar Serviços',
-  
+
   // Rotas do cliente
   '/cliente/dashboard': 'Área do Cliente',
   '/cliente/agendamentos': 'Meus Agendamentos',
@@ -39,10 +42,11 @@ const pageTitles = {
   '/cliente/pontos': 'Meus Pontos',
   '/cliente/historico': 'Meu Histórico',
   '/cliente/perfil': 'Meu Perfil',
+  '/cliente/manual': 'Manual do Portal do Cliente',
   '/cliente/login': 'Login do Cliente',
   '/cliente/cadastro': 'Cadastro de Cliente',
   '/cliente/recuperar-senha': 'Recuperar Senha',
-  
+
   // Páginas públicas
   '/login': 'Login',
   '/teste': 'Página de Teste',
@@ -55,10 +59,10 @@ const pageTitles = {
 function PageTitle() {
   const location = useLocation();
   const path = location.pathname;
-  
+
   // Tentar匹配 exato primeiro
   let title = pageTitles[path];
-  
+
   // Se não encontrar, tentar匹配 rotas dinâmicas (como /atendimento/:id)
   if (!title) {
     if (path.startsWith('/atendimento/')) {
@@ -67,9 +71,9 @@ function PageTitle() {
       title = 'Histórico de Fidelidade';
     }
   }
-  
+
   const defaultTitle = 'BeautyPro - Sistema para Salão';
-  
+
   return (
     <Helmet>
       <title>{title ? `${title} | BeautyPro` : defaultTitle}</title>
