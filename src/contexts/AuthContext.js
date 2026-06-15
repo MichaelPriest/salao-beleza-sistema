@@ -8,12 +8,109 @@ import { caixaService } from '../services/caixaService';
 
 const AuthContext = createContext({});
 
+const ROTAS_SISTEMA_COM_CAIXA = [
+  '/dashboard',
+  '/clientes',
+  '/servicos',
+  '/profissionais',
+  '/agendamentos',
+  '/agenda',
+  '/atendimentos',
+  '/atendimento',
+  '/financeiro',
+  '/compras',
+  '/relatorios',
+  '/estoque',
+  '/fornecedores',
+  '/entradas',
+  '/empresa',
+  '/usuarios',
+  '/historico',
+  '/auditoria',
+  '/perfil',
+  '/notificacoes',
+  '/selecionar-empresa',
+  '/chamados',
+  '/manual',
+  '/configuracoes',
+  '/minhas-comissoes',
+  '/importar-servicos',
+  '/anamnese',
+  '/cupons',
+  '/campanhas',
+  '/analise-cupons',
+  '/disponibilidade',
+  '/categorias-produtos',
+  '/analise-vendas',
+  '/performance',
+  '/backup',
+  '/logs',
+  '/fidelidade',
+  '/meus-pontos',
+  '/indicacoes'
+];
+
+const ROTAS_PUBLICAS_SEM_CAIXA = [
+  '/',
+  '/login',
+  '/cliente',
+  '/cadastro',
+  '/promocoes',
+  '/e',
+  '/teste',
+  '/403',
+  '/500',
+  '/manutencao',
+  '/saas',
+  '/termos-uso',
+  '/politica-privacidade'
+];
+
+const rotaComecaCom = (pathname, rota) => pathname === rota || pathname.startsWith(`${rota}/`);
+
+const isRotaSistemaComCaixa = (pathname = '/') => {
+  const path = pathname || '/';
+
+  if (ROTAS_PUBLICAS_SEM_CAIXA.some((rota) => rota === '/' ? path === '/' : rotaComecaCom(path, rota))) {
+    return false;
+  }
+
+  return ROTAS_SISTEMA_COM_CAIXA.some((rota) => rotaComecaCom(path, rota));
+};
+
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [caixaPerguntadoNestaSessao, setCaixaPerguntadoNestaSessao] = useState(false);
+  const [pathnameAtual, setPathnameAtual] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const atualizarPathname = () => setPathnameAtual(window.location.pathname);
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function pushStateComAtualizacao(...args) {
+      const retorno = originalPushState.apply(this, args);
+      atualizarPathname();
+      return retorno;
+    };
+
+    window.history.replaceState = function replaceStateComAtualizacao(...args) {
+      const retorno = originalReplaceState.apply(this, args);
+      atualizarPathname();
+      return retorno;
+    };
+
+    window.addEventListener('popstate', atualizarPathname);
+
+    return () => {
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener('popstate', atualizarPathname);
+    };
+  }, []);
 
   useEffect(() => {
     // 🔥 CORREÇÃO CRÍTICA: Verificar se está na área do cliente
@@ -118,7 +215,9 @@ export const AuthProvider = ({ children }) => {
 
 
   useEffect(() => {
-    if (loading || !user || user.isCliente || caixaPerguntadoNestaSessao) return undefined;
+    if (loading || !user || user.isCliente || caixaPerguntadoNestaSessao || !isRotaSistemaComCaixa(pathnameAtual)) {
+      return undefined;
+    }
 
     const timer = setTimeout(() => {
       caixaService.perguntarAberturaAoEntrar().catch((error) => {
@@ -128,7 +227,7 @@ export const AuthProvider = ({ children }) => {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [loading, user, caixaPerguntadoNestaSessao]);
+  }, [loading, user, caixaPerguntadoNestaSessao, pathnameAtual]);
 
   // 🔥 FUNÇÃO PARA OBTER IP DO USUÁRIO
   const obterIp = async () => {
