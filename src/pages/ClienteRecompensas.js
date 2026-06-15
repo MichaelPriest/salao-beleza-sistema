@@ -33,6 +33,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
 
@@ -191,17 +192,11 @@ function ClienteRecompensas() {
         createdAt: new Date().toISOString()
       };
 
-      await firebaseService.add('resgates_fidelidade', resgateData);
-
-      // Registrar a movimentação de pontos
-      await firebaseService.add('pontuacao', {
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        quantidade: obterPontosRecompensaCliente(recompensaSelecionada),
-        tipo: 'debito',
-        motivo: `Resgate: ${recompensaSelecionada.nome}`,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+      await resgateFidelidadeService.criar({
+        ...resgateData,
+        origem: 'cliente',
+        usuarioId: firebaseUser?.uid || cliente.authUid || cliente.id,
+        usuarioNome: cliente.nome || 'Cliente',
       });
 
       // Atualizar quantidade disponível se necessário
