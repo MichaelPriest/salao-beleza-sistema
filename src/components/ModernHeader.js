@@ -1430,24 +1430,6 @@ function ModernHeader() {
             </TextField>
           )}
 
-          {unidades.length > 1 && (
-            <TextField
-              select
-              size="small"
-              value={unidadeAtualId}
-              onChange={handleTrocarUnidade}
-              disabled={loadingUnidades}
-              label="Unidade"
-              sx={{ minWidth: 190, display: { xs: 'none', lg: 'block' } }}
-              InputProps={{ startAdornment: <ApartmentIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> }}
-            >
-              <MenuItem value="">Todas as unidades</MenuItem>
-              {unidades.map((unidade) => (
-                <MenuItem key={unidade.id} value={unidade.id}>{unidade.nome}</MenuItem>
-              ))}
-            </TextField>
-          )}
-
           {/* Notificações */}
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
             <IconButton color="inherit" onClick={handleNotificationsOpen}>

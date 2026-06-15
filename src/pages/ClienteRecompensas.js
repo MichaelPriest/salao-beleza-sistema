@@ -64,6 +64,19 @@ const getQuantidadeDisponivel = (recompensa) => {
   return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
 };
 
+
+const getPontosRecompensa = (recompensa) => {
+  const dados = recompensa || {};
+  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
+};
+
+const getQuantidadeDisponivel = (recompensa) => {
+  const dados = recompensa || {};
+  if (dados.ilimitado === true) return Infinity;
+  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
+  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
+};
+
 function ClienteRecompensas() {
   const { cliente, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
