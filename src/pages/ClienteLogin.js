@@ -49,6 +49,14 @@ import { firebaseService } from '../services/firebase';
 import { saasService } from '../services/saasService';
 import { formatarCPF, removerMascaraCPF, validarCPF } from '../utils/cpfUtils';
 
+
+const getEmpresaLogo = (empresa = {}) => empresa?.sitePublico?.logo
+  || empresa?.logo
+  || empresa?.logoBase64
+  || empresa?.logoUrl
+  || empresa?.configuracoes?.salao?.logo
+  || '';
+
 function ClienteLogin() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -312,6 +320,7 @@ function ClienteLogin() {
 
   const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
   const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
+  const empresaLogo = getEmpresaLogo(empresaPublica);
 
   return (
     <>
@@ -353,9 +362,25 @@ function ClienteLogin() {
                 <ArrowBackIcon />
               </IconButton>
               
-              <SpaIcon sx={{ fontSize: 48, mb: 1 }} />
+              {empresaLogo ? (
+                <Avatar
+                  src={empresaLogo}
+                  alt={empresaPublica?.nome || 'Logo da empresa'}
+                  sx={{
+                    width: 76,
+                    height: 76,
+                    mx: 'auto',
+                    mb: 1.5,
+                    bgcolor: 'white',
+                    border: '3px solid rgba(255,255,255,0.75)',
+                    '& img': { objectFit: 'contain', p: 0.75 },
+                  }}
+                />
+              ) : (
+                <SpaIcon sx={{ fontSize: 48, mb: 1 }} />
+              )}
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                BeautyPro
+                {empresaPublica?.nome || 'BeautyPro'}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
                 Área do Cliente

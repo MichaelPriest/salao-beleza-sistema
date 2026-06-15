@@ -17,7 +17,8 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { Assessment as AssessmentIcon, Business as BusinessIcon, ReceiptLong as ReceiptLongIcon, WorkspacePremium as WorkspacePremiumIcon } from '@mui/icons-material';
+import { Assessment as AssessmentIcon, Business as BusinessIcon, WorkspacePremium as WorkspacePremiumIcon } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-hot-toast';
 import firebaseService from '../services/firebase';
 import { PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';

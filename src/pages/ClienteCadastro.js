@@ -42,6 +42,7 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { masks, MaskedInput } from '../utils/plugins';
 import { saasService } from '../services/saasService';
+import { firebaseService } from '../services/firebase';
 
 const steps = ['Dados Pessoais', 'Login', 'Preferências', 'Confirmação'];
 
@@ -55,6 +56,9 @@ function ClienteCadastro() {
   const [success, setSuccess] = useState(false);
 
   const [empresaPublica, setEmpresaPublica] = useState(null);
+  const [profissionaisDisponiveis, setProfissionaisDisponiveis] = useState([]);
+  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const [formData, setFormData] = useState({
     // Dados Pessoais
@@ -96,15 +100,62 @@ function ClienteCadastro() {
       window.sessionStorage.setItem('empresa_publica_slug', slug);
       window.sessionStorage.setItem('empresa_publica_id', empresa.id);
       window.sessionStorage.setItem('empresa_publica_nome', empresa.nome || '');
+      await carregarDadosCadastro(empresa.id);
     };
 
     carregarEmpresaPublica();
   }, []);
 
+  const carregarDadosCadastro = async (empresaId) => {
+    if (!empresaId) return;
+    try {
+      const [profissionaisData, servicosData] = await Promise.all([
+        firebaseService.query('profissionais', [{ field: 'empresaId', operator: '==', value: empresaId }]).catch(() => []),
+        firebaseService.query('servicos', [{ field: 'empresaId', operator: '==', value: empresaId }]).catch(() => []),
+      ]);
+      setProfissionaisDisponiveis((profissionaisData || []).filter((profissional) => profissional.status !== 'inativo' && profissional.ativo !== false));
+      setServicosDisponiveis((servicosData || []).filter((servico) => servico.status !== 'inativo' && servico.ativo !== false));
+    } catch (error) {
+      console.error('Erro ao carregar profissionais/serviços do cadastro:', error);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
+  };
+
+  const buscarEnderecoPorCep = async (cepValue) => {
+    const cep = String(cepValue || '').replace(/\D/g, '');
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
+      if (data?.erro) {
+        setError('CEP não encontrado. Confira o número informado.');
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        cep: data.cep || prev.cep,
+        logradouro: data.logradouro || prev.logradouro,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.localidade || prev.cidade,
+        estado: data.uf || prev.estado,
+      }));
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      setError('Não foi possível buscar o endereço pelo CEP. Preencha manualmente.');
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
+  const handleCepChange = (event) => {
+    handleChange(event);
+    buscarEnderecoPorCep(event.target.value);
   };
 
   const handleNext = () => {
@@ -172,17 +223,6 @@ function ClienteCadastro() {
 
   const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
   const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
-
-  const servicosDisponiveis = [
-    'Corte de Cabelo',
-    'Manicure',
-    'Pedicure',
-    'Coloração',
-    'Hidratação',
-    'Maquiagem',
-    'Design de Sobrancelhas',
-    'Depilação',
-  ];
 
   const getStepContent = (step) => {
     switch (step) {
@@ -381,10 +421,11 @@ function ClienteCadastro() {
                   onChange={handleChange}
                 >
                   <MenuItem value="">Nenhum em específico</MenuItem>
-                  <MenuItem value="joana">Joana Silva</MenuItem>
-                  <MenuItem value="carlos">Carlos Santos</MenuItem>
-                  <MenuItem value="ana">Ana Oliveira</MenuItem>
-                  <MenuItem value="marcos">Marcos Souza</MenuItem>
+                  {profissionaisDisponiveis.map((profissional) => (
+                    <MenuItem key={profissional.id} value={profissional.id}>
+                      {profissional.nome}{profissional.especialidade ? ` - ${profissional.especialidade}` : ''}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -400,15 +441,16 @@ function ClienteCadastro() {
                   label="Serviços de Interesse"
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
+                      {selected.map((value) => {
+                        const servico = servicosDisponiveis.find((item) => item.id === value);
+                        return <Chip key={value} label={servico?.nome || value} size="small" />;
+                      })}
                     </Box>
                   )}
                 >
                   {servicosDisponiveis.map((servico) => (
-                    <MenuItem key={servico} value={servico}>
-                      {servico}
+                    <MenuItem key={servico.id} value={servico.id}>
+                      {servico.nome}
                     </MenuItem>
                   ))}
                 </Select>
@@ -427,7 +469,10 @@ function ClienteCadastro() {
                 label="CEP"
                 name="cep"
                 value={formData.cep}
-                onChange={handleChange}
+                onChange={handleCepChange}
+                InputProps={{
+                  endAdornment: buscandoCep ? <InputAdornment position="end"><CircularProgress size={18} /></InputAdornment> : null,
+                }}
               />
             </Grid>
 

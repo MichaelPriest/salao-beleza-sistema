@@ -126,20 +126,22 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
 import { auditoriaService } from '../services/auditoriaService';
+import { caixaService } from '../services/caixaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  format, 
-  subDays, 
-  subMonths, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfYear, 
-  endOfYear, 
-  addDays, 
+import {
+  format,
+  subDays,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+  addDays,
   differenceInDays,
   addMonths,
   isSameDay,
@@ -184,7 +186,7 @@ import 'jspdf-autotable';
  */
 const toISOString = (value) => {
   if (!value) return null;
-  
+
   try {
     // Se já é string
     if (typeof value === 'string') {
@@ -193,22 +195,22 @@ const toISOString = (value) => {
       if (!isNaN(date.getTime())) return date.toISOString();
       return value;
     }
-    
+
     // Se é timestamp do Firebase
     if (value.seconds !== undefined) {
       return new Date(value.seconds * 1000).toISOString();
     }
-    
+
     // Se tem método toDate (Firestore Timestamp)
     if (typeof value.toDate === 'function') {
       return value.toDate().toISOString();
     }
-    
+
     // Se é Date
     if (value instanceof Date) {
       if (!isNaN(value.getTime())) return value.toISOString();
     }
-    
+
     return null;
   } catch (e) {
     return null;
@@ -290,6 +292,25 @@ const formasPagamento = [
   { value: 'credito_loja', label: 'Crédito na Loja', icon: '🏪' },
 ];
 
+
+const MOTIVOS_TRANSACAO = [
+  { value: 'venda_servico', label: 'Venda de serviço', tipo: 'receita', categoria: 'Serviços', descricao: 'Recebimento de serviço' },
+  { value: 'venda_produto', label: 'Venda de produto', tipo: 'receita', categoria: 'Produtos', descricao: 'Recebimento de produto' },
+  { value: 'recebimento_cliente', label: 'Recebimento de cliente', tipo: 'receita', categoria: 'Clientes', descricao: 'Recebimento de cliente' },
+  { value: 'reforco_caixa', label: 'Reforço de caixa', tipo: 'receita', categoria: 'Reforço de Caixa', descricao: 'Reforço de caixa', caixaTipo: 'reforco' },
+  { value: 'outra_receita', label: 'Outra receita', tipo: 'receita', categoria: 'Outras receitas', descricao: 'Receita manual' },
+  { value: 'sangria_caixa', label: 'Sangria de caixa', tipo: 'despesa', categoria: 'Sangria de Caixa', descricao: 'Sangria de caixa', caixaTipo: 'sangria' },
+  { value: 'retirada_caixa', label: 'Retirada do caixa', tipo: 'despesa', categoria: 'Retirada de Caixa', descricao: 'Retirada do caixa', caixaTipo: 'retirada' },
+  { value: 'despesa_operacional', label: 'Despesa operacional', tipo: 'despesa', categoria: 'Despesas operacionais', descricao: 'Despesa operacional', caixaTipo: 'despesa' },
+  { value: 'compra_estoque', label: 'Compra de estoque', tipo: 'despesa', categoria: 'Compras de estoque', descricao: 'Compra de estoque' },
+  { value: 'pagamento_fornecedor', label: 'Pagamento a fornecedor', tipo: 'despesa', categoria: 'Fornecedores', descricao: 'Pagamento a fornecedor' },
+  { value: 'pagamento_comissao', label: 'Pagamento de comissão', tipo: 'despesa', categoria: 'Comissões', descricao: 'Pagamento de comissão' },
+  { value: 'transferencia_contas', label: 'Transferência entre contas', tipo: 'transferencia', categoria: 'Transferências', descricao: 'Transferência entre contas' },
+  { value: 'aplicacao_investimento', label: 'Aplicação / investimento', tipo: 'investimento', categoria: 'Investimentos', descricao: 'Aplicação financeira' },
+];
+
+const getMotivoTransacao = (value) => MOTIVOS_TRANSACAO.find((motivo) => motivo.value === value) || null;
+
 const periodosRepeticao = [
   { value: 'nao', label: 'Não repetir' },
   { value: 'diario', label: 'Diariamente' },
@@ -341,7 +362,7 @@ function ModernFinanceiro() {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [periodoSelecionado, setPeriodoSelecionado] = useState('mes');
-  
+
   // Dados
   const [transacoesManuais, setTransacoesManuais] = useState([]);
   const [comissoes, setComissoes] = useState([]);
@@ -354,7 +375,7 @@ function ModernFinanceiro() {
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [anexos, setAnexos] = useState([]);
-  
+
   // Filtros
   const [filtro, setFiltro] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
@@ -363,11 +384,11 @@ function ModernFinanceiro() {
   const [filtroFormaPagamento, setFiltroFormaPagamento] = useState('todas');
   const [dataInicio, setDataInicio] = useState(formatarDataBrasilia(startOfMonth(new Date())));
   const [dataFim, setDataFim] = useState(formatarDataBrasilia(new Date()));
-  
+
   // Paginação
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  
+
   // Diálogos
   const [openDialog, setOpenDialog] = useState(false);
   const [openCaixaDialog, setOpenCaixaDialog] = useState(false);
@@ -382,26 +403,26 @@ function ModernFinanceiro() {
   const [transacaoEditando, setTransacaoEditando] = useState(null);
   const [transacaoSelecionada, setTransacaoSelecionada] = useState(null);
   const [openSpeedDial, setOpenSpeedDial] = useState(false);
-  
+
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  
+
   // Alertas
   const [alertasVencimento, setAlertasVencimento] = useState([]);
   const [openAlertasDialog, setOpenAlertasDialog] = useState(false);
-  
+
   // Usuário e permissões
   const [usuario, setUsuario] = useState(null);
   const [perfilAtual, setPerfilAtual] = useState('operador');
-  
+
   // Orçamentos
   const [orcamentos, setOrcamentos] = useState([]);
   const [orcamentoSelecionado, setOrcamentoSelecionado] = useState(null);
-  
+
   // Conciliação
   const [extratoBancario, setExtratoBancario] = useState([]);
   const [conciliacoes, setConciliacoes] = useState([]);
-  
+
   // Estado do formulário
   const [formData, setFormData] = useState({
     tipo: 'receita',
@@ -410,6 +431,7 @@ function ModernFinanceiro() {
     data: formatarDataBrasilia(new Date()),
     dataVencimento: formatarDataBrasilia(new Date()),
     categoria: '',
+    motivoTransacao: '',
     formaPagamento: 'dinheiro',
     status: 'pendente',
     clienteId: '',
@@ -518,11 +540,13 @@ function ModernFinanceiro() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      
+
       const [
         transacoesManuaisData,
         comissoesData,
         comprasData,
+        contasReceberData,
+        contasPagarData,
         caixaData,
         clientesData,
         fornecedoresData,
@@ -534,6 +558,8 @@ function ModernFinanceiro() {
         firebaseService.getAll('transacoes').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
         firebaseService.getAll('compras').catch(() => []),
+        firebaseService.getAll('contas_receber').catch(() => []),
+        firebaseService.getAll('contas_pagar').catch(() => []),
         firebaseService.getAll('caixa').catch(() => []),
         firebaseService.getAll('clientes').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
@@ -542,7 +568,7 @@ function ModernFinanceiro() {
         firebaseService.getAll('orcamentos').catch(() => []),
         firebaseService.getAll('conciliacoes').catch(() => []),
       ]);
-      
+
       // Processar transações manuais
       const transacoesProcessadas = (transacoesManuaisData || []).map(t => ({
         ...t,
@@ -576,9 +602,9 @@ function ModernFinanceiro() {
         createdAt: toISOString(t.createdAt),
         updatedAt: toISOString(t.updatedAt),
       }));
-      
+
       setTransacoesManuais(transacoesProcessadas);
-      
+
       // Processar comissões
       const comissoesProcessadas = (comissoesData || []).map(c => ({
         ...c,
@@ -598,9 +624,9 @@ function ModernFinanceiro() {
         createdAt: toISOString(c.createdAt),
         updatedAt: toISOString(c.updatedAt),
       }));
-      
+
       setComissoes(comissoesProcessadas);
-      
+
       // Processar compras
       const comprasProcessadas = (comprasData || []).map(c => ({
         ...c,
@@ -610,6 +636,7 @@ function ModernFinanceiro() {
         valorTotal: toNumber(c.valorTotal),
         status: toString(c.status, 'pendente'),
         dataCompra: safeToDateString(c.dataCompra) || safeToDateString(c.createdAt),
+        dataVencimento: safeToDateString(c.dataVencimento) || safeToDateString(c.prazoEntrega) || safeToDateString(c.dataCompra) || safeToDateString(c.createdAt),
         dataPagamento: toISOString(c.dataPagamento),
         formaPagamento: toString(c.formaPagamento, 'pix'),
         prazoEntrega: toString(c.prazoEntrega),
@@ -619,9 +646,11 @@ function ModernFinanceiro() {
         createdAt: toISOString(c.createdAt),
         updatedAt: toISOString(c.updatedAt),
       }));
-      
+
       setCompras(comprasProcessadas);
-      
+      const contasReceberProcessadas = contasReceberParaTransacoes(contasReceberData || []);
+      const contasPagarProcessadas = contasPagarParaTransacoes(contasPagarData || []);
+
       // Processar outros dados
       setClientes(clientesData || []);
       setFornecedores(fornecedoresData || []);
@@ -629,33 +658,41 @@ function ModernFinanceiro() {
       setServicos(servicosData || []);
       setOrcamentos(orcamentosData || []);
       setConciliacoes(conciliacoesData || []);
-      
-      // Processar caixa
-      if (caixaData && caixaData.length > 0) {
-        const caixaAtual = [...caixaData].sort((a, b) => {
-          const dateA = safeToDate(a.dataAbertura) || new Date(0);
-          const dateB = safeToDate(b.dataAbertura) || new Date(0);
+
+      // Processar caixa automatizado no próprio dashboard financeiro
+      const resumoCaixa = await caixaService.carregarResumoAtual();
+      const caixaAtual = resumoCaixa.caixaAberto || (caixaData || [])
+        .filter((item) => item?.status)
+        .sort((a, b) => {
+          const dateA = safeToDate(a.abertoEm || a.dataAbertura || a.createdAt) || new Date(0);
+          const dateB = safeToDate(b.abertoEm || b.dataAbertura || b.createdAt) || new Date(0);
           return dateB - dateA;
         })[0];
-        
+
+      if (caixaAtual) {
+        const totaisCaixa = resumoCaixa.caixaAberto?.id === caixaAtual.id
+          ? resumoCaixa.totais
+          : caixaService.calcularTotais(caixaAtual, caixaAtual.movimentacoes || []);
+
         setCaixa({
           ...caixaAtual,
           id: toString(caixaAtual.id),
-          saldoAtual: toNumber(caixaAtual.saldoAtual),
-          saldoInicial: toNumber(caixaAtual.saldoInicial),
+          saldoAtual: toNumber(totaisCaixa?.saldoAtual ?? caixaAtual.saldoAtual ?? caixaAtual.saldoFinal),
+          saldoInicial: toNumber(caixaAtual.saldoInicial ?? caixaAtual.valorAbertura),
           status: toString(caixaAtual.status, 'fechado'),
-          dataAbertura: toISOString(caixaAtual.dataAbertura),
-          dataFechamento: toISOString(caixaAtual.dataFechamento),
-          movimentacoes: (caixaAtual.movimentacoes || []).map(m => ({
+          dataAbertura: toISOString(caixaAtual.abertoEm || caixaAtual.dataAbertura || caixaAtual.createdAt),
+          dataFechamento: toISOString(caixaAtual.fechadoEm || caixaAtual.dataFechamento),
+          movimentacoes: (resumoCaixa.caixaAberto?.id === caixaAtual.id ? resumoCaixa.movimentos : (caixaAtual.movimentacoes || [])).map(m => ({
             ...m,
             valor: toNumber(m.valor),
-            data: toISOString(m.data),
+            data: toISOString(m.data || m.createdAt),
           })),
+          totais: totaisCaixa,
         });
       } else {
         setCaixa({ saldoAtual: 0, status: 'fechado', movimentacoes: [] });
       }
-      
+
       // Combinar transações
       const comissoesComoTransacoes = comissoesProcessadas.map(c => ({
         id: `comissao_${c.id}`,
@@ -691,8 +728,8 @@ function ModernFinanceiro() {
         descricao: `Compra - ${c.numeroPedido || 'Pedido'}`,
         valor: c.valorTotal,
         data: c.dataCompra,
-        dataVencimento: c.dataCompra,
-        categoria: 'Compras',
+        dataVencimento: c.dataVencimento || c.prazoEntrega || c.dataCompra,
+        categoria: c.categoriaFinanceira || 'Compras de estoque',
         formaPagamento: c.formaPagamento,
         status: c.status === 'pago' ? 'pago' : (c.status === 'cancelada' ? 'cancelado' : 'pendente'),
         fornecedorId: c.fornecedorId,
@@ -708,32 +745,34 @@ function ModernFinanceiro() {
 
       const todasTransacoes = [
         ...transacoesProcessadas,
+        ...contasReceberProcessadas,
+        ...contasPagarProcessadas,
         ...comissoesComoTransacoes,
         ...comprasComoTransacoes,
       ];
-      
+
       todasTransacoes.sort((a, b) => {
         const dateA = a.data ? new Date(a.data) : new Date(0);
         const dateB = b.data ? new Date(b.data) : new Date(0);
         return dateB - dateA;
       });
-      
+
       setTransacoesCombinadas(todasTransacoes);
-      
+
       // Extrair categorias
       const categoriasUnicas = [...new Set(todasTransacoes.map(t => t.categoria).filter(Boolean))];
       setCategorias(categoriasUnicas);
-      
+
       // Gerar alertas de vencimento
       gerarAlertasVencimento(todasTransacoes);
-      
+
       await registrarAuditoria(
         'carregar_financeiro',
         'listagem',
         'Página financeira carregada',
         { totalTransacoes: todasTransacoes.length }
       );
-      
+
       toast.success('Dados carregados com sucesso!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -758,7 +797,7 @@ function ModernFinanceiro() {
         const comissao = comissoes.find(c => c.id === comissaoId);
         if (comissao) {
           const novoSaldo = (caixa.saldoAtual || 0) - comissao.valor;
-          
+
           const novaMovimentacao = {
             id: Date.now().toString(),
             tipo: 'despesa',
@@ -767,16 +806,16 @@ function ModernFinanceiro() {
             data: new Date().toISOString(),
             comissaoId: comissaoId,
           };
-          
+
           const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
           const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-          
+
           await firebaseService.update('caixa', caixa.id, {
             saldoAtual: novoSaldo,
             movimentacoes: novasMovimentacoes,
             updatedAt: new Date().toISOString(),
           });
-          
+
           setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
         }
       }
@@ -803,7 +842,7 @@ function ModernFinanceiro() {
         const compra = compras.find(c => c.id === compraId);
         if (compra) {
           const novoSaldo = (caixa.saldoAtual || 0) - compra.valorTotal;
-          
+
           const novaMovimentacao = {
             id: Date.now().toString(),
             tipo: 'despesa',
@@ -812,16 +851,16 @@ function ModernFinanceiro() {
             data: new Date().toISOString(),
             compraId: compraId,
           };
-          
+
           const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
           const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-          
+
           await firebaseService.update('caixa', caixa.id, {
             saldoAtual: novoSaldo,
             movimentacoes: novasMovimentacoes,
             updatedAt: new Date().toISOString(),
           });
-          
+
           setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
         }
       }
@@ -850,7 +889,7 @@ function ModernFinanceiro() {
         dataPagamento: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      
+
       await firebaseService.update('transacoes', transacao.id, dadosTransacao);
 
       await registrarAuditoria('marcar_pago', transacao.id, 'Transação marcada como paga');
@@ -858,7 +897,7 @@ function ModernFinanceiro() {
       if (caixa && caixa.status === 'aberto' && caixa.id) {
         const valorOperacao = transacao.tipo === 'receita' ? transacao.valor : -transacao.valor;
         const novoSaldo = (caixa.saldoAtual || 0) + valorOperacao;
-        
+
         const novaMovimentacao = {
           id: Date.now().toString(),
           tipo: transacao.tipo,
@@ -867,16 +906,16 @@ function ModernFinanceiro() {
           data: new Date().toISOString(),
           transacaoId: String(transacao.id),
         };
-        
+
         const movimentacoesAtuais = Array.isArray(caixa.movimentacoes) ? caixa.movimentacoes : [];
         const novasMovimentacoes = [...movimentacoesAtuais, novaMovimentacao];
-        
+
         await firebaseService.update('caixa', caixa.id, {
           saldoAtual: Number(novoSaldo),
           movimentacoes: novasMovimentacoes,
           updatedAt: new Date().toISOString(),
         });
-        
+
         setCaixa({ ...caixa, saldoAtual: novoSaldo, movimentacoes: novasMovimentacoes });
       }
 
@@ -907,10 +946,10 @@ function ModernFinanceiro() {
       const ws = XLSX.utils.json_to_sheet(dadosExportacao);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
-      
+
       const nomeArquivo = `financeiro_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`;
       XLSX.writeFile(wb, nomeArquivo);
-      
+
       mostrarSnackbar('✅ Arquivo exportado com sucesso!');
     } catch (error) {
       console.error('Erro ao exportar:', error);
@@ -921,13 +960,13 @@ function ModernFinanceiro() {
   const exportarParaPDF = () => {
     try {
       const doc = new jsPDF();
-      
+
       doc.setFontSize(18);
       doc.text('Relatório Financeiro', 14, 15);
       doc.setFontSize(10);
       doc.text(`Período: ${formatarDataExibicao(dataInicio)} a ${formatarDataExibicao(dataFim)}`, 14, 25);
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 32);
-      
+
       const tableData = transacoesFiltradas.slice(0, 100).map(t => [
         formatarDataExibicao(t.data),
         t.descricao.substring(0, 40),
@@ -935,7 +974,7 @@ function ModernFinanceiro() {
         `R$ ${t.valor.toFixed(2)}`,
         statusColors[t.status]?.label || t.status,
       ]);
-      
+
       doc.autoTable({
         head: [['Data', 'Descrição', 'Tipo', 'Valor', 'Status']],
         body: tableData,
@@ -943,7 +982,7 @@ function ModernFinanceiro() {
         styles: { fontSize: 8 },
         headStyles: { fillColor: [156, 39, 176] },
       });
-      
+
       doc.save(`relatorio_financeiro_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
       mostrarSnackbar('✅ PDF gerado com sucesso!');
     } catch (error) {
@@ -956,16 +995,16 @@ function ModernFinanceiro() {
   const gerarAlertasVencimento = (transacoes) => {
     const hoje = new Date();
     const alertas = [];
-    
+
     transacoes.forEach(t => {
       if (t.status !== 'pendente') return;
-      
+
       const vencimento = t.dataVencimento ? new Date(t.dataVencimento) : new Date(t.data);
       if (isNaN(vencimento.getTime())) return;
-      
+
       const diasAtraso = differenceInDays(hoje, vencimento);
       const diasParaVencer = differenceInDays(vencimento, hoje);
-      
+
       if (diasAtraso > 0) {
         alertas.push({
           ...t,
@@ -982,14 +1021,14 @@ function ModernFinanceiro() {
         });
       }
     });
-    
+
     setAlertasVencimento(alertas);
   };
 
   // ==================== RELATÓRIOS ====================
   const gerarRelatorioComissoesProfissional = () => {
     const comissoesPorProfissional = {};
-    
+
     transacoesCombinadas
       .filter(t => t.origem === 'comissao')
       .forEach(t => {
@@ -1010,7 +1049,7 @@ function ModernFinanceiro() {
         }
         comissoesPorProfissional[profissional].transacoes.push(t);
       });
-    
+
     return comissoesPorProfissional;
   };
 
@@ -1066,21 +1105,21 @@ function ModernFinanceiro() {
     const hoje = new Date();
     const projecao = [];
     let saldoAtual = caixa?.saldoAtual || 0;
-    
+
     for (let i = 0; i <= dias; i++) {
       const data = addDays(hoje, i);
       const dataStr = formatarDataBrasilia(data);
-      
+
       const receber = transacoesCombinadas
         .filter(t => t.tipo === 'receita' && t.status === 'pendente' && t.dataVencimento === dataStr)
         .reduce((acc, t) => acc + t.valor, 0);
-      
+
       const pagar = transacoesCombinadas
         .filter(t => t.tipo === 'despesa' && t.status === 'pendente' && t.dataVencimento === dataStr)
         .reduce((acc, t) => acc + t.valor, 0);
-      
+
       saldoAtual += receber - pagar;
-      
+
       projecao.push({
         data: formatarDataExibicao(data),
         dataOriginal: data,
@@ -1089,7 +1128,7 @@ function ModernFinanceiro() {
         saldo: saldoAtual,
       });
     }
-    
+
     return projecao;
   };
 
@@ -1098,13 +1137,13 @@ function ModernFinanceiro() {
     try {
       const novasConciliacoes = [];
       let conciliadas = 0;
-      
+
       for (const item of extrato) {
-        const transacaoCorrespondente = transacoesCombinadas.find(t => 
-          Math.abs(t.valor - item.valor) < 0.01 && 
+        const transacaoCorrespondente = transacoesCombinadas.find(t =>
+          Math.abs(t.valor - item.valor) < 0.01 &&
           formatarDataBrasilia(new Date(t.data)) === formatarDataBrasilia(new Date(item.data))
         );
-        
+
         if (transacaoCorrespondente) {
           novasConciliacoes.push({
             extratoId: item.id,
@@ -1118,7 +1157,7 @@ function ModernFinanceiro() {
           conciliadas++;
         }
       }
-      
+
       await firebaseService.add('conciliacoes', novasConciliacoes);
       await carregarDados();
       mostrarSnackbar(`✅ Conciliação realizada! ${conciliadas} transações conciliadas.`);
@@ -1141,7 +1180,7 @@ function ModernFinanceiro() {
         criadoEm: new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
       };
-      
+
       await firebaseService.add('orcamentos', novoOrcamento);
       await carregarDados();
       mostrarSnackbar('✅ Orçamento criado com sucesso!');
@@ -1155,63 +1194,31 @@ function ModernFinanceiro() {
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
-        let usuarioId = 'sistema';
-        try {
-          const usuarioStr = localStorage.getItem('usuario');
-          if (usuarioStr) {
-            const usuario = JSON.parse(usuarioStr);
-            usuarioId = usuario?.id || 'sistema';
-          }
-        } catch (e) {}
-
-        const hoje = formatarDataBrasilia(new Date());
-        const transacoesHoje = transacoesCombinadas.filter(t => 
-          t.data === hoje && t.status === 'pago'
-        );
-        
-        const saldoInicial = transacoesHoje.reduce((acc, t) => {
-          if (t.tipo === 'receita') return acc + t.valor;
-          if (t.tipo === 'despesa') return acc - t.valor;
-          return acc;
-        }, 0);
-
-        const novoCaixa = {
-          dataAbertura: new Date().toISOString(),
-          saldoInicial: saldoInicial,
-          saldoAtual: saldoInicial,
-          movimentacoes: transacoesHoje.map(t => ({
-            id: Date.now() + Math.random(),
-            tipo: t.tipo,
-            valor: t.valor,
-            descricao: t.descricao,
-            data: t.data,
-            transacaoId: t.id,
-          })),
-          status: 'aberto',
-          responsavelId: String(usuarioId),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        
-        const novoId = await firebaseService.add('caixa', novoCaixa);
-        setCaixa({ ...novoCaixa, id: novoId });
+        const novoCaixa = await caixaService.abrirCaixa({
+          valorAbertura: 0,
+          observacao: 'Abertura pelo dashboard financeiro',
+        });
+        setCaixa({
+          ...novoCaixa,
+          saldoAtual: Number(novoCaixa.valorAbertura || 0),
+          saldoInicial: Number(novoCaixa.valorAbertura || 0),
+          dataAbertura: novoCaixa.abertoEm || novoCaixa.createdAt,
+          movimentacoes: [],
+        });
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
-        const dadosAtualizacao = {
-          status: 'fechado',
-          dataFechamento: new Date().toISOString(),
-          saldoFinal: caixa.saldoAtual || 0,
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await firebaseService.update('caixa', caixa.id, dadosAtualizacao);
-        setCaixa({ ...caixa, ...dadosAtualizacao });
+        const caixaFechado = await caixaService.fecharCaixa(caixa.id, {
+          valorConferido: caixa.saldoAtual || caixa.totais?.saldoAtual || 0,
+          observacao: 'Fechamento pelo dashboard financeiro',
+        });
+        setCaixa({ ...caixa, ...caixaFechado, status: 'fechado' });
         mostrarSnackbar('✅ Caixa fechado com sucesso!');
       }
       handleCloseCaixaDialog();
+      await carregarDados();
     } catch (error) {
       console.error('Erro ao abrir/fechar caixa:', error);
-      mostrarSnackbar('Erro ao operar caixa', 'error');
+      mostrarSnackbar(error.message || 'Erro ao operar caixa', 'error');
     }
   };
 
@@ -1236,6 +1243,8 @@ function ModernFinanceiro() {
         data: String(formData.data),
         dataVencimento: formData.dataVencimento ? String(formData.dataVencimento) : null,
         categoria: formData.categoria ? String(formData.categoria) : null,
+        motivoTransacao: formData.motivoTransacao ? String(formData.motivoTransacao) : null,
+        motivoTransacaoLabel: getMotivoTransacao(formData.motivoTransacao)?.label || null,
         formaPagamento: String(formData.formaPagamento),
         status: String(formData.status),
         clienteId: formData.clienteId ? String(formData.clienteId) : null,
@@ -1253,17 +1262,58 @@ function ModernFinanceiro() {
         updatedAt: new Date().toISOString(),
       };
 
+      const motivoSelecionado = getMotivoTransacao(formData.motivoTransacao);
+      let caixaAbertoParaMovimento = null;
+
       if (formData.status === 'pago') {
         dadosParaSalvar.dataPagamento = new Date().toISOString();
+        if (motivoSelecionado?.caixaTipo) {
+          caixaAbertoParaMovimento = await caixaService.obterCaixaAberto();
+          if (!caixaAbertoParaMovimento) {
+            mostrarSnackbar('Abra o caixa antes de salvar uma transação paga de sangria, reforço, retirada ou despesa do caixa.', 'error');
+            return;
+          }
+        }
       }
 
       if (transacaoEditando) {
         await firebaseService.update('transacoes', transacaoEditando.id, dadosParaSalvar);
+        if (motivoSelecionado?.caixaTipo && caixaAbertoParaMovimento) {
+          await caixaService.removerMovimentosPorReferencia({ referenciaId: transacaoEditando.id, referenciaTipo: 'transacao_manual' }).catch(() => 0);
+          await caixaService.registrarMovimento({
+            caixaId: caixaAbertoParaMovimento.id,
+            tipo: motivoSelecionado.caixaTipo,
+            valor: valorNumerico,
+            formaPagamento: formData.formaPagamento,
+            descricao: dadosParaSalvar.descricao,
+            observacao: dadosParaSalvar.observacoes || motivoSelecionado.label,
+            origem: 'financeiro',
+            referenciaId: transacaoEditando.id,
+            referenciaTipo: 'transacao_manual',
+            transacaoId: transacaoEditando.id,
+            criarTransacao: false,
+          });
+        }
         await registrarAuditoria('editar_transacao', transacaoEditando.id, 'Transação editada');
         mostrarSnackbar('Transação atualizada com sucesso!');
       } else {
         dadosParaSalvar.createdAt = new Date().toISOString();
         const novoId = await firebaseService.add('transacoes', dadosParaSalvar);
+        if (motivoSelecionado?.caixaTipo && caixaAbertoParaMovimento) {
+          await caixaService.registrarMovimento({
+            caixaId: caixaAbertoParaMovimento.id,
+            tipo: motivoSelecionado.caixaTipo,
+            valor: valorNumerico,
+            formaPagamento: formData.formaPagamento,
+            descricao: dadosParaSalvar.descricao,
+            observacao: dadosParaSalvar.observacoes || motivoSelecionado.label,
+            origem: 'financeiro',
+            referenciaId: novoId,
+            referenciaTipo: 'transacao_manual',
+            transacaoId: novoId,
+            criarTransacao: false,
+          });
+        }
         await registrarAuditoria('criar_transacao', novoId, 'Nova transação criada');
         mostrarSnackbar('Transação criada com sucesso!');
       }
@@ -1302,7 +1352,7 @@ function ModernFinanceiro() {
         arquivado: novoStatus,
         updatedAt: new Date().toISOString(),
       });
-      
+
       await carregarDados();
       mostrarSnackbar(novoStatus ? '📦 Transação arquivada' : '📂 Transação desarquivada');
     } catch (error) {
@@ -1335,6 +1385,7 @@ function ModernFinanceiro() {
         data: transacao.data || formatarDataBrasilia(new Date()),
         dataVencimento: transacao.dataVencimento || formatarDataBrasilia(new Date()),
         categoria: transacao.categoria || '',
+        motivoTransacao: transacao.motivoTransacao || '',
         formaPagamento: transacao.formaPagamento || 'dinheiro',
         status: transacao.status || 'pendente',
         clienteId: transacao.clienteId || '',
@@ -1363,6 +1414,7 @@ function ModernFinanceiro() {
         data: formatarDataBrasilia(new Date()),
         dataVencimento: formatarDataBrasilia(new Date()),
         categoria: '',
+        motivoTransacao: '',
         formaPagamento: 'dinheiro',
         status: 'pendente',
         clienteId: '',
@@ -1409,13 +1461,32 @@ function ModernFinanceiro() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'motivoTransacao') {
+      const motivo = getMotivoTransacao(value);
+      setFormData(prev => ({
+        ...prev,
+        motivoTransacao: value,
+        tipo: motivo?.tipo || prev.tipo,
+        categoria: motivo?.categoria || prev.categoria,
+        descricao: !prev.descricao?.trim() || MOTIVOS_TRANSACAO.some((item) => item.descricao === prev.descricao)
+          ? (motivo?.descricao || prev.descricao)
+          : prev.descricao,
+      }));
+      return;
+    }
+
+    if (name === 'tipo') {
+      setFormData(prev => ({ ...prev, tipo: value, motivoTransacao: '' }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handlePeriodoChange = (periodo) => {
     setPeriodoSelecionado(periodo);
     const hoje = new Date();
-    
+
     switch(periodo) {
       case 'hoje':
         setDataInicio(formatarDataBrasilia(hoje));
@@ -1498,8 +1569,8 @@ function ModernFinanceiro() {
       .filter(t => t.origem === 'compra' && t.status === 'pendente')
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
 
-    const ticketMedio = receitas > 0 
-      ? receitas / transacoesPeriodo.filter(t => t.tipo === 'receita' && t.status === 'pago').length 
+    const ticketMedio = receitas > 0
+      ? receitas / transacoesPeriodo.filter(t => t.tipo === 'receita' && t.status === 'pago').length
       : 0;
 
     return {
@@ -1522,12 +1593,12 @@ function ModernFinanceiro() {
     const dias = {};
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
-    
+
     for (let d = new Date(inicio); d <= fim; d.setDate(d.getDate() + 1)) {
       const dia = format(d, 'yyyy-MM-dd');
-      dias[dia] = { 
-        receitas: 0, 
-        despesas: 0, 
+      dias[dia] = {
+        receitas: 0,
+        despesas: 0,
         saldo: 0,
         comissoes: 0,
         compras: 0,
@@ -1566,7 +1637,7 @@ function ModernFinanceiro() {
         let cat = t.categoria || 'Outros';
         if (t.origem === 'comissao') cat = 'Comissões';
         if (t.origem === 'compra') cat = 'Compras';
-        
+
         if (!categorias[cat]) {
           categorias[cat] = 0;
         }
@@ -1585,13 +1656,13 @@ function ModernFinanceiro() {
   const gerarDadosGraficoMensal = () => {
     const meses = {};
     const hoje = new Date();
-    
+
     for (let i = 5; i >= 0; i--) {
       const data = subMonths(hoje, i);
       const mes = format(data, 'MMM/yyyy');
-      meses[mes] = { 
-        mes, 
-        receitas: 0, 
+      meses[mes] = {
+        mes,
+        receitas: 0,
         despesas: 0,
         comissoes: 0,
         compras: 0,
@@ -1635,7 +1706,7 @@ function ModernFinanceiro() {
   // Filtrar transações
   const getTransacoesFiltradas = () => {
     let lista = [];
-    
+
     if (tabValue === 0) lista = transacoesCombinadas.filter(t => !t.arquivado);
     else if (tabValue === 1) lista = transacoesCombinadas.filter(t => t.tipo === 'receita' && !t.arquivado);
     else if (tabValue === 2) lista = transacoesCombinadas.filter(t => t.tipo === 'despesa' && !t.arquivado);
@@ -1644,7 +1715,7 @@ function ModernFinanceiro() {
     else if (tabValue === 5) lista = transacoesCombinadas.filter(t => t.arquivado);
 
     return lista.filter(t => {
-      const matchesTexto = filtro === '' || 
+      const matchesTexto = filtro === '' ||
         t.descricao?.toLowerCase().includes(filtro.toLowerCase()) ||
         t.categoria?.toLowerCase().includes(filtro.toLowerCase()) ||
         (t.profissionalNome?.toLowerCase().includes(filtro.toLowerCase())) ||
@@ -1700,7 +1771,7 @@ function ModernFinanceiro() {
                 />
               )}
             </Box>
-            
+
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               {alertasVencimento.length > 0 && (
                 <Badge badgeContent={alertasVencimento.length} color="error">
@@ -1714,27 +1785,27 @@ function ModernFinanceiro() {
                   </Button>
                 </Badge>
               )}
-              
+
               <Button variant="outlined" startIcon={<RefreshIcon />} onClick={carregarDados}>
                 Atualizar
               </Button>
-              
+
               <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportarParaExcel}>
                 Excel
               </Button>
-              
+
               <Button variant="outlined" startIcon={<PrintIcon />} onClick={exportarParaPDF}>
                 PDF
               </Button>
-              
+
               <Button variant="outlined" startIcon={<BarChartIcon />} onClick={handleOpenRelatorioDialog}>
                 Relatórios
               </Button>
-              
+
               <Button variant="outlined" startIcon={<PercentIcon />} onClick={() => setOpenComissaoProfissionalDialog(true)}>
                 Comissões
               </Button>
-              
+
               <Button
                 variant="contained"
                 startIcon={<AccountBalanceIcon />}
@@ -1743,7 +1814,7 @@ function ModernFinanceiro() {
               >
                 {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
               </Button>
-              
+
               {verificarPermissao('criar') && (
                 <Button
                   variant="contained"
@@ -1759,10 +1830,10 @@ function ModernFinanceiro() {
         </motion.div>
 
         {/* Status do Caixa */}
-        {caixa?.status === 'aberto' && (
+        {caixa?.status === 'aberto' ? (
           <Zoom in={true}>
-            <Alert 
-              severity="success" 
+            <Alert
+              severity="success"
               sx={{ mb: 3 }}
               action={
                 <Button color="inherit" size="small" onClick={handleOpenCaixaDialog}>
@@ -1770,10 +1841,22 @@ function ModernFinanceiro() {
                 </Button>
               }
             >
-              <strong>Caixa Aberto</strong> - Saldo atual: {formatarMoeda(caixa.saldoAtual)} | 
+              <strong>Caixa Aberto</strong> - Saldo atual: {formatarMoeda(caixa.saldoAtual)} |
               Abertura: {safeToDisplayDate(caixa.dataAbertura)} {caixa.dataAbertura ? new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5) : ''}
             </Alert>
           </Zoom>
+        ) : (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={handleOpenCaixaDialog}>
+                Abrir Caixa
+              </Button>
+            }
+          >
+            <strong>Caixa fechado.</strong> Abra o caixa no Dashboard Financeiro antes de finalizar pagamentos de atendimentos.
+          </Alert>
         )}
 
         {/* Cards de Resumo */}
@@ -1913,7 +1996,7 @@ function ModernFinanceiro() {
                   </Select>
                 </FormControl>
               </Grid>
-              
+
               <Grid item xs={12} md={3}>
                 <DatePicker
                   label="Data Início"
@@ -1927,7 +2010,7 @@ function ModernFinanceiro() {
                   renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                 />
               </Grid>
-              
+
               <Grid item xs={12} md={3}>
                 <DatePicker
                   label="Data Fim"
@@ -1941,7 +2024,7 @@ function ModernFinanceiro() {
                   renderInput={(params) => <TextField {...params} fullWidth size="small" />}
                 />
               </Grid>
-              
+
               <Grid item xs={12} md={4}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button variant="outlined" startIcon={<TimelineIcon />} onClick={() => setOpenFluxoProjetadoDialog(true)}>
@@ -2175,11 +2258,11 @@ function ModernFinanceiro() {
                       const fornecedor = fornecedores.find(f => f.id === transacao.fornecedorId);
                       const profissional = profissionais.find(p => p.id === transacao.profissionalId);
                       const formaPagto = formasPagamento.find(fp => fp.value === transacao.formaPagamento);
-                      
+
                       let iconeTipo = <ReceiptIcon />;
                       let corTipo = '#757575';
                       let tipoLabel = '';
-                      
+
                       if (transacao.origem === 'comissao') {
                         iconeTipo = <PercentIcon />;
                         corTipo = '#9c27b0';
@@ -2197,7 +2280,7 @@ function ModernFinanceiro() {
                         corTipo = '#f44336';
                         tipoLabel = 'Despesa';
                       }
-                      
+
                       return (
                         <motion.tr
                           key={transacao.id}
@@ -2381,6 +2464,18 @@ function ModernFinanceiro() {
                   <MenuItem value="despesa">💸 Despesa</MenuItem>
                   <MenuItem value="transferencia">🔄 Transferência</MenuItem>
                   <MenuItem value="investimento">📈 Investimento</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Motivo</InputLabel>
+                <Select name="motivoTransacao" value={formData.motivoTransacao} label="Motivo" onChange={handleInputChange}>
+                  <MenuItem value="">Selecionar motivo</MenuItem>
+                  {MOTIVOS_TRANSACAO.filter((motivo) => motivo.tipo === formData.tipo).map((motivo) => (
+                    <MenuItem key={motivo.value} value={motivo.value}>{motivo.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>

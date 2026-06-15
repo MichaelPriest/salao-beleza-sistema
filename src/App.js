@@ -58,15 +58,15 @@ export const isSameDayBrasilia = (date1, date2) => {
 // Hook customizado para usar horário de Brasília
 export const useBrasiliaTime = () => {
   const [currentTime, setCurrentTime] = useState(dayjs().tz(BRASILIA_TIMEZONE));
-  
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(dayjs().tz(BRASILIA_TIMEZONE));
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, []);
-  
+
   return {
     currentTime,
     format: (date, formatStr = 'DD/MM/YYYY HH:mm:ss') => formatBrasiliaTime(date, formatStr),
@@ -95,6 +95,7 @@ import GlobalSnackbar from './components/GlobalSnackbar';
 import ClienteLayout from './components/ClienteLayout';
 import ClientePrivateRoute from './components/ClientePrivateRoute';
 import SaasAdminRoute from './components/SaasAdminRoute';
+import FidelidadeRoute from './components/FidelidadeRoute';
 import Footer from './components/Footer';
 
 // Pages Principais
@@ -198,7 +199,7 @@ import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
-import SaasGestao from './pages/SaasGestao';
+import ManualSistema from './pages/ManualSistema';
 import SaasAdmin from './pages/SaasAdmin';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasEmpresas from './pages/SaasEmpresas';
@@ -206,6 +207,8 @@ import SaasCobrancas from './pages/SaasCobrancas';
 import SaasPlanos from './pages/SaasPlanos';
 import SaasRelatorios from './pages/SaasRelatorios';
 import SaasLanding from './pages/SaasLanding';
+import SuperAdminSelecionarEmpresa from './pages/SuperAdminSelecionarEmpresa';
+import AdminChamados from './pages/AdminChamados';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -281,10 +284,10 @@ firebaseService.update = async function(collectionName, id, data) {
 
 // Componente de Loading
 const AppLoading = () => (
-  <Box sx={{ 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  <Box sx={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
     height: '100vh',
     bgcolor: '#faf5ff'
   }}>
@@ -297,15 +300,15 @@ const SistemaLayout = ({ children, theme }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
     <Box sx={{ display: 'flex', flex: 1 }}>
       <ModernSidebar />
-      <Box sx={{ 
-        flexGrow: 1, 
-        display: 'flex', 
+      <Box sx={{
+        flexGrow: 1,
+        display: 'flex',
         flexDirection: 'column',
         width: { xs: '100%', md: 'calc(100% - 300px)' },
       }}>
         <ModernHeader />
-        <Box component="main" sx={{ 
-          flexGrow: 1, 
+        <Box component="main" sx={{
+          flexGrow: 1,
           p: { xs: 2, md: 3 },
           backgroundColor: theme.palette.background.default,
           overflow: 'auto'
@@ -339,7 +342,7 @@ function App() {
       try {
         console.log('🔄 Carregando configurações do Firebase...');
         const configData = await firebaseService.getAll('configuracoes');
-        
+
         if (configData && configData.length > 0) {
           const config = configData[0];
           setConfiguracoes(config);
@@ -363,8 +366,19 @@ function App() {
       }
     };
 
+    const handleTemaAtualizado = (e) => {
+      const modoEscuroAtual = typeof e.detail?.modoEscuro === 'boolean'
+        ? e.detail.modoEscuro
+        : localStorage.getItem('modoEscuro') === 'true';
+      setModoEscuro(modoEscuroAtual);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('temaAtualizado', handleTemaAtualizado);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('temaAtualizado', handleTemaAtualizado);
+    };
   }, []);
 
   if (loading) {
@@ -378,7 +392,7 @@ function App() {
         <DadosProvider>
           <AuthProvider>
             <GlobalLoading />
-            <Toaster 
+            <Toaster
               position="top-right"
               toastOptions={{
                 style: {
@@ -390,7 +404,7 @@ function App() {
               }}
             />
             <GlobalSnackbar />
-            
+
             <Router>
               <Routes>
                 {/* Rotas Públicas com Footer */}
@@ -434,7 +448,7 @@ function App() {
                     <Manutencao />
                   </SimpleLayout>
                 } />
-                
+
                 {/* Rotas do Cliente */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
@@ -443,7 +457,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 {/* 🔥 ROTA DE CALLBACK DO GOOGLE - IMPORTANTE */}
                 <Route path="/cliente/auth/callback" element={
                   <AuthClienteProvider>
@@ -452,7 +466,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -460,13 +474,13 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 {/* Rota para cadastro via indicação */}
-                <Route 
-                  path="/cadastro" 
-                  element={<CadastroIndicacao />} 
+                <Route
+                  path="/cadastro"
+                  element={<CadastroIndicacao />}
                 />
-                
+
                 {/* Rota para cadastro complementar após login Google */}
                 <Route path="/cliente/cadastro-complementar" element={
                   <AuthClienteProvider>
@@ -475,7 +489,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -483,7 +497,7 @@ function App() {
                     </SimpleLayout>
                   </AuthClienteProvider>
                 } />
-                
+
                 <Route path="/cliente" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
@@ -493,17 +507,18 @@ function App() {
                 }>
                   <Route path="dashboard" element={<ClienteDashboard />} />
                   <Route path="agendamentos" element={<ClienteAgendamentos />} />
-                  <Route path="recompensas" element={<ClienteRecompensas />} />
-                  <Route path="pontos" element={<ClientePontos />} />
+                  <Route path="recompensas" element={<FidelidadeRoute cliente><ClienteRecompensas /></FidelidadeRoute>} />
+                  <Route path="pontos" element={<FidelidadeRoute cliente><ClientePontos /></FidelidadeRoute>} />
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                 </Route>
-                
+
                 {/* Rotas do Sistema com Sidebar e Footer */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
@@ -564,42 +579,42 @@ function App() {
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Fidelidade />
+                      <FidelidadeRoute allowInactive><Fidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/gerenciar" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <GerenciarFidelidade />
+                      <FidelidadeRoute allowInactive><GerenciarFidelidade /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/recompensas" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Recompensas />
+                      <FidelidadeRoute><Recompensas /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/meus-pontos" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <MeusPontos />
+                      <FidelidadeRoute><MeusPontos /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/indicacoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <Indicacoes />
+                      <FidelidadeRoute><Indicacoes /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fidelidade/historico/:id" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
-                      <FidelidadeHistorico />
+                      <FidelidadeRoute><FidelidadeHistorico /></FidelidadeRoute>
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
@@ -709,41 +724,11 @@ function App() {
                     </SistemaLayout>
                   </SaasAdminRoute>
                 } />
-                <Route path="/empresa" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/unidades" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={1} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/assinatura" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={3} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/cobranca" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={4} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/empresa/site" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={5} />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
+                <Route path="/empresa" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=dados" replace />} />
+                <Route path="/empresa/unidades" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=unidades" replace />} />
+                <Route path="/empresa/assinatura" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=assinatura" replace />} />
+                <Route path="/empresa/cobranca" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=cobranca" replace />} />
+                <Route path="/empresa/site" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=site" replace />} />
                 <Route path="/usuarios" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -776,6 +761,27 @@ function App() {
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
                       <ModernNotificacoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/selecionar-empresa" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SuperAdminSelecionarEmpresa />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/chamados" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <AdminChamados />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/manual" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ManualSistema audience="admin" />
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
@@ -901,7 +907,7 @@ function App() {
                   <SimpleLayout>
                     <PoliticaPrivacidade />
                   </SimpleLayout>
-                } />                
+                } />
                 {/* Rota 404 com Footer */}
                 <Route path="*" element={
                   <SimpleLayout>
