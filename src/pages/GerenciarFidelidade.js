@@ -1,4 +1,3 @@
-// src/pages/GerenciarFidelidade.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
@@ -170,6 +169,15 @@ const getInitials = (name) => {
 // Função para verificar se a foto é válida
 const temFotoValida = (foto) => {
   return foto && foto !== 'null' && foto !== 'undefined' && foto.trim() !== '';
+};
+
+// Função para obter usuário atual (UMA ÚNICA DECLARAÇÃO)
+const getUsuarioAtual = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || '{}');
+  } catch (error) {
+    return {};
+  }
 };
 
 // Componente de Card de Cliente Mobile
@@ -564,7 +572,6 @@ function GerenciarFidelidade() {
     else if (tabParam === 'resgates') setTabValue(2);
   }, [location.search]);
 
-
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
   };
@@ -573,15 +580,7 @@ function GerenciarFidelidade() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-
-  const getUsuarioAtual = () => {
-    try {
-      return JSON.parse(localStorage.getItem('usuario') || '{}');
-    } catch (error) {
-      return {};
-    }
-  };
-
+  // UMA ÚNICA DECLARAÇÃO de handleUtilizarResgate
   const handleUtilizarResgate = async (resgate) => {
     if (!resgate?.id) return;
     const codigoInformado = window.prompt(`Informe o código apresentado pelo cliente para utilizar o resgate de ${resgate.recompensaNome}:`);
@@ -607,6 +606,7 @@ function GerenciarFidelidade() {
     }
   };
 
+  // UMA ÚNICA DECLARAÇÃO de handleCancelarResgate
   const handleCancelarResgate = async (resgate) => {
     if (!resgate?.id) return;
     const confirmar = window.confirm('Cancelar este resgate e devolver os pontos ao cliente?');
@@ -658,7 +658,6 @@ function GerenciarFidelidade() {
       setResgates(resgatesData || []);
       setRecompensas(recompensasData || []);
 
-      // Auditoria não deve impedir o carregamento da página administrativa.
       auditoriaService.registrar('acesso_gerenciar_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Acesso à página de gerenciamento de fidelidade',
@@ -805,7 +804,6 @@ function GerenciarFidelidade() {
 
       await firebaseService.add('pontuacao', pontuacaoData);
 
-      // Registrar na auditoria
       await auditoriaService.registrar(
         pontosForm.tipo === 'credito' ? 'credito_pontos_manual' : 'debito_pontos_manual',
         {
@@ -822,7 +820,6 @@ function GerenciarFidelidade() {
         }
       );
 
-      // Atualizar lista local
       setPontuacoes(prev => [...prev, pontuacaoData]);
 
       mostrarSnackbar('Pontos adicionados com sucesso!');
@@ -835,40 +832,6 @@ function GerenciarFidelidade() {
         acao: 'salvar_pontos_fidelidade',
         dados: pontosForm
       });
-    }
-  };
-
-  const handleUtilizarResgate = async (resgate) => {
-    try {
-      const usuarioAtual = getUsuarioAtual();
-      await resgateFidelidadeService.utilizar(resgate.id, {
-        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
-        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
-      });
-      mostrarSnackbar('Recompensa marcada como utilizada!');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao utilizar resgate:', error);
-      mostrarSnackbar('Erro ao marcar recompensa como utilizada', 'error');
-    }
-  };
-
-  const handleCancelarResgate = async (resgate) => {
-    if (!window.confirm(`Cancelar o resgate ${resgate.codigo || ''} e estornar os pontos do cliente?`)) return;
-
-    try {
-      const usuarioAtual = getUsuarioAtual();
-      await resgateFidelidadeService.cancelar(resgate.id, {
-        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
-        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
-        motivo: 'Cancelado pelo gerenciamento de fidelidade',
-        estornarPontos: true,
-      });
-      mostrarSnackbar('Resgate cancelado e pontos estornados!');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao cancelar resgate:', error);
-      mostrarSnackbar('Erro ao cancelar resgate', 'error');
     }
   };
 
@@ -898,7 +861,6 @@ function GerenciarFidelidade() {
       };
 
       if (recompensaEditando) {
-        // Buscar dados antigos para auditoria
         const recompensaAntiga = { ...recompensaEditando };
         
         await firebaseService.update('recompensas', recompensaEditando.id, recompensaData);
@@ -907,7 +869,6 @@ function GerenciarFidelidade() {
           r.id === recompensaEditando.id ? { ...r, ...recompensaData, id: recompensaEditando.id } : r
         ));
 
-        // Registrar na auditoria
         await auditoriaService.registrarAtualizacao(
           'recompensas',
           recompensaEditando.id,
@@ -922,7 +883,6 @@ function GerenciarFidelidade() {
         const novoId = await firebaseService.add('recompensas', recompensaData);
         setRecompensas([...recompensas, { ...recompensaData, id: novoId }]);
 
-        // Registrar na auditoria
         await auditoriaService.registrarCriacao(
           'recompensas',
           novoId,
@@ -950,7 +910,6 @@ function GerenciarFidelidade() {
       await firebaseService.delete('recompensas', confirmDelete.id);
       setRecompensas(recompensas.filter(r => r.id !== confirmDelete.id));
 
-      // Registrar na auditoria
       await auditoriaService.registrar('excluir_recompensa', {
         entidade: 'recompensas',
         entidadeId: confirmDelete.id,
@@ -975,7 +934,6 @@ function GerenciarFidelidade() {
     try {
       const doc = new jsPDF();
       
-      // Cabeçalho
       doc.setFillColor(156, 39, 176);
       doc.rect(0, 0, 210, 40, 'F');
       
@@ -988,7 +946,6 @@ function GerenciarFidelidade() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
 
-      // Estatísticas
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(10);
       
@@ -1017,7 +974,6 @@ function GerenciarFidelidade() {
       doc.setFont('helvetica', 'normal');
       doc.text(String(stats.totalRecompensas), 145, yPos + 25);
       
-      // Distribuição por nível
       doc.setFont('helvetica', 'bold');
       doc.text('Distribuição por Nível:', 25, yPos + 40);
       
@@ -1032,7 +988,6 @@ function GerenciarFidelidade() {
       
       yPos += 70;
 
-      // Tabela de clientes
       const tableColumn = ['Cliente', 'Nível', 'Pontos', 'Resgates'];
       const tableRows = [];
       
@@ -1066,7 +1021,6 @@ function GerenciarFidelidade() {
         },
       });
       
-      // Registrar na auditoria
       await auditoriaService.registrar('exportar_relatorio_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Exportação de relatório de fidelidade',
@@ -1956,8 +1910,7 @@ function GerenciarFidelidade() {
             </Grid>
 
             <Grid item xs={12}>
-              <TextField
-                fullWidth
+              <TextField                fullWidth
                 label="URL da Imagem"
                 name="imagem"
                 value={recompensaForm.imagem}
