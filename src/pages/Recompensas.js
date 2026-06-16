@@ -1,4 +1,3 @@
-// src/pages/Recompensas.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -492,72 +491,7 @@ function Recompensas() {
     }
   };
 
-  const handleImagemRecompensaChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type?.startsWith('image/')) {
-      toast.error('Selecione um arquivo de imagem válido.');
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 1MB.');
-      return;
-    }
-    try {
-      const base64 = await fileToBase64(file);
-      setFormData((current) => ({ ...current, imagem: base64 }));
-    } catch (error) {
-      console.error('Erro ao converter imagem da recompensa:', error);
-      toast.error('Erro ao carregar imagem da recompensa.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const handleImagemRecompensaChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type?.startsWith('image/')) {
-      toast.error('Selecione um arquivo de imagem válido.');
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 1MB.');
-      return;
-    }
-    try {
-      const base64 = await fileToBase64(file);
-      setFormData((current) => ({ ...current, imagem: base64 }));
-    } catch (error) {
-      console.error('Erro ao converter imagem da recompensa:', error);
-      toast.error('Erro ao carregar imagem da recompensa.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const handleImagemRecompensaChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type?.startsWith('image/')) {
-      toast.error('Selecione um arquivo de imagem válido.');
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 1MB.');
-      return;
-    }
-    try {
-      const base64 = await fileToBase64(file);
-      setFormData((current) => ({ ...current, imagem: base64 }));
-    } catch (error) {
-      console.error('Erro ao converter imagem da recompensa:', error);
-      toast.error('Erro ao carregar imagem da recompensa.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
+  // APENAS UMA DECLARAÇÃO da função handleImagemRecompensaChange
   const handleImagemRecompensaChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
