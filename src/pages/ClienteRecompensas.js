@@ -33,6 +33,11 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import {
+  getPontosRecompensa as obterPontosRecompensaCliente,
+  getQuantidadeDisponivel as obterQuantidadeDisponivelCliente,
+  resgateFidelidadeService as clienteResgateFidelidadeService,
+} from '../services/resgateFidelidadeService';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import {
   getPontosRecompensa,
@@ -76,6 +81,7 @@ const getQuantidadeDisponivel = (recompensa) => {
   const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
   return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
 };
+
 
 function ClienteRecompensas() {
   const { cliente, firebaseUser } = useAuthCliente();
@@ -188,7 +194,7 @@ function ClienteRecompensas() {
   };
 
   const handleResgatar = (recompensa) => {
-    if (saldo < getPontosRecompensa(recompensa)) {
+    if (saldo < obterPontosRecompensaCliente(recompensa)) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -207,8 +213,8 @@ function ClienteRecompensas() {
       setResgatando(true);
 
       // Verificar disponibilidade
-      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity &&
-          getQuantidadeDisponivel(recompensaSelecionada) <= 0) {
+      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity &&
+          obterQuantidadeDisponivelCliente(recompensaSelecionada) <= 0) {
         toast.error('Recompensa esgotada');
         return;
       }
@@ -223,7 +229,7 @@ function ClienteRecompensas() {
         recompensaId: recompensaSelecionada.id,
         recompensaNome: recompensaSelecionada.nome,
         recompensaImagem: recompensaSelecionada.imagem || '',
-        pontosGastos: getPontosRecompensa(recompensaSelecionada),
+        pontosGastos: obterPontosRecompensaCliente(recompensaSelecionada),
         data: new Date().toISOString(),
         status: 'disponivel',
         codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
@@ -232,22 +238,16 @@ function ClienteRecompensas() {
         createdAt: new Date().toISOString()
       };
 
-      await firebaseService.add('resgates_fidelidade', resgateData);
-
-      // Registrar a movimentação de pontos
-      await firebaseService.add('pontuacao', {
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        quantidade: getPontosRecompensa(recompensaSelecionada),
-        tipo: 'debito',
-        motivo: `Resgate: ${recompensaSelecionada.nome}`,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+      await clienteResgateFidelidadeService.criar({
+        ...resgateData,
+        origem: 'cliente',
+        usuarioId: firebaseUser?.uid || cliente.authUid || cliente.id,
+        usuarioNome: cliente.nome || 'Cliente',
       });
 
       // Atualizar quantidade disponível se necessário
-      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity) {
-        const quantidadeAtual = getQuantidadeDisponivel(recompensaSelecionada);
+      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity) {
+        const quantidadeAtual = obterQuantidadeDisponivelCliente(recompensaSelecionada);
         await firebaseService.update('recompensas', recompensaSelecionada.id, {
           quantidadeDisponivel: quantidadeAtual - 1,
           quantidade: quantidadeAtual - 1,
@@ -409,7 +409,7 @@ function ClienteRecompensas() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <StarIcon sx={{ color: '#ff9800' }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      {getPontosRecompensa(recompensa)}
+                      {obterPontosRecompensaCliente(recompensa)}
                     </Typography>
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                       {recompensa.descricao || 'Sem descrição disponível'}
@@ -428,13 +428,13 @@ function ClienteRecompensas() {
                   <Button
                     fullWidth
                     variant="contained"
-                    disabled={saldo < getPontosRecompensa(recompensa)}
+                    disabled={saldo < obterPontosRecompensaCliente(recompensa)}
                     onClick={() => handleResgatar(recompensa)}
                     sx={{
-                      bgcolor: saldo >= getPontosRecompensa(recompensa) ? '#ff9800' : undefined,
+                      bgcolor: saldo >= obterPontosRecompensaCliente(recompensa) ? '#ff9800' : undefined,
                     }}
                   >
-                    {saldo >= getPontosRecompensa(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
+                    {saldo >= obterPontosRecompensaCliente(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
                   </Button>
                 </CardActions>
               </Card>
@@ -475,12 +475,12 @@ function ClienteRecompensas() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Pontos necessários:</Typography>
               <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                {getPontosRecompensa(recompensaSelecionada)}
+                {obterPontosRecompensaCliente(recompensaSelecionada)}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography>Seu saldo:</Typography>
-              <Typography sx={{ fontWeight: 600, color: saldo >= getPontosRecompensa(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
+              <Typography sx={{ fontWeight: 600, color: saldo >= obterPontosRecompensaCliente(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
                 {saldo}
               </Typography>
               <Divider sx={{ my: 2 }} />

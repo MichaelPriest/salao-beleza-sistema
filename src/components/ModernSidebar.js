@@ -250,6 +250,20 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'cliente']
       },
       {
+        text: 'Gerenciar Fidelidade',
+        icon: <EmojiEventsIcon />,
+        path: '/fidelidade/gerenciar',
+        permission: 'visualizar_fidelidade',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Baixar Resgates',
+        icon: <RedeemIcon />,
+        path: '/fidelidade/gerenciar?tab=resgates',
+        permission: 'visualizar_fidelidade',
+        cargos: ['admin', 'gerente', 'atendente']
+      },
+      {
         text: 'Recompensas',
         icon: <CardGiftcardIcon />,
         path: '/fidelidade/recompensas',

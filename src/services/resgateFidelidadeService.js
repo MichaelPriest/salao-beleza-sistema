@@ -126,6 +126,18 @@ const gerarMovimentoFinanceiroResgate = async (resgate, recompensa = {}) => {
   });
 };
 
+export const getPontosRecompensa = (recompensa) => {
+  const dados = recompensa || {};
+  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
+};
+
+export const getQuantidadeDisponivel = (recompensa) => {
+  const dados = recompensa || {};
+  if (dados.ilimitado === true) return Infinity;
+  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
+  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
+};
+
 export const resgateFidelidadeService = {
   buscarPorCliente: async (clienteId) => {
     try {
@@ -173,225 +185,106 @@ export const resgateFidelidadeService = {
       if (quantidadeDisponivel !== Infinity && quantidadeDisponivel <= 0) throw new Error('Recompensa esgotada');
 
       const resgate = {
-        clienteId,
-        clienteAuthUid: dados.clienteAuthUid || firebaseUser?.uid || cliente.authUid || '',
-        authUid: dados.authUid || firebaseUser?.uid || cliente.authUid || '',
-        googleUid: dados.googleUid || cliente.googleUid || '',
-        clienteEmail: dados.clienteEmail || cliente.email || firebaseUser?.email || '',
-        clienteNome,
-        recompensaId,
-        recompensaNome,
-        recompensaImagem: dados.recompensaImagem || recompensa.imagem || '',
-        pontosGastos,
-        data: dados.data || agoraIso(),
+        clienteId: dados.clienteId,
+        clienteNome: dados.clienteNome || 'Cliente',
+        recompensaId: dados.recompensaId || '',
+        recompensaNome: dados.recompensaNome || 'Recompensa',
+        pontosGastos: Number(dados.pontosGastos),
+        data: dados.data || new Date().toISOString().split('T')[0],
         status: dados.status || 'disponivel',
         utilizado: false,
         codigo: dados.codigo || gerarCodigoResgate(),
         observacoes: dados.observacoes || '',
-        validadeAte: dados.validadeAte || recompensa.validade || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        usuarioId: dados.usuarioId || firebaseUser?.uid || 'cliente',
-        usuarioNome: dados.usuarioNome || clienteNome,
+        clienteAuthUid: dados.clienteAuthUid || dados.authUid || '',
+        authUid: dados.authUid || dados.clienteAuthUid || '',
+        googleUid: dados.googleUid || '',
+        recompensaImagem: dados.recompensaImagem || '',
+        validadeAte: dados.validadeAte || '',
+        origem: dados.origem || 'admin',
+        usuarioId: dados.usuarioId || 'sistema',
+        usuarioNome: dados.usuarioNome || 'Sistema',
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
 
-      const resultadoResgate = await firebaseService.add('resgates_fidelidade', resgate);
-      const resgateId = getId(resultadoResgate);
-      const resgateComId = { ...resgate, id: resgateId };
+      const novoResgate = await firebaseService.add('resgates_fidelidade', resgate);
+      const id = novoResgate?.id || novoResgate;
 
+      // Remover pontos
       await pontuacaoService.removerPontos({
-        clienteId,
-        clienteNome,
-        quantidade: pontosGastos,
-        motivo: `Resgate: ${recompensaNome}`,
-        resgateId,
-        usuarioId: dados.usuarioId || firebaseUser?.uid || 'cliente',
-        usuarioNome: dados.usuarioNome || clienteNome,
-        observacoes: dados.observacoes || '',
+        clienteId: dados.clienteId,
+        clienteNome: dados.clienteNome,
+        quantidade: dados.pontosGastos,
+        motivo: `Resgate: ${resgate.recompensaNome}`,
+        resgateId: id,
+        usuarioId: dados.usuarioId,
+        usuarioNome: dados.usuarioNome
       });
 
-      if (quantidadeDisponivel !== Infinity) {
-        await firebaseService.update('recompensas', recompensaId, {
-          quantidadeDisponivel: quantidadeDisponivel - 1,
-          quantidade: quantidadeDisponivel - 1,
-          updatedAt: Timestamp.now(),
-        });
-      }
-
-      const movimentoFinanceiro = await gerarMovimentoFinanceiroResgate(resgateComId, recompensa);
-      if (movimentoFinanceiro?.id) {
-        await firebaseService.update('resgates_fidelidade', resgateId, {
-          transacaoFinanceiraId: movimentoFinanceiro.id,
-          updatedAt: Timestamp.now(),
-        }).catch(() => null);
-      }
-
-      await Promise.all([
-        notificarCliente(clienteId, {
-          clienteId,
-          clienteUid: resgateComId.clienteAuthUid,
-          authUid: resgateComId.authUid,
-          googleUid: resgateComId.googleUid,
-          clienteEmail: resgateComId.clienteEmail,
-          tipo: 'resgate',
-          titulo: '🎁 Recompensa resgatada!',
-          mensagem: `Você resgatou ${recompensaNome}. Apresente o código ${resgateComId.codigo} no salão.`,
-          icone: 'redeem',
-          link: '/cliente/recompensas',
-          dados: {
-            resgateId,
-            recompensaId,
-            recompensaNome,
-            pontosGastos,
-            codigo: resgateComId.codigo,
-          }
-        }),
-        notificarAdministradores(
-          resgateComId,
-          '🎁 Novo resgate de recompensa',
-          `${clienteNome} resgatou ${recompensaNome} usando ${pontosGastos} pontos. Código: ${resgateComId.codigo}`,
-          'alta'
-        ),
-      ]);
-
-      auditoriaService.registrar('resgate_recompensa', {
-        entidade: 'resgates_fidelidade',
-        entidadeId: resgateId,
-        detalhes: `Resgate de ${recompensaNome} por ${clienteNome}`,
-        dados: {
-          clienteId,
-          clienteNome,
-          recompensaId,
-          recompensaNome,
-          pontosGastos,
-          saldoAnterior: saldo,
-          saldoNovo: saldo - pontosGastos,
-          transacaoFinanceiraId: movimentoFinanceiro?.id || null,
-        }
-      }).catch(() => null);
-
-      return { ...resgateComId, transacaoFinanceiraId: movimentoFinanceiro?.id || null };
+      return { ...resgate, ...(typeof novoResgate === 'object' ? novoResgate : {}), id };
     } catch (error) {
       console.error('Erro ao criar resgate:', error);
       throw error;
     }
   },
 
+  // Utilizar resgate
   utilizar: async (id, dados = {}) => {
     try {
-      const resgate = await firebaseService.getById('resgates_fidelidade', id);
-      if (!resgate) throw new Error('Resgate não encontrado');
-      if (resgate.utilizado || String(resgate.status).toLowerCase() === 'utilizado') return { ...resgate, utilizado: true };
-
-      const atualizado = {
-        utilizado: true,
+      const atualizacao = {
         status: 'utilizado',
-        dataUtilizacao: agoraIso(),
-        utilizadoPor: dados.usuarioNome || dados.usuarioId || 'Sistema',
+        utilizado: true,
+        dataUtilizacao: new Date().toISOString(),
         usuarioUtilizacaoId: dados.usuarioId || 'sistema',
+        usuarioUtilizacaoNome: dados.usuarioNome || 'Sistema',
         observacoesUtilizacao: dados.observacoes || '',
-        updatedAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       };
 
-      await firebaseService.update('resgates_fidelidade', id, atualizado);
-
-      await Promise.all([
-        notificarCliente(resgate.clienteId, {
-          clienteId: resgate.clienteId,
-          clienteUid: resgate.clienteAuthUid,
-          authUid: resgate.authUid,
-          googleUid: resgate.googleUid,
-          clienteEmail: resgate.clienteEmail,
-          tipo: 'resgate_utilizado',
-          titulo: '✅ Recompensa utilizada',
-          mensagem: `A recompensa ${resgate.recompensaNome} foi marcada como utilizada.`,
-          icone: 'check_circle',
-          link: '/cliente/recompensas',
-          dados: { resgateId: id, codigo: resgate.codigo }
-        }),
-        notificarAdministradores(
-          { ...resgate, id },
-          '✅ Recompensa utilizada',
-          `${resgate.recompensaNome} de ${resgate.clienteNome} foi marcada como utilizada.`,
-          'media'
-        ),
-      ]);
-
-      auditoriaService.registrar('utilizar_resgate_recompensa', {
-        entidade: 'resgates_fidelidade',
-        entidadeId: id,
-        detalhes: `Resgate ${resgate.codigo} utilizado`,
-        dados: { ...resgate, ...atualizado }
-      }).catch(() => null);
-
-      return { ...resgate, ...atualizado, id };
+      await firebaseService.update('resgates_fidelidade', id, atualizacao);
+      return { id, ...atualizacao };
     } catch (error) {
       console.error('Erro ao utilizar resgate:', error);
       throw error;
     }
   },
 
+  // Cancelar resgate administrativo. Quando estornarPontos=true, devolve os pontos ao cliente.
   cancelar: async (id, dados = {}) => {
     try {
-      const resgate = await firebaseService.getById('resgates_fidelidade', id);
+      const resgate = dados.resgate || await firebaseService.getById('resgates_fidelidade', id);
       if (!resgate) throw new Error('Resgate não encontrado');
-      if (STATUS_ENCERRADOS.includes(String(resgate.status || '').toLowerCase())) return resgate;
+      if (resgate.utilizado || resgate.status === 'utilizado') {
+        throw new Error('Resgate já utilizado não pode ser cancelado');
+      }
 
-      const pontosGastos = Number(resgate.pontosGastos || 0);
-      if (pontosGastos > 0 && dados.estornarPontos !== false) {
+      const atualizacao = {
+        status: 'cancelado',
+        utilizado: false,
+        dataCancelamento: new Date().toISOString(),
+        usuarioCancelamentoId: dados.usuarioId || 'sistema',
+        usuarioCancelamentoNome: dados.usuarioNome || 'Sistema',
+        motivoCancelamento: dados.motivo || 'Cancelado pela administração',
+        pontosEstornados: Boolean(dados.estornarPontos),
+        updatedAt: Timestamp.now()
+      };
+
+      await firebaseService.update('resgates_fidelidade', id, atualizacao);
+
+      if (dados.estornarPontos) {
         await pontuacaoService.adicionarPontos({
           clienteId: resgate.clienteId,
           clienteNome: resgate.clienteNome || 'Cliente',
-          quantidade: pontosGastos,
-          motivo: `Estorno do resgate: ${resgate.recompensaNome}`,
-          usuarioId: dados.usuarioId || 'sistema',
-          usuarioNome: dados.usuarioNome || 'Sistema',
-          observacoes: dados.motivo || 'Cancelamento de resgate',
+          quantidade: Number(resgate.pontosGastos) || 0,
+          motivo: `Estorno de resgate: ${resgate.recompensaNome || 'Recompensa'}`,
+          resgateId: id,
+          usuarioId: dados.usuarioId,
+          usuarioNome: dados.usuarioNome,
+          observacoes: dados.motivo || 'Cancelamento de resgate'
         });
       }
 
-      const atualizado = {
-        status: 'cancelado',
-        utilizado: false,
-        dataCancelamento: agoraIso(),
-        motivoCancelamento: dados.motivo || '',
-        canceladoPor: dados.usuarioNome || dados.usuarioId || 'Sistema',
-        updatedAt: Timestamp.now(),
-      };
-      await firebaseService.update('resgates_fidelidade', id, atualizado);
-
-      const recompensa = resgate.recompensaId ? await firebaseService.getById('recompensas', resgate.recompensaId).catch(() => null) : null;
-      if (recompensa && getQuantidadeDisponivel(recompensa) !== Infinity) {
-        const quantidadeAtual = getQuantidadeDisponivel(recompensa);
-        await firebaseService.update('recompensas', resgate.recompensaId, {
-          quantidadeDisponivel: quantidadeAtual + 1,
-          quantidade: quantidadeAtual + 1,
-          updatedAt: Timestamp.now(),
-        }).catch(() => null);
-      }
-
-      await notificarCliente(resgate.clienteId, {
-        clienteId: resgate.clienteId,
-        clienteUid: resgate.clienteAuthUid,
-        authUid: resgate.authUid,
-        googleUid: resgate.googleUid,
-        clienteEmail: resgate.clienteEmail,
-        tipo: 'resgate_cancelado',
-        titulo: '↩️ Resgate cancelado',
-        mensagem: `O resgate de ${resgate.recompensaNome} foi cancelado${dados.estornarPontos !== false ? ' e os pontos foram estornados.' : '.'}`,
-        icone: 'cancel',
-        link: '/cliente/recompensas',
-        dados: { resgateId: id, codigo: resgate.codigo, pontosEstornados: dados.estornarPontos !== false ? pontosGastos : 0 }
-      });
-
-      auditoriaService.registrar('cancelar_resgate_recompensa', {
-        entidade: 'resgates_fidelidade',
-        entidadeId: id,
-        detalhes: `Resgate ${resgate.codigo} cancelado`,
-        dados: { ...resgate, ...atualizado, pontosEstornados: dados.estornarPontos !== false ? pontosGastos : 0 }
-      }).catch(() => null);
-
-      return { ...resgate, ...atualizado, id };
+      return { id, ...atualizacao };
     } catch (error) {
       console.error('Erro ao cancelar resgate:', error);
       throw error;
