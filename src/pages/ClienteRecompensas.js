@@ -40,7 +40,7 @@ import {
 } from '../services/resgateFidelidadeService';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
-// Funções de validação seguras (renamed to avoid conflicts)
+// Funções de validação seguras (com nomes diferentes para evitar conflito)
 const safeGetPontosRecompensa = (recompensa) => {
   if (!recompensa || typeof recompensa !== 'object') return 0;
   return recompensa.pontosNecessarios || recompensa.pontos || 0;
