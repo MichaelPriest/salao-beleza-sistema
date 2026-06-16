@@ -34,18 +34,13 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import {
-  getPontosRecompensa as obterPontosRecompensaCliente,
-  getQuantidadeDisponivel as obterQuantidadeDisponivelCliente,
-  resgateFidelidadeService as clienteResgateFidelidadeService,
-} from '../services/resgateFidelidadeService';
-import { useAuthCliente } from '../contexts/AuthClienteContext';
-import {
   getPontosRecompensa,
   getQuantidadeDisponivel,
   resgateFidelidadeService,
 } from '../services/resgateFidelidadeService';
+import { useAuthCliente } from '../contexts/AuthClienteContext';
 
-// Funções de validação seguras
+// Funções de validação seguras (renamed to avoid conflicts)
 const safeGetPontosRecompensa = (recompensa) => {
   if (!recompensa || typeof recompensa !== 'object') return 0;
   return recompensa.pontosNecessarios || recompensa.pontos || 0;
@@ -55,33 +50,6 @@ const safeGetQuantidadeDisponivel = (recompensa) => {
   if (!recompensa || typeof recompensa !== 'object') return 0;
   return recompensa.quantidade || recompensa.estoque || Infinity;
 };
-
-
-const getPontosRecompensa = (recompensa) => {
-  const dados = recompensa || {};
-  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
-};
-
-const getQuantidadeDisponivel = (recompensa) => {
-  const dados = recompensa || {};
-  if (dados.ilimitado === true) return Infinity;
-  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
-  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
-};
-
-
-const getPontosRecompensa = (recompensa) => {
-  const dados = recompensa || {};
-  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
-};
-
-const getQuantidadeDisponivel = (recompensa) => {
-  const dados = recompensa || {};
-  if (dados.ilimitado === true) return Infinity;
-  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
-  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
-};
-
 
 function ClienteRecompensas() {
   const { cliente, firebaseUser } = useAuthCliente();
@@ -93,7 +61,6 @@ function ClienteRecompensas() {
   const [openResgateDialog, setOpenResgateDialog] = useState(false);
   const [recompensaSelecionada, setRecompensaSelecionada] = useState(null);
   const [resgatando, setResgatando] = useState(false);
-
 
   const getClienteIds = () => Array.from(new Set([
     firebaseUser?.uid,
@@ -120,8 +87,6 @@ function ClienteRecompensas() {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const idsCliente = getClienteIds();
-
       const idsCliente = getClienteIds();
 
       // Carregar pontuação do cliente por todos os vínculos do portal
@@ -194,7 +159,7 @@ function ClienteRecompensas() {
   };
 
   const handleResgatar = (recompensa) => {
-    if (saldo < obterPontosRecompensaCliente(recompensa)) {
+    if (saldo < getPontosRecompensa(recompensa)) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -213,8 +178,8 @@ function ClienteRecompensas() {
       setResgatando(true);
 
       // Verificar disponibilidade
-      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity &&
-          obterQuantidadeDisponivelCliente(recompensaSelecionada) <= 0) {
+      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity &&
+          getQuantidadeDisponivel(recompensaSelecionada) <= 0) {
         toast.error('Recompensa esgotada');
         return;
       }
@@ -229,7 +194,7 @@ function ClienteRecompensas() {
         recompensaId: recompensaSelecionada.id,
         recompensaNome: recompensaSelecionada.nome,
         recompensaImagem: recompensaSelecionada.imagem || '',
-        pontosGastos: obterPontosRecompensaCliente(recompensaSelecionada),
+        pontosGastos: getPontosRecompensa(recompensaSelecionada),
         data: new Date().toISOString(),
         status: 'disponivel',
         codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
@@ -238,7 +203,7 @@ function ClienteRecompensas() {
         createdAt: new Date().toISOString()
       };
 
-      await clienteResgateFidelidadeService.criar({
+      await resgateFidelidadeService.criar({
         ...resgateData,
         origem: 'cliente',
         usuarioId: firebaseUser?.uid || cliente.authUid || cliente.id,
@@ -246,8 +211,8 @@ function ClienteRecompensas() {
       });
 
       // Atualizar quantidade disponível se necessário
-      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity) {
-        const quantidadeAtual = obterQuantidadeDisponivelCliente(recompensaSelecionada);
+      if (getQuantidadeDisponivel(recompensaSelecionada) !== Infinity) {
+        const quantidadeAtual = getQuantidadeDisponivel(recompensaSelecionada);
         await firebaseService.update('recompensas', recompensaSelecionada.id, {
           quantidadeDisponivel: quantidadeAtual - 1,
           quantidade: quantidadeAtual - 1,
@@ -409,10 +374,10 @@ function ClienteRecompensas() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <StarIcon sx={{ color: '#ff9800' }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      {obterPontosRecompensaCliente(recompensa)}
+                      {getPontosRecompensa(recompensa)}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      {recompensa.descricao || 'Sem descrição disponível'}
+                    <Typography variant="body2" color="textSecondary">
+                      pontos
                     </Typography>
                   </Box>
 
@@ -428,13 +393,13 @@ function ClienteRecompensas() {
                   <Button
                     fullWidth
                     variant="contained"
-                    disabled={saldo < obterPontosRecompensaCliente(recompensa)}
+                    disabled={saldo < getPontosRecompensa(recompensa)}
                     onClick={() => handleResgatar(recompensa)}
                     sx={{
-                      bgcolor: saldo >= obterPontosRecompensaCliente(recompensa) ? '#ff9800' : undefined,
+                      bgcolor: saldo >= getPontosRecompensa(recompensa) ? '#ff9800' : undefined,
                     }}
                   >
-                    {saldo >= obterPontosRecompensaCliente(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
+                    {saldo >= getPontosRecompensa(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
                   </Button>
                 </CardActions>
               </Card>
@@ -475,29 +440,16 @@ function ClienteRecompensas() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Pontos necessários:</Typography>
               <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                {obterPontosRecompensaCliente(recompensaSelecionada)}
+                {getPontosRecompensa(recompensaSelecionada)}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography>Seu saldo:</Typography>
-              <Typography sx={{ fontWeight: 600, color: saldo >= obterPontosRecompensaCliente(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
+              <Typography sx={{ fontWeight: 600, color: saldo >= getPontosRecompensa(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
                 {saldo}
               </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography>Pontos necessários:</Typography>
-                <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                  {safeGetPontosRecompensa(recompensaSelecionada)}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography>Seu saldo:</Typography>
-                <Typography sx={{ fontWeight: 600, color: saldo >= safeGetPontosRecompensa(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
-                  {saldo}
-                </Typography>
-              </Box>
             </Box>
-          )}
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenResgateDialog(false)}>Cancelar</Button>
