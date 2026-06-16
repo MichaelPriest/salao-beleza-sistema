@@ -50,6 +50,12 @@ function ClientePontos() {
     totalTransacoes: 0,
   });
 
+  const getClienteIds = () => Array.from(new Set([
+    cliente?.id,
+    cliente?.authUid,
+    cliente?.googleUid,
+  ].filter(Boolean)));
+
   useEffect(() => {
     if (cliente) {
       carregarPontuacoes();
@@ -60,9 +66,13 @@ function ClientePontos() {
     try {
       setLoading(true);
 
-      const pontuacoesData = await firebaseService.query('pontuacao', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ], 'data', 'desc');
+      const idsCliente = getClienteIds();
+      const pontuacoesPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('pontuacao', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'data', 'desc')
+      ));
+      const pontuacoesData = Array.from(new Map(pontuacoesPorId.flat().map((item) => [item.id, item])).values());
 
       setPontuacoes(pontuacoesData || []);
 

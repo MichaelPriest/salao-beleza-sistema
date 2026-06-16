@@ -9,6 +9,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Grid,
   MenuItem,
   Paper,
@@ -21,6 +22,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -33,13 +35,29 @@ import {
   DomainAdd as DomainAddIcon,
   Language as LanguageIcon,
   Launch as LaunchIcon,
-  ReceiptLong as ReceiptLongIcon,
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
-import { CONFIG_COBRANCA_PADRAO, PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import {
+  CONFIG_COBRANCA_PADRAO,
+  PLANOS_PADRAO,
+  STATUS_ASSINATURA,
+  metodoPagamentoLabel,
+  metodosAtivosNoGateway,
+  metodosSomentePreferencial,
+  primeiroMetodoDisponivel,
+  saasService,
+} from '../services/saasService';
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
 const formatCurrency = (value, currency = 'BRL') =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
@@ -47,19 +65,6 @@ const formatCurrency = (value, currency = 'BRL') =>
 const formatDate = (value) => {
   if (!value) return '-';
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
-};
-
-const metodosSomentePreferencial = (metodo = 'card') => ({
-  card: metodo === 'card',
-  pix: metodo === 'pix',
-  boleto: metodo === 'boleto',
-});
-
-const primeiroMetodoDisponivel = (metodos = {}) => {
-  if (metodos.card !== false) return 'card';
-  if (metodos.pix !== false) return 'pix';
-  if (metodos.boleto !== false) return 'boleto';
-  return 'card';
 };
 
 const getStatusColor = (status) => {
@@ -79,7 +84,7 @@ function TabPanel({ children, value, index }) {
   return <Box sx={{ mt: 3 }}>{children}</Box>;
 }
 
-function SaasGestao({ initialTab = 0 }) {
+function SaasGestao({ initialTab = 0, embedded = false }) {
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,7 +99,6 @@ function SaasGestao({ initialTab = 0 }) {
   const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
-  const [faturaForm, setFaturaForm] = useState({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
   const [portalForm, setPortalForm] = useState({
     slug: '',
     titulo: '',
@@ -108,6 +112,9 @@ function SaasGestao({ initialTab = 0 }) {
     whatsapp: '',
     temaLayout: 'moderno',
     mostrarContato: true,
+    mostrarAreaRestrita: true,
+    mostrarRedesSociais: true,
+    mostrarBanner: true,
   });
 
   const planoAtual = useMemo(() => {
@@ -148,7 +155,7 @@ function SaasGestao({ initialTab = 0 }) {
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
       const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
-      const metodosDisponiveis = configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento;
+      const metodosDisponiveis = metodosAtivosNoGateway(configGlobal.provider, configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento);
       setPaymentConfig({
         ...configGlobal,
         dadosCobranca: {
@@ -190,6 +197,9 @@ function SaasGestao({ initialTab = 0 }) {
         whatsapp: empresaData?.sitePublico?.whatsapp || empresaData?.telefone || '',
         temaLayout: empresaData?.sitePublico?.temaLayout || 'moderno',
         mostrarContato: empresaData?.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: empresaData?.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: empresaData?.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: empresaData?.sitePublico?.mostrarBanner !== false,
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -268,6 +278,28 @@ function SaasGestao({ initialTab = 0 }) {
     }
   };
 
+  const handlePortalImageChange = async (field, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione uma imagem válida.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setPortalForm((current) => ({ ...current, [field]: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem:', error);
+      toast.error('Erro ao carregar imagem.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const salvarPortalEmpresa = async (event) => {
     event.preventDefault();
     if (!empresa?.id) {
@@ -291,6 +323,9 @@ function SaasGestao({ initialTab = 0 }) {
           whatsapp: portalForm.whatsapp,
           temaLayout: portalForm.temaLayout,
           mostrarContato: portalForm.mostrarContato,
+          mostrarAreaRestrita: portalForm.mostrarAreaRestrita,
+          mostrarRedesSociais: portalForm.mostrarRedesSociais,
+          mostrarBanner: portalForm.mostrarBanner,
         }
       });
       setEmpresa(atualizada);
@@ -307,6 +342,9 @@ function SaasGestao({ initialTab = 0 }) {
         whatsapp: atualizada.sitePublico?.whatsapp || '',
         temaLayout: atualizada.sitePublico?.temaLayout || 'moderno',
         mostrarContato: atualizada.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: atualizada.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: atualizada.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: atualizada.sitePublico?.mostrarBanner !== false,
       });
       toast.success('Página inicial da empresa atualizada.');
     } catch (error) {
@@ -362,7 +400,10 @@ function SaasGestao({ initialTab = 0 }) {
   const iniciarCheckout = async () => {
     setCheckoutLoading(true);
     try {
-      const metodoPreferencial = paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento);
+      const metodosAtivos = metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento);
+      const metodoPreferencial = paymentConfig.metodoPreferencial && metodosAtivos[paymentConfig.metodoPreferencial] !== false
+        ? paymentConfig.metodoPreferencial
+        : primeiroMetodoDisponivel(metodosAtivos);
       const data = await saasService.iniciarCheckout({
         planoId: planoAtual.id,
         provider: paymentConfig.provider,
@@ -370,10 +411,10 @@ function SaasGestao({ initialTab = 0 }) {
         dadosPagamento: { ...paymentConfig, metodoPreferencial }
       });
       setCheckout(data);
+      toast.success(`Checkout ${metodoPagamentoLabel(data.metodoPreferencial || metodoPreferencial)} iniciado.`);
       if (data.checkoutUrl) {
         window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
       }
-      toast.success('Checkout iniciado.');
     } catch (error) {
       console.error('Erro ao iniciar checkout:', error);
       toast.error(error.message || 'Erro ao iniciar cobrança.');
@@ -392,8 +433,8 @@ function SaasGestao({ initialTab = 0 }) {
         cobranca: {
           ...(empresa.cobranca || {}),
           provider: paymentConfig.provider,
-          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
-          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
+          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento)),
+          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento))),
           configPagamento: paymentConfig,
           dadosCobranca: paymentConfig.dadosCobranca || {},
           diaVencimento: paymentConfig.diaVencimentoPadrao || empresa.cobranca?.diaVencimento || 5,
@@ -412,44 +453,6 @@ function SaasGestao({ initialTab = 0 }) {
     }
   };
 
-  const criarFatura = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      await saasService.criarFatura({
-        valor: Number(faturaForm.valor || planoAtual.precoMensal || 0),
-        vencimentoEm: faturaForm.vencimentoEm,
-        descricao: faturaForm.descricao,
-      });
-      setFaturaForm({ valor: '', vencimentoEm: '', descricao: 'Mensalidade SaaS' });
-      toast.success('Fatura criada.');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao criar fatura:', error);
-      toast.error(error.message || 'Erro ao criar fatura.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmarPagamento = async (fatura) => {
-    setSaving(true);
-    try {
-      await saasService.registrarPagamento({
-        faturaId: fatura.id,
-        valor: fatura.valor,
-        gateway: 'manual',
-      });
-      toast.success('Pagamento confirmado.');
-      await carregarDados();
-    } catch (error) {
-      console.error('Erro ao confirmar pagamento:', error);
-      toast.error(error.message || 'Erro ao confirmar pagamento.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
@@ -459,7 +462,7 @@ function SaasGestao({ initialTab = 0 }) {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
@@ -634,7 +637,7 @@ function SaasGestao({ initialTab = 0 }) {
             <Button variant="contained" disabled={checkoutLoading} startIcon={<LaunchIcon />} onClick={iniciarCheckout}>
               {checkoutLoading ? 'Abrindo...' : 'Abrir checkout'}
             </Button>
-            {checkout && <Alert severity="info" sx={{ mt: 2 }}>{checkout.checkoutUrl || checkout.instrucoes}</Alert>}
+            {checkout && <Alert severity="info" sx={{ mt: 2 }}>Método: {metodoPagamentoLabel(checkout.metodoPreferencial)} · Gateway: {checkout.provider}. {checkout.checkoutUrl || checkout.instrucoes}</Alert>}
           </CardContent>
         </Card>
       </TabPanel>
@@ -655,20 +658,12 @@ function SaasGestao({ initialTab = 0 }) {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent component="form" onSubmit={criarFatura}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Criar fatura manual</Typography>
-                <Stack spacing={2}>
-                  <TextField label="Valor" type="number" value={faturaForm.valor} onChange={(e) => setFaturaForm({ ...faturaForm, valor: e.target.value })} placeholder={String(planoAtual?.precoMensal || '')} />
-                  <TextField label="Vencimento" type="datetime-local" InputLabelProps={{ shrink: true }} value={faturaForm.vencimentoEm} onChange={(e) => setFaturaForm({ ...faturaForm, vencimentoEm: e.target.value })} />
-                  <TextField label="Descrição" value={faturaForm.descricao} onChange={(e) => setFaturaForm({ ...faturaForm, descricao: e.target.value })} />
-                  <Button type="submit" variant="contained" disabled={saving} startIcon={<ReceiptLongIcon />}>Criar fatura</Button>
-                </Stack>
-              </CardContent>
-            </Card>
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              As cobranças do SaaS são geradas automaticamente pela rotina do sistema com base na assinatura, plano, vencimento e método de pagamento configurado. A criação manual de faturas foi removida para evitar divergências financeiras.
+            </Alert>
           </Grid>
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -676,6 +671,7 @@ function SaasGestao({ initialTab = 0 }) {
                     <TableCell>Descrição</TableCell>
                     <TableCell>Valor</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Método</TableCell>
                     <TableCell>Vencimento</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -686,8 +682,9 @@ function SaasGestao({ initialTab = 0 }) {
                       <TableCell>{fatura.descricao}</TableCell>
                       <TableCell>{formatCurrency(fatura.valor, fatura.moeda)}</TableCell>
                       <TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell>
+                      <TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell>
                       <TableCell>{formatDate(fatura.vencimentoEm)}</TableCell>
-                      <TableCell align="right">{fatura.status !== 'paga' && <Button size="small" onClick={() => confirmarPagamento(fatura)}>Confirmar pagamento</Button>}</TableCell>
+                      <TableCell align="right">{fatura.status !== 'paga' ? <Button size="small" variant="outlined" onClick={iniciarCheckout}>Abrir checkout</Button> : <Chip size="small" color="success" label="Confirmada" />}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -696,7 +693,7 @@ function SaasGestao({ initialTab = 0 }) {
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Pagamentos recentes</Typography>
             <Stack spacing={1}>
               {pagamentos.slice(0, 5).map((pagamento) => (
-                <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} em {formatDate(pagamento.pagoEm)}</Alert>
+                <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} / {pagamento.metodoPagamentoLabel || metodoPagamentoLabel(pagamento.metodoPagamento)} em {formatDate(pagamento.pagoEm)}</Alert>
               ))}
             </Stack>
           </Grid>
@@ -725,19 +722,35 @@ function SaasGestao({ initialTab = 0 }) {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Tema do layout" value={portalForm.temaLayout} onChange={(e) => setPortalForm({ ...portalForm, temaLayout: e.target.value })}>
-                  <MenuItem value="classico">Clássico</MenuItem>
-                  <MenuItem value="moderno">Moderno</MenuItem>
-                  <MenuItem value="premium">Premium</MenuItem>
+                  <MenuItem value="classico">Clássico - página simples e direta</MenuItem>
+                  <MenuItem value="moderno">Moderno - cards e gradientes</MenuItem>
+                  <MenuItem value="premium">Premium - visual elegante</MenuItem>
+                  <MenuItem value="compacto">Compacto - foco em acesso rápido</MenuItem>
                 </TextField>
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="URL do logotipo" value={portalForm.logo} onChange={(e) => setPortalForm({ ...portalForm, logo: e.target.value })} />
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar logotipo
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('logo', e)} />
+                  </Button>
+                  {portalForm.logo && <Box component="img" src={portalForm.logo} alt="Logo" sx={{ height: 72, objectFit: 'contain', border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1 }} />}
+                  {portalForm.logo && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, logo: '' })}>Remover logo</Button>}
+                </Stack>
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField fullWidth label="WhatsApp de atendimento" value={portalForm.whatsapp} onChange={(e) => setPortalForm({ ...portalForm, whatsapp: e.target.value })} />
               </Grid>
               <Grid item xs={12}>
-                <TextField fullWidth label="URL do banner" value={portalForm.bannerUrl} onChange={(e) => setPortalForm({ ...portalForm, bannerUrl: e.target.value })} helperText="Imagem de capa da página pública." />
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar banner da página pública
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('bannerUrl', e)} />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">As imagens de logo e banner são salvas em base64; não é necessário informar URL externa.</Typography>
+                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
+                  {portalForm.bannerUrl && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, bannerUrl: '' })}>Remover banner</Button>}
+                </Stack>
               </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
@@ -765,6 +778,22 @@ function SaasGestao({ initialTab = 0 }) {
                   <MenuItem value="sim">Sim</MenuItem>
                   <MenuItem value="nao">Não</MenuItem>
                 </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Conteúdo exibido na página pública</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      ['mostrarBanner', 'Mostrar banner/imagem principal'],
+                      ['mostrarAreaRestrita', 'Mostrar área restrita e links de login'],
+                      ['mostrarRedesSociais', 'Mostrar redes sociais'],
+                    ].map(([field, label]) => (
+                      <Grid item xs={12} md={4} key={field}>
+                        <FormControlLabel control={<Switch checked={portalForm[field] !== false} onChange={(e) => setPortalForm({ ...portalForm, [field]: e.target.checked })} />} label={label} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
               </Grid>
               <Grid item xs={12}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

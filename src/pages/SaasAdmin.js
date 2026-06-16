@@ -15,10 +15,10 @@ import {
 import {
   Business as BusinessIcon,
   Payments as PaymentsIcon,
-  ReceiptLong as ReceiptLongIcon,
   Settings as SettingsIcon,
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { Link as RouterLink } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import firebaseService from '../services/firebase';

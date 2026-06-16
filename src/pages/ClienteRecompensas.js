@@ -18,27 +18,49 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  Paper,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import {
   CardGiftcard as GiftIcon,
   Star as StarIcon,
   CheckCircle as CheckIcon,
   EmojiEvents as TrophyIcon,
+  ContentCopy as CopyIcon,
+  LocalOffer as TicketIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import {
+  getPontosRecompensa as obterPontosRecompensaCliente,
+  getQuantidadeDisponivel as obterQuantidadeDisponivelCliente,
+  resgateFidelidadeService as clienteResgateFidelidadeService,
+} from '../services/resgateFidelidadeService';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 
+
 function ClienteRecompensas() {
-  const { cliente } = useAuthCliente();
+  const { cliente, firebaseUser } = useAuthCliente();
   const [loading, setLoading] = useState(true);
   const [recompensas, setRecompensas] = useState([]);
+  const [resgatesAtivos, setResgatesAtivos] = useState([]);
   const [saldo, setSaldo] = useState(0);
   const [nivel, setNivel] = useState('bronze');
   const [openResgateDialog, setOpenResgateDialog] = useState(false);
   const [recompensaSelecionada, setRecompensaSelecionada] = useState(null);
   const [resgatando, setResgatando] = useState(false);
+
+
+  const getClienteIds = () => Array.from(new Set([
+    firebaseUser?.uid,
+    cliente?.id,
+    cliente?.uid,
+    cliente?.authUid,
+    cliente?.googleUid,
+    cliente?.email,
+  ].filter(Boolean)));
 
   const niveis = {
     bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0 },
@@ -57,10 +79,15 @@ function ClienteRecompensas() {
     try {
       setLoading(true);
 
-      // Carregar pontuação do cliente
-      const pontuacoes = await firebaseService.query('pontuacao', [
-        { field: 'clienteId', operator: '==', value: cliente.id }
-      ]);
+      const idsCliente = getClienteIds();
+
+      // Carregar pontuação do cliente por todos os vínculos do portal
+      const pontuacoesPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('pontuacao', [
+          { field: 'clienteId', operator: '==', value: id }
+        ]).catch(() => [])
+      ));
+      const pontuacoes = Array.from(new Map(pontuacoesPorId.flat().map((item) => [item.id, item])).values());
 
       const creditos = pontuacoes
         .filter(p => p.tipo === 'credito')
@@ -95,6 +122,16 @@ function ClienteRecompensas() {
 
       setRecompensas(recompensasFiltradas);
 
+      const resgatesPorId = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('resgates_fidelidade', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'data', 'desc').catch(() => [])
+      ));
+      const resgates = Array.from(new Map(resgatesPorId.flat().map((item) => [item.id, item])).values())
+        .filter((resgate) => !resgate.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(resgate.status))
+        .sort((a, b) => new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0));
+      setResgatesAtivos(resgates);
+
     } catch (error) {
       console.error('Erro ao carregar recompensas:', error);
       toast.error('Erro ao carregar recompensas');
@@ -104,7 +141,7 @@ function ClienteRecompensas() {
   };
 
   const handleResgatar = (recompensa) => {
-    if (saldo < recompensa.pontosNecessarios) {
+    if (saldo < obterPontosRecompensaCliente(recompensa)) {
       toast.error('Saldo insuficiente');
       return;
     }
@@ -113,12 +150,17 @@ function ClienteRecompensas() {
   };
 
   const confirmarResgate = async () => {
+    if (!recompensaSelecionada) {
+      toast.error('Selecione uma recompensa para resgatar.');
+      return;
+    }
+
     try {
       setResgatando(true);
 
       // Verificar disponibilidade
-      if (recompensaSelecionada.quantidadeDisponivel !== null && 
-          recompensaSelecionada.quantidadeDisponivel <= 0) {
+      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity &&
+          obterQuantidadeDisponivelCliente(recompensaSelecionada) <= 0) {
         toast.error('Recompensa esgotada');
         return;
       }
@@ -126,34 +168,35 @@ function ClienteRecompensas() {
       // Registrar o resgate
       const resgateData = {
         clienteId: cliente.id,
+        clienteAuthUid: firebaseUser?.uid || cliente.authUid || '',
+        authUid: firebaseUser?.uid || cliente.authUid || '',
+        googleUid: cliente.googleUid || '',
         clienteNome: cliente.nome,
         recompensaId: recompensaSelecionada.id,
         recompensaNome: recompensaSelecionada.nome,
-        pontosGastos: recompensaSelecionada.pontosNecessarios,
+        recompensaImagem: recompensaSelecionada.imagem || '',
+        pontosGastos: obterPontosRecompensaCliente(recompensaSelecionada),
         data: new Date().toISOString(),
-        status: 'resgatado',
+        status: 'disponivel',
         codigo: 'RES' + Date.now() + Math.floor(Math.random() * 1000),
         utilizado: false,
+        validadeAte: recompensaSelecionada.validade || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         createdAt: new Date().toISOString()
       };
 
-      await firebaseService.add('resgates_fidelidade', resgateData);
-
-      // Registrar a movimentação de pontos
-      await firebaseService.add('pontuacao', {
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        quantidade: recompensaSelecionada.pontosNecessarios,
-        tipo: 'debito',
-        motivo: `Resgate: ${recompensaSelecionada.nome}`,
-        data: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+      await clienteResgateFidelidadeService.criar({
+        ...resgateData,
+        origem: 'cliente',
+        usuarioId: firebaseUser?.uid || cliente.authUid || cliente.id,
+        usuarioNome: cliente.nome || 'Cliente',
       });
 
       // Atualizar quantidade disponível se necessário
-      if (recompensaSelecionada.quantidadeDisponivel !== null) {
+      if (obterQuantidadeDisponivelCliente(recompensaSelecionada) !== Infinity) {
+        const quantidadeAtual = obterQuantidadeDisponivelCliente(recompensaSelecionada);
         await firebaseService.update('recompensas', recompensaSelecionada.id, {
-          quantidadeDisponivel: recompensaSelecionada.quantidadeDisponivel - 1,
+          quantidadeDisponivel: quantidadeAtual - 1,
+          quantidade: quantidadeAtual - 1,
           updatedAt: new Date().toISOString()
         });
       }
@@ -227,6 +270,62 @@ function ClienteRecompensas() {
         </CardContent>
       </Card>
 
+      {/* Recompensas resgatadas para uso no salão */}
+      <Card sx={{ mb: 4, border: '1px solid', borderColor: 'success.light' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#2e7d32' }}>
+                Minhas recompensas para usar no salão
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Mostre o código abaixo na recepção ou para o profissional no atendimento.
+              </Typography>
+            </Box>
+            <Chip color="success" label={`${resgatesAtivos.length} ativo${resgatesAtivos.length === 1 ? '' : 's'}`} />
+          </Box>
+
+          {resgatesAtivos.length === 0 ? (
+            <Alert severity="info">Você ainda não possui recompensas resgatadas disponíveis para uso.</Alert>
+          ) : (
+            <Grid container spacing={2}>
+              {resgatesAtivos.map((resgate) => (
+                <Grid item xs={12} md={6} key={resgate.id}>
+                  <Paper variant="outlined" sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Avatar src={resgate.recompensaImagem} sx={{ bgcolor: '#4caf50', width: 56, height: 56 }}>
+                      <TicketIcon />
+                    </Avatar>
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+                        {resgate.recompensaNome}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        Válido até {resgate.validadeAte ? new Date(`${resgate.validadeAte}T12:00:00`).toLocaleDateString('pt-BR') : 'uso no salão'}
+                      </Typography>
+                      <Chip
+                        label={resgate.codigo}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        sx={{ mt: 1, fontFamily: 'monospace', fontWeight: 700 }}
+                      />
+                    </Box>
+                    <Tooltip title="Copiar código">
+                      <IconButton onClick={() => {
+                        navigator.clipboard?.writeText(resgate.codigo);
+                        toast.success('Código copiado!');
+                      }}>
+                        <CopyIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Lista de Recompensas */}
       <Grid container spacing={3}>
         {recompensas.map((recompensa, index) => (
@@ -255,7 +354,7 @@ function ClienteRecompensas() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <StarIcon sx={{ color: '#ff9800' }} />
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      {recompensa.pontosNecessarios}
+                      {obterPontosRecompensaCliente(recompensa)}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       pontos
@@ -274,13 +373,13 @@ function ClienteRecompensas() {
                   <Button
                     fullWidth
                     variant="contained"
-                    disabled={saldo < recompensa.pontosNecessarios}
+                    disabled={saldo < obterPontosRecompensaCliente(recompensa)}
                     onClick={() => handleResgatar(recompensa)}
                     sx={{
-                      bgcolor: saldo >= recompensa.pontosNecessarios ? '#ff9800' : undefined,
+                      bgcolor: saldo >= obterPontosRecompensaCliente(recompensa) ? '#ff9800' : undefined,
                     }}
                   >
-                    {saldo >= recompensa.pontosNecessarios ? 'Resgatar' : 'Pontos insuficientes'}
+                    {saldo >= obterPontosRecompensaCliente(recompensa) ? 'Resgatar' : 'Pontos insuficientes'}
                   </Button>
                 </CardActions>
               </Card>
@@ -321,12 +420,12 @@ function ClienteRecompensas() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Pontos necessários:</Typography>
               <Typography sx={{ fontWeight: 600, color: '#ff9800' }}>
-                {recompensaSelecionada?.pontosNecessarios}
+                {obterPontosRecompensaCliente(recompensaSelecionada)}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography>Seu saldo:</Typography>
-              <Typography sx={{ fontWeight: 600, color: saldo >= (recompensaSelecionada?.pontosNecessarios || 0) ? '#4caf50' : '#f44336' }}>
+              <Typography sx={{ fontWeight: 600, color: saldo >= obterPontosRecompensaCliente(recompensaSelecionada) ? '#4caf50' : '#f44336' }}>
                 {saldo}
               </Typography>
             </Box>

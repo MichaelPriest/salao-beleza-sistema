@@ -64,7 +64,7 @@ function ModernNotificacoes() {
   const [usuario, setUsuario] = useState(null);
   const [error, setError] = useState(null);
   const [carregado, setCarregado] = useState(false);
-  
+
   // 🔥 ESTADOS PARA ANAMNESE
   const [anamnesePendentes, setAnamnesePendentes] = useState([]);
   const [loadingAnamnese, setLoadingAnamnese] = useState(false);
@@ -77,17 +77,17 @@ function ModernNotificacoes() {
       console.log('📝 Iniciando carregamento da página de notificações');
       const userStr = localStorage.getItem('usuario');
       console.log('📝 userStr:', userStr);
-      
+
       if (userStr) {
         const user = JSON.parse(userStr);
         console.log('👤 Usuário carregado do localStorage:', user);
-        
+
         // 🔥 CORREÇÃO: Normalizar o objeto do usuário para ter uid
         const userNormalized = {
           ...user,
           uid: user.uid || user.id  // Se não tiver uid, usa o id
         };
-        
+
         console.log('👤 Usuário normalizado:', userNormalized);
         setUsuario(userNormalized);
       } else {
@@ -102,75 +102,18 @@ function ModernNotificacoes() {
     }
   }, []);
 
-  // 🔥 CARREGAR ANAMNESES PENDENTES
-  const carregarAnamnesesPendentes = useCallback(async () => {
-    try {
-      setLoadingAnamnese(true);
-      console.log('📋 Carregando anamneses pendentes...');
-      
-      // Buscar todos os agendamentos de hoje em diante
-      const agendamentos = await firebaseService.getAll('agendamentos');
-      const hoje = new Date().toISOString().split('T')[0];
-      
-      const agendamentosFuturos = agendamentos.filter(a => 
-        a.data >= hoje && 
-        a.status !== 'cancelado' && 
-        a.status !== 'finalizado'
-      );
-      
-      console.log(`📅 Encontrados ${agendamentosFuturos.length} agendamentos futuros`);
-      
-      // Verificar quais têm formulário pendente
-      const pendentes = [];
-      
-      for (const agendamento of agendamentosFuturos) {
-        const temFormulario = await anamneseService.verificarFormularioPendente(agendamento.id);
-        
-        if (temFormulario) {
-          const formulario = await anamneseService.obterFormularioParaAgendamento(agendamento.id);
-          
-          pendentes.push({
-            id: agendamento.id,
-            agendamentoId: agendamento.id,
-            clienteId: agendamento.clienteId,
-            clienteNome: agendamento.clienteNome || 'Cliente',
-            profissionalId: agendamento.profissionalId,
-            profissionalNome: agendamento.profissionalNome || 'Profissional',
-            servicoId: agendamento.servicoId,
-            servicoNome: agendamento.servicoNome || 'Serviço',
-            data: agendamento.data,
-            horaInicio: agendamento.horaInicio,
-            formularioTitulo: formulario?.titulo || 'Formulário de Anamnese',
-            formularioId: formulario?.id,
-            status: 'pendente'
-          });
-        }
-      }
-      
-      console.log(`📋 ${pendentes.length} anamneses pendentes encontradas`);
-      setAnamnesePendentes(pendentes);
-      
-      // 🔥 Criar notificações para anamneses pendentes
-      await criarNotificacoesAnamnese(pendentes);
-      
-    } catch (error) {
-      console.error('❌ Erro ao carregar anamneses pendentes:', error);
-    } finally {
-      setLoadingAnamnese(false);
-    }
-  }, []);
-
   // 🔥 CRIAR NOTIFICAÇÕES PARA ANAMNESE
-  const criarNotificacoesAnamnese = async (pendentes) => {
+  const criarNotificacoesAnamnese = useCallback(async (pendentes) => {
     const userId = usuario?.uid || usuario?.id;
-    if (!userId) return;
+    if (!userId || !pendentes?.length) return;
 
     try {
+      let notificacoesExistentes = await notificacoesService.listar(userId);
+
       for (const item of pendentes) {
-        // Verificar se já existe notificação para este agendamento
-        const notificacoesExistentes = await notificacoesService.listar(userId);
-        const existeNotificacao = notificacoesExistentes.some(n => 
-          n.tipo === 'anamnese' && 
+        // Verificar se já existe notificação para este agendamento sem recarregar toda a página a cada item
+        const existeNotificacao = notificacoesExistentes.some(n =>
+          n.tipo === 'anamnese' &&
           n.detalhes?.agendamentoId === item.agendamentoId &&
           !n.lida
         );
@@ -204,14 +147,75 @@ function ModernNotificacoes() {
             }
           };
 
-          await notificacoesService.criar(notificacao);
+          const criada = await notificacoesService.criar(notificacao);
+          if (criada) {
+            notificacoesExistentes = [...notificacoesExistentes, criada];
+          }
           console.log('✅ Notificação de anamnese criada para:', item.clienteNome);
         }
       }
     } catch (error) {
       console.error('❌ Erro ao criar notificações de anamnese:', error);
     }
-  };
+  }, [usuario]);
+
+  // 🔥 CARREGAR ANAMNESES PENDENTES
+  const carregarAnamnesesPendentes = useCallback(async () => {
+    try {
+      setLoadingAnamnese(true);
+      console.log('📋 Carregando anamneses pendentes...');
+
+      // Buscar todos os agendamentos de hoje em diante
+      const agendamentos = await firebaseService.getAll('agendamentos');
+      const hoje = new Date().toISOString().split('T')[0];
+
+      const agendamentosFuturos = agendamentos.filter(a =>
+        a.data >= hoje &&
+        a.status !== 'cancelado' &&
+        a.status !== 'finalizado'
+      );
+
+      console.log(`📅 Encontrados ${agendamentosFuturos.length} agendamentos futuros`);
+
+      // Verificar quais têm formulário pendente
+      const pendentes = [];
+
+      for (const agendamento of agendamentosFuturos) {
+        const temFormulario = await anamneseService.verificarFormularioPendente(agendamento.id);
+
+        if (temFormulario) {
+          const formulario = await anamneseService.obterFormularioParaAgendamento(agendamento.id);
+
+          pendentes.push({
+            id: agendamento.id,
+            agendamentoId: agendamento.id,
+            clienteId: agendamento.clienteId,
+            clienteNome: agendamento.clienteNome || 'Cliente',
+            profissionalId: agendamento.profissionalId,
+            profissionalNome: agendamento.profissionalNome || 'Profissional',
+            servicoId: agendamento.servicoId,
+            servicoNome: agendamento.servicoNome || 'Serviço',
+            data: agendamento.data,
+            horaInicio: agendamento.horaInicio,
+            formularioTitulo: formulario?.titulo || 'Formulário de Anamnese',
+            formularioId: formulario?.id,
+            status: 'pendente'
+          });
+        }
+      }
+
+      console.log(`📋 ${pendentes.length} anamneses pendentes encontradas`);
+      setAnamnesePendentes(pendentes);
+
+      // 🔥 Criar notificações para anamneses pendentes
+      await criarNotificacoesAnamnese(pendentes);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar anamneses pendentes:', error);
+    } finally {
+      setLoadingAnamnese(false);
+    }
+  }, [criarNotificacoesAnamnese]);
 
   // Carregar notificações quando o usuário estiver disponível
   useEffect(() => {
@@ -219,7 +223,7 @@ function ModernNotificacoes() {
 
     const loadNotifications = async () => {
       const userId = usuario?.uid || usuario?.id;
-      
+
       if (!userId) {
         console.log('⏳ Aguardando usuário...', { usuario });
         return;
@@ -229,21 +233,14 @@ function ModernNotificacoes() {
         console.log('📥 Iniciando carregamento de notificações para userId:', userId);
         setLoading(true);
         setError(null);
-        
-        // Timeout para evitar loading infinito
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout ao carregar notificações')), 10000)
-        );
 
-        const dataPromise = notificacoesService.listar(userId);
-        
-        const data = await Promise.race([dataPromise, timeoutPromise]);
-        
+        const data = await notificacoesService.listar(userId);
+
         if (mounted) {
           console.log('✅ Notificações carregadas com sucesso:', data?.length || 0);
           setNotifications(data || []);
           setCarregado(true);
-          
+
           // 🔥 Carregar anamneses pendentes
           await carregarAnamnesesPendentes();
         }
@@ -332,20 +329,20 @@ function ModernNotificacoes() {
   const carregarNotificacoes = useCallback(async () => {
     const userId = usuario?.uid || usuario?.id;
     if (!userId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
       console.log('📥 Recarregando notificações manualmente para userId:', userId);
-      
+
       // Recarregar notificações
       const data = await notificacoesService.listar(userId);
       console.log('📊 Notificações recarregadas:', data.length);
       setNotifications(data);
-      
+
       // Recarregar anamneses pendentes
       await carregarAnamnesesPendentes();
-      
+
     } catch (error) {
       console.error('❌ Erro ao recarregar notificações:', error);
       setError(error.message);
@@ -355,11 +352,25 @@ function ModernNotificacoes() {
     }
   }, [usuario, carregarAnamnesesPendentes]);
 
+  useEffect(() => {
+    const atualizarNotificacoes = () => {
+      carregarNotificacoes();
+    };
+
+    window.addEventListener('notificacoesAtualizadas', atualizarNotificacoes);
+    window.addEventListener('novaNotificacao', atualizarNotificacoes);
+
+    return () => {
+      window.removeEventListener('notificacoesAtualizadas', atualizarNotificacoes);
+      window.removeEventListener('novaNotificacao', atualizarNotificacoes);
+    };
+  }, [carregarNotificacoes]);
+
   const handleMarkAsRead = async (id) => {
     try {
       const success = await notificacoesService.marcarComoLida(id);
       if (success) {
-        setNotifications(prev => 
+        setNotifications(prev =>
           prev.map(n => n.id === id ? { ...n, lida: true } : n)
         );
         toast.success('Notificação marcada como lida');
@@ -373,7 +384,7 @@ function ModernNotificacoes() {
   const handleMarkAllAsRead = async () => {
     const userId = usuario?.uid || usuario?.id;
     if (!userId) return;
-    
+
     try {
       const success = await notificacoesService.marcarTodasComoLidas(userId);
       if (success) {
@@ -403,7 +414,7 @@ function ModernNotificacoes() {
   const handleDeleteAll = async () => {
     const userId = usuario?.uid || usuario?.id;
     if (!userId) return;
-    
+
     try {
       const success = await notificacoesService.excluirTodas(userId);
       if (success) {
@@ -446,9 +457,9 @@ function ModernNotificacoes() {
 
   const handleNavigate = (tipo, detalhes) => {
     setOpenDetailsDialog(false);
-    
+
     console.log('🧭 Navegando:', { tipo, detalhes });
-    
+
     switch (tipo) {
       case 'agendamento':
       case 'lembrete':
@@ -543,8 +554,8 @@ function ModernNotificacoes() {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           action={
             <Button color="inherit" size="small" onClick={carregarNotificacoes}>
               Tentar novamente
@@ -609,8 +620,8 @@ function ModernNotificacoes() {
       {/* Debug info (remover em produção) */}
       <Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}>
         <Typography variant="caption" component="div">
-          <strong>Debug:</strong> ID: {usuario?.uid || usuario?.id || 'N/A'} | 
-          Notificações: {notifications.length} | 
+          <strong>Debug:</strong> ID: {usuario?.uid || usuario?.id || 'N/A'} |
+          Notificações: {notifications.length} |
           Anamnese Pendentes: {anamnesePendentes.length} |
           Carregado: {carregado ? 'Sim' : 'Não'}
         </Typography>
@@ -618,13 +629,13 @@ function ModernNotificacoes() {
 
       {/* 🔥 AVISO DE ANAMNESE PENDENTE */}
       {anamnesePendentes.length > 0 && (
-        <Alert 
-          severity="info" 
+        <Alert
+          severity="info"
           icon={<AssignmentIcon />}
           sx={{ mb: 3 }}
           action={
-            <Button 
-              color="inherit" 
+            <Button
+              color="inherit"
               size="small"
               onClick={() => setFilterType('anamnese')}
             >
@@ -738,13 +749,13 @@ function ModernNotificacoes() {
                 <Box sx={{ textAlign: 'center', py: 8 }}>
                   <NotificationsIcon sx={{ fontSize: 64, color: '#ccc', mb: 2 }} />
                   <Typography variant="h6" color="textSecondary">
-                    {notifications.length === 0 
-                      ? 'Nenhuma notificação encontrada' 
+                    {notifications.length === 0
+                      ? 'Nenhuma notificação encontrada'
                       : 'Nenhuma notificação com os filtros selecionados'}
                   </Typography>
                   {notifications.length === 0 && (
-                    <Button 
-                      variant="contained" 
+                    <Button
+                      variant="contained"
                       onClick={carregarNotificacoes}
                       sx={{ mt: 2, bgcolor: '#9c27b0' }}
                     >
@@ -778,7 +789,7 @@ function ModernNotificacoes() {
                                 {getNotificationIcon(notification.tipo)}
                               </Avatar>
                             </Grid>
-                            
+
                             <Grid item xs={12} sm={9}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                                 <Chip
@@ -791,26 +802,26 @@ function ModernNotificacoes() {
                                   }}
                                 />
                                 {notification.prioridade === 'alta' && (
-                                  <Chip 
-                                    icon={<WarningIcon />} 
-                                    label="Prioridade Alta" 
-                                    size="small" 
-                                    color="error" 
+                                  <Chip
+                                    icon={<WarningIcon />}
+                                    label="Prioridade Alta"
+                                    size="small"
+                                    color="error"
                                   />
                                 )}
                                 {!notification.lida && (
                                   <Chip icon={<TimeIcon />} label="Nova" size="small" color="secondary" />
                                 )}
                               </Box>
-                              
+
                               <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
                                 {notification.titulo}
                               </Typography>
-                              
+
                               <Typography variant="body1" color="textSecondary" sx={{ mb: 1 }}>
                                 {notification.mensagem}
                               </Typography>
-                              
+
                               <Typography variant="caption" color="textSecondary">
                                 {formatDate(notification.data)}
                               </Typography>
@@ -830,7 +841,7 @@ function ModernNotificacoes() {
                                 </Box>
                               )}
                             </Grid>
-                            
+
                             <Grid item xs={12} sm={2}>
                               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                                 <Tooltip title="Ver detalhes">
@@ -908,9 +919,9 @@ function ModernNotificacoes() {
             <Box sx={{ mt: 2 }}>
               <Typography variant="h6" gutterBottom>{notificationDetails.titulo}</Typography>
               <Typography variant="body1" paragraph>{notificationDetails.mensagem}</Typography>
-              
+
               <Divider sx={{ my: 2 }} />
-              
+
               <Typography variant="body2">
                 <strong>Tipo:</strong> {getNotificationTypeLabel(notificationDetails.tipo)}
               </Typography>
@@ -920,12 +931,12 @@ function ModernNotificacoes() {
               <Typography variant="body2">
                 <strong>Prioridade:</strong> {notificationDetails.prioridade || 'normal'}
               </Typography>
-              
+
               {notificationDetails.detalhes && (
                 <>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" gutterBottom>Detalhes adicionais:</Typography>
-                  
+
                   {notificationDetails.tipo === 'anamnese' ? (
                     // 🔥 DETALHES ESPECÍFICOS PARA ANAMNESE
                     <>

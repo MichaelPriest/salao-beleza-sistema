@@ -61,6 +61,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { agendaDisponibilidadeService, TIME_SLOTS_PADRAO } from '../services/agendaDisponibilidadeService';
 
 // Componente de card de agendamento para mobile
 const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancelar }) => {
@@ -306,6 +307,8 @@ function ClienteAgendamentos() {
   const [agendamentos, setAgendamentos] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
+  const [disponibilidades, setDisponibilidades] = useState([]);
+  const [ausencias, setAusencias] = useState([]);
   
   // Estados para diálogos
   const [openDialog, setOpenDialog] = useState(false);
@@ -327,11 +330,34 @@ function ClienteAgendamentos() {
     observacoes: '',
   });
 
-  const timeSlots = [
-    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-    '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
-  ];
+  const timeSlots = TIME_SLOTS_PADRAO;
+
+  const getClienteIdsBusca = () => ([
+    cliente?.id,
+    cliente?.uid,
+    cliente?.authUid,
+    cliente?.googleUid,
+    firebaseUser?.uid,
+  ].filter(Boolean));
+
+  const calcularHorarioFim = (horario, duracaoTotal = 60) => agendaDisponibilidadeService.calcularHorarioFim(horario, duracaoTotal);
+
+  const calcularDuracaoSelecionada = () => selectedServicos.reduce((total, servico) => total + Number(servico.duracao || 60), 0) || 60;
+
+  const getMotivoIndisponibilidade = (profissionalId, data, horario) => agendaDisponibilidadeService.obterMotivoIndisponibilidade({
+    profissionalId,
+    data,
+    horario,
+    duracaoMinutos: calcularDuracaoSelecionada(),
+    disponibilidades,
+    ausencias,
+    agendamentos,
+  });
+
+  const isHorarioDisponivel = (horario) => {
+    if (!formData.profissionalId || !formData.data || selectedServicos.length === 0) return false;
+    return getMotivoIndisponibilidade(formData.profissionalId, formData.data, horario) === null;
+  };
 
   useEffect(() => {
     if (cliente) {
@@ -343,24 +369,36 @@ function ClienteAgendamentos() {
     try {
       setLoading(true);
       
-      const uid = firebaseUser?.uid || cliente?.id;
-      
-      if (!uid) {
+      const clienteIds = getClienteIdsBusca();
+
+      if (clienteIds.length === 0) {
         toast.error('Erro ao identificar o cliente');
         return;
       }
-      
-      const [agendamentosData, servicosData, profissionaisData] = await Promise.all([
-        firebaseService.query('agendamentos', [
-          { field: 'clienteId', operator: '==', value: uid }
-        ], 'data', 'desc'),
+
+      const [todosAgendamentos, servicosData, profissionaisData, dispData, ausData] = await Promise.all([
+        firebaseService.getAll('agendamentos').catch(() => []),
         firebaseService.getAll('servicos'),
-        firebaseService.getAll('profissionais')
+        firebaseService.getAll('profissionais'),
+        firebaseService.getAll('disponibilidades').catch(() => []),
+        firebaseService.getAll('ausencias').catch(() => [])
       ]);
+
+      const agendamentosCliente = (todosAgendamentos || [])
+        .filter((agendamento) => clienteIds.some((id) => [
+          agendamento.clienteId,
+          agendamento.clienteUid,
+          agendamento.clienteAuthUid,
+          agendamento.authUid,
+          agendamento.googleUid,
+        ].filter(Boolean).map(String).includes(String(id))))
+        .sort((a, b) => `${b.data || ''} ${b.horario || b.horaInicio || ''}`.localeCompare(`${a.data || ''} ${a.horario || a.horaInicio || ''}`));
       
-      setAgendamentos(agendamentosData || []);
+      setAgendamentos(agendamentosCliente);
       setServicos(servicosData || []);
       setProfissionais(profissionaisData || []);
+      setDisponibilidades(dispData || []);
+      setAusencias(ausData || []);
       
     } catch (error) {
       console.error('Erro ao carregar agendamentos:', error);
@@ -415,36 +453,70 @@ function ClienteAgendamentos() {
         return;
       }
 
+      if (!formData.profissionalId) {
+        toast.error('Selecione um profissional para ver os horários disponíveis');
+        return;
+      }
+
       if (!formData.data || !formData.horario) {
         toast.error('Preencha todos os campos');
         return;
       }
 
-      const uid = firebaseUser?.uid || cliente?.id;
+      const motivoIndisponibilidade = getMotivoIndisponibilidade(formData.profissionalId, formData.data, formData.horario);
+      if (motivoIndisponibilidade) {
+        toast.error(`Horário indisponível: ${motivoIndisponibilidade}`);
+        return;
+      }
+
+      const clienteIdPrincipal = cliente?.id || firebaseUser?.uid;
+      const authUid = firebaseUser?.uid || cliente?.authUid || cliente?.uid || null;
       const profissional = profissionais.find(p => p.id === formData.profissionalId);
+      const servicosNormalizados = selectedServicos.map(s => ({
+        id: s.id,
+        nome: s.nome,
+        preco: Number(s.preco || 0),
+        duracao: Number(s.duracao || 60)
+      }));
+      const servicoIds = servicosNormalizados.map(s => s.id);
+      const duracaoTotal = servicosNormalizados.reduce((total, servico) => total + Number(servico.duracao || 60), 0);
+      const primeiroServico = servicosNormalizados[0] || {};
+      const servicoOriginal = servicos.find(s => s.id === primeiroServico.id);
+      const unidadeId = cliente?.unidadeId || profissional?.unidadeId || servicoOriginal?.unidadeId || null;
 
       const novoAgendamento = {
-        clienteId: uid,
+        empresaId: cliente?.empresaId || null,
+        unidadeId,
+        unidadeNome: cliente?.unidadeNome || profissional?.unidadeNome || servicoOriginal?.unidadeNome || null,
+        clienteId: clienteIdPrincipal,
+        clienteUid: cliente?.uid || null,
+        clienteAuthUid: authUid,
+        authUid,
+        googleUid: cliente?.googleUid || null,
         clienteNome: cliente.nome,
         clienteEmail: cliente.email,
         clienteTelefone: cliente.telefone,
-        servicos: selectedServicos.map(s => ({
-          id: s.id,
-          nome: s.nome,
-          preco: s.preco,
-          duracao: s.duracao
-        })),
-        servicosIds: selectedServicos.map(s => s.id),
-        servicosNomes: selectedServicos.map(s => s.nome).join(', '),
-        quantidadeServicos: selectedServicos.length,
+        servicos: servicosNormalizados,
+        servicoId: primeiroServico.id || null,
+        servicoNome: primeiroServico.nome || '',
+        servicoIds,
+        servicosIds: servicoIds,
+        servicosNomes: servicosNormalizados.map(s => s.nome).join(', '),
+        quantidadeServicos: servicosNormalizados.length,
         valorTotal: calcularTotal(),
+        valor: calcularTotal(),
+        preco: Number(primeiroServico.preco || 0),
+        duracao: duracaoTotal,
         profissionalId: formData.profissionalId || null,
         profissionalNome: profissional?.nome || null,
         data: formData.data,
         horario: formData.horario,
+        horaInicio: formData.horario,
+        horaFim: calcularHorarioFim(formData.horario, duracaoTotal),
         observacoes: formData.observacoes,
         status: 'pendente',
         origem: 'cliente',
+        origemPortalCliente: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -799,7 +871,7 @@ function ClienteAgendamentos() {
               label="Profissional"
               onChange={(e) => setFormData({ ...formData, profissionalId: e.target.value })}
             >
-              <MenuItem value="">Qualquer</MenuItem>
+              <MenuItem value="">Selecione um profissional</MenuItem>
               {profissionais.map(prof => (
                 <MenuItem key={prof.id} value={prof.id}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -821,7 +893,7 @@ function ClienteAgendamentos() {
                 type="date"
                 label="Data"
                 value={formData.data}
-                onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, data: e.target.value, horario: '' })}
                 InputLabelProps={{ shrink: true }}
                 size="small"
               />
@@ -834,9 +906,17 @@ function ClienteAgendamentos() {
                   label="Horário"
                   onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
                 >
-                  {timeSlots.map(time => (
-                    <MenuItem key={time} value={time}>{time}</MenuItem>
-                  ))}
+                  {timeSlots.map(time => {
+                    const disponivel = isHorarioDisponivel(time);
+                    const motivo = formData.profissionalId && formData.data && selectedServicos.length > 0
+                      ? getMotivoIndisponibilidade(formData.profissionalId, formData.data, time)
+                      : 'Selecione serviço, profissional e data';
+                    return (
+                      <MenuItem key={time} value={time} disabled={!disponivel}>
+                        {time}{!disponivel && motivo ? ` — ${motivo}` : ''}
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             </Grid>

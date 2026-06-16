@@ -100,6 +100,7 @@ import { firebaseService } from '../services/firebase';
 import { notificacoesService } from '../services/notificacoesService';
 import { usuariosService } from '../services/usuariosService';
 import { auditoriaService } from '../services/auditoriaService';
+import { agendaDisponibilidadeService, TIME_SLOTS_PADRAO } from '../services/agendaDisponibilidadeService';
 import { Timestamp } from '../services/firebase';
 
 // Importações para PDF e Excel
@@ -111,11 +112,7 @@ import * as XLSX from 'xlsx';
 // CONSTANTES E FUNÇÕES AUXILIARES
 // ============================================
 
-const timeSlots = [
-  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
-];
+const timeSlots = TIME_SLOTS_PADRAO;
 
 const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
@@ -415,7 +412,7 @@ const RelatorioAgenda = React.forwardRef(({
                     </TableHead>
                     <TableBody>
                       {eventosOrdenados.map(evento => {
-                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+                        const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
                         const profissional = profissionais?.find(p => p.id === evento.profissionalId);
                         const servicos = evento.servicos || 
                           (evento.servicoId ? [{ 
@@ -572,13 +569,15 @@ function ModernAgendamentos() {
     const cliente = clientes.find(c => 
       c.id === clienteId || 
       c.uid === clienteId || 
-      c.googleUid === clienteId
+      c.authUid === clienteId ||
+      c.googleUid === clienteId ||
+      c.supabaseUid === clienteId
     );
     
     if (!cliente) return null;
     
     return {
-      id: cliente.id || cliente.uid || cliente.googleUid,
+      id: cliente.id || cliente.uid || cliente.authUid || cliente.googleUid,
       nome: cliente.nome || cliente.displayName || 'Cliente',
       telefone: cliente.telefone || cliente.phoneNumber || 'Não informado',
       email: cliente.email || '',
@@ -756,138 +755,40 @@ function ModernAgendamentos() {
   // FUNÇÕES DE VALIDAÇÃO DE DISPONIBILIDADE
   // ============================================
 
-  const verificarDisponibilidadeProfissional = (profissionalId, data, horario) => {
-    if (!profissionalId || !data || !horario) return false;
-
-    const dataObj = new Date(data + 'T12:00:00');
-    const diaSemana = dataObj.getDay();
-
-    const disponibilidade = disponibilidades.find(
-      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
-    );
-
-    if (!disponibilidade) return false;
-
-    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
-    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
-    const [horaAtual, minAtual] = horario.split(':').map(Number);
-    
-    const minutosInicio = horaInicio * 60 + minInicio;
-    const minutosFim = horaFim * 60 + minFim;
-    const minutosAtual = horaAtual * 60 + minAtual;
-
-    if (minutosAtual < minutosInicio || minutosAtual >= minutosFim) return false;
-
-    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
-      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
-      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
-      
-      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
-      const minutosIntFim = horaIntFim * 60 + minIntFim;
-
-      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return false;
-    }
-
-    const ausencia = ausencias.find(a => 
-      a.profissionalId === profissionalId &&
-      data >= a.dataInicio &&
-      data <= a.dataFim &&
-      (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
-        (horario >= a.horarioInicio && horario < a.horarioFim)
-      )
-    );
-
-    if (ausencia) return false;
-
-    const agendamentoExistente = (agendamentos || []).some(apt => 
-      apt.profissionalId === profissionalId &&
-      apt.data === data &&
-      apt.horario === horario &&
-      apt.id !== selectedAppointment?.id &&
-      apt.status !== 'cancelado'
-    );
-
-    return !agendamentoExistente;
+  const getDuracaoAgendamentoSelecionado = () => {
+    const totalServicos = (servicosSelecionados || []).reduce((total, servico) => total + Number(servico.duracao || 60), 0);
+    return totalServicos || Number(formData.duracao || 60) || 60;
   };
 
-  const getMotivoIndisponibilidade = (profissionalId, data, horario) => {
-    if (!profissionalId || !data || !horario) return 'Selecione um profissional e data';
+  const verificarDisponibilidadeProfissional = (profissionalId, data, horario, duracaoMinutos = getDuracaoAgendamentoSelecionado()) => {
+    return agendaDisponibilidadeService.verificarDisponibilidade({
+      profissionalId,
+      data,
+      horario,
+      duracaoMinutos,
+      disponibilidades,
+      ausencias,
+      agendamentos,
+      ignorarAgendamentoId: selectedAppointment?.id,
+    });
+  };
 
-    const dataObj = new Date(data + 'T12:00:00');
-    const diaSemana = dataObj.getDay();
-
-    const disponibilidade = disponibilidades.find(
-      d => d.profissionalId === profissionalId && d.diaSemana === diaSemana && d.ativo !== false
-    );
-
-    if (!disponibilidade) return 'Profissional não trabalha neste dia da semana';
-
-    const [horaAtual, minAtual] = horario.split(':').map(Number);
-    const minutosAtual = horaAtual * 60 + minAtual;
-
-    const [horaInicio, minInicio] = disponibilidade.horarioInicio.split(':').map(Number);
-    const minutosInicio = horaInicio * 60 + minInicio;
-    
-    const [horaFim, minFim] = disponibilidade.horarioFim.split(':').map(Number);
-    const minutosFim = horaFim * 60 + minFim;
-
-    if (minutosAtual < minutosInicio) return 'Antes do horário de início';
-    if (minutosAtual >= minutosFim) return 'Após o horário de término';
-
-    if (disponibilidade.intervaloInicio && disponibilidade.intervaloFim) {
-      const [horaIntInicio, minIntInicio] = disponibilidade.intervaloInicio.split(':').map(Number);
-      const minutosIntInicio = horaIntInicio * 60 + minIntInicio;
-      
-      const [horaIntFim, minIntFim] = disponibilidade.intervaloFim.split(':').map(Number);
-      const minutosIntFim = horaIntFim * 60 + minIntFim;
-
-      if (minutosAtual >= minutosIntInicio && minutosAtual < minutosIntFim) return 'Horário de intervalo';
-    }
-
-    const ausencia = ausencias.find(a => 
-      a.profissionalId === profissionalId &&
-      data >= a.dataInicio &&
-      data <= a.dataFim &&
-      (
-        (a.horarioInicio === '00:00' && a.horarioFim === '23:59') ||
-        (horario >= a.horarioInicio && horario < a.horarioFim)
-      )
-    );
-
-    if (ausencia) {
-      const tipos = {
-        folga: 'Profissional está de folga',
-        ferias: 'Profissional está de férias',
-        licenca: 'Profissional está de licença',
-        falta: 'Profissional ausente',
-        treinamento: 'Profissional em treinamento',
-        evento: 'Profissional em evento'
-      };
-      return tipos[ausencia.tipo] || 'Profissional ausente';
-    }
-
-    const agendamentoExistente = (agendamentos || []).some(apt => 
-      apt.profissionalId === profissionalId &&
-      apt.data === data &&
-      apt.horario === horario &&
-      apt.id !== selectedAppointment?.id &&
-      apt.status !== 'cancelado'
-    );
-
-    if (agendamentoExistente) return 'Horário já ocupado';
-
-    return null;
+  const getMotivoIndisponibilidade = (profissionalId, data, horario, duracaoMinutos = getDuracaoAgendamentoSelecionado()) => {
+    return agendaDisponibilidadeService.obterMotivoIndisponibilidade({
+      profissionalId,
+      data,
+      horario,
+      duracaoMinutos,
+      disponibilidades,
+      ausencias,
+      agendamentos,
+      ignorarAgendamentoId: selectedAppointment?.id,
+    });
   };
 
   const isHorarioDisponivel = (horario) => {
     if (!formData.profissionalId || !formData.data) return true;
-    
-    return verificarDisponibilidadeProfissional(
-      formData.profissionalId,
-      formData.data,
-      horario
-    );
+    return verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, horario);
   };
 
   // ============================================
@@ -1436,14 +1337,31 @@ function ModernAgendamentos() {
         return;
       }
 
-      const servicosLista = agendamento.servicos || [];
+      const clienteData = getClienteData(agendamento.clienteId);
+      const profissionalData = getProfissionalData(agendamento.profissionalId);
+      const servicosLista = (agendamento.servicos && agendamento.servicos.length > 0)
+        ? agendamento.servicos
+        : (agendamento.servicoIds || agendamento.servicosIds || [agendamento.servicoId]).filter(Boolean).map((servicoId) => {
+          const servico = servicosMemo.find((item) => item.id === servicoId) || {};
+          return {
+            id: servicoId,
+            nome: servico.nome || agendamento.servicoNome || 'Serviço',
+            preco: Number(servico.preco || agendamento.valor || agendamento.valorTotal || 0),
+            duracao: servico.duracao || agendamento.duracao || null,
+          };
+        });
       const primeiroServico = servicosLista[0] || {};
+      const atendimentoId = firebaseService.generateId('atendimentos');
 
       const novoAtendimento = {
+        id: atendimentoId,
         agendamentoId: agendamento.id,
         clienteId: agendamento.clienteId,
+        clienteNome: clienteData?.nome || agendamento.clienteNome || 'Cliente',
         profissionalId: agendamento.profissionalId,
-        servicoId: primeiroServico.id,
+        profissionalNome: profissionalData?.nome || agendamento.profissionalNome || 'Profissional',
+        servicoId: primeiroServico.id || agendamento.servicoId || null,
+        servicoNome: primeiroServico.nome || agendamento.servicoNome || 'Serviço',
         servicos: servicosLista,
         data: agendamento.data,
         horaInicio: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1457,7 +1375,7 @@ function ModernAgendamentos() {
           principal: s.id === primeiroServico.id
         })),
         itensProduto: [],
-        valorTotal: agendamento.valorTotal || 0,
+        valorTotal: Number(agendamento.valorTotal || agendamento.valor || primeiroServico.preco || 0),
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         iniciadoPor: usuario?.nome || 'Sistema',
@@ -1465,15 +1383,17 @@ function ModernAgendamentos() {
       };
 
       const atendimentoCriado = await firebaseService.add('atendimentos', novoAtendimento);
+      const atendimentoCriadoId = atendimentoCriado?.id || atendimentoId;
       
       await atualizar(agendamento.id, { 
         status: 'em_andamento',
+        atendimentoId: atendimentoCriadoId,
         updatedAt: Timestamp.now()
       });
 
       await auditoriaService.registrar('iniciar_atendimento', {
         entidade: 'atendimentos',
-        entidadeId: atendimentoCriado.id,
+        entidadeId: atendimentoCriadoId,
         detalhes: `Atendimento iniciado a partir do agendamento ${agendamento.id}`,
         dados: {
           agendamentoId: agendamento.id,
@@ -1488,7 +1408,7 @@ function ModernAgendamentos() {
       toast.dismiss(toastId);
       toast.success('Atendimento iniciado com sucesso!');
       
-      navigate(`/atendimento/${atendimentoCriado.id}`);
+      navigate(`/atendimento/${atendimentoCriadoId}`);
       
     } catch (error) {
       console.error('Erro ao iniciar atendimento:', error);
@@ -1578,6 +1498,9 @@ function ModernAgendamentos() {
         servicos: servicosSelecionados,
         data: formData.data,
         horario: formData.horario,
+        horaInicio: formData.horario,
+        horaFim: agendaDisponibilidadeService.calcularHorarioFim(formData.horario, getDuracaoAgendamentoSelecionado()),
+        duracao: getDuracaoAgendamentoSelecionado(),
         observacoes: formData.observacoes || '',
         status: formData.status || 'pendente',
         valorTotal: formData.valorTotal,
@@ -1746,7 +1669,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -1969,7 +1892,7 @@ function ModernAgendamentos() {
           eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
           
           eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId);
+            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
@@ -2259,7 +2182,7 @@ function ModernAgendamentos() {
       const agendaData = [
         ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
         ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.googleUid === evento.clienteId);
+          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
           const profissional = profissionais?.find(p => p.id === evento.profissionalId);
           const servicos = evento.servicos || 
             (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);

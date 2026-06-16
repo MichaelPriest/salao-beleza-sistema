@@ -58,6 +58,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { registrarAlteracaoPrecoProduto, registrarMovimentacaoEstoqueProduto } from '../services/produtosHistoricoService';
 
 const statusColors = {
   pendente: { color: '#ff9800', label: 'Pendente' },
@@ -69,6 +70,20 @@ const statusColors = {
 // Função utilitária para garantir precisão decimal no estoque
 const formatarQuantidade = (valor) => {
   return parseFloat(parseFloat(valor).toFixed(3));
+};
+
+const getUsuarioAtual = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || '{}') || {};
+  } catch (error) {
+    return {};
+  }
+};
+
+const calcularDataVencimentoCompra = (compra) => {
+  if (compra.prazoEntrega) return compra.prazoEntrega;
+  if (compra.dataCompra) return compra.dataCompra;
+  return new Date().toISOString().split('T')[0];
 };
 
 function ModernCompras() {
@@ -199,12 +214,21 @@ function ModernCompras() {
   // Abrir diálogo de recebimento
   const handleOpenRecebimento = (compra) => {
     setCompraSelecionada(compra);
-    // Inicializar itens de recebimento com quantidades pendentes
-    const itensIniciais = compra.itens.map(item => ({
-      ...item,
-      quantidadeRecebida: formatarQuantidade(item.quantidade), // Por padrão, recebe tudo
-      recebido: true, // Por padrão, todos marcados como recebidos
-    }));
+    // Inicializar itens de recebimento com apenas o saldo pendente para evitar duplicidade de entradas
+    const recebimentosAnteriores = Array.isArray(compra.itensRecebidos) ? compra.itensRecebidos : [];
+    const itensIniciais = compra.itens.map(item => {
+      const jaRecebido = recebimentosAnteriores
+        .filter(recebido => recebido.produtoId === item.produtoId)
+        .reduce((acc, recebido) => acc + formatarQuantidade(recebido.quantidadeRecebida || 0), 0);
+      const pendente = Math.max(0, formatarQuantidade(item.quantidade) - formatarQuantidade(jaRecebido));
+
+      return {
+        ...item,
+        quantidadeRecebida: pendente,
+        quantidadePendente: pendente,
+        recebido: pendente > 0,
+      };
+    });
     setItensRecebimento(itensIniciais);
     setRecebimentoCompleto(true);
     setOpenRecebimentoDialog(true);
@@ -309,6 +333,9 @@ function ModernCompras() {
         valorTotal: Number(formData.valorTotal),
         prazoEntrega: formData.prazoEntrega ? String(formData.prazoEntrega) : null,
         formaPagamento: formData.formaPagamento ? String(formData.formaPagamento) : null,
+        dataVencimento: calcularDataVencimentoCompra(formData),
+        categoriaFinanceira: 'Compras de estoque',
+        origemFinanceira: 'compras',
         observacoes: formData.observacoes ? String(formData.observacoes) : null,
         itens: formData.itens.map(item => ({
           ...item,
@@ -389,7 +416,7 @@ function ModernCompras() {
       novosItens[index] = {
         ...item,
         recebido: novoRecebido,
-        quantidadeRecebida: novoRecebido ? formatarQuantidade(item.quantidade) : 0,
+        quantidadeRecebida: novoRecebido ? formatarQuantidade(item.quantidadePendente ?? item.quantidade) : 0,
       };
       return novosItens;
     });
@@ -402,7 +429,7 @@ function ModernCompras() {
     setItensRecebimento(prev => prev.map(item => ({
       ...item,
       recebido: novoStatus,
-      quantidadeRecebida: novoStatus ? formatarQuantidade(item.quantidade) : 0,
+      quantidadeRecebida: novoStatus ? formatarQuantidade(item.quantidadePendente ?? item.quantidade) : 0,
     })));
   };
 
@@ -416,30 +443,106 @@ function ModernCompras() {
         return;
       }
 
-      // Atualizar estoque dos produtos - SOMANDO ao estoque existente
+      const usuarioAtual = getUsuarioAtual();
+      const entradasRegistradas = [];
+
+      // Atualizar estoque dos produtos, registrar entrada e preservar rastreabilidade financeira/operacional
       for (const item of itensRecebidos) {
         const produto = produtos.find(p => p.id === item.produtoId);
         if (produto) {
-          // Converte para número garantido e soma ao estoque existente
           const estoqueAtual = formatarQuantidade(produto.quantidadeEstoque || 0);
           const quantidadeRecebida = formatarQuantidade(item.quantidadeRecebida || 0);
           const novaQuantidade = formatarQuantidade(estoqueAtual + quantidadeRecebida);
-          
-          console.log(`Atualizando estoque - Produto: ${produto.nome}`);
-          console.log(`  Estoque atual: ${estoqueAtual}`);
-          console.log(`  Quantidade recebida: ${quantidadeRecebida}`);
-          console.log(`  Novo estoque: ${novaQuantidade}`);
-          
+          const novoCusto = Number(item.valorUnitario || produto.precoCusto || 0);
+          const produtoAtualizado = {
+            ...produto,
+            quantidadeEstoque: novaQuantidade,
+            precoCusto: novoCusto,
+            ultimoCustoCompra: novoCusto,
+            ultimaEntradaEm: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
           await firebaseService.update('produtos', item.produtoId, {
             quantidadeEstoque: novaQuantidade,
-            updatedAt: new Date().toISOString(),
+            precoCusto: novoCusto,
+            ultimoCustoCompra: novoCusto,
+            ultimaEntradaEm: produtoAtualizado.ultimaEntradaEm,
+            updatedAt: produtoAtualizado.updatedAt,
           });
+
+          await registrarAlteracaoPrecoProduto({
+            produtoId: item.produtoId,
+            produtoNome: produto.nome,
+            produtoAnterior: produto,
+            produtoNovo: produtoAtualizado,
+            origem: 'compra_recebida',
+            motivo: `Custo atualizado pelo recebimento da compra ${compraSelecionada.numeroPedido || compraSelecionada.id}`,
+            referenciaId: compraSelecionada.id,
+            referenciaTipo: 'compra',
+            documento: compraSelecionada.numeroPedido,
+            usuario: usuarioAtual,
+          });
+
+          await registrarMovimentacaoEstoqueProduto({
+            produto,
+            tipo: 'entrada',
+            quantidade: quantidadeRecebida,
+            estoqueAnterior: estoqueAtual,
+            estoqueNovo: novaQuantidade,
+            valorUnitario: novoCusto,
+            origem: 'compra',
+            origemId: compraSelecionada.id,
+            documento: compraSelecionada.numeroPedido,
+            observacoes: `Entrada automática por recebimento de compra ${compraSelecionada.numeroPedido || compraSelecionada.id}`,
+            usuario: usuarioAtual,
+          });
+
+          const entrada = {
+            numeroEntrada: `ENT-${Date.now()}-${item.produtoId}`,
+            compraId: compraSelecionada.id,
+            numeroPedido: compraSelecionada.numeroPedido || '',
+            fornecedorId: compraSelecionada.fornecedorId || '',
+            produtoId: item.produtoId,
+            produtoNome: produto.nome || item.produtoNome,
+            dataEntrada: new Date().toISOString().split('T')[0],
+            tipo: 'compra',
+            status: 'finalizado',
+            quantidade: quantidadeRecebida,
+            valorUnitario: novoCusto,
+            valorTotal: Number((quantidadeRecebida * novoCusto).toFixed(2)),
+            itens: [{
+              produtoId: item.produtoId,
+              produtoNome: produto.nome || item.produtoNome,
+              quantidade: quantidadeRecebida,
+              quantidadeConferida: quantidadeRecebida,
+              valorUnitario: novoCusto,
+              total: Number((quantidadeRecebida * novoCusto).toFixed(2)),
+            }],
+            estoqueAnterior: estoqueAtual,
+            estoqueNovo: novaQuantidade,
+            responsavel: usuarioAtual?.nome || usuarioAtual?.email || 'Sistema',
+            documento: compraSelecionada.numeroPedido || '',
+            observacoes: `Entrada gerada automaticamente pela compra ${compraSelecionada.numeroPedido || compraSelecionada.id}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          const entradaId = await firebaseService.add('entradas', entrada).catch((error) => {
+            console.warn('Erro ao registrar entrada automática:', error);
+            return null;
+          });
+
+          entradasRegistradas.push({ ...entrada, id: entradaId });
         }
       }
 
       // Verificar se foi recebimento parcial ou completo
       const totalEsperado = compraSelecionada.itens.reduce((acc, item) => acc + formatarQuantidade(item.quantidade), 0);
-      const totalRecebido = itensRecebidos.reduce((acc, item) => acc + formatarQuantidade(item.quantidadeRecebida), 0);
+      const totalRecebidoAtual = itensRecebidos.reduce((acc, item) => acc + formatarQuantidade(item.quantidadeRecebida), 0);
+      const totalRecebidoAnterior = (Array.isArray(compraSelecionada.itensRecebidos) ? compraSelecionada.itensRecebidos : [])
+        .reduce((acc, item) => acc + formatarQuantidade(item.quantidadeRecebida || 0), 0);
+      const totalRecebido = formatarQuantidade(totalRecebidoAnterior + totalRecebidoAtual);
       
       const statusFinal = totalRecebido >= totalEsperado ? 'entregue' : 'aprovada';
       const observacaoRecebimento = totalRecebido < totalEsperado 
@@ -449,14 +552,22 @@ function ModernCompras() {
       // Atualizar compra com dados de recebimento
       const dadosAtualizacao = {
         status: statusFinal,
-        itensRecebidos: itensRecebimento.map(item => ({
-          produtoId: item.produtoId,
-          produtoNome: item.produtoNome,
-          quantidadeEsperada: formatarQuantidade(item.quantidade),
-          quantidadeRecebida: formatarQuantidade(item.quantidadeRecebida),
-          recebido: item.recebido,
-        })),
+        itensRecebidos: [
+          ...(Array.isArray(compraSelecionada.itensRecebidos) ? compraSelecionada.itensRecebidos : []),
+          ...itensRecebidos.map(item => ({
+            produtoId: item.produtoId,
+            produtoNome: item.produtoNome,
+            quantidadeEsperada: formatarQuantidade(item.quantidade),
+            quantidadeRecebida: formatarQuantidade(item.quantidadeRecebida),
+            recebido: item.recebido,
+            dataRecebimento: new Date().toISOString(),
+          }))
+        ],
         dataRecebimento: new Date().toISOString(),
+        entradasEstoqueIds: entradasRegistradas.map(entrada => entrada.id).filter(Boolean),
+        financeiroIntegrado: true,
+        categoriaFinanceira: 'Compras de estoque',
+        dataVencimento: calcularDataVencimentoCompra(compraSelecionada),
         updatedAt: new Date().toISOString(),
         observacoes: (compraSelecionada.observacoes || '') + observacaoRecebimento,
       };
@@ -479,6 +590,9 @@ function ModernCompras() {
           return {
             ...p,
             quantidadeEstoque: formatarQuantidade(estoqueAtual + quantidadeRecebida),
+            precoCusto: Number(itemRecebido.valorUnitario || p.precoCusto || 0),
+            ultimoCustoCompra: Number(itemRecebido.valorUnitario || p.precoCusto || 0),
+            ultimaEntradaEm: new Date().toISOString(),
           };
         }
         return p;
@@ -486,8 +600,8 @@ function ModernCompras() {
 
       mostrarSnackbar(
         totalRecebido < totalEsperado 
-          ? `Recebimento parcial confirmado! ${totalRecebido.toFixed(3)} unidades adicionadas ao estoque.` 
-          : `Recebimento completo! ${totalRecebido.toFixed(3)} unidades adicionadas ao estoque.`,
+          ? `Recebimento parcial confirmado! ${totalRecebidoAtual.toFixed(3)} unidades adicionadas ao estoque.`
+          : `Recebimento completo! ${totalRecebidoAtual.toFixed(3)} unidades adicionadas ao estoque.`,
         'success'
       );
 

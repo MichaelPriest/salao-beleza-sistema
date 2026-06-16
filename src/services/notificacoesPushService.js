@@ -1,6 +1,52 @@
 // src/services/notificacoesPushService.js
 import { firebaseService } from './firebase';
 
+const asArray = (value) => Array.isArray(value) ? value : [value];
+
+const uniqueIds = (value) => Array.from(new Set(asArray(value).flatMap((item) => {
+  if (!item) return [];
+  if (typeof item === 'object') {
+    return [item.id, item.uid, item.authUid, item.googleUid, item.clienteId, item.email];
+  }
+  return [item];
+}).filter(Boolean).map(String)));
+
+const getClienteLocalIds = () => {
+  try {
+    const cliente = JSON.parse(localStorage.getItem('cliente') || localStorage.getItem('clienteLogado') || '{}');
+    const firebaseUser = JSON.parse(localStorage.getItem('firebaseUser') || '{}');
+    return uniqueIds([cliente, firebaseUser]);
+  } catch {
+    return [];
+  }
+};
+
+const notificationMatchesCliente = (notificacao, ids = []) => {
+  const normalizedIds = new Set(uniqueIds(ids));
+  if (normalizedIds.size === 0) return false;
+
+  const camposDiretos = [
+    notificacao.clienteId,
+    notificacao.clienteUid,
+    notificacao.authUid,
+    notificacao.googleUid,
+    notificacao.usuarioId,
+    notificacao.destinatarioId,
+    notificacao.paraClienteId,
+    notificacao.email,
+    notificacao.clienteEmail,
+  ].filter(Boolean).map(String);
+
+  const listas = [
+    notificacao.clienteIds,
+    notificacao.destinatarios,
+    notificacao.destinatariosIds,
+    notificacao.usuarios,
+  ].flatMap((lista) => Array.isArray(lista) ? lista : []).filter(Boolean).map(String);
+
+  return [...camposDiretos, ...listas].some((id) => normalizedIds.has(id));
+};
+
 class NotificacoesPushService {
   constructor() {
     this.listeners = [];
@@ -62,12 +108,28 @@ class NotificacoesPushService {
   // 🔥 BUSCAR NOTIFICAÇÕES DO CLIENTE
   async buscarNotificacoes(clienteId) {
     try {
-      console.log('🔍 Buscando notificações para cliente:', clienteId);
-      
-      const notificacoes = await firebaseService.query('notificacoes_cliente', [
-        { field: 'clienteId', operator: '==', value: clienteId }
-      ], 'data', 'desc');
-      
+      const idsCliente = uniqueIds([clienteId, getClienteLocalIds()]);
+      console.log('🔍 Buscando notificações para cliente:', idsCliente);
+
+      if (idsCliente.length === 0) {
+        this.atualizarContagem(0);
+        return [];
+      }
+
+      const buscas = await Promise.all(idsCliente.map((id) =>
+        firebaseService.query('notificacoes_cliente', [
+          { field: 'clienteId', operator: '==', value: id }
+        ], 'data', 'desc').catch(() => [])
+      ));
+
+      const todas = await firebaseService.getAll('notificacoes_cliente').catch(() => []);
+      let notificacoes = Array.from(new Map([
+        ...buscas.flat(),
+        ...todas.filter((notificacao) => notificationMatchesCliente(notificacao, idsCliente)),
+      ].map((item) => [item.id, item])).values());
+
+      notificacoes.sort((a, b) => new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0));
+
       // Atualizar contagem
       const naoLidas = notificacoes.filter(n => !n.lida).length;
       this.atualizarContagem(naoLidas);
@@ -106,10 +168,8 @@ class NotificacoesPushService {
   // 🔥 MARCAR TODAS COMO LIDAS
   async marcarTodasComoLidas(clienteId) {
     try {
-      const naoLidas = await firebaseService.query('notificacoes_cliente', [
-        { field: 'clienteId', operator: '==', value: clienteId },
-        { field: 'lida', operator: '==', value: false }
-      ]);
+      const notificacoes = await this.buscarNotificacoes(clienteId);
+      const naoLidas = notificacoes.filter((n) => !n.lida);
       
       const promises = naoLidas.map(n => 
         firebaseService.update('notificacoes_cliente', n.id, {
