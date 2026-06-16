@@ -100,6 +100,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
@@ -435,7 +436,17 @@ const RecompensaMobileCard = ({ recompensa, onEditar, onExcluir }) => {
 };
 
 // Componente de Item de Resgate Mobile
-const ResgateItem = ({ resgate, cliente }) => {
+const getStatusResgateInfo = (resgate) => {
+  if (resgate?.utilizado || resgate?.status === 'utilizado') return { label: 'Utilizado', color: 'default' };
+  if (resgate?.status === 'cancelado') return { label: 'Cancelado', color: 'error' };
+  if (resgate?.status === 'expirado') return { label: 'Expirado', color: 'warning' };
+  return { label: 'Disponível', color: 'success' };
+};
+
+const ResgateItem = ({ resgate, cliente, onUtilizar, onCancelar }) => {
+  const statusInfo = getStatusResgateInfo(resgate);
+  const podeGerenciar = !resgate?.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(resgate?.status);
+
   return (
     <ListItem divider>
       <ListItemAvatar>
@@ -456,6 +467,11 @@ const ResgateItem = ({ resgate, cliente }) => {
             <Typography variant="caption" color="text.secondary">
               {formatDate(resgate.data)}
             </Typography>
+            {resgate.codigo && (
+              <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                Código: {resgate.codigo}
+              </Typography>
+            )}
           </>
         }
       />
@@ -466,10 +482,20 @@ const ResgateItem = ({ resgate, cliente }) => {
           </Typography>
           <Chip
             size="small"
-            label={resgate.status || 'Resgatado'}
-            color={resgate.status === 'cancelado' ? 'error' : 'success'}
+            label={statusInfo.label}
+            color={statusInfo.color}
             sx={{ height: 20, fontSize: '0.65rem' }}
           />
+          {podeGerenciar && (
+            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
+              <Button size="small" variant="contained" color="success" onClick={() => onUtilizar(resgate)}>
+                Usar
+              </Button>
+              <Button size="small" variant="outlined" color="error" onClick={() => onCancelar(resgate)}>
+                Cancelar
+              </Button>
+            </Stack>
+          )}
         </Box>
       </ListItemSecondaryAction>
     </ListItem>
@@ -536,6 +562,62 @@ function GerenciarFidelidade() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+
+  const getUsuarioAtual = () => {
+    try {
+      return JSON.parse(localStorage.getItem('usuario') || '{}');
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const handleUtilizarResgate = async (resgate) => {
+    if (!resgate?.id) return;
+    const codigoInformado = window.prompt(`Informe o código apresentado pelo cliente para utilizar o resgate de ${resgate.recompensaNome}:`);
+    if (codigoInformado === null) return;
+
+    if ((codigoInformado || '').trim().toUpperCase() !== String(resgate.codigo || '').trim().toUpperCase()) {
+      mostrarSnackbar('Código de resgate inválido. Confira o código no acesso do cliente.', 'error');
+      return;
+    }
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.utilizar(resgate.id, {
+        usuarioId: usuarioAtual.id || usuarioAtual.uid,
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        observacoes: 'Utilizado pela administração'
+      });
+      mostrarSnackbar('Resgate marcado como utilizado e sincronizado com o cliente.');
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao utilizar resgate:', error);
+      mostrarSnackbar(error.message || 'Erro ao utilizar resgate', 'error');
+    }
+  };
+
+  const handleCancelarResgate = async (resgate) => {
+    if (!resgate?.id) return;
+    const confirmar = window.confirm('Cancelar este resgate e devolver os pontos ao cliente?');
+    if (!confirmar) return;
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.cancelar(resgate.id, {
+        resgate,
+        estornarPontos: true,
+        usuarioId: usuarioAtual.id || usuarioAtual.uid,
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        motivo: 'Cancelado pela administração com estorno de pontos'
+      });
+      mostrarSnackbar('Resgate cancelado e pontos estornados para o cliente.');
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao cancelar resgate:', error);
+      mostrarSnackbar(error.message || 'Erro ao cancelar resgate', 'error');
+    }
+  };
+
   const carregarDados = async () => {
     try {
       setLoading(true);
@@ -565,8 +647,8 @@ function GerenciarFidelidade() {
       setResgates(resgatesData || []);
       setRecompensas(recompensasData || []);
 
-      // Registrar acesso na auditoria
-      await auditoriaService.registrar('acesso_gerenciar_fidelidade', {
+      // Auditoria não deve impedir o carregamento da página administrativa.
+      auditoriaService.registrar('acesso_gerenciar_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Acesso à página de gerenciamento de fidelidade',
         dados: {
@@ -574,7 +656,7 @@ function GerenciarFidelidade() {
           totalRecompensas: recompensasData?.length || 0,
           totalResgates: resgatesData?.length || 0
         }
-      });
+      }).catch((auditError) => console.warn('Auditoria de acesso ao gerenciamento de fidelidade falhou:', auditError));
 
       console.log('📊 Dados carregados:', {
         clientes: clientesData?.length || 0,
@@ -588,10 +670,10 @@ function GerenciarFidelidade() {
       console.error('❌ Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados', 'error');
       
-      await auditoriaService.registrarErro(error, { 
+      auditoriaService.registrarErro(error, {
         acao: 'carregar_gerenciar_fidelidade',
         detalhes: 'Erro ao carregar dados de fidelidade'
-      });
+      }).catch((auditError) => console.warn('Auditoria do erro de gerenciamento de fidelidade falhou:', auditError));
     } finally {
       setLoading(false);
     }
@@ -1474,9 +1556,11 @@ function GerenciarFidelidade() {
                     const cliente = clientes.find(c => c.id === resgate.clienteId);
                     return (
                       <ResgateItem
-                        key={index}
+                        key={resgate.id || index}
                         resgate={resgate}
                         cliente={cliente}
+                        onUtilizar={handleUtilizarResgate}
+                        onCancelar={handleCancelarResgate}
                       />
                     );
                   })}

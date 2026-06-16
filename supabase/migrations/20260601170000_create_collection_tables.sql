@@ -80,6 +80,7 @@ declare
     'entradas',
     'formularios_anamnese',
     'fornecedores',
+    'historico_precos_produtos',
     'indicacoes',
     'itens_venda',
     'logs',
