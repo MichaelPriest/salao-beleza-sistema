@@ -88,6 +88,7 @@ import { toast } from 'react-hot-toast';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
 import { Timestamp } from '../services/firebase';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { QRCodeSVG } from 'qrcode.react';
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
@@ -451,44 +452,21 @@ function Recompensas() {
         return;
       }
 
-      const resgate = {
-        recompensaId: selectedRecompensaResgate.id,
-        recompensaNome: selectedRecompensaResgate.nome,
-        clienteId: usuario?.clienteId || 'cliente_exemplo',
+      await resgateFidelidadeService.criar({
+        clienteId: usuario?.clienteId,
         clienteNome: usuario?.nome || 'Cliente',
+        cliente: {
+          id: usuario?.clienteId,
+          nome: usuario?.nome || 'Cliente',
+          authUid: usuario?.uid,
+          email: usuario?.email,
+        },
+        recompensa: selectedRecompensaResgate,
         pontosGastos: selectedRecompensaResgate.pontos,
-        data: new Date().toISOString(),
-        status: 'resgatado',
-        utilizado: false,
-        codigo: gerarCodigoResgate(),
         observacoes: resgateForm.observacoes,
         usuarioId: usuario?.uid || 'sistema',
         usuarioNome: usuario?.nome || 'Sistema',
-        createdAt: Timestamp.now(),
-      };
-
-      await firebaseService.add('resgates_fidelidade', resgate);
-
-      // Registrar débito dos pontos
-      const debito = {
-        clienteId: usuario?.clienteId || 'cliente_exemplo',
-        clienteNome: usuario?.nome || 'Cliente',
-        quantidade: selectedRecompensaResgate.pontos,
-        tipo: 'debito',
-        motivo: `Resgate: ${selectedRecompensaResgate.nome}`,
-        data: new Date().toISOString(),
-        usuarioId: usuario?.uid || 'sistema',
-        usuarioNome: usuario?.nome || 'Sistema',
-        createdAt: Timestamp.now(),
-      };
-      await firebaseService.add('pontuacao', debito);
-
-      // Atualizar quantidade disponível se não for ilimitado
-      if (!selectedRecompensaResgate.ilimitado && selectedRecompensaResgate.quantidade > 0) {
-        await firebaseService.update('recompensas', selectedRecompensaResgate.id, {
-          quantidade: selectedRecompensaResgate.quantidade - 1,
-        });
-      }
+      });
 
       toast.success('Recompensa resgatada com sucesso!');
       setOpenResgatarDialog(false);
@@ -514,13 +492,70 @@ function Recompensas() {
     }
   };
 
-  const gerarCodigoResgate = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let codigo = '';
-    for (let i = 0; i < 8; i++) {
-      codigo += chars.charAt(Math.floor(Math.random() * chars.length));
+  const handleImagemRecompensaChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem válido.');
+      return;
     }
-    return codigo;
+    if (file.size > 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 1MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setFormData((current) => ({ ...current, imagem: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem da recompensa:', error);
+      toast.error('Erro ao carregar imagem da recompensa.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleImagemRecompensaChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem válido.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 1MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setFormData((current) => ({ ...current, imagem: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem da recompensa:', error);
+      toast.error('Erro ao carregar imagem da recompensa.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleImagemRecompensaChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem válido.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 1MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setFormData((current) => ({ ...current, imagem: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem da recompensa:', error);
+      toast.error('Erro ao carregar imagem da recompensa.');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleImagemRecompensaChange = async (event) => {
