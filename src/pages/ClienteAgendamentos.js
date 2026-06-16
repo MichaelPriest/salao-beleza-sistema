@@ -1,4 +1,4 @@
-// src/pages/ClienteAgendamentos.js
+// src/pages/ClienteAgendamentos.js - VERSÃO OTIMIZADA PARA MOBILE
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -321,6 +321,8 @@ function ClienteAgendamentos() {
   const [selectedServicos, setSelectedServicos] = useState([]);
   const [filterStatus, setFilterStatus] = useState('todos');
   const [servicoExpandido, setServicoExpandido] = useState(false);
+  // NOVO: controla se deve mostrar todos os históricos
+  const [showAllHistory, setShowAllHistory] = useState(false);
   
   // Formulário de novo agendamento
   const [formData, setFormData] = useState({
@@ -332,66 +334,21 @@ function ClienteAgendamentos() {
 
   const timeSlots = TIME_SLOTS_PADRAO;
 
-  // ========== FUNÇÕES CORRIGIDAS PARA BUSCAR TODOS OS AGENDAMENTOS ==========
-  
-  // Função para obter todos os possíveis IDs do cliente
+  // --- Funções auxiliares ---
   const getClienteIdsBusca = () => {
     const ids = new Set();
-    
-    // Adiciona todos os IDs possíveis do cliente
     if (cliente?.id) ids.add(String(cliente.id));
     if (cliente?.uid) ids.add(String(cliente.uid));
     if (cliente?.authUid) ids.add(String(cliente.authUid));
     if (cliente?.googleUid) ids.add(String(cliente.googleUid));
     if (firebaseUser?.uid) ids.add(String(firebaseUser.uid));
     if (cliente?.email) ids.add(String(cliente.email));
-    if (firebaseUser?.email) ids.add(String(firebaseUser.email));
-    
-    // Remove valores vazios
-    const result = Array.from(ids).filter(id => id && id !== 'undefined' && id !== 'null' && id !== '');
-    
-    console.log('🔍 IDs do cliente para busca:', result);
-    return result;
+    return Array.from(ids).filter(id => id && id !== 'undefined' && id !== 'null');
   };
 
-  // Função para verificar se um agendamento pertence ao cliente
-  const agendamentoPertenceAoCliente = (agendamento, clienteIds, emailCliente) => {
-    // Coleta todos os IDs do agendamento
-    const agendamentoIds = [
-      agendamento.clienteId,
-      agendamento.clienteUid,
-      agendamento.clienteAuthUid,
-      agendamento.authUid,
-      agendamento.googleUid,
-      agendamento.clienteEmail,
-      agendamento.email,
-      agendamento.usuarioId,
-      agendamento.userId,
-      agendamento.cliente?.id,
-      agendamento.cliente?.uid,
-      agendamento.cliente?.authUid,
-      agendamento.cliente?.email,
-    ]
-      .filter(Boolean)
-      .map(String);
-
-    // Verifica se algum ID do agendamento corresponde a algum ID do cliente
-    const matchPorId = clienteIds.some(clienteId => 
-      agendamentoIds.some(id => id === String(clienteId))
-    );
-
-    // Verifica por email
-    const matchPorEmail = emailCliente && (
-      agendamento.clienteEmail === emailCliente ||
-      agendamento.email === emailCliente ||
-      agendamento.cliente?.email === emailCliente
-    );
-
-    return matchPorId || matchPorEmail;
-  };
+  const getClienteEmail = () => cliente?.email || firebaseUser?.email || null;
 
   const calcularHorarioFim = (horario, duracaoTotal = 60) => agendaDisponibilidadeService.calcularHorarioFim(horario, duracaoTotal);
-
   const calcularDuracaoSelecionada = () => selectedServicos.reduce((total, servico) => total + Number(servico.duracao || 60), 0) || 60;
 
   const getMotivoIndisponibilidade = (profissionalId, data, horario) => agendaDisponibilidadeService.obterMotivoIndisponibilidade({
@@ -409,19 +366,13 @@ function ClienteAgendamentos() {
     return getMotivoIndisponibilidade(formData.profissionalId, formData.data, horario) === null;
   };
 
-  useEffect(() => {
-    if (cliente) {
-      carregarDados();
-    }
-  }, [cliente]);
-
-  // ========== FUNÇÃO CARREGAR DADOS CORRIGIDA ==========
+  // --- Carregamento de dados ---
   const carregarDados = async () => {
     try {
       setLoading(true);
       
       const clienteIds = getClienteIdsBusca();
-      const emailCliente = cliente?.email || firebaseUser?.email;
+      const emailCliente = getClienteEmail();
 
       if (clienteIds.length === 0 && !emailCliente) {
         toast.error('Erro ao identificar o cliente');
@@ -429,27 +380,46 @@ function ClienteAgendamentos() {
         return;
       }
 
-      console.log('🔍 Buscando agendamentos para IDs:', clienteIds);
+      console.log('🔍 IDs do cliente:', clienteIds);
       console.log('🔍 Email do cliente:', emailCliente);
 
       // Buscar todos os agendamentos
-      const todosAgendamentos = await firebaseService.getAll('agendamentos').catch(() => []);
+      let todosAgendamentos = await firebaseService.getAll('agendamentos').catch(() => []);
       
+      // Se não encontrou por IDs, tentar buscar por email
+      if (todosAgendamentos.length === 0 && emailCliente) {
+        const agendamentosPorEmail = await firebaseService.query('agendamentos', [
+          { field: 'clienteEmail', operator: '==', value: emailCliente }
+        ]).catch(() => []);
+        todosAgendamentos = agendamentosPorEmail;
+      }
+
       console.log('📋 Total de agendamentos no sistema:', todosAgendamentos.length);
 
-      // Filtrar agendamentos do cliente
+      // Filtrar agendamentos do cliente com normalização
       const agendamentosCliente = (todosAgendamentos || []).filter((agendamento) => {
-        const pertence = agendamentoPertenceAoCliente(agendamento, clienteIds, emailCliente);
-        if (pertence) {
-          console.log('✅ Agendamento encontrado:', {
-            id: agendamento.id,
-            clienteId: agendamento.clienteId,
-            clienteNome: agendamento.clienteNome,
-            data: agendamento.data,
-            status: agendamento.status
-          });
+        const agendamentoIds = [
+          agendamento.clienteId,
+          agendamento.clienteUid,
+          agendamento.clienteAuthUid,
+          agendamento.authUid,
+          agendamento.googleUid,
+          agendamento.clienteEmail,
+          agendamento.email,
+          agendamento.usuarioId,
+          agendamento.userId,
+        ]
+          .filter(Boolean)
+          .map(String);
+
+        const match = clienteIds.some(clienteId => 
+          agendamentoIds.some(id => id === String(clienteId))
+        ) || (emailCliente && agendamento.clienteEmail === emailCliente);
+
+        if (match) {
+          console.log('✅ Agendamento encontrado:', agendamento.id);
         }
-        return pertence;
+        return match;
       });
 
       console.log('📋 Agendamentos do cliente encontrados:', agendamentosCliente.length);
@@ -463,7 +433,7 @@ function ClienteAgendamentos() {
       
       setAgendamentos(agendamentosOrdenados);
       
-      // Carregar outros dados (serviços, profissionais, disponibilidades, ausências)
+      // Carregar outros dados
       const [servicosData, profissionaisData, dispData, ausData] = await Promise.all([
         firebaseService.getAll('servicos').catch(() => []),
         firebaseService.getAll('profissionais').catch(() => []),
@@ -488,6 +458,13 @@ function ClienteAgendamentos() {
     }
   };
 
+  useEffect(() => {
+    if (cliente) {
+      carregarDados();
+    }
+  }, [cliente]);
+
+  // --- Handlers ---
   const handleNovoAgendamento = () => {
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
@@ -650,43 +627,12 @@ function ClienteAgendamentos() {
     }
   };
 
-  const getStatusLabel = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return 'Conf.';
-      case 'pendente': return 'Pend.';
-      case 'cancelado': return 'Canc.';
-      case 'finalizado': return 'Real.';
-      default: return status || 'Pend.';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return <CheckIcon fontSize="small" />;
-      case 'pendente': return <ScheduleIcon fontSize="small" />;
-      case 'cancelado': return <CancelIcon fontSize="small" />;
-      case 'finalizado': return <CheckIcon fontSize="small" />;
-      default: return <EventIcon fontSize="small" />;
-    }
-  };
-
-  const formatarData = (data) => {
-    if (!data) return '-';
-    try {
-      return new Date(data).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit'
-      });
-    } catch {
-      return data;
-    }
-  };
-
   const formatarMoeda = (valor) => {
     if (!valor) return 'R$ 0';
     return `R$ ${valor.toFixed(2)}`;
   };
 
+  // --- Filtros e agrupamentos ---
   const agendamentosFiltrados = agendamentos.filter(a => {
     if (filterStatus === 'todos') return true;
     return a.status?.toLowerCase() === filterStatus;
@@ -702,6 +648,15 @@ function ClienteAgendamentos() {
     return status === 'cancelado' || status === 'finalizado';
   });
 
+  // Controlar quantos itens do histórico exibir
+  const historyToShow = showAllHistory ? agendamentosPassados : agendamentosPassados.slice(0, 3);
+
+  // Resetar showAllHistory quando o filtro mudar
+  useEffect(() => {
+    setShowAllHistory(false);
+  }, [filterStatus]);
+
+  // --- Render ---
   if (loading) {
     return <LoadingSkeleton />;
   }
@@ -797,7 +752,7 @@ function ClienteAgendamentos() {
               Histórico
             </Typography>
             <AnimatePresence>
-              {agendamentosPassados.slice(0, 3).map((agendamento) => {
+              {historyToShow.map((agendamento) => {
                 const profissional = profissionais.find(p => 
                   p.id === agendamento.profissionalId
                 );
@@ -811,17 +766,22 @@ function ClienteAgendamentos() {
                   />
                 );
               })}
-              {agendamentosPassados.length > 3 && (
-                <Button
-                  fullWidth
-                  size="small"
-                  onClick={() => setFilterStatus('finalizado')}
-                  sx={{ color: '#9c27b0', mt: 0.5 }}
-                >
-                  Ver mais {agendamentosPassados.length - 3}
-                </Button>
-              )}
             </AnimatePresence>
+
+            {/* Botão "Ver mais" / "Ver menos" */}
+            {agendamentosPassados.length > 3 && (
+              <Button
+                fullWidth
+                size="small"
+                onClick={() => setShowAllHistory(!showAllHistory)}
+                sx={{ color: '#9c27b0', mt: 0.5 }}
+                startIcon={showAllHistory ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              >
+                {showAllHistory 
+                  ? `Ver menos (${agendamentosPassados.length})` 
+                  : `Ver mais (${agendamentosPassados.length - 3})`}
+              </Button>
+            )}
           </>
         )}
 
@@ -1039,7 +999,7 @@ function ClienteAgendamentos() {
           {selectedAgendamento && (
             <Paper variant="outlined" sx={{ p: 1.5, bgcolor: '#f5f5f5' }}>
               <Typography variant="caption" display="block">
-                <strong>Data:</strong> {formatarData(selectedAgendamento.data)} às {selectedAgendamento.horario}
+                <strong>Data:</strong> {selectedAgendamento.data} às {selectedAgendamento.horario}
               </Typography>
               <Typography variant="caption" display="block">
                 <strong>Serviço:</strong> {selectedAgendamento.servicosNomes}
