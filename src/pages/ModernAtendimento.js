@@ -50,6 +50,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Stack,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
