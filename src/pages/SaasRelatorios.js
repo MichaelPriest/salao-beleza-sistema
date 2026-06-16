@@ -22,26 +22,10 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-hot-toast';
 import firebaseService from '../services/firebase';
 import { PLANOS_PADRAO, STATUS_ASSINATURA, saasService } from '../services/saasService';
+import { ReportHeader, ReportMetricCard, ReportSectionCard, reportPageSx, reportTableSx } from '../components/ReportDesign';
 
 const formatCurrency = (value, currency = 'BRL') => new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value || 0));
 const formatDate = (value) => (value ? new Intl.DateTimeFormat('pt-BR').format(new Date(value)) : '-');
-
-function MetricCard({ icon, title, value, helper, color = 'primary' }) {
-  return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Box sx={{ color: `${color}.main` }}>{icon}</Box>
-          <Box>
-            <Typography variant="body2" color="text.secondary">{title}</Typography>
-            <Typography variant="h4" sx={{ fontWeight: 800 }}>{value}</Typography>
-            {helper && <Typography variant="caption" color="text.secondary">{helper}</Typography>}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
 
 function SaasRelatorios() {
   const [loading, setLoading] = useState(true);
@@ -102,29 +86,26 @@ function SaasRelatorios() {
   if (loading) return <Box sx={{ minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>Relatórios do SaaS</Typography>
-          <Typography color="text.secondary">Acompanhe MRR, empresas, assinaturas, faturas em aberto e evolução comercial da plataforma.</Typography>
-        </Box>
-        <Chip icon={<AssessmentIcon />} label="Visão plataforma" color="primary" />
-      </Stack>
+    <Box sx={reportPageSx}>
+      <ReportHeader
+        title="Relatórios do SaaS"
+        subtitle="Acompanhe MRR, empresas, assinaturas, faturas em aberto e evolução comercial da plataforma."
+        icon={<AssessmentIcon />}
+        badge="Visão plataforma"
+      />
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}><MetricCard icon={<WorkspacePremiumIcon />} title="Assinaturas ativas" value={metricas.assinaturasAtivas} helper={`${assinaturas.length} contratos cadastrados`} /></Grid>
-        <Grid item xs={12} md={3}><MetricCard icon={<ReceiptLongIcon />} title="MRR estimado" value={formatCurrency(metricas.mrr)} helper="Receita recorrente mensal" color="success" /></Grid>
-        <Grid item xs={12} md={3}><MetricCard icon={<ReceiptLongIcon />} title="Em aberto" value={formatCurrency(metricas.aberto)} helper="Faturas pendentes/vencidas" color="warning" /></Grid>
-        <Grid item xs={12} md={3}><MetricCard icon={<BusinessIcon />} title="Empresas inadimplentes" value={metricas.inadimplentes} helper={`${empresas.length} empresas totais`} color="error" /></Grid>
+        <Grid item xs={12} md={3}><ReportMetricCard icon={<WorkspacePremiumIcon />} title="Assinaturas ativas" value={metricas.assinaturasAtivas} helper={`${assinaturas.length} contratos cadastrados`} /></Grid>
+        <Grid item xs={12} md={3}><ReportMetricCard icon={<ReceiptLongIcon />} title="MRR estimado" value={formatCurrency(metricas.mrr)} helper="Receita recorrente mensal" color="success" /></Grid>
+        <Grid item xs={12} md={3}><ReportMetricCard icon={<ReceiptLongIcon />} title="Em aberto" value={formatCurrency(metricas.aberto)} helper="Faturas pendentes/vencidas" color="warning" /></Grid>
+        <Grid item xs={12} md={3}><ReportMetricCard icon={<BusinessIcon />} title="Empresas inadimplentes" value={metricas.inadimplentes} helper={`${empresas.length} empresas totais`} color="error" /></Grid>
       </Grid>
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>Receita por plano</Typography>
+          <ReportSectionCard title="Receita por plano" subtitle="Distribuição de contratos e MRR por plano comercial.">
               <TableContainer>
-                <Table size="small">
+                <Table size="small" sx={reportTableSx}>
                   <TableHead><TableRow><TableCell>Plano</TableCell><TableCell>Empresas</TableCell><TableCell>Assinaturas</TableCell><TableCell align="right">MRR</TableCell></TableRow></TableHead>
                   <TableBody>
                     {resumoPorPlano.map(({ plano, empresas: totalEmpresas, assinaturas: totalAssinaturas, receitaPlano }) => (
@@ -138,16 +119,13 @@ function SaasRelatorios() {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </CardContent>
-          </Card>
+          </ReportSectionCard>
         </Grid>
         <Grid item xs={12} lg={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>Últimas faturas</Typography>
+          <ReportSectionCard title="Últimas faturas" subtitle="Acompanhamento operacional dos recebíveis SaaS.">
               {faturas.length === 0 ? <Alert severity="info">Nenhuma fatura SaaS gerada ainda.</Alert> : (
                 <TableContainer>
-                  <Table size="small">
+                  <Table size="small" sx={reportTableSx}>
                     <TableHead><TableRow><TableCell>Empresa</TableCell><TableCell>Vencimento</TableCell><TableCell>Status</TableCell><TableCell align="right">Valor</TableCell></TableRow></TableHead>
                     <TableBody>
                       {[...faturas].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 10).map((fatura) => (
@@ -162,8 +140,7 @@ function SaasRelatorios() {
                   </Table>
                 </TableContainer>
               )}
-            </CardContent>
-          </Card>
+          </ReportSectionCard>
         </Grid>
       </Grid>
     </Box>

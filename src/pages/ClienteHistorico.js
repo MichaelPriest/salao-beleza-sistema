@@ -27,6 +27,7 @@ import {
 import { motion } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
+import { ReportHeader, ReportMetricCard, ReportSectionCard, reportPageSx, reportTableSx } from '../components/ReportDesign';
 
 function ClienteHistorico() {
   const { cliente } = useAuthCliente();
@@ -109,16 +110,13 @@ function ClienteHistorico() {
   }
 
   return (
-    <Box>
-      {/* Cabeçalho */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-          Meu Histórico
-        </Typography>
-        <Typography variant="body2" color="textSecondary">
-          Acompanhe todos os seus atendimentos
-        </Typography>
-      </Box>
+    <Box sx={reportPageSx}>
+      <ReportHeader
+        title="Meu Histórico"
+        subtitle="Acompanhe todos os atendimentos, valores investidos e preferências de serviços."
+        icon={<HistoryIcon />}
+        badge="Cliente"
+      />
 
       {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -128,21 +126,7 @@ function ClienteHistorico() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <HistoryIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                      {estatisticas.totalAtendimentos}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Atendimentos realizados
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+            <ReportMetricCard icon={<HistoryIcon />} title="Atendimentos realizados" value={estatisticas.totalAtendimentos} />
           </motion.div>
         </Grid>
 
@@ -152,21 +136,7 @@ function ClienteHistorico() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <MoneyIcon sx={{ fontSize: 40, color: '#4caf50' }} />
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                      R$ {estatisticas.totalGasto.toFixed(2)}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Total investido
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+            <ReportMetricCard icon={<MoneyIcon />} title="Total investido" value={`R$ ${estatisticas.totalGasto.toFixed(2)}`} color="#4caf50" />
           </motion.div>
         </Grid>
 
@@ -176,35 +146,17 @@ function ClienteHistorico() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <PersonIcon sx={{ fontSize: 40, color: '#ff9800' }} />
-                  <Box>
-                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                      Serviço favorito
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {estatisticas.servicosFavoritos[0]?.nome || '-'}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+            <ReportMetricCard icon={<PersonIcon />} title="Serviço favorito" value={estatisticas.servicosFavoritos[0]?.nome || '-'} helper={estatisticas.servicosFavoritos[0] ? `${estatisticas.servicosFavoritos[0].count} visita(s)` : 'Sem recorrência'} color="#ff9800" />
           </motion.div>
         </Grid>
       </Grid>
 
       {/* Lista de Atendimentos */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-            Todos os Atendimentos
-          </Typography>
+      <ReportSectionCard title="Todos os atendimentos" subtitle="Histórico organizado por data, serviço, profissional e valor.">
 
           {atendimentos.length > 0 ? (
             <TableContainer>
-              <Table>
+              <Table sx={reportTableSx}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Data</TableCell>
@@ -235,8 +187,7 @@ function ClienteHistorico() {
               </Typography>
             </Box>
           )}
-        </CardContent>
-      </Card>
+      </ReportSectionCard>
     </Box>
   );
 }

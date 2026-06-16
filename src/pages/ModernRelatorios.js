@@ -118,6 +118,7 @@ import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { ReportHeader, ReportSectionCard, reportPageSx } from '../components/ReportDesign';
 
 const COLORS = ['#9c27b0', '#ff4081', '#7b1fa2', '#ba68c8', '#f8bbd0', '#f3e5f5', '#ce93d8', '#e1bee7', '#4caf50', '#ff9800'];
 
@@ -2964,12 +2965,13 @@ function ModernRelatorios() {
   }
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-          Relatórios
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+    <Box sx={reportPageSx}>
+      <ReportHeader
+        title="Relatórios"
+        subtitle="Painel gerencial padronizado com filtros, gráficos, exportações e análises por área."
+        icon={<AssessmentIcon />}
+        badge="Gerencial"
+        actions={<>
           <Button
             variant="contained"
             startIcon={<PrintIcon />}
@@ -2981,44 +2983,20 @@ function ModernRelatorios() {
               }
             }}
             size="medium"
-            sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }}
+            sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } }}
           >
             Imprimir
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<PdfIcon />}
-            onClick={handleExportPDF}
-            size="medium"
-            color="error"
-          >
-            PDF
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<ExcelIcon />}
-            onClick={handleExportExcel}
-            size="medium"
-            color="success"
-          >
-            Excel
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportJSON}
-            size="medium"
-          >
-            JSON
-          </Button>
-        </Box>
-      </Box>
+          <Button variant="contained" startIcon={<PdfIcon />} onClick={handleExportPDF} size="medium" color="error">PDF</Button>
+          <Button variant="contained" startIcon={<ExcelIcon />} onClick={handleExportExcel} size="medium" color="success">Excel</Button>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportJSON} size="medium" sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>JSON</Button>
+        </>}
+      />
 
       <Grid container spacing={3}>
         {/* Filtros */}
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
+          <ReportSectionCard title="Filtros do relatório" subtitle="Escolha o tipo, período e datas para manter todos os relatórios no mesmo padrão.">
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={3}>
                   <FormControl fullWidth size="small">
@@ -3087,8 +3065,7 @@ function ModernRelatorios() {
                   </>
                 )}
               </Grid>
-            </CardContent>
-          </Card>
+          </ReportSectionCard>
         </Grid>
 
         {/* Gráficos por tipo de relatório */}
