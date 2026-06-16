@@ -838,14 +838,6 @@ function GerenciarFidelidade() {
     }
   };
 
-  const getUsuarioAtual = () => {
-    try {
-      return JSON.parse(localStorage.getItem('usuario') || '{}');
-    } catch {
-      return {};
-    }
-  };
-
   const handleUtilizarResgate = async (resgate) => {
     try {
       const usuarioAtual = getUsuarioAtual();
