@@ -492,9 +492,9 @@ function ClienteLayout() {
         {/* AppBar Mobile */}
         {isMobile && (
           <AppBar position="fixed" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 1200 }}>
-            <Toolbar>
+            <Toolbar sx={{ px: { xs: 1, sm: 2 }, minHeight: { xs: 64, sm: 72 } }}>
               <IconButton color="inherit" edge="start" onClick={handleDrawerToggle}><MenuIcon /></IconButton>
-              <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0' }}>BeautyPro</Typography>
+              <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0', fontSize: { xs: '1rem', sm: '1.25rem' } }}>BeautyPro</Typography>
               <IconButton color="inherit" onClick={handleNotificacoesClick}>
                 <Badge badgeContent={notificacoesNaoLidas} color="secondary"><NotificationsIcon /></Badge>
               </IconButton>
@@ -513,12 +513,12 @@ function ClienteLayout() {
         )}
 
         {/* Drawer Mobile */}
-        <SwipeableDrawer anchor="left" open={mobileOpen} onClose={handleDrawerToggle} onOpen={() => {}} disableBackdropTransition ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: 280, backgroundColor: '#ffffff' } }}>
+        <SwipeableDrawer anchor="left" open={mobileOpen} onClose={handleDrawerToggle} onOpen={() => {}} disableBackdropTransition ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: '84vw', sm: 320 }, maxWidth: 320, backgroundColor: '#ffffff' } }}>
           {drawer}
         </SwipeableDrawer>
 
         {/* Conteúdo Principal */}
-        <Box component="main" sx={{ flexGrow: 1, p: isMobile ? 2 : 3, pt: isMobile ? '80px' : 3, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
+        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.5, sm: 2, md: 3 }, pt: isMobile ? { xs: '76px', sm: '84px' } : 3, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
           {/* Botão de Notificações Desktop */}
           {!isMobile && (
             <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
@@ -530,7 +530,7 @@ function ClienteLayout() {
 
           {/* Badge Formulários Pendentes */}
           {formulariosPendentes > 0 && (
-            <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: 20, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
+            <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: { xs: 12, sm: 20 }, left: { xs: 12, sm: 'auto' }, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
               <Paper elevation={3} sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#fff3e0', borderRadius: 2, border: '1px solid #ff9800', '&:hover': { bgcolor: '#ffe0b2' } }}>
                 <Badge badgeContent={formulariosPendentes} color="warning"><AssignmentIcon sx={{ color: '#ff9800' }} /></Badge>
                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
@@ -540,7 +540,7 @@ function ClienteLayout() {
             </Box>
           )}
 
-          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
             <Outlet />
           </motion.div>
         </Box>
@@ -555,7 +555,7 @@ function ClienteLayout() {
         onClose={handleNotificacoesClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 360, maxHeight: 480, borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' } }}
+        PaperProps={{ sx: { width: { xs: 'calc(100vw - 24px)', sm: 360 }, maxWidth: 360, maxHeight: { xs: '70vh', sm: 480 }, borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' } }}
       >
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>Notificações</Typography>
