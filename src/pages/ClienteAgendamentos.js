@@ -1,4 +1,4 @@
-// src/pages/ClienteAgendamentos.js - VERSÃO OTIMIZADA PARA MOBILE
+// src/pages/ClienteAgendamentos.js
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -332,13 +332,63 @@ function ClienteAgendamentos() {
 
   const timeSlots = TIME_SLOTS_PADRAO;
 
-  const getClienteIdsBusca = () => ([
-    cliente?.id,
-    cliente?.uid,
-    cliente?.authUid,
-    cliente?.googleUid,
-    firebaseUser?.uid,
-  ].filter(Boolean));
+  // ========== FUNÇÕES CORRIGIDAS PARA BUSCAR TODOS OS AGENDAMENTOS ==========
+  
+  // Função para obter todos os possíveis IDs do cliente
+  const getClienteIdsBusca = () => {
+    const ids = new Set();
+    
+    // Adiciona todos os IDs possíveis do cliente
+    if (cliente?.id) ids.add(String(cliente.id));
+    if (cliente?.uid) ids.add(String(cliente.uid));
+    if (cliente?.authUid) ids.add(String(cliente.authUid));
+    if (cliente?.googleUid) ids.add(String(cliente.googleUid));
+    if (firebaseUser?.uid) ids.add(String(firebaseUser.uid));
+    if (cliente?.email) ids.add(String(cliente.email));
+    if (firebaseUser?.email) ids.add(String(firebaseUser.email));
+    
+    // Remove valores vazios
+    const result = Array.from(ids).filter(id => id && id !== 'undefined' && id !== 'null' && id !== '');
+    
+    console.log('🔍 IDs do cliente para busca:', result);
+    return result;
+  };
+
+  // Função para verificar se um agendamento pertence ao cliente
+  const agendamentoPertenceAoCliente = (agendamento, clienteIds, emailCliente) => {
+    // Coleta todos os IDs do agendamento
+    const agendamentoIds = [
+      agendamento.clienteId,
+      agendamento.clienteUid,
+      agendamento.clienteAuthUid,
+      agendamento.authUid,
+      agendamento.googleUid,
+      agendamento.clienteEmail,
+      agendamento.email,
+      agendamento.usuarioId,
+      agendamento.userId,
+      agendamento.cliente?.id,
+      agendamento.cliente?.uid,
+      agendamento.cliente?.authUid,
+      agendamento.cliente?.email,
+    ]
+      .filter(Boolean)
+      .map(String);
+
+    // Verifica se algum ID do agendamento corresponde a algum ID do cliente
+    const matchPorId = clienteIds.some(clienteId => 
+      agendamentoIds.some(id => id === String(clienteId))
+    );
+
+    // Verifica por email
+    const matchPorEmail = emailCliente && (
+      agendamento.clienteEmail === emailCliente ||
+      agendamento.email === emailCliente ||
+      agendamento.cliente?.email === emailCliente
+    );
+
+    return matchPorId || matchPorEmail;
+  };
 
   const calcularHorarioFim = (horario, duracaoTotal = 60) => agendaDisponibilidadeService.calcularHorarioFim(horario, duracaoTotal);
 
@@ -365,43 +415,73 @@ function ClienteAgendamentos() {
     }
   }, [cliente]);
 
+  // ========== FUNÇÃO CARREGAR DADOS CORRIGIDA ==========
   const carregarDados = async () => {
     try {
       setLoading(true);
       
       const clienteIds = getClienteIdsBusca();
+      const emailCliente = cliente?.email || firebaseUser?.email;
 
-      if (clienteIds.length === 0) {
+      if (clienteIds.length === 0 && !emailCliente) {
         toast.error('Erro ao identificar o cliente');
+        setLoading(false);
         return;
       }
 
-      const [todosAgendamentos, servicosData, profissionaisData, dispData, ausData] = await Promise.all([
-        firebaseService.getAll('agendamentos').catch(() => []),
-        firebaseService.getAll('servicos'),
-        firebaseService.getAll('profissionais'),
+      console.log('🔍 Buscando agendamentos para IDs:', clienteIds);
+      console.log('🔍 Email do cliente:', emailCliente);
+
+      // Buscar todos os agendamentos
+      const todosAgendamentos = await firebaseService.getAll('agendamentos').catch(() => []);
+      
+      console.log('📋 Total de agendamentos no sistema:', todosAgendamentos.length);
+
+      // Filtrar agendamentos do cliente
+      const agendamentosCliente = (todosAgendamentos || []).filter((agendamento) => {
+        const pertence = agendamentoPertenceAoCliente(agendamento, clienteIds, emailCliente);
+        if (pertence) {
+          console.log('✅ Agendamento encontrado:', {
+            id: agendamento.id,
+            clienteId: agendamento.clienteId,
+            clienteNome: agendamento.clienteNome,
+            data: agendamento.data,
+            status: agendamento.status
+          });
+        }
+        return pertence;
+      });
+
+      console.log('📋 Agendamentos do cliente encontrados:', agendamentosCliente.length);
+
+      // Ordenar por data (mais recentes primeiro)
+      const agendamentosOrdenados = agendamentosCliente.sort((a, b) => {
+        const dataA = `${a.data || ''} ${a.horario || a.horaInicio || ''}`;
+        const dataB = `${b.data || ''} ${b.horario || b.horaInicio || ''}`;
+        return dataB.localeCompare(dataA);
+      });
+      
+      setAgendamentos(agendamentosOrdenados);
+      
+      // Carregar outros dados (serviços, profissionais, disponibilidades, ausências)
+      const [servicosData, profissionaisData, dispData, ausData] = await Promise.all([
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('disponibilidades').catch(() => []),
         firebaseService.getAll('ausencias').catch(() => [])
       ]);
-
-      const agendamentosCliente = (todosAgendamentos || [])
-        .filter((agendamento) => clienteIds.some((id) => [
-          agendamento.clienteId,
-          agendamento.clienteUid,
-          agendamento.clienteAuthUid,
-          agendamento.authUid,
-          agendamento.googleUid,
-        ].filter(Boolean).map(String).includes(String(id))))
-        .sort((a, b) => `${b.data || ''} ${b.horario || b.horaInicio || ''}`.localeCompare(`${a.data || ''} ${a.horario || a.horaInicio || ''}`));
       
-      setAgendamentos(agendamentosCliente);
       setServicos(servicosData || []);
       setProfissionais(profissionaisData || []);
       setDisponibilidades(dispData || []);
       setAusencias(ausData || []);
       
+      if (agendamentosOrdenados.length === 0) {
+        console.log('ℹ️ Nenhum agendamento encontrado para este cliente');
+      }
+      
     } catch (error) {
-      console.error('Erro ao carregar agendamentos:', error);
+      console.error('❌ Erro ao carregar agendamentos:', error);
       toast.error('Erro ao carregar agendamentos');
     } finally {
       setLoading(false);
