@@ -94,6 +94,8 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService'; // 🔥 ADICIONADO
+import { ReportHeader, ReportSectionCard, reportPageSx } from '../components/ReportDesign';
+import { exportRowsToPdf, exportRowsToExcel } from '../utils/reportExportUtils';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -628,9 +630,46 @@ function AnaliseVendas() {
       // 🔥 LOG TÉCNICO
       await firebaseService.log('info', `Exportando análise de vendas para ${formato}`);
       
-      if (formato === 'csv') {
+      const dadosExport = vendas.map(venda => ({
+        Data: venda.data || '',
+        Cliente: venda.clienteNome || '',
+        Profissional: venda.profissionalNome || '',
+        Serviços: venda.itensServico?.map(s => s.nome).join(', ') || venda.servicoNome || '',
+        Valor: venda.valorTotal || 0,
+        'Forma Pagamento': venda.pagamentos?.map(p => p.formaPagamento).join(', ') || ''
+      }));
+
+      if (formato === 'pdf') {
+        exportRowsToPdf({
+          title: 'Análise de Vendas',
+          subtitle: `Vendas: ${metricas.totalVendas} • Faturamento: ${formatarMoeda(metricas.faturamentoTotal)}`,
+          summary: [
+            { label: 'Total de vendas', value: metricas.totalVendas },
+            { label: 'Faturamento', value: formatarMoeda(metricas.faturamentoTotal) },
+            { label: 'Ticket médio', value: formatarMoeda(metricas.ticketMedio) },
+            { label: 'Clientes atendidos', value: metricas.clientesAtendidos },
+          ],
+          rows: dadosExport,
+          filename: `analise-vendas-${format(new Date(), 'yyyyMMdd')}.pdf`,
+        });
+        toast.success('Relatório PDF gerado');
+      } else if (formato === 'excel') {
+        exportRowsToExcel({
+          title: 'Análise de Vendas',
+          subtitle: `Vendas: ${metricas.totalVendas} • Faturamento: ${formatarMoeda(metricas.faturamentoTotal)}`,
+          summary: [
+            { label: 'Total de vendas', value: metricas.totalVendas },
+            { label: 'Faturamento', value: metricas.faturamentoTotal },
+            { label: 'Ticket médio', value: metricas.ticketMedio },
+            { label: 'Clientes atendidos', value: metricas.clientesAtendidos },
+          ],
+          rows: dadosExport,
+          filename: `analise-vendas-${format(new Date(), 'yyyyMMdd')}.xlsx`,
+        });
+        toast.success('Planilha Excel gerada');
+      } else if (formato === 'csv') {
         // Criar dados para CSV
-        const dadosExport = vendas.map(venda => ({
+        const dadosCsv = vendas.map(venda => ({
           Data: venda.data || '',
           Cliente: venda.clienteNome || '',
           Profissional: venda.profissionalNome || '',
@@ -641,8 +680,8 @@ function AnaliseVendas() {
   
         // Gerar CSV
         const csvContent = [
-          Object.keys(dadosExport[0] || {}).join(','),
-          ...dadosExport.map(row => Object.values(row).map(val => `"${val}"`).join(','))
+          Object.keys(dadosCsv[0] || {}).join(','),
+          ...dadosCsv.map(row => Object.values(row).map(val => `"${val}"`).join(','))
         ].join('\n');
   
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -652,10 +691,6 @@ function AnaliseVendas() {
         link.click();
         
         toast.success('Dados exportados para CSV');
-      } else if (formato === 'pdf') {
-        toast.success('Relatório PDF gerado (simulação)');
-      } else if (formato === 'excel') {
-        toast.success('Planilha Excel gerada (simulação)');
       }
       
       // 🔥 AUDITORIA - CORRIGIDO
@@ -725,45 +760,23 @@ function AnaliseVendas() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Box>
-        {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              Análise de Vendas
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Métricas detalhadas e insights sobre o desempenho de vendas
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={() => handleExportar('csv')}
-            >
-              Exportar CSV
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={() => window.print()}
-            >
-              Imprimir
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleRefresh}
-            >
-              Atualizar
-            </Button>
-          </Box>
-        </Box>
+      <Box sx={reportPageSx}>
+        <ReportHeader
+          title="Análise de Vendas"
+          subtitle="Métricas detalhadas e insights sobre o desempenho de vendas."
+          icon={<AssessmentIcon />}
+          badge="Vendas"
+          actions={<>
+            <Button variant="contained" color="error" startIcon={<DownloadIcon />} onClick={() => handleExportar('pdf')}>PDF</Button>
+            <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => handleExportar('excel')}>Excel</Button>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleExportar('csv')} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>CSV</Button>
+            <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => window.print()} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>Imprimir</Button>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefresh} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>Atualizar</Button>
+          </>}
+        />
 
         {/* Filtros */}
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
+        <ReportSectionCard title="Filtros da análise" subtitle="Padronize o período, agrupamento e dimensões antes de exportar." sx={{ mb: 4 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
@@ -918,8 +931,7 @@ function AnaliseVendas() {
                 </Grid>
               </Box>
             </Collapse>
-          </CardContent>
-        </Card>
+        </ReportSectionCard>
 
         {/* Cards de Métricas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
