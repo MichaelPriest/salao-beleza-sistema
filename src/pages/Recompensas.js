@@ -414,12 +414,13 @@ function Recompensas() {
   };
 
   const getOpcoesItemRelacionado = (tipo = formData.tipo) => {
-    if (tipo === 'servico') return servicosDisponiveis;
+    if (tipo === 'servico' || tipo === 'desconto') return servicosDisponiveis;
     if (tipo === 'produto' || tipo === 'brinde') return produtosDisponiveis;
     return [];
   };
 
   const getLabelItemRelacionado = (tipo = formData.tipo) => {
+    if (tipo === 'desconto') return 'Serviço do desconto';
     if (tipo === 'servico') return 'Serviço vinculado';
     if (tipo === 'produto') return 'Produto vinculado';
     if (tipo === 'brinde') return 'Brinde/produto vinculado';
@@ -1316,7 +1317,7 @@ function Recompensas() {
               </FormControl>
             </Grid>
 
-            {['servico', 'produto', 'brinde'].includes(formData.tipo) && (
+            {['desconto', 'servico', 'produto', 'brinde'].includes(formData.tipo) && (
               <Grid item xs={12}>
                 <FormControl fullWidth size="small">
                   <InputLabel>{getLabelItemRelacionado()}</InputLabel>
@@ -1327,7 +1328,7 @@ function Recompensas() {
                       const item = getOpcoesItemRelacionado().find((opcao) => opcao.id === e.target.value);
                       setFormData({
                         ...formData,
-                        itemRelacionadoTipo: formData.tipo === 'servico' ? 'servico' : 'produto',
+                        itemRelacionadoTipo: ['servico', 'desconto'].includes(formData.tipo) ? 'servico' : 'produto',
                         itemRelacionadoId: item?.id || '',
                         itemRelacionadoNome: item?.nome || '',
                       });
@@ -1342,7 +1343,7 @@ function Recompensas() {
                   </Select>
                 </FormControl>
                 <Typography variant="caption" color="text.secondary">
-                  Vincule o item para ele ser lançado no atendimento e, no caso de produto/brinde, dar baixa no estoque.
+                  Vincule o item para validar a recompensa no atendimento. Descontos só serão aplicados sobre este item; produto/brinde dá baixa no estoque.
                 </Typography>
               </Grid>
             )}

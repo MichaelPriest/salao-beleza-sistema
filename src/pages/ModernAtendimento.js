@@ -619,13 +619,49 @@ function ModernAtendimento() {
     return calcularTotalServicos() + calcularTotalProdutos();
   };
 
+  const getItemRelacionadoLancado = (tipo, itemId) => {
+    if (!tipo || !itemId) return null;
+
+    if (tipo === 'servico') {
+      return itensServico.find((item) => item.id === itemId) || null;
+    }
+
+    if (tipo === 'produto') {
+      return itensProduto.find((item) => item.id === itemId) || null;
+    }
+
+    return null;
+  };
+
+  const calcularSubtotalItemRelacionado = (tipo, itemId) => {
+    const item = getItemRelacionadoLancado(tipo, itemId);
+
+    if (!item) return 0;
+    if (tipo === 'servico') return Number(item.preco) || 0;
+    if (tipo === 'produto') {
+      if (item.semCobranca) return 0;
+      return (Number(item.preco) || 0) * (Number(item.quantidadeVenda) || 1);
+    }
+
+    return 0;
+  };
+
   const calcularDescontoCupons = () => {
     let descontoTotal = 0;
     const subtotal = calcularSubtotal();
 
     cuponsAplicados.forEach(cupom => {
+      const baseDesconto = cupom.itemRelacionadoId
+        ? calcularSubtotalItemRelacionado(cupom.itemRelacionadoTipo, cupom.itemRelacionadoId)
+        : subtotal;
+
+      if (baseDesconto <= 0) {
+        cupom.valorDescontoCalculado = 0;
+        return;
+      }
+
       if (cupom.tipo === 'percentual') {
-        let valorDesconto = (subtotal * cupom.valor) / 100;
+        let valorDesconto = (baseDesconto * cupom.valor) / 100;
 
         if (cupom.valorMaximoDesconto && valorDesconto > cupom.valorMaximoDesconto) {
           valorDesconto = cupom.valorMaximoDesconto;
@@ -635,8 +671,9 @@ function ModernAtendimento() {
         cupom.valorDescontoCalculado = valorDesconto;
 
       } else if (cupom.tipo === 'fixo') {
-        descontoTotal += cupom.valor;
-        cupom.valorDescontoCalculado = cupom.valor;
+        const valorDesconto = Math.min(baseDesconto, Number(cupom.valor) || 0);
+        descontoTotal += valorDesconto;
+        cupom.valorDescontoCalculado = valorDesconto;
       }
     });
 
@@ -648,9 +685,9 @@ function ModernAtendimento() {
     return descontoTotal;
   };
 
-  const calcularValorDescontoResgate = (resgate, recompensa = null) => {
+  const calcularValorDescontoResgate = (resgate, recompensa = null, baseDesconto = calcularSubtotal()) => {
     const origem = recompensa || resgate || {};
-    const subtotal = calcularSubtotal();
+    const subtotal = Number(baseDesconto) || 0;
     const valor = Number(origem.valorDesconto ?? origem.valor ?? origem.desconto ?? 0);
     const tipo = origem.tipoDesconto || origem.tipo;
 
@@ -1238,8 +1275,24 @@ function ModernAtendimento() {
     const itemRelacionadoTipo = resgate.itemRelacionadoTipo || recompensa.itemRelacionadoTipo;
     const itemRelacionadoId = resgate.itemRelacionadoId || recompensa.itemRelacionadoId;
     const itemRelacionadoNome = resgate.itemRelacionadoNome || recompensa.itemRelacionadoNome;
+    const temItemRelacionado = Boolean(itemRelacionadoTipo && itemRelacionadoId);
+    const itemRelacionadoLancado = temItemRelacionado
+      ? getItemRelacionadoLancado(itemRelacionadoTipo, itemRelacionadoId)
+      : null;
+    const baseItemRelacionado = temItemRelacionado
+      ? calcularSubtotalItemRelacionado(itemRelacionadoTipo, itemRelacionadoId)
+      : calcularSubtotal();
+    const valorConfigurado = Number(recompensa.valorDesconto ?? recompensa.valor ?? resgate.valorDesconto ?? resgate.valor ?? resgate.desconto ?? 0);
+    const recompensaComDescontoConfigurado = valorConfigurado > 0;
+    const desconto = calcularValorDescontoResgate(resgate, recompensa, baseItemRelacionado);
+    const temDesconto = (Number(desconto.valorCalculado) || 0) > 0;
 
-    if (itemRelacionadoTipo === 'servico' && itemRelacionadoId) {
+    if (temItemRelacionado && recompensaComDescontoConfigurado && !itemRelacionadoLancado) {
+      toast.error(`Lance o item "${itemRelacionadoNome || 'vinculado'}" no atendimento antes de aplicar esta recompensa.`);
+      return;
+    }
+
+    if (!recompensaComDescontoConfigurado && itemRelacionadoTipo === 'servico' && itemRelacionadoId) {
       const servico = servicosDisponiveis.find((item) => item.id === itemRelacionadoId) || { id: itemRelacionadoId, nome: itemRelacionadoNome, preco: 0 };
       if (!itensServico.some((item) => item.id === servico.id)) {
         setItensServico([...itensServico, {
@@ -1252,7 +1305,7 @@ function ModernAtendimento() {
           resgateId: resgate.id,
         }]);
       }
-    } else if (itemRelacionadoTipo === 'produto' && itemRelacionadoId) {
+    } else if (!recompensaComDescontoConfigurado && itemRelacionadoTipo === 'produto' && itemRelacionadoId) {
       const produto = produtosDisponiveis.find((item) => item.id === itemRelacionadoId) || { id: itemRelacionadoId, nome: itemRelacionadoNome, precoVenda: 0, quantidadeEstoque: 0, fatorConversao: 1 };
       const quantidadeEstoque = converterParaEstoque(produto, 1) || 1;
       if ((Number(produto.quantidadeEstoque) || 0) < quantidadeEstoque) {
@@ -1280,9 +1333,10 @@ function ModernAtendimento() {
       registrarMovimentacaoEstoque(produto, quantidadeEstoque, produto.unidadeEstoque, 'recompensa');
     }
 
-    const desconto = resgate.desconto || calcularValorDescontoResgate(resgate, recompensa);
-    const temDesconto = (Number(desconto.valorCalculado) || 0) > 0;
-    const temItemRelacionado = Boolean(itemRelacionadoTipo && itemRelacionadoId);
+    if (recompensaComDescontoConfigurado && !temDesconto) {
+      toast.error('O item vinculado não possui valor para receber o desconto desta recompensa.');
+      return;
+    }
 
     if (!temDesconto && !temItemRelacionado) {
       toast.error('Esta recompensa não possui desconto ou item vinculado para lançar no atendimento.');
