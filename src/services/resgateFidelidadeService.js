@@ -1,4 +1,3 @@
-// src/services/resgateFidelidadeService.js
 import { firebaseService } from './firebase';
 import { Timestamp } from './firebase';
 import { pontuacaoService } from './pontuacaoService';
@@ -15,10 +14,13 @@ const getId = (resultado) => (typeof resultado === 'string' ? resultado : result
 
 export const gerarCodigoResgate = () => `RES${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-export const getPontosRecompensa = (recompensa = {}) => Number(
-  recompensa.pontosNecessarios ?? recompensa.pontos ?? recompensa.custoPontos ?? recompensa.valorPontos ?? 0
-);
+// APENAS UMA DECLARAÇÃO de getPontosRecompensa
+export const getPontosRecompensa = (recompensa = {}) => {
+  const dados = recompensa || {};
+  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
+};
 
+// APENAS UMA DECLARAÇÃO de getQuantidadeDisponivel
 export const getQuantidadeDisponivel = (recompensa = {}) => {
   if (recompensa.ilimitado === true) return Infinity;
   const valor = recompensa.quantidadeDisponivel ?? recompensa.quantidade ?? recompensa.estoque;
@@ -124,18 +126,6 @@ const gerarMovimentoFinanceiroResgate = async (resgate, recompensa = {}) => {
     console.warn('Não foi possível gerar movimento financeiro do resgate:', error);
     return null;
   });
-};
-
-export const getPontosRecompensa = (recompensa) => {
-  const dados = recompensa || {};
-  return Number(dados.pontosNecessarios ?? dados.pontos ?? dados.custoPontos ?? dados.valorPontos ?? 0);
-};
-
-export const getQuantidadeDisponivel = (recompensa) => {
-  const dados = recompensa || {};
-  if (dados.ilimitado === true) return Infinity;
-  const valor = dados.quantidadeDisponivel ?? dados.quantidade ?? dados.estoque ?? null;
-  return valor === null || valor === undefined || valor === '' ? Infinity : Number(valor);
 };
 
 export const resgateFidelidadeService = {
