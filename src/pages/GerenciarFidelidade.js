@@ -97,7 +97,7 @@ import {
   AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
@@ -507,13 +507,17 @@ function GerenciarFidelidade() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState([]);
   const [pontuacoes, setPontuacoes] = useState([]);
   const [resgates, setResgates] = useState([]);
   const [recompensas, setRecompensas] = useState([]);
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(() => {
+    const tabParam = new URLSearchParams(window.location.search).get('tab');
+    return tabParam === 'recompensas' ? 1 : tabParam === 'resgates' ? 2 : 0;
+  });
   const [filtro, setFiltro] = useState('');
   const [filtroNivel, setFiltroNivel] = useState('todos');
   const [page, setPage] = useState(0);
@@ -553,6 +557,13 @@ function GerenciarFidelidade() {
   useEffect(() => {
     carregarDados();
   }, []);
+
+  useEffect(() => {
+    const tabParam = new URLSearchParams(location.search).get('tab');
+    if (tabParam === 'recompensas') setTabValue(1);
+    else if (tabParam === 'resgates') setTabValue(2);
+  }, [location.search]);
+
 
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });

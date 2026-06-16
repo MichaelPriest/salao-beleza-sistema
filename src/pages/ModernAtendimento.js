@@ -95,6 +95,7 @@ import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { cupomService } from '../services/cupomService';
 import { caixaService } from '../services/caixaService';
+import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { Timestamp } from '../services/firebase';
 
 // Lista de unidades de medida
@@ -383,6 +384,9 @@ function ModernAtendimento() {
   const [mostrarValidadorCupom, setMostrarValidadorCupom] = useState(false);
   const [descontoTotalCupons, setDescontoTotalCupons] = useState(0);
   const [cuponsProximosExpiracao, setCuponsProximosExpiracao] = useState([]);
+  const [resgatesDisponiveis, setResgatesDisponiveis] = useState([]);
+  const [codigoResgate, setCodigoResgate] = useState('');
+  const [carregandoResgates, setCarregandoResgates] = useState(false);
 
   // 🔥 ESTADOS PARA ANAMNESE
   const [respostasAnamnese, setRespostasAnamnese] = useState(null);
@@ -642,6 +646,21 @@ function ModernAtendimento() {
     setDescontoTotalCupons(descontoTotal);
     return descontoTotal;
   };
+
+  const calcularValorDescontoResgate = (resgate, recompensa = null) => {
+    const origem = recompensa || resgate || {};
+    const subtotal = calcularSubtotal();
+    const valor = Number(origem.valorDesconto ?? origem.valor ?? origem.desconto ?? 0);
+    const tipo = origem.tipoDesconto || origem.tipo;
+
+    if ((tipo === 'percentual' || tipo === 'desconto') && valor > 0 && valor <= 100) {
+      return { tipo: 'percentual', valor, valorCalculado: Math.min(subtotal, (subtotal * valor) / 100) };
+    }
+
+    return { tipo: 'fixo', valor, valorCalculado: Math.min(subtotal, valor) };
+  };
+
+  const getCuponsRecompensaAplicados = () => cuponsAplicados.filter((cupom) => cupom.origem === 'resgate_fidelidade');
 
   const calcularValorTotal = () => {
     return calcularSubtotal() - descontoTotalCupons;
@@ -1166,6 +1185,83 @@ function ModernAtendimento() {
     );
   };
 
+  const carregarResgatesDisponiveisCliente = async (clienteId) => {
+    try {
+      setCarregandoResgates(true);
+      const resgates = await firebaseService.query('resgates_fidelidade', [
+        { field: 'clienteId', operator: '==', value: clienteId }
+      ]).catch(() => []);
+
+      const recompensas = await firebaseService.getAll('recompensas').catch(() => []);
+      const recompensasPorId = new Map((recompensas || []).map((recompensa) => [recompensa.id, recompensa]));
+
+      const disponiveis = (resgates || [])
+        .filter((resgate) => !resgate.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(resgate.status))
+        .map((resgate) => {
+          const recompensa = recompensasPorId.get(resgate.recompensaId);
+          return {
+            ...resgate,
+            recompensa,
+            desconto: calcularValorDescontoResgate(resgate, recompensa)
+          };
+        });
+
+      setResgatesDisponiveis(disponiveis);
+    } catch (error) {
+      console.error('Erro ao carregar resgates disponíveis:', error);
+      setResgatesDisponiveis([]);
+    } finally {
+      setCarregandoResgates(false);
+    }
+  };
+
+  const handleAplicarResgate = (resgateInformado = null) => {
+    const codigo = String(resgateInformado?.codigo || codigoResgate || '').trim().toUpperCase();
+    if (!codigo) {
+      toast.error('Informe o código da recompensa');
+      return;
+    }
+
+    const resgate = resgateInformado || resgatesDisponiveis.find((item) => String(item.codigo || '').trim().toUpperCase() === codigo);
+    if (!resgate) {
+      toast.error('Código de recompensa não encontrado para este cliente');
+      return;
+    }
+
+    if (cuponsAplicados.some((cupom) => cupom.resgateId === resgate.id)) {
+      toast.error('Esta recompensa já foi aplicada');
+      return;
+    }
+
+    const desconto = resgate.desconto || calcularValorDescontoResgate(resgate, resgate.recompensa);
+    if ((Number(desconto.valorCalculado) || 0) <= 0) {
+      toast.error('Esta recompensa não possui valor de desconto automático. Use a baixa manual em Fidelidade > Baixar Resgates.');
+      return;
+    }
+
+    const cupomRecompensa = {
+      id: `resgate-${resgate.id}`,
+      codigo: resgate.codigo,
+      descricao: `Recompensa: ${resgate.recompensaNome || resgate.recompensa?.nome || 'Recompensa'}`,
+      tipo: desconto.tipo,
+      valor: Number(desconto.valor) || 0,
+      valorDescontoCalculado: Number(desconto.valorCalculado) || 0,
+      origem: 'resgate_fidelidade',
+      resgateId: resgate.id,
+      recompensaId: resgate.recompensaId,
+      recompensaNome: resgate.recompensaNome || resgate.recompensa?.nome,
+    };
+
+    setCuponsAplicados([...cuponsAplicados, cupomRecompensa]);
+    setCodigoResgate('');
+    toast.success(`Recompensa ${resgate.codigo} aplicada ao atendimento`);
+  };
+
+  const handleRemoverResgateAplicado = (resgateId) => {
+    setCuponsAplicados(cuponsAplicados.filter((cupom) => cupom.resgateId !== resgateId));
+    toast.info('Recompensa removida do atendimento');
+  };
+
   const verificarCuponsProximosExpiracao = async () => {
     try {
       if (!cliente?.id) return;
@@ -1187,6 +1283,9 @@ function ModernAtendimento() {
   useEffect(() => {
     if (cliente?.id) {
       verificarCuponsProximosExpiracao();
+      carregarResgatesDisponiveisCliente(cliente.id);
+    } else {
+      setResgatesDisponiveis([]);
     }
   }, [cliente]);
 
@@ -1791,7 +1890,15 @@ function ModernAtendimento() {
 
       // 3. Registrar uso dos cupons
       for (const cupom of cuponsAplicados) {
-        await registrarUsoCupom(cupom);
+        if (cupom.origem === 'resgate_fidelidade' && cupom.resgateId) {
+          await resgateFidelidadeService.utilizar(cupom.resgateId, {
+            usuarioId: usuario?.id || usuario?.uid,
+            usuarioNome: usuario?.nome || usuario?.email || 'Sistema',
+            observacoes: `Aplicado no atendimento ${id}`
+          });
+        } else {
+          await registrarUsoCupom(cupom);
+        }
       }
 
       // 4. Atualizar agendamento
@@ -2802,6 +2909,86 @@ function ModernAtendimento() {
                               key={index}
                               cupom={cupom}
                               onRemover={() => handleRemoverCupom(index)}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </Paper>
+
+                    <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: '#fff8e1' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <TrophyIcon sx={{ color: '#ff9800' }} />
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            Aplicar Recompensa / Resgate
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          startIcon={<SearchIcon />}
+                          onClick={() => carregarResgatesDisponiveisCliente(cliente?.id)}
+                          disabled={!cliente?.id || carregandoResgates}
+                        >
+                          Atualizar resgates
+                        </Button>
+                      </Box>
+
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} md={8}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="Código da recompensa"
+                            value={codigoResgate}
+                            onChange={(event) => setCodigoResgate(event.target.value)}
+                            placeholder="Digite o código apresentado pelo cliente"
+                            disabled={!cliente?.id}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                          <Button
+                            fullWidth
+                            variant="contained"
+                            color="warning"
+                            onClick={() => handleAplicarResgate()}
+                            disabled={!cliente?.id || !codigoResgate.trim()}
+                          >
+                            Aplicar Recompensa
+                          </Button>
+                        </Grid>
+                      </Grid>
+
+                      {resgatesDisponiveis.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Resgates disponíveis deste cliente:
+                          </Typography>
+                          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                            {resgatesDisponiveis.map((resgate) => (
+                              <Chip
+                                key={resgate.id}
+                                label={`${resgate.codigo} • ${resgate.recompensaNome || resgate.recompensa?.nome || 'Recompensa'}`}
+                                color="warning"
+                                variant="outlined"
+                                onClick={() => handleAplicarResgate(resgate)}
+                              />
+                            ))}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {getCuponsRecompensaAplicados().length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Recompensas aplicadas:
+                          </Typography>
+                          {getCuponsRecompensaAplicados().map((resgate) => (
+                            <Chip
+                              key={resgate.resgateId}
+                              label={`${resgate.codigo} - R$ ${(resgate.valorDescontoCalculado || 0).toFixed(2)}`}
+                              color="success"
+                              onDelete={() => handleRemoverResgateAplicado(resgate.resgateId)}
+                              sx={{ mr: 1, mb: 1 }}
                             />
                           ))}
                         </Box>
