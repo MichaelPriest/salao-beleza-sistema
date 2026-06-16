@@ -436,9 +436,17 @@ const RecompensaMobileCard = ({ recompensa, onEditar, onExcluir }) => {
 };
 
 // Componente de Item de Resgate Mobile
+const getStatusResgateInfo = (resgate) => {
+  if (resgate?.utilizado || resgate?.status === 'utilizado') return { label: 'Utilizado', color: 'default' };
+  if (resgate?.status === 'cancelado') return { label: 'Cancelado', color: 'error' };
+  if (resgate?.status === 'expirado') return { label: 'Expirado', color: 'warning' };
+  return { label: 'Disponível', color: 'success' };
+};
+
 const ResgateItem = ({ resgate, cliente, onUtilizar, onCancelar }) => {
-  const status = String(resgate.status || (resgate.utilizado ? 'utilizado' : 'disponivel')).toLowerCase();
-  const ativo = !resgate.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(status);
+  const statusInfo = getStatusResgateInfo(resgate);
+  const podeGerenciar = !resgate?.utilizado && !['utilizado', 'cancelado', 'expirado'].includes(resgate?.status);
+
   return (
     <ListItem divider>
       <ListItemAvatar>
@@ -459,6 +467,11 @@ const ResgateItem = ({ resgate, cliente, onUtilizar, onCancelar }) => {
             <Typography variant="caption" color="text.secondary">
               {formatDate(resgate.data)}
             </Typography>
+            {resgate.codigo && (
+              <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                Código: {resgate.codigo}
+              </Typography>
+            )}
           </>
         }
       />
@@ -469,23 +482,19 @@ const ResgateItem = ({ resgate, cliente, onUtilizar, onCancelar }) => {
           </Typography>
           <Chip
             size="small"
-            label={status === 'disponivel' ? 'Disponível' : (resgate.status || 'Resgatado')}
-            color={status === 'cancelado' ? 'error' : status === 'utilizado' ? 'default' : 'success'}
+            label={statusInfo.label}
+            color={statusInfo.color}
             sx={{ height: 20, fontSize: '0.65rem' }}
           />
-          {ativo && (
-            <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, justifyContent: 'flex-end' }}>
-              <Tooltip title="Marcar como utilizado">
-                <IconButton size="small" color="success" onClick={() => onUtilizar(resgate)}>
-                  <CheckCircleIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Cancelar e estornar pontos">
-                <IconButton size="small" color="error" onClick={() => onCancelar(resgate)}>
-                  <BlockIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
+          {podeGerenciar && (
+            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
+              <Button size="small" variant="contained" color="success" onClick={() => onUtilizar(resgate)}>
+                Usar
+              </Button>
+              <Button size="small" variant="outlined" color="error" onClick={() => onCancelar(resgate)}>
+                Cancelar
+              </Button>
+            </Stack>
           )}
         </Box>
       </ListItemSecondaryAction>
@@ -551,6 +560,62 @@ function GerenciarFidelidade() {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+
+  const getUsuarioAtual = () => {
+    try {
+      return JSON.parse(localStorage.getItem('usuario') || '{}');
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const handleUtilizarResgate = async (resgate) => {
+    if (!resgate?.id) return;
+    const codigoInformado = window.prompt(`Informe o código apresentado pelo cliente para utilizar o resgate de ${resgate.recompensaNome}:`);
+    if (codigoInformado === null) return;
+
+    if ((codigoInformado || '').trim().toUpperCase() !== String(resgate.codigo || '').trim().toUpperCase()) {
+      mostrarSnackbar('Código de resgate inválido. Confira o código no acesso do cliente.', 'error');
+      return;
+    }
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.utilizar(resgate.id, {
+        usuarioId: usuarioAtual.id || usuarioAtual.uid,
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        observacoes: 'Utilizado pela administração'
+      });
+      mostrarSnackbar('Resgate marcado como utilizado e sincronizado com o cliente.');
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao utilizar resgate:', error);
+      mostrarSnackbar(error.message || 'Erro ao utilizar resgate', 'error');
+    }
+  };
+
+  const handleCancelarResgate = async (resgate) => {
+    if (!resgate?.id) return;
+    const confirmar = window.confirm('Cancelar este resgate e devolver os pontos ao cliente?');
+    if (!confirmar) return;
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.cancelar(resgate.id, {
+        resgate,
+        estornarPontos: true,
+        usuarioId: usuarioAtual.id || usuarioAtual.uid,
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        motivo: 'Cancelado pela administração com estorno de pontos'
+      });
+      mostrarSnackbar('Resgate cancelado e pontos estornados para o cliente.');
+      carregarDados();
+    } catch (error) {
+      console.error('Erro ao cancelar resgate:', error);
+      mostrarSnackbar(error.message || 'Erro ao cancelar resgate', 'error');
+    }
   };
 
   const carregarDados = async () => {
