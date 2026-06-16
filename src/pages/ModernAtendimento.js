@@ -1216,7 +1216,7 @@ function ModernAtendimento() {
     }
   };
 
-  const handleAplicarResgate = (resgateInformado = null) => {
+  const handleAplicarResgate = async (resgateInformado = null) => {
     const codigo = String(resgateInformado?.codigo || codigoResgate || '').trim().toUpperCase();
     if (!codigo) {
       toast.error('Informe o código da recompensa');
@@ -1234,23 +1234,75 @@ function ModernAtendimento() {
       return;
     }
 
-    const desconto = resgate.desconto || calcularValorDescontoResgate(resgate, resgate.recompensa);
-    if ((Number(desconto.valorCalculado) || 0) <= 0) {
-      toast.error('Esta recompensa não possui valor de desconto automático. Use a baixa manual em Fidelidade > Baixar Resgates.');
+    const recompensa = resgate.recompensa || {};
+    const itemRelacionadoTipo = resgate.itemRelacionadoTipo || recompensa.itemRelacionadoTipo;
+    const itemRelacionadoId = resgate.itemRelacionadoId || recompensa.itemRelacionadoId;
+    const itemRelacionadoNome = resgate.itemRelacionadoNome || recompensa.itemRelacionadoNome;
+
+    if (itemRelacionadoTipo === 'servico' && itemRelacionadoId) {
+      const servico = servicosDisponiveis.find((item) => item.id === itemRelacionadoId) || { id: itemRelacionadoId, nome: itemRelacionadoNome, preco: 0 };
+      if (!itensServico.some((item) => item.id === servico.id)) {
+        setItensServico([...itensServico, {
+          id: servico.id,
+          nome: `${servico.nome || itemRelacionadoNome} (Recompensa)`,
+          preco: 0,
+          duracao: servico.duracao || 0,
+          principal: itensServico.length === 0,
+          origem: 'resgate_fidelidade',
+          resgateId: resgate.id,
+        }]);
+      }
+    } else if (itemRelacionadoTipo === 'produto' && itemRelacionadoId) {
+      const produto = produtosDisponiveis.find((item) => item.id === itemRelacionadoId) || { id: itemRelacionadoId, nome: itemRelacionadoNome, precoVenda: 0, quantidadeEstoque: 0, fatorConversao: 1 };
+      const quantidadeEstoque = converterParaEstoque(produto, 1) || 1;
+      if ((Number(produto.quantidadeEstoque) || 0) < quantidadeEstoque) {
+        toast.error('Produto da recompensa sem estoque disponível');
+        return;
+      }
+      setItensProduto([...itensProduto, {
+        id: produto.id,
+        nome: `${produto.nome || itemRelacionadoNome} (Recompensa)`,
+        preco: 0,
+        unidadeEstoque: produto.unidadeEstoque,
+        unidadeVenda: produto.unidadeVenda,
+        fatorConversao: produto.fatorConversao || 1,
+        quantidadeVenda: 1,
+        quantidadeEstoque,
+        semCobranca: true,
+        apenasBaixa: true,
+        origem: 'resgate_fidelidade',
+        resgateId: resgate.id,
+      }]);
+      await firebaseService.update('produtos', produto.id, {
+        quantidadeEstoque: (Number(produto.quantidadeEstoque) || 0) - quantidadeEstoque,
+        updatedAt: Timestamp.now()
+      });
+      registrarMovimentacaoEstoque(produto, quantidadeEstoque, produto.unidadeEstoque, 'recompensa');
+    }
+
+    const desconto = resgate.desconto || calcularValorDescontoResgate(resgate, recompensa);
+    const temDesconto = (Number(desconto.valorCalculado) || 0) > 0;
+    const temItemRelacionado = Boolean(itemRelacionadoTipo && itemRelacionadoId);
+
+    if (!temDesconto && !temItemRelacionado) {
+      toast.error('Esta recompensa não possui desconto ou item vinculado para lançar no atendimento.');
       return;
     }
 
     const cupomRecompensa = {
       id: `resgate-${resgate.id}`,
       codigo: resgate.codigo,
-      descricao: `Recompensa: ${resgate.recompensaNome || resgate.recompensa?.nome || 'Recompensa'}`,
+      descricao: `Recompensa: ${resgate.recompensaNome || recompensa.nome || 'Recompensa'}`,
       tipo: desconto.tipo,
-      valor: Number(desconto.valor) || 0,
-      valorDescontoCalculado: Number(desconto.valorCalculado) || 0,
+      valor: temDesconto ? Number(desconto.valor) || 0 : 0,
+      valorDescontoCalculado: temDesconto ? Number(desconto.valorCalculado) || 0 : 0,
       origem: 'resgate_fidelidade',
       resgateId: resgate.id,
       recompensaId: resgate.recompensaId,
-      recompensaNome: resgate.recompensaNome || resgate.recompensa?.nome,
+      recompensaNome: resgate.recompensaNome || recompensa.nome,
+      itemRelacionadoTipo,
+      itemRelacionadoId,
+      itemRelacionadoNome,
     };
 
     setCuponsAplicados([...cuponsAplicados, cupomRecompensa]);

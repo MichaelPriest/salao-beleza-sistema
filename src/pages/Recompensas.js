@@ -121,6 +121,8 @@ function Recompensas() {
   const [recompensas, setRecompensas] = useState([]);
   const [recompensasUsuario, setRecompensasUsuario] = useState([]);
   const [resgates, setResgates] = useState([]);
+  const [servicosDisponiveis, setServicosDisponiveis] = useState([]);
+  const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
@@ -138,6 +140,7 @@ function Recompensas() {
   const [openDetalhesDialog, setOpenDetalhesDialog] = useState(false);
   const [openCompartilharDialog, setOpenCompartilharDialog] = useState(false);
   const [selectedRecompensa, setSelectedRecompensa] = useState(null);
+  const [selectedRecompensaDetalhes, setSelectedRecompensaDetalhes] = useState(null);
   const [selectedRecompensaResgate, setSelectedRecompensaResgate] = useState(null);
 
   // Formulário
@@ -155,6 +158,9 @@ function Recompensas() {
     validade: '',
     imagem: '',
     termos: '',
+    itemRelacionadoTipo: '',
+    itemRelacionadoId: '',
+    itemRelacionadoNome: '',
   });
 
   // Resgate form
@@ -176,6 +182,7 @@ function Recompensas() {
     carregarUsuario();
     carregarRecompensas();
     carregarResgates();
+    carregarItensRelacionados();
   }, []);
 
   const carregarUsuario = () => {
@@ -391,6 +398,45 @@ function Recompensas() {
     }
   };
 
+  const carregarItensRelacionados = async () => {
+    try {
+      const [servicosData, produtosData] = await Promise.all([
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+      ]);
+      setServicosDisponiveis(servicosData || []);
+      setProdutosDisponiveis(produtosData || []);
+    } catch (error) {
+      console.error('Erro ao carregar itens para recompensas:', error);
+      setServicosDisponiveis([]);
+      setProdutosDisponiveis([]);
+    }
+  };
+
+  const getOpcoesItemRelacionado = (tipo = formData.tipo) => {
+    if (tipo === 'servico') return servicosDisponiveis;
+    if (tipo === 'produto' || tipo === 'brinde') return produtosDisponiveis;
+    return [];
+  };
+
+  const getLabelItemRelacionado = (tipo = formData.tipo) => {
+    if (tipo === 'servico') return 'Serviço vinculado';
+    if (tipo === 'produto') return 'Produto vinculado';
+    if (tipo === 'brinde') return 'Brinde/produto vinculado';
+    return 'Item vinculado';
+  };
+
+  const getDescricaoItemRelacionado = (recompensa = {}) => {
+    if (!recompensa.itemRelacionadoNome) return 'Nenhum item vinculado';
+    const tipo = recompensa.itemRelacionadoTipo === 'servico' ? 'Serviço' : 'Produto';
+    return `${tipo}: ${recompensa.itemRelacionadoNome}`;
+  };
+
+  const abrirDetalhes = (recompensa) => {
+    setSelectedRecompensaDetalhes(recompensa);
+    setOpenDetalhesDialog(true);
+  };
+
   const carregarResgates = async () => {
     try {
       const resgatesData = await firebaseService.getAll('resgates_fidelidade').catch(() => []);
@@ -529,6 +575,9 @@ function Recompensas() {
       validade: '',
       imagem: '',
       termos: '',
+      itemRelacionadoTipo: '',
+      itemRelacionadoId: '',
+      itemRelacionadoNome: '',
     });
     setSelectedRecompensa(null);
   };
@@ -549,6 +598,9 @@ function Recompensas() {
       validade: recompensa.validade || '',
       imagem: recompensa.imagem || '',
       termos: recompensa.termos || '',
+      itemRelacionadoTipo: recompensa.itemRelacionadoTipo || '',
+      itemRelacionadoId: recompensa.itemRelacionadoId || '',
+      itemRelacionadoNome: recompensa.itemRelacionadoNome || '',
     });
     setOpenEditarDialog(true);
   };
@@ -926,7 +978,7 @@ function Recompensas() {
                           <Button
                             fullWidth
                             variant="outlined"
-                            onClick={() => setOpenDetalhesDialog(true)}
+                            onClick={() => abrirDetalhes(recompensa)}
                           >
                             Ver detalhes
                           </Button>
@@ -1236,7 +1288,7 @@ function Recompensas() {
                 <Select
                   value={formData.tipo}
                   label="Tipo"
-                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value, itemRelacionadoTipo: '', itemRelacionadoId: '', itemRelacionadoNome: '' })}
                 >
                   {tiposRecompensa.map(tipo => (
                     <MenuItem key={tipo.value} value={tipo.value}>
@@ -1263,6 +1315,37 @@ function Recompensas() {
                 </Select>
               </FormControl>
             </Grid>
+
+            {['servico', 'produto', 'brinde'].includes(formData.tipo) && (
+              <Grid item xs={12}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>{getLabelItemRelacionado()}</InputLabel>
+                  <Select
+                    value={formData.itemRelacionadoId || ''}
+                    label={getLabelItemRelacionado()}
+                    onChange={(e) => {
+                      const item = getOpcoesItemRelacionado().find((opcao) => opcao.id === e.target.value);
+                      setFormData({
+                        ...formData,
+                        itemRelacionadoTipo: formData.tipo === 'servico' ? 'servico' : 'produto',
+                        itemRelacionadoId: item?.id || '',
+                        itemRelacionadoNome: item?.nome || '',
+                      });
+                    }}
+                  >
+                    <MenuItem value="">Nenhum item vinculado</MenuItem>
+                    {getOpcoesItemRelacionado().map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.nome} {item.preco || item.precoVenda ? `• R$ ${Number(item.preco || item.precoVenda || 0).toFixed(2)}` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="text.secondary">
+                  Vincule o item para ele ser lançado no atendimento e, no caso de produto/brinde, dar baixa no estoque.
+                </Typography>
+              </Grid>
+            )}
 
             <Grid item xs={12} md={4}>
               <TextField
@@ -1383,6 +1466,44 @@ function Recompensas() {
           >
             {selectedRecompensa ? 'Atualizar' : 'Criar'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: Detalhes da Recompensa */}
+      <Dialog open={openDetalhesDialog} onClose={() => setOpenDetalhesDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
+          Detalhes da Recompensa
+        </DialogTitle>
+        <DialogContent>
+          {selectedRecompensaDetalhes && (
+            <Box sx={{ mt: 2 }}>
+              <Stack spacing={2}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: getTipoInfo(selectedRecompensaDetalhes.tipo).cor }}>
+                    {getTipoInfo(selectedRecompensaDetalhes.tipo).icon}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6">{selectedRecompensaDetalhes.nome}</Typography>
+                    <Typography variant="body2" color="text.secondary">{selectedRecompensaDetalhes.descricao || 'Sem descrição'}</Typography>
+                  </Box>
+                </Box>
+                <Divider />
+                <Typography><strong>Tipo:</strong> {getTipoInfo(selectedRecompensaDetalhes.tipo).label}</Typography>
+                <Typography><strong>Categoria:</strong> {selectedRecompensaDetalhes.categoria || '-'}</Typography>
+                <Typography><strong>Pontos necessários:</strong> {selectedRecompensaDetalhes.pontos}</Typography>
+                <Typography><strong>Disponível:</strong> {selectedRecompensaDetalhes.ilimitado ? 'Ilimitado' : selectedRecompensaDetalhes.quantidade}</Typography>
+                <Typography><strong>Item para lançar no atendimento:</strong> {getDescricaoItemRelacionado(selectedRecompensaDetalhes)}</Typography>
+                {selectedRecompensaDetalhes.tipo === 'desconto' && (
+                  <Typography><strong>Desconto:</strong> {Number(selectedRecompensaDetalhes.valor || 0)}%</Typography>
+                )}
+                <Typography><strong>Validade:</strong> {selectedRecompensaDetalhes.validade || 'Sem validade definida'}</Typography>
+                <Typography><strong>Termos:</strong> {selectedRecompensaDetalhes.termos || 'Nenhum termo informado'}</Typography>
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDetalhesDialog(false)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
