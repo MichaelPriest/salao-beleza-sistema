@@ -827,6 +827,48 @@ function GerenciarFidelidade() {
     }
   };
 
+  const getUsuarioAtual = () => {
+    try {
+      return JSON.parse(localStorage.getItem('usuario') || '{}');
+    } catch {
+      return {};
+    }
+  };
+
+  const handleUtilizarResgate = async (resgate) => {
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.utilizar(resgate.id, {
+        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+      });
+      mostrarSnackbar('Recompensa marcada como utilizada!');
+      await carregarDados();
+    } catch (error) {
+      console.error('Erro ao utilizar resgate:', error);
+      mostrarSnackbar('Erro ao marcar recompensa como utilizada', 'error');
+    }
+  };
+
+  const handleCancelarResgate = async (resgate) => {
+    if (!window.confirm(`Cancelar o resgate ${resgate.codigo || ''} e estornar os pontos do cliente?`)) return;
+
+    try {
+      const usuarioAtual = getUsuarioAtual();
+      await resgateFidelidadeService.cancelar(resgate.id, {
+        usuarioId: usuarioAtual.uid || usuarioAtual.id || 'sistema',
+        usuarioNome: usuarioAtual.nome || usuarioAtual.email || 'Sistema',
+        motivo: 'Cancelado pelo gerenciamento de fidelidade',
+        estornarPontos: true,
+      });
+      mostrarSnackbar('Resgate cancelado e pontos estornados!');
+      await carregarDados();
+    } catch (error) {
+      console.error('Erro ao cancelar resgate:', error);
+      mostrarSnackbar('Erro ao cancelar resgate', 'error');
+    }
+  };
+
   const handleSalvarRecompensa = async () => {
     try {
       if (!recompensaForm.nome.trim()) {

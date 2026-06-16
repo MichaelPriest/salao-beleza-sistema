@@ -28,15 +28,38 @@ function ClienteRecuperarSenha() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    // CORREÇÃO: Pega a URL completa e extrai parâmetros do último hash
+    const fullHash = window.location.hash;
+    const lastHashIndex = fullHash.lastIndexOf('#');
+    
+    // Se tem dois hashes, pega a parte após o último
+    const paramsString = lastHashIndex > 0 && lastHashIndex !== fullHash.indexOf('#')
+      ? fullHash.substring(lastHashIndex + 1)
+      : fullHash.substring(1);
+    
+    const params = new URLSearchParams(paramsString);
     const tipo = params.get('type');
     const token = params.get('access_token');
+    const errorParam = params.get('error');
+    const errorDesc = params.get('error_description');
+
+    // Tratar erro de link expirado/inválido
+    if (errorParam === 'access_denied' || errorDesc?.includes('expired')) {
+      setError('Este link de recuperação expirou ou já foi utilizado. Por favor, solicite um novo link.');
+      // Limpa a URL para mostrar o formulário de email
+      window.history.replaceState({}, document.title, '/#/cliente/recuperar-senha');
+      return;
+    }
 
     if (tipo === 'recovery' && token) {
       setModoRedefinicao(true);
+      // Limpa os parâmetros da URL para não mostrar o token
+      window.history.replaceState({}, document.title, '/#/cliente/recuperar-senha');
+      
       consumeSupabaseAuthRedirect().catch((error) => {
         console.error('Erro ao validar link de recuperação:', error);
         setError('Link de recuperação inválido ou expirado. Solicite um novo email.');
+        setModoRedefinicao(false);
       });
     }
   }, []);
@@ -78,6 +101,11 @@ function ClienteRecuperarSenha() {
       setSenhaAlterada(true);
       setNovaSenha('');
       setConfirmarSenha('');
+      
+      // Redireciona para o login após 3 segundos
+      setTimeout(() => {
+        window.location.href = '/#/cliente/login';
+      }, 3000);
     } catch (error) {
       console.error('Erro ao redefinir senha:', error);
       setError(error.message || 'Erro ao redefinir senha. Solicite um novo link e tente novamente.');
@@ -133,7 +161,7 @@ function ClienteRecuperarSenha() {
 
             {senhaAlterada ? (
               <Alert severity="success" sx={{ mb: 3 }}>
-                Senha redefinida com sucesso! Você já pode fazer login com a nova senha.
+                Senha redefinida com sucesso! Redirecionando para o login...
               </Alert>
             ) : modoRedefinicao ? (
               <form onSubmit={handleRedefinirSenha}>
