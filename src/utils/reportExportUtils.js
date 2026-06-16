@@ -21,6 +21,16 @@ const parseStorage = (key) => {
   }
 };
 
+export const setEmpresaImpressaoCache = (config) => {
+  try {
+    if (config) {
+      localStorage.setItem('configuracaoAtual', JSON.stringify(config));
+    }
+  } catch {
+    // Cache local é apenas uma otimização para impressões/exportações.
+  }
+};
+
 export const getEmpresaImpressao = (empresaInformada = null) => {
   const stored = empresaInformada
     || parseStorage('configuracaoAtual')

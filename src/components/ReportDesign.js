@@ -1,5 +1,7 @@
 import React from 'react';
 import { Avatar, Box, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
+import firebaseService from '../services/firebase';
+import { setEmpresaImpressaoCache } from '../utils/reportExportUtils';
 
 export const REPORT_COLORS = {
   primary: '#9c27b0',
@@ -40,6 +42,25 @@ export const reportTableSx = {
 };
 
 export function ReportHeader({ title, subtitle, icon, badge, actions }) {
+  React.useEffect(() => {
+    let ativo = true;
+
+    const carregarEmpresa = async () => {
+      try {
+        const configuracoes = await firebaseService.getAll('configuracoes').catch(() => []);
+        const config = Array.isArray(configuracoes) ? configuracoes[0] : null;
+        if (ativo && config) setEmpresaImpressaoCache(config);
+      } catch (error) {
+        console.warn('Não foi possível carregar dados da empresa para relatórios:', error);
+      }
+    };
+
+    carregarEmpresa();
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   return (
     <Card sx={{ ...reportCardSx, mb: 3, background: 'linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%)', color: 'white' }}>
       <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
