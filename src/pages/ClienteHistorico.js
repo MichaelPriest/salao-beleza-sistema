@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Typography,
@@ -23,11 +24,17 @@ import {
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
   AttachMoney as MoneyIcon,
+  Print as PrintIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as ExcelIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { ReportHeader, ReportMetricCard, ReportSectionCard, reportPageSx, reportTableSx } from '../components/ReportDesign';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 function ClienteHistorico() {
   const { cliente } = useAuthCliente();
@@ -101,6 +108,47 @@ function ClienteHistorico() {
     });
   };
 
+  const getLinhasHistorico = () => atendimentos.map((atendimento) => ([
+    formatarData(atendimento.data),
+    atendimento.servicoNome || 'Serviço',
+    atendimento.profissionalNome || '-',
+    Number(atendimento.valorTotal || 0),
+  ]));
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    doc.setFillColor(156, 39, 176);
+    doc.rect(0, 0, 210, 14, 'F');
+    doc.setTextColor(156, 39, 176);
+    doc.setFontSize(18);
+    doc.text('Meu Histórico', 14, 28);
+    doc.setFontSize(10);
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Cliente: ${cliente?.nome || cliente?.email || '-'}`, 14, 36);
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 42);
+    doc.autoTable({
+      startY: 50,
+      head: [['Data', 'Serviço', 'Profissional', 'Valor']],
+      body: getLinhasHistorico().map((linha) => [linha[0], linha[1], linha[2], `R$ ${Number(linha[3] || 0).toFixed(2)}`]),
+      headStyles: { fillColor: [156, 39, 176] },
+    });
+    doc.save(`meu_historico_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const handleExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Meu Histórico'],
+      [`Cliente: ${cliente?.nome || cliente?.email || '-'}`],
+      [`Gerado em: ${new Date().toLocaleString('pt-BR')}`],
+      [],
+      ['Data', 'Serviço', 'Profissional', 'Valor'],
+      ...getLinhasHistorico(),
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
+    XLSX.writeFile(wb, `meu_historico_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -116,6 +164,11 @@ function ClienteHistorico() {
         subtitle="Acompanhe todos os atendimentos, valores investidos e preferências de serviços."
         icon={<HistoryIcon />}
         badge="Cliente"
+        actions={<>
+          <Button variant="contained" startIcon={<PrintIcon />} onClick={() => window.print()} sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } }}>Imprimir</Button>
+          <Button variant="contained" color="error" startIcon={<PdfIcon />} onClick={handleExportPDF}>PDF</Button>
+          <Button variant="contained" color="success" startIcon={<ExcelIcon />} onClick={handleExportExcel}>Excel</Button>
+        </>}
       />
 
       {/* Cards de Estatísticas */}

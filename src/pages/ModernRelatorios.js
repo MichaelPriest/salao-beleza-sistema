@@ -2318,6 +2318,71 @@ function ModernRelatorios() {
     toast.success('Relatório enviado para impressão!', { id: 'print' });
   };
 
+  const formatarValorExportacao = (valor) => {
+    if (valor === null || valor === undefined || valor === '') return '-';
+    if (valor instanceof Date) return valor.toLocaleString('pt-BR');
+    if (typeof valor === 'number') return Number.isInteger(valor) ? valor : valor.toFixed(2);
+    if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não';
+    if (Array.isArray(valor)) {
+      return valor.map((item) => {
+        if (typeof item === 'object' && item !== null) return item.nome || item.name || item.label || JSON.stringify(item);
+        return item;
+      }).join(', ') || '-';
+    }
+    if (typeof valor === 'object') return valor.nome || valor.name || valor.label || JSON.stringify(valor);
+    return String(valor);
+  };
+
+  const criarTabelaExportacaoGenerica = () => {
+    const fontesPorRelatorio = {
+      servicos: [
+        { titulo: 'Serviços mais realizados', dados: dados.grafico },
+        { titulo: 'Serviços detalhados', dados: dados.servicosDetalhados || dados.servicos?.detalhes },
+      ],
+      produtos: [
+        { titulo: 'Produtos com estoque baixo', dados: dados.produtos?.estoqueBaixo },
+        { titulo: 'Produtos detalhados', dados: dados.produtosDetalhados || dados.produtos?.detalhes || dados.grafico },
+      ],
+      fornecedores: [
+        { titulo: 'Fornecedores por volume', dados: dados.grafico },
+        { titulo: 'Fornecedores detalhados', dados: dados.fornecedoresDetalhados || dados.fornecedores?.detalhes },
+      ],
+      cancelamentos: [
+        { titulo: 'Cancelamentos por motivo', dados: dados.grafico },
+        { titulo: 'Cancelamentos detalhados', dados: dados.cancelamentosDetalhados || dados.cancelamentos?.detalhes },
+      ],
+      performance: [
+        { titulo: 'Indicadores de performance', dados: dados.grafico || dados.performance?.indicadores },
+      ],
+      fidelidade: [
+        { titulo: 'Clientes por pontos', dados: dados.grafico || dados.topPontos || dados.fidelidade?.topPontos },
+      ],
+      agenda: [
+        { titulo: 'Agenda consolidada', dados: dados.grafico },
+      ],
+      profissionais: [
+        { titulo: 'Desempenho por profissional', dados: dados.grafico },
+      ],
+    };
+
+    const fonte = (fontesPorRelatorio[tipoRelatorio] || [])
+      .find((item) => Array.isArray(item.dados) && item.dados.length > 0)
+      || { titulo: 'Dados do relatório', dados: dados.grafico || dados.resumos || [] };
+
+    const linhas = Array.isArray(fonte.dados) ? fonte.dados : [];
+    if (!linhas.length) return null;
+
+    const colunas = Array.from(new Set(linhas.flatMap((linha) => Object.keys(linha || {}))))
+      .filter((coluna) => !['id', 'uid', 'createdAt', 'updatedAt'].includes(coluna))
+      .slice(0, 8);
+
+    return {
+      titulo: fonte.titulo,
+      colunas,
+      linhas: linhas.map((linha) => colunas.map((coluna) => formatarValorExportacao(linha?.[coluna]))),
+    };
+  };
+
   // Exportar para PDF
   const handleExportPDF = async () => {
     try {
@@ -2738,6 +2803,34 @@ function ModernRelatorios() {
             margin: { left: 14, right: 14 },
           });
         }
+      } else {
+        const tabelaGenerica = criarTabelaExportacaoGenerica();
+        if (tabelaGenerica) {
+          if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = addFullHeader(doc);
+          }
+
+          doc.setFontSize(11);
+          doc.setTextColor(156, 39, 176);
+          doc.setFont(undefined, 'bold');
+          doc.text(tabelaGenerica.titulo, 14, yPos);
+          yPos += 8;
+
+          doc.autoTable({
+            startY: yPos,
+            head: [tabelaGenerica.colunas.map((coluna) => coluna.replace(/([A-Z])/g, ' $1').trim())],
+            body: tabelaGenerica.linhas,
+            theme: 'striped',
+            headStyles: { fillColor: [156, 39, 176], textColor: 255, fontSize: 9 },
+            styles: { fontSize: 7 },
+            margin: { left: 14, right: 14 },
+          });
+        } else {
+          doc.setFontSize(10);
+          doc.setTextColor(120, 120, 120);
+          doc.text('Nenhum dado detalhado encontrado para este relatório no período selecionado.', 14, yPos);
+        }
       }
       
       // Rodapé em todas as páginas
@@ -2916,6 +3009,15 @@ function ModernRelatorios() {
               `${row.variacao >= 0 ? '+' : ''}${row.variacao.toFixed(1)}%`,
             ]);
           });
+        }
+      } else {
+        const tabelaGenerica = criarTabelaExportacaoGenerica();
+        if (tabelaGenerica) {
+          worksheetData.push([tabelaGenerica.titulo.toUpperCase()]);
+          worksheetData.push(tabelaGenerica.colunas.map((coluna) => coluna.replace(/([A-Z])/g, ' $1').trim()));
+          tabelaGenerica.linhas.forEach((linha) => worksheetData.push(linha));
+        } else {
+          worksheetData.push(['Sem dados detalhados para exportar no período selecionado']);
         }
       }
 
