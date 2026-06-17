@@ -80,8 +80,7 @@ import { Timestamp } from '../services/firebase';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { auditoriaService } from '../services/auditoriaService';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf } from '../utils/reportExportUtils';
 
 // Níveis de fidelidade
 const niveis = {
@@ -575,137 +574,37 @@ function FidelidadeHistorico() {
     try {
       if (!cliente) return;
 
-      const doc = new jsPDF();
-      
-      // Cabeçalho
-      doc.setFillColor(156, 39, 176);
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('HISTÓRICO DE FIDELIDADE', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(cliente.nome, 105, 30, { align: 'center' });
+      const rows = movimentacoesFiltradas.map(item => ({
+        data: formatDate(item.data, 'dd/MM/yyyy HH:mm'),
+        tipo: getTipoLabel(item.tipoMov),
+        descricao: item.motivo || item.recompensaNome || '—',
+        pontos: `${item.tipoMov === 'credito' ? '+' : '-'}${Math.abs(item.quantidade || item.pontosGastos || 0)}`,
+        status: item.status || '-',
+      }));
 
-      // Informações do cliente
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Telefone:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(cliente.telefone || '—', 60, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Email:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(cliente.email || '—', 60, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Nível:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(nivel.toUpperCase(), 60, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Saldo:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${saldo} pontos`, 60, yPos);
-      
-      yPos += 15;
-
-      // Estatísticas
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 40, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Créditos:', 25, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(estatisticas.totalCreditos), 50, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Débitos:', 80, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(estatisticas.totalDebitos), 105, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Resgates:', 135, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(estatisticas.totalResgates), 160, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Média Mensal:', 25, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(estatisticas.mediaMensal), 60, yPos + 25);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Melhor Mês:', 100, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${estatisticas.melhorMes.mes} (${estatisticas.melhorMes.pontos})`, 130, yPos + 25);
-      
-      yPos += 55;
-
-      // Tabela de movimentações
-      const tableColumn = ['Data', 'Tipo', 'Descrição', 'Pontos'];
-      const tableRows = [];
-      
-      movimentacoesFiltradas.slice(0, 20).forEach(item => {
-        const row = [
-          formatDate(item.data, 'dd/MM/yyyy HH:mm'),
-          getTipoLabel(item.tipoMov),
-          item.motivo || item.recompensaNome || '—',
-          `${item.tipoMov === 'credito' ? '+' : '-'}${Math.abs(item.quantidade || item.pontosGastos || 0)}`,
-        ];
-        tableRows.push(row);
+      exportRowsToPdf({
+        title: 'Histórico de Fidelidade',
+        subtitle: `${cliente.nome} • Nível ${nivel.toUpperCase()} • Saldo ${saldo} pontos`,
+        summary: [
+          { label: 'Créditos', value: estatisticas.totalCreditos },
+          { label: 'Débitos', value: estatisticas.totalDebitos },
+          { label: 'Resgates', value: estatisticas.totalResgates },
+          { label: 'Média mensal', value: estatisticas.mediaMensal },
+        ],
+        rows,
+        filename: `historico_fidelidade_${cliente.nome}_${format(new Date(), 'yyyy-MM-dd')}.pdf`,
       });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
-      });
-      
-      // Rodapé
-      const finalY = doc.lastAutoTable.finalY || yPos + 50;
-      
-      doc.setFontSize(8);
-      doc.setTextColor(128, 128, 128);
-      doc.text('Documento gerado pelo sistema de gestão', 105, finalY + 10, { align: 'center' });
-      doc.text(`Emitido em: ${formatDate(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, finalY + 15, { align: 'center' });
-      
-      // Registrar na auditoria
+
       await auditoriaService.registrar('exportar_historico_fidelidade', {
         entidade: 'fidelidade',
         entidadeId: id,
         detalhes: `Exportação do histórico de fidelidade do cliente ${cliente.nome}`,
-        dados: {
-          formato: 'PDF',
-          totalRegistros: movimentacoesFiltradas.length
-        }
+        dados: { formato: 'PDF', totalRegistros: movimentacoesFiltradas.length }
       });
-      
-      window.open(doc.output('bloburl'), '_blank');
+
       setOpenPrintDialog(false);
       mostrarSnackbar('PDF gerado com sucesso!');
-      
+      return;
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');

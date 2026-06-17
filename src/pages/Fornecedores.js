@@ -92,8 +92,7 @@ import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf } from '../utils/reportExportUtils';
 
 // Função utilitária para formatar data com segurança
 const formatDate = (date, formatString = 'dd/MM/yyyy') => {
@@ -661,80 +660,29 @@ function Fornecedores() {
 
   const handlePrintPDF = async () => {
     try {
-      const doc = new jsPDF();
-      
-      // Cabeçalho
-      doc.setFillColor(156, 39, 176);
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('RELATÓRIO DE FORNECEDORES', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
-
-      // Estatísticas
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 40, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Fornecedores:', 25, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.total), 70, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Ativos:', 100, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.ativos), 120, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Inativos:', 140, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.inativos), 160, yPos + 10);
-      
-      yPos += 25;
-
-      // Tabela de fornecedores
-      const tableColumn = ['Fornecedor', 'CNPJ', 'Contato', 'Categoria', 'Avaliação', 'Status'];
-      const tableRows = [];
-      
-      fornecedoresFiltrados.slice(0, 50).forEach(f => {
-        const row = [
-          f.nome,
-          formatarCNPJ(f.cnpj),
-          f.telefone || f.celular || '—',
-          categorias.find(c => c.value === f.categoria)?.label || f.categoria,
-          f.rating ? `${f.rating} ★` : '—',
-          f.status === 'ativo' ? 'Ativo' : 'Inativo',
-        ];
-        tableRows.push(row);
+      exportRowsToPdf({
+        title: 'Relatório de Fornecedores',
+        subtitle: `Fornecedores filtrados: ${fornecedoresFiltrados.length} • Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+        filename: `relatorio_fornecedores_${new Date().toISOString().split('T')[0]}.pdf`,
+        summary: [
+          { label: 'Total de fornecedores', value: stats.total },
+          { label: 'Ativos', value: stats.ativos },
+          { label: 'Inativos', value: stats.inativos },
+          { label: 'Categorias diferentes', value: new Set(fornecedoresFiltrados.map((f) => f.categoria).filter(Boolean)).size },
+        ],
+        columns: ['fornecedor', 'cnpj', 'contato', 'email', 'categoria', 'avaliacao', 'status', 'endereco'],
+        rows: fornecedoresFiltrados.map((f) => ({
+          fornecedor: f.nomeFantasia || f.nome || '—',
+          cnpj: formatarCNPJ(f.cnpj) || '—',
+          contato: formatarTelefone(f.telefone || f.celular) || '—',
+          email: f.email || '—',
+          categoria: categorias.find((c) => c.value === f.categoria)?.label || f.categoria || '—',
+          avaliacao: f.rating ? `${f.rating} ★` : '—',
+          status: f.status === 'ativo' ? 'Ativo' : 'Inativo',
+          endereco: f.endereco ? `${f.endereco.logradouro || ''}, ${f.endereco.numero || ''} - ${f.endereco.cidade || ''}/${f.endereco.estado || ''}` : '—',
+        })),
       });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
-      });
-      
-      // Registrar na auditoria
+
       await auditoriaService.registrar('exportar_fornecedores', {
         entidade: 'fornecedores',
         detalhes: 'Exportação de relatório de fornecedores',
@@ -744,16 +692,14 @@ function Fornecedores() {
           stats
         }
       });
-      
-      window.open(doc.output('bloburl'), '_blank');
+
       setOpenPrintDialog(false);
       mostrarSnackbar('PDF gerado com sucesso!');
-      
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+
+      await auditoriaService.registrarErro(error, {
         acao: 'exportar_fornecedores_pdf',
         detalhes: 'Erro ao gerar PDF de fornecedores'
       });

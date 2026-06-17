@@ -42,6 +42,7 @@ import {
   Visibility as VisibilityIcon,
   Assignment as AssignmentIcon, // 🔥 Ícone para anamnese
   Quiz as QuizIcon, // 🔥 Ícone para formulário
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -49,6 +50,7 @@ import { useNavigate } from 'react-router-dom';
 import { notificacoesService } from '../services/notificacoesService';
 import { anamneseService } from '../services/anamneseService'; // 🔥 Importar serviço de anamnese
 import { firebaseService } from '../services/firebase';
+import { montarDetalhesNotificacao, normalizarLinkNotificacao } from '../utils/notificationUtils';
 
 function ModernNotificacoes() {
   const navigate = useNavigate();
@@ -438,9 +440,26 @@ function ModernNotificacoes() {
     setSelectedNotification(null);
   };
 
-  const handleViewDetails = (notification) => {
+  const handleViewDetails = async (notification) => {
     setNotificationDetails(notification);
     setOpenDetailsDialog(true);
+
+    if (notification?.id && !notification.lida) {
+      try {
+        await notificacoesService.marcarComoLida(notification.id);
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, lida: true, visualizadaEm: new Date().toISOString() } : n)
+        );
+      } catch (error) {
+        console.error('Erro ao marcar notificação visualizada:', error);
+      }
+    }
+  };
+
+  const handleIrParaNotificacao = (notification) => {
+    if (!notification) return;
+    setOpenDetailsDialog(false);
+    navigate(normalizarLinkNotificacao(notification, 'admin'));
   };
 
   // 🔥 FUNÇÃO PARA VER DETALHES DA ANAMNESE
@@ -458,7 +477,9 @@ function ModernNotificacoes() {
   const handleNavigate = (tipo, detalhes) => {
     setOpenDetailsDialog(false);
 
-    console.log('🧭 Navegando:', { tipo, detalhes });
+    const notificacaoAtual = notificationDetails || { tipo, detalhes };
+    const linkNormalizado = normalizarLinkNotificacao(notificacaoAtual, 'admin');
+    console.log('🧭 Navegando:', { tipo, detalhes, linkNormalizado });
 
     switch (tipo) {
       case 'agendamento':
@@ -487,9 +508,7 @@ function ModernNotificacoes() {
         }
         break;
       default:
-        if (detalhes?.link) {
-          navigate(detalhes.link);
-        }
+        navigate(linkNormalizado);
     }
   };
 
@@ -514,7 +533,10 @@ function ModernNotificacoes() {
       estoque: 'Estoque',
       pagamento: 'Pagamento',
       lembrete: 'Lembrete',
-      anamnese: 'Anamnese' // 🔥 NOVO
+      anamnese: 'Anamnese', // 🔥 NOVO
+      pontos: 'Pontos',
+      resgate: 'Resgate',
+      atendimento: 'Atendimento'
     };
     return labels[tipo] || 'Sistema';
   };
@@ -527,7 +549,10 @@ function ModernNotificacoes() {
       estoque: '#f44336',
       pagamento: '#4caf50',
       lembrete: '#ff9800',
-      anamnese: '#2196f3' // 🔥 NOVO
+      anamnese: '#2196f3', // 🔥 NOVO
+      pontos: '#ff9800',
+      resgate: '#2196f3',
+      atendimento: '#4caf50'
     };
     return colors[tipo] || '#2196f3';
   };
@@ -779,8 +804,10 @@ function ModernNotificacoes() {
                           mb: 2,
                           bgcolor: notification.lida ? 'transparent' : `${getNotificationTypeColor(notification.tipo)}10`,
                           borderLeft: !notification.lida ? `4px solid ${getNotificationTypeColor(notification.tipo)}` : 'none',
-                          '&:hover': { boxShadow: 3 }
+                          cursor: 'pointer',
+                          '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' }
                         }}
+                        onClick={() => handleViewDetails(notification)}
                       >
                         <CardContent>
                           <Grid container spacing={2} alignItems="flex-start">
@@ -843,11 +870,20 @@ function ModernNotificacoes() {
                             </Grid>
 
                             <Grid item xs={12} sm={2}>
-                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+                                <Tooltip title="Ir para a página relacionada">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(event) => { event.stopPropagation(); handleIrParaNotificacao(notification); }}
+                                    sx={{ color: '#1976d2' }}
+                                  >
+                                    <OpenInNewIcon />
+                                  </IconButton>
+                                </Tooltip>
                                 <Tooltip title="Ver detalhes">
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleViewDetails(notification)}
+                                    onClick={(event) => { event.stopPropagation(); handleViewDetails(notification); }}
                                     sx={{ color: '#9c27b0' }}
                                   >
                                     <VisibilityIcon />
@@ -857,7 +893,7 @@ function ModernNotificacoes() {
                                   <Tooltip title="Marcar como lida">
                                     <IconButton
                                       size="small"
-                                      onClick={() => handleMarkAsRead(notification.id)}
+                                      onClick={(event) => { event.stopPropagation(); handleMarkAsRead(notification.id); }}
                                       sx={{ color: '#4caf50' }}
                                     >
                                       <CheckIcon />
@@ -867,7 +903,7 @@ function ModernNotificacoes() {
                                 <Tooltip title="Mais opções">
                                   <IconButton
                                     size="small"
-                                    onClick={(e) => handleMenuOpen(e, notification)}
+                                    onClick={(e) => { e.stopPropagation(); handleMenuOpen(e, notification); }}
                                   >
                                     <MoreIcon />
                                   </IconButton>
@@ -932,7 +968,7 @@ function ModernNotificacoes() {
                 <strong>Prioridade:</strong> {notificationDetails.prioridade || 'normal'}
               </Typography>
 
-              {notificationDetails.detalhes && (
+              {montarDetalhesNotificacao(notificationDetails).length > 0 && (
                 <>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" gutterBottom>Detalhes adicionais:</Typography>
@@ -957,9 +993,8 @@ function ModernNotificacoes() {
                       </Typography>
                     </>
                   ) : (
-                    // DETALHES GERAIS
-                    Object.entries(notificationDetails.detalhes).map(([key, value]) => (
-                      <Typography key={key} variant="body2">
+                    montarDetalhesNotificacao(notificationDetails).map(([key, value]) => (
+                      <Typography key={key} variant="body2" sx={{ mb: 0.5 }}>
                         <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                       </Typography>
                     ))
@@ -973,10 +1008,10 @@ function ModernNotificacoes() {
           <Button onClick={() => setOpenDetailsDialog(false)}>Fechar</Button>
           <Button
             variant="contained"
-            onClick={() => handleNavigate(notificationDetails?.tipo, notificationDetails?.detalhes)}
+            onClick={() => handleIrParaNotificacao(notificationDetails)}
             sx={{ bgcolor: getNotificationTypeColor(notificationDetails?.tipo) }}
           >
-            {notificationDetails?.tipo === 'anamnese' ? 'Preencher Formulário' : 'Ir para'}
+            Ir para página relacionada
           </Button>
         </DialogActions>
       </Dialog>

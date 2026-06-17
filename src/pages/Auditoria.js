@@ -77,6 +77,7 @@ import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { useReactToPrint } from 'react-to-print';
+import { exportRowsToPdf, exportRowsToExcel } from '../utils/reportExportUtils';
 
 // ✅ Função segura para obter a data no formato YYYY-MM-DD
 const getDataString = (data) => {
@@ -514,6 +515,36 @@ function Auditoria() {
       console.error('Erro ao exportar:', error);
       mostrarSnackbar('Erro ao exportar', 'error');
     }
+  };
+
+  const getLinhasAuditoriaExportacao = () => logsFiltrados.map(log => ({
+    dataHora: log.data ? new Date(log.data).toLocaleString('pt-BR') : '',
+    usuario: log.usuario || 'Sistema',
+    acao: acoesColors[log.acao]?.label || log.acao || '-',
+    entidade: log.entidade || '-',
+    entidadeId: log.entidadeId || '-',
+    ip: log.ip || '-',
+    detalhes: log.detalhes || '',
+  }));
+
+  const handleExportPDF = () => {
+    exportRowsToPdf({
+      title: 'Auditoria do Sistema',
+      subtitle: `Registros: ${logsFiltrados.length} • Gerado em ${new Date().toLocaleString('pt-BR')}`,
+      rows: getLinhasAuditoriaExportacao(),
+      filename: `auditoria_${getDataString(new Date())}.pdf`,
+    });
+    mostrarSnackbar('PDF exportado com sucesso!');
+  };
+
+  const handleExportExcel = () => {
+    exportRowsToExcel({
+      title: 'Auditoria do Sistema',
+      subtitle: `Registros: ${logsFiltrados.length} • Gerado em ${new Date().toLocaleString('pt-BR')}`,
+      rows: getLinhasAuditoriaExportacao(),
+      filename: `auditoria_${getDataString(new Date())}.xlsx`,
+    });
+    mostrarSnackbar('Excel exportado com sucesso!');
   };
 
   const handleExportCSV = async () => {
@@ -1010,6 +1041,12 @@ function Auditoria() {
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button startIcon={<PrintIcon />} onClick={handlePrint} variant="outlined">
               Imprimir
+            </Button>
+            <Button startIcon={<DownloadIcon />} onClick={handleExportPDF} variant="outlined">
+              PDF
+            </Button>
+            <Button startIcon={<DownloadIcon />} onClick={handleExportExcel} variant="outlined">
+              Excel
             </Button>
             <Button startIcon={<DownloadIcon />} onClick={handleExportJSON} variant="outlined">
               JSON

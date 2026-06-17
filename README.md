@@ -38,6 +38,16 @@ O arquivo `supabase/migrations/20260601170000_create_collection_tables.sql` cria
 
 Cada tabela recebe índices, trigger de `updated_at`, grants para `anon`/`authenticated` e políticas RLS compatíveis com os fluxos atuais do frontend.
 
+### SQL das notificações automáticas
+
+Para o Supabase gerar notificações automaticamente conforme os eventos do sistema, aplique também:
+
+```txt
+supabase/migrations/20260617120000_create_notification_automation.sql
+```
+
+Essa migration garante a estrutura de `notificacoes` e `notificacoes_cliente`, cria índices para os campos consultados pelo frontend (`usuarioId`, `destinatarioId`, `clienteId`, `tipo`, `lida`, `empresaId`, `unidadeId`) e instala triggers para gerar notificações em eventos como novos agendamentos, mudança de status de agendamento, novo cliente, estoque baixo, pagamentos, atendimentos, respostas de anamnese, pontos e resgates de fidelidade.
+
 ### Criar usuário administrador
 
 Para criar o primeiro usuário da parte administrativa, execute o script abaixo depois de aplicar as migrations do Supabase:

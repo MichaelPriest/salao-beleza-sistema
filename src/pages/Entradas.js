@@ -77,8 +77,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf, openProfessionalPrintWindow } from '../utils/reportExportUtils';
 
 // Componente de Card Mobile Otimizado
 const EntradaMobileCard = ({ entrada, fornecedor, onDetalhes, onConferir, onPrint }) => {
@@ -500,141 +499,38 @@ function Entradas() {
     if (!entradaSelecionada) return;
 
     try {
-      const doc = new jsPDF();
       const fornecedor = fornecedores.find(f => f.id === entradaSelecionada.fornecedorId);
-      
-      // Cabeçalho
-      doc.setFillColor(156, 39, 176); // Roxo
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('COMPROVANTE DE ENTRADA', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Nº ${entradaSelecionada.numeroEntrada}`, 105, 30, { align: 'center' });
-
-      // Informações principais
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      // Data e Status
-      doc.setFont('helvetica', 'bold');
-      doc.text('Data da Entrada:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(entradaSelecionada.dataEntrada ? format(new Date(entradaSelecionada.dataEntrada), 'dd/MM/yyyy') : '—', 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Status:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
       const statusMap = {
         pendente: 'Pendente',
         conferido: 'Conferido',
         finalizado: 'Finalizado',
         cancelado: 'Cancelado'
       };
-      doc.text(statusMap[entradaSelecionada.status] || entradaSelecionada.status, 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Fornecedor:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(fornecedor?.nome || '—', 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Documento:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(entradaSelecionada.documento || '—', 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Responsável:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(entradaSelecionada.responsavel || '—', 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Itens:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(entradaSelecionada.itens?.length || 0), 70, yPos);
-      
-      yPos += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Valor Total:', 20, yPos);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`R$ ${Number(entradaSelecionada.valorTotal || 0).toFixed(2)}`, 70, yPos);
-      
-      // Observações
-      if (entradaSelecionada.observacoes) {
-        yPos += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Observações:', 20, yPos);
-        yPos += 5;
-        doc.setFont('helvetica', 'normal');
-        
-        // Quebrar texto longo
-        const splitObservacoes = doc.splitTextToSize(entradaSelecionada.observacoes, 170);
-        doc.text(splitObservacoes, 20, yPos);
-        yPos += splitObservacoes.length * 5;
-      }
-      
-      // Tabela de Itens
-      yPos += 10;
-      
-      const tableColumn = ['Produto', 'Qtd', 'Lote', 'Validade', 'Valor'];
-      const tableRows = [];
-      
-      entradaSelecionada.itens?.forEach(item => {
-        const itemData = [
-          item.produtoNome || '—',
-          String(item.quantidade || 0),
-          item.lote || '—',
-          item.dataValidade ? format(new Date(item.dataValidade), 'dd/MM/yyyy') : '—',
-          `R$ ${Number(item.valorUnitario || 0).toFixed(2)}`,
-        ];
-        tableRows.push(itemData);
+
+      exportRowsToPdf({
+        title: 'Comprovante de Entrada',
+        subtitle: `Nº ${entradaSelecionada.numeroEntrada || '—'} • ${entradaSelecionada.dataEntrada ? format(new Date(entradaSelecionada.dataEntrada), 'dd/MM/yyyy') : 'Data não informada'}`,
+        filename: `comprovante_entrada_${entradaSelecionada.numeroEntrada || 'entrada'}.pdf`,
+        summary: [
+          { label: 'Fornecedor', value: fornecedor?.nome || '—' },
+          { label: 'Documento', value: entradaSelecionada.documento || '—' },
+          { label: 'Status', value: statusMap[entradaSelecionada.status] || entradaSelecionada.status },
+          { label: 'Responsável', value: entradaSelecionada.responsavel || '—' },
+          { label: 'Total de itens', value: entradaSelecionada.itens?.length || 0 },
+          { label: 'Valor total', value: `R$ ${Number(entradaSelecionada.valorTotal || 0).toFixed(2)}` },
+          ...(entradaSelecionada.observacoes ? [{ label: 'Observações', value: entradaSelecionada.observacoes }] : []),
+        ],
+        columns: ['produto', 'quantidade', 'lote', 'validade', 'valorUnitario', 'total'],
+        rows: (entradaSelecionada.itens || []).map((item) => ({
+          produto: item.produtoNome || '—',
+          quantidade: item.quantidade || 0,
+          lote: item.lote || '—',
+          validade: item.dataValidade ? format(new Date(item.dataValidade), 'dd/MM/yyyy') : '—',
+          valorUnitario: `R$ ${Number(item.valorUnitario || 0).toFixed(2)}`,
+          total: `R$ ${Number(item.total || 0).toFixed(2)}`,
+        })),
       });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 9,
-          cellPadding: 3,
-        },
-        columnStyles: {
-          0: { cellWidth: 60 },
-          1: { cellWidth: 20, halign: 'center' },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 30 },
-          4: { cellWidth: 30, halign: 'right' },
-        },
-      });
-      
-      // Rodapé
-      const finalY = doc.lastAutoTable.finalY || yPos + 50;
-      
-      doc.setFontSize(8);
-      doc.setTextColor(128, 128, 128);
-      doc.text('Documento gerado pelo sistema de gestão', 105, finalY + 10, { align: 'center' });
-      doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, finalY + 15, { align: 'center' });
-      
-      // Abrir PDF em nova janela
-      window.open(doc.output('bloburl'), '_blank');
-      
+
       setOpenPrintDialog(false);
       toast.success('PDF gerado com sucesso!');
       
@@ -647,7 +543,6 @@ function Entradas() {
   const handlePrintHTML = () => {
     if (!entradaSelecionada) return;
 
-    const printWindow = window.open('', '_blank');
     const fornecedor = fornecedores.find(f => f.id === entradaSelecionada.fornecedorId);
     
     const statusMap = {
@@ -657,125 +552,7 @@ function Entradas() {
       cancelado: 'Cancelado'
     };
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Comprovante de Entrada - ${entradaSelecionada.numeroEntrada}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-          }
-          .header {
-            background: #9c27b0;
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-            margin-bottom: 30px;
-            border-radius: 5px;
-          }
-          .header h1 {
-            margin: 0;
-            font-size: 28px;
-          }
-          .header p {
-            margin: 10px 0 0;
-            font-size: 16px;
-          }
-          .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f5f5f5;
-            border-radius: 5px;
-          }
-          .info-item {
-            display: flex;
-            flex-direction: column;
-          }
-          .info-item .label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-          }
-          .info-item .value {
-            font-size: 16px;
-            font-weight: bold;
-            color: #333;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-          }
-          th {
-            background: #9c27b0;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-size: 14px;
-          }
-          td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            font-size: 13px;
-          }
-          tr:hover {
-            background: #f5f5f5;
-          }
-          .total {
-            text-align: right;
-            font-size: 18px;
-            font-weight: bold;
-            color: #4caf50;
-            margin-top: 20px;
-            padding: 15px;
-            background: #f5f5f5;
-            border-radius: 5px;
-          }
-          .footer {
-            text-align: center;
-            font-size: 11px;
-            color: #999;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-          }
-          .observacoes {
-            margin: 20px 0;
-            padding: 15px;
-            background: #fff3e0;
-            border-left: 4px solid #ff9800;
-            border-radius: 3px;
-          }
-          @media print {
-            body {
-              padding: 0;
-            }
-            .header {
-              background: #9c27b0 !important;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            th {
-              background: #9c27b0 !important;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>COMPROVANTE DE ENTRADA</h1>
-          <p>Nº ${entradaSelecionada.numeroEntrada}</p>
-        </div>
-
+    const body = `
         <div class="info-grid">
           <div class="info-item">
             <span class="label">Data da Entrada</span>
@@ -842,18 +619,13 @@ function Entradas() {
         <div class="footer">
           Documento gerado pelo sistema de gestão em ${format(new Date(), 'dd/MM/yyyy HH:mm')}
         </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          }
-        </script>
-      </body>
-      </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    openProfessionalPrintWindow({
+      title: 'Comprovante de Entrada',
+      subtitle: `Nº ${entradaSelecionada.numeroEntrada || '—'}`,
+      body,
+    });
     
     setOpenPrintDialog(false);
   };

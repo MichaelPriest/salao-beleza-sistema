@@ -13,8 +13,10 @@ import {
   Chip,
   Divider,
 } from '@mui/material';
+import { getEmpresaImpressao } from '../utils/reportExportUtils';
 
-export const ImprimirHistorico = React.forwardRef(({ atendimentos, clienteNome, periodo }, ref) => {
+export const ImprimirHistorico = React.forwardRef(({ atendimentos, clienteNome, periodo, empresa }, ref) => {
+  const empresaDados = getEmpresaImpressao(empresa);
   const formatarData = (data) => {
     if (!data) return '-';
     return new Date(data).toLocaleDateString('pt-BR');
@@ -50,13 +52,27 @@ export const ImprimirHistorico = React.forwardRef(({ atendimentos, clienteNome, 
         pb: 2,
         borderBottom: '2px solid #9c27b0'
       }}>
-        <Box>
-          <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700 }}>
-            Beauty Pro
-          </Typography>
-          <Typography variant="subtitle1" color="textSecondary">
-            Sistema de Gerenciamento
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {empresaDados.logo && (
+            <Box component="img" src={empresaDados.logo} alt="Logo da empresa" sx={{ width: 64, height: 64, objectFit: 'contain' }} />
+          )}
+          <Box>
+            <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 700 }}>
+              {empresaDados.nome}
+            </Typography>
+            {empresaDados.razaoSocial && (
+              <Typography variant="subtitle2" color="textSecondary">
+                {empresaDados.razaoSocial}
+              </Typography>
+            )}
+            {empresaDados.cnpj && <Typography variant="body2">CNPJ: {empresaDados.cnpj}</Typography>}
+            {empresaDados.endereco && <Typography variant="body2" color="textSecondary">{empresaDados.endereco}</Typography>}
+            {[empresaDados.telefone, empresaDados.whatsapp, empresaDados.email].filter(Boolean).length > 0 && (
+              <Typography variant="body2" color="textSecondary">
+                {[empresaDados.telefone, empresaDados.whatsapp, empresaDados.email].filter(Boolean).join(' • ')}
+              </Typography>
+            )}
+          </Box>
         </Box>
         <Box sx={{ textAlign: 'right' }}>
           <Typography variant="body2">

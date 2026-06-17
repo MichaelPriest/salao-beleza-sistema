@@ -89,6 +89,7 @@ import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { ImprimirHistorico } from '../components/ImprimirHistorico';
+import { exportRowsToExcel } from '../utils/reportExportUtils';
 
 // 🔥 FUNÇÃO PARA OBTER DADOS DO CLIENTE DE FORMA SEGURA
 const getClienteData = (clienteId, clientes) => {
@@ -584,6 +585,32 @@ function HistoricoAtendimentos() {
       await auditoriaService.registrarErro(error, { 
         acao: 'exportar_relatorio_atendimentos_pdf'
       });
+    }
+  };
+
+  const getLinhasAtendimentosExportacao = () => atendimentosFiltrados.map(a => ({
+    data: formatDate(a.data),
+    cliente: getClienteNome(a.clienteId),
+    profissional: getProfissionalNome(a.profissionalId),
+    servicos: getServicosNomes(a).join(', '),
+    valor: getValorTotal(a).toFixed(2),
+    status: a.status === 'finalizado' ? 'Realizado' : a.status,
+    observacoes: a.observacoes || '',
+  }));
+
+  const handleExportExcel = async () => {
+    try {
+      exportRowsToExcel({
+        title: 'Histórico de Atendimentos',
+        subtitle: `Período: ${getPeriodoTexto()} • Total: ${atendimentosFiltrados.length}`,
+        rows: getLinhasAtendimentosExportacao(),
+        filename: `historico_atendimentos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`,
+      });
+      mostrarSnackbar('Excel exportado com sucesso!');
+      setOpenPrintDialog(false);
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      mostrarSnackbar('Erro ao exportar Excel', 'error');
     }
   };
 
@@ -1406,6 +1433,26 @@ function HistoricoAtendimentos() {
                 </Button>
               </Grid>
               
+              <Grid item xs={12} sm={6}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleExportExcel}
+                  sx={{ 
+                    p: 3,
+                    bgcolor: '#4caf50',
+                    '&:hover': { bgcolor: '#388e3c' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                  }}
+                >
+                  <DownloadIcon sx={{ fontSize: 40 }} />
+                  <Typography variant="body1">Excel</Typography>
+                  <Typography variant="caption">Planilha detalhada</Typography>
+                </Button>
+              </Grid>
+
               <Grid item xs={12} sm={6}>
                 <Button
                   fullWidth
