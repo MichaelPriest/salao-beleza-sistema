@@ -1,7 +1,7 @@
 import React from 'react';
 import { Avatar, Box, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
 import firebaseService from '../services/firebase';
-import { setEmpresaImpressaoCache } from '../utils/reportExportUtils';
+import { getEmpresaImpressao, setEmpresaImpressaoCache } from '../utils/reportExportUtils';
 
 export const REPORT_COLORS = {
   primary: '#9c27b0',
@@ -42,6 +42,8 @@ export const reportTableSx = {
 };
 
 export function ReportHeader({ title, subtitle, icon, badge, actions }) {
+  const [empresa, setEmpresa] = React.useState(() => getEmpresaImpressao());
+
   React.useEffect(() => {
     let ativo = true;
 
@@ -49,9 +51,15 @@ export function ReportHeader({ title, subtitle, icon, badge, actions }) {
       try {
         const configuracoes = await firebaseService.getAll('configuracoes').catch(() => []);
         const config = Array.isArray(configuracoes) ? configuracoes[0] : null;
-        if (ativo && config) setEmpresaImpressaoCache(config);
+        if (ativo && config) {
+          setEmpresaImpressaoCache(config);
+          setEmpresa(getEmpresaImpressao(config));
+        } else if (ativo) {
+          setEmpresa(getEmpresaImpressao());
+        }
       } catch (error) {
         console.warn('Não foi possível carregar dados da empresa para relatórios:', error);
+        if (ativo) setEmpresa(getEmpresaImpressao());
       }
     };
 
@@ -64,6 +72,46 @@ export function ReportHeader({ title, subtitle, icon, badge, actions }) {
   return (
     <Card sx={{ ...reportCardSx, mb: 3, background: 'linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%)', color: 'white' }}>
       <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          justifyContent="space-between"
+          spacing={2}
+          sx={{
+            mb: 2.5,
+            pb: 2,
+            borderBottom: '1px solid rgba(255,255,255,0.18)',
+          }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            {empresa.logo && (
+              <Avatar
+                src={empresa.logo}
+                variant="rounded"
+                sx={{ width: 54, height: 54, bgcolor: 'white', p: 0.5 }}
+              />
+            )}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, lineHeight: 1.15 }}>
+                {empresa.nome}
+              </Typography>
+              {[empresa.cnpj && `CNPJ: ${empresa.cnpj}`, empresa.endereco].filter(Boolean).map((linha) => (
+                <Typography key={linha} variant="caption" sx={{ display: 'block', opacity: 0.88 }}>
+                  {linha}
+                </Typography>
+              ))}
+            </Box>
+          </Stack>
+          {[empresa.telefone, empresa.whatsapp, empresa.email].filter(Boolean).length > 0 && (
+            <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+              <Typography variant="caption" sx={{ display: 'block', opacity: 0.75, fontWeight: 700 }}>
+                Contato da empresa
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {[empresa.telefone, empresa.whatsapp, empresa.email].filter(Boolean).join(' • ')}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             {icon && (

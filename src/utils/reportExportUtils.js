@@ -28,10 +28,42 @@ const parseStorage = (key) => {
   }
 };
 
+const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
+
+const firstValue = (...values) => values.find(hasValue) || '';
+
+const getPath = (source, path) => path.split('.').reduce((acc, key) => acc?.[key], source);
+
+const firstPathValue = (sources, paths) => {
+  for (const source of sources) {
+    if (!source) continue;
+    for (const path of paths) {
+      const value = getPath(source, path);
+      if (hasValue(value)) return value;
+    }
+  }
+  return '';
+};
+
+const normalizeEndereco = (endereco = {}, source = {}) => {
+  if (typeof endereco === 'string') return endereco;
+
+  return [
+    firstValue(endereco.logradouro, endereco.rua, source.logradouro, source.rua),
+    firstValue(endereco.numero, source.numero),
+    firstValue(endereco.complemento, source.complemento),
+    firstValue(endereco.bairro, source.bairro),
+    firstValue(endereco.cidade, source.cidade),
+    firstValue(endereco.estado, source.estado, source.uf),
+    firstValue(endereco.cep, source.cep),
+  ].filter(Boolean).join(', ');
+};
+
 export const setEmpresaImpressaoCache = (config) => {
   try {
     if (config) {
       localStorage.setItem('configuracaoAtual', JSON.stringify(config));
+      if (config.salao) localStorage.setItem('empresaImpressaoAtual', JSON.stringify(config.salao));
     }
   } catch {
     // Cache local é apenas uma otimização para impressões/exportações.
@@ -39,35 +71,45 @@ export const setEmpresaImpressaoCache = (config) => {
 };
 
 export const getEmpresaImpressao = (empresaInformada = null) => {
-  const stored = empresaInformada
-    || parseStorage('configuracaoAtual')
-    || parseStorage('configuracoes')?.[0]
-    || parseStorage('configuracao')
-    || parseStorage('empresa')
-    || parseStorage('tenant')?.empresa
-    || {};
+  const configuracoesStorage = parseStorage('configuracoes');
+  const usuario = parseStorage('usuario') || parseStorage('user') || {};
+  const tenantEmpresa = parseStorage('saas.empresaAtual') || parseStorage('tenant')?.empresa || {};
+  const tenantUnidade = parseStorage('saas.unidadeAtual') || {};
+  const configAtual = parseStorage('configuracaoAtual') || parseStorage('configuracao') || {};
+  const empresaCache = parseStorage('empresaImpressaoAtual') || parseStorage('empresa') || {};
+  const configLista = Array.isArray(configuracoesStorage) ? configuracoesStorage[0] : configuracoesStorage;
 
-  const salao = stored.salao || stored.configuracoes?.salao || stored;
-  const endereco = salao.endereco || {};
-  const contato = salao.contato || {};
-  const enderecoCompleto = [
-    endereco.logradouro || salao.logradouro,
-    endereco.numero || salao.numero,
-    endereco.bairro || salao.bairro,
-    endereco.cidade || salao.cidade,
-    endereco.estado || salao.estado,
-    endereco.cep || salao.cep,
-  ].filter(Boolean).join(', ');
+  const fontes = [
+    empresaInformada,
+    empresaInformada?.salao,
+    configAtual?.salao,
+    configAtual?.empresa,
+    configAtual,
+    configLista?.salao,
+    configLista?.empresa,
+    configLista,
+    empresaCache?.salao,
+    empresaCache,
+    tenantUnidade,
+    usuario?.unidade,
+    tenantEmpresa,
+    usuario?.empresa,
+    usuario,
+  ].filter(Boolean);
+
+  const enderecoFonte = firstPathValue(fontes, ['endereco']) || {};
+  const contatoFonte = firstPathValue(fontes, ['contato']) || {};
+  const enderecoCompleto = normalizeEndereco(enderecoFonte, fontes.find((fonte) => fonte?.logradouro || fonte?.cidade || fonte?.cep) || {});
 
   return {
-    nome: salao.nomeFantasia || salao.nome || salao.razaoSocial || 'Beauty Pro',
-    razaoSocial: salao.razaoSocial || salao.nome || '',
-    cnpj: salao.cnpj || '',
-    logo: salao.logo || salao.logoBase64 || salao.logoUrl || stored.logo || '',
+    nome: firstPathValue(fontes, ['nomeFantasia', 'nome', 'razaoSocial', 'empresaNome', 'unidadeNome']) || 'Beauty Pro',
+    razaoSocial: firstPathValue(fontes, ['razaoSocial', 'nomeRazaoSocial', 'nome']),
+    cnpj: firstPathValue(fontes, ['cnpj', 'documento', 'cpfCnpj', 'documentoCobranca']),
+    logo: firstPathValue(fontes, ['logo', 'logoBase64', 'logoUrl', 'urlLogo', 'marca.logo']),
     endereco: enderecoCompleto,
-    telefone: contato.telefone || salao.telefone || '',
-    whatsapp: contato.whatsapp || salao.whatsapp || '',
-    email: contato.email || salao.email || '',
+    telefone: firstValue(contatoFonte.telefone, contatoFonte.celular, firstPathValue(fontes, ['telefone', 'celular', 'phone'])),
+    whatsapp: firstValue(contatoFonte.whatsapp, firstPathValue(fontes, ['whatsapp'])),
+    email: firstValue(contatoFonte.email, firstPathValue(fontes, ['email', 'emailFinanceiro'])),
   };
 };
 
