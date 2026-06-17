@@ -371,7 +371,7 @@ begin
   );
   servico_id := public.first_json_text(payload, 'servicoId', 'servicos.0.id', 'servicos.0.servicoId');
   profissional_id := public.first_json_text(payload, 'profissionalId', 'profissional.id');
-  produto_id := public.first_json_text(payload, 'produtoId', 'produto.id', 'itens.0.produtoId', 'itens.0.id');
+  produto_id := public.first_json_text(payload, 'produtoId', 'produto.id', 'itens.0.produtoId', 'itens.0.id', 'produto_id');
   recompensa_id := public.first_json_text(payload, 'recompensaId', 'recompensa.id', 'recompensa.idRecompensa');
   cliente_payload := public.app_document_payload('clientes', cliente_id);
   servico_payload := public.app_document_payload('servicos', servico_id);
@@ -462,18 +462,38 @@ begin
     );
   end if;
 
-  if tg_table_name = 'produtos' then
-    quantidade := public.numeric_or_null(coalesce(payload->>'quantidadeEstoque', payload->>'estoque', payload->>'quantidade'));
-    estoque_minimo := public.numeric_or_null(coalesce(payload->>'estoqueMinimo', payload->>'minimo'));
+  if tg_table_name in ('produtos', 'movimentacoes_estoque') then
+    if tg_table_name = 'movimentacoes_estoque' and produto_payload <> '{}'::jsonb then
+      payload := payload || jsonb_strip_nulls(jsonb_build_object(
+        'produtoId', coalesce(produto_id, ref_id),
+        'produtoNome', produto_nome,
+        'quantidadeMovimentada', coalesce(payload->>'quantidade', payload->>'qtd'),
+        'tipoMovimentacao', coalesce(payload->>'tipo', payload->>'motivo'),
+        'estoqueAtual', coalesce(produto_payload->>'quantidadeEstoque', produto_payload->>'estoque', produto_payload->>'quantidade'),
+        'estoqueMinimo', coalesce(produto_payload->>'estoqueMinimo', produto_payload->>'minimo')
+      ));
+    end if;
+
+    quantidade := public.numeric_or_null(coalesce(
+      payload->>'quantidadeEstoque',
+      payload->>'estoqueAtual',
+      payload->>'estoque',
+      payload->>'saldo',
+      payload->>'quantidade',
+      produto_payload->>'quantidadeEstoque',
+      produto_payload->>'estoque',
+      produto_payload->>'quantidade'
+    ));
+    estoque_minimo := public.numeric_or_null(coalesce(payload->>'estoqueMinimo', payload->>'minimo', produto_payload->>'estoqueMinimo', produto_payload->>'minimo'));
     if quantidade is not null and estoque_minimo is not null and quantidade <= estoque_minimo then
       perform public.upsert_admin_notification(
-        'auto_estoque_baixo_' || ref_id,
+        'auto_estoque_baixo_' || coalesce(produto_id, ref_id),
         'estoque',
         'Estoque baixo',
-        public.text_or_dash(coalesce(produto_nome, produto_id, ref_id)) || ' está com estoque baixo (' || quantidade::text || ' disponível).',
+        public.text_or_dash(coalesce(produto_nome, produto_id, ref_id)) || ' está com estoque baixo: ' || quantidade::text || ' em estoque, mínimo configurado ' || estoque_minimo::text || '.',
         '/estoque',
         payload,
-        jsonb_build_object('tabela', tg_table_name, 'icone', 'inventory', 'prioridade', 'alta')
+        jsonb_build_object('tabela', tg_table_name, 'icone', 'inventory', 'prioridade', 'alta', 'acao', 'Repor estoque', 'motivo', 'Estoque atual menor ou igual ao mínimo')
       );
     end if;
   end if;
@@ -608,6 +628,7 @@ $$ language plpgsql;
 select public.install_app_notification_trigger('agendamentos', 'agendamentos_auto_notificacoes', 'insert or update');
 select public.install_app_notification_trigger('clientes', 'clientes_auto_notificacoes', 'insert');
 select public.install_app_notification_trigger('produtos', 'produtos_auto_notificacoes', 'insert or update');
+select public.install_app_notification_trigger('movimentacoes_estoque', 'movimentacoes_estoque_auto_notificacoes', 'insert');
 select public.install_app_notification_trigger('pagamentos', 'pagamentos_auto_notificacoes', 'insert or update');
 select public.install_app_notification_trigger('atendimentos', 'atendimentos_auto_notificacoes', 'insert or update');
 select public.install_app_notification_trigger('respostas_anamnese', 'respostas_anamnese_auto_notificacoes', 'insert');
