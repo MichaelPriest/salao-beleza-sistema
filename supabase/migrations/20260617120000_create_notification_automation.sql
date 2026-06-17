@@ -86,11 +86,30 @@ begin
 end;
 $$ language plpgsql;
 
+create or replace function public.relax_notification_legacy_not_nulls(p_table_name text)
+returns void as $$
+declare
+  v_column text;
+begin
+  for v_column in
+    select column_name
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = p_table_name
+       and is_nullable = 'NO'
+       and column_name not in ('id', 'document_id', 'data', 'created_at', 'updated_at')
+  loop
+    execute format('alter table public.%I alter column %I drop not null', p_table_name, v_column);
+  end loop;
+end;
+$$ language plpgsql;
+
 create or replace function public.ensure_notification_table(p_table_name text)
 returns void as $$
 begin
   perform public.ensure_notification_column(p_table_name, 'document_id', 'text');
   perform public.ensure_notification_jsonb_data(p_table_name);
+  perform public.relax_notification_legacy_not_nulls(p_table_name);
   perform public.ensure_notification_column(p_table_name, 'created_at', 'timestamptz not null default now()');
   perform public.ensure_notification_column(p_table_name, 'updated_at', 'timestamptz not null default now()');
 
