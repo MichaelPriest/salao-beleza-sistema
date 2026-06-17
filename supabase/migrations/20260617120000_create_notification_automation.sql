@@ -299,6 +299,16 @@ begin
     'clienteId', p_cliente_id,
     'clienteUid', coalesce(p_payload->>'clienteUid', p_payload->>'authUid', p_payload->>'googleUid'),
     'clienteEmail', coalesce(p_payload->>'clienteEmail', p_payload->>'email'),
+    'clienteIds', jsonb_build_array(
+      p_cliente_id,
+      p_payload->>'clienteId',
+      p_payload->>'clienteDocId',
+      p_payload->>'clienteUid',
+      p_payload->>'authUid',
+      p_payload->>'googleUid',
+      p_payload->>'clienteEmail',
+      p_payload->>'email'
+    ),
     'tipo', p_tipo,
     'titulo', p_titulo,
     'mensagem', p_mensagem,
@@ -398,7 +408,11 @@ begin
     'servicoId', servico_id,
     'profissionalId', profissional_id,
     'produtoId', produto_id,
-    'recompensaId', recompensa_id
+    'recompensaId', recompensa_id,
+    'statusAnterior', status_anterior,
+    'statusAtual', status_atual,
+    'dataAgendamento', coalesce(payload->>'data', payload->>'dataAgendamento'),
+    'horarioAgendamento', coalesce(payload->>'horario', payload->>'horaInicio')
   ));
 
   if tg_table_name = 'agendamentos' then
