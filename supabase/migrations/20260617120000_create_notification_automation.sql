@@ -340,11 +340,17 @@ declare
   cliente_payload jsonb;
   servico_payload jsonb;
   profissional_payload jsonb;
+  produto_payload jsonb;
+  recompensa_payload jsonb;
   servico_id text;
   profissional_id text;
+  produto_id text;
+  recompensa_id text;
   cliente_nome text;
   servico_nome text;
   profissional_nome text;
+  produto_nome text;
+  recompensa_nome text;
   titulo_ref text;
   valor_ref text;
   quantidade numeric;
@@ -355,35 +361,54 @@ begin
   ref_id := coalesce(new.document_id, payload->>'id', new.id::text);
   status_atual := coalesce(payload->>'status', payload->>'situacao');
   status_anterior := coalesce(old_payload->>'status', old_payload->>'situacao');
-  cliente_id := coalesce(payload->>'clienteId', payload->>'clienteDocId', payload->>'clienteUid', payload->>'authUid', payload->>'googleUid');
+  cliente_id := coalesce(
+    payload->>'clienteId',
+    payload->>'clienteDocId',
+    payload->>'clienteUid',
+    payload->>'authUid',
+    payload->>'googleUid',
+    public.first_json_text(payload, 'cliente.id', 'cliente.uid', 'cliente.authUid', 'cliente.googleUid')
+  );
   servico_id := public.first_json_text(payload, 'servicoId', 'servicos.0.id', 'servicos.0.servicoId');
   profissional_id := public.first_json_text(payload, 'profissionalId', 'profissional.id');
+  produto_id := public.first_json_text(payload, 'produtoId', 'produto.id', 'itens.0.produtoId', 'itens.0.id');
+  recompensa_id := public.first_json_text(payload, 'recompensaId', 'recompensa.id', 'recompensa.idRecompensa');
   cliente_payload := public.app_document_payload('clientes', cliente_id);
   servico_payload := public.app_document_payload('servicos', servico_id);
   profissional_payload := public.app_document_payload('profissionais', profissional_id);
+  produto_payload := public.app_document_payload('produtos', coalesce(produto_id, ref_id));
+  recompensa_payload := public.app_document_payload('recompensas', recompensa_id);
   cliente_nome := public.first_json_text(payload, 'clienteNome', 'nomeCliente', 'cliente.nome', 'cliente.name');
   cliente_nome := coalesce(cliente_nome, public.first_json_text(cliente_payload, 'nome', 'name', 'clienteNome'));
   servico_nome := public.first_json_text(payload, 'servicoNome', 'servico', 'servicos.0.nome', 'servicos.0.name', 'servicos.0.servicoNome');
   servico_nome := coalesce(servico_nome, public.first_json_text(servico_payload, 'nome', 'name', 'servicoNome'));
   profissional_nome := public.first_json_text(payload, 'profissionalNome', 'profissional.nome', 'profissional.name');
   profissional_nome := coalesce(profissional_nome, public.first_json_text(profissional_payload, 'nome', 'name', 'profissionalNome'));
+  produto_nome := public.first_json_text(payload, 'produtoNome', 'produto.nome', 'itens.0.produtoNome', 'itens.0.nome', 'nome');
+  produto_nome := coalesce(produto_nome, public.first_json_text(produto_payload, 'nome', 'name', 'produtoNome'));
+  recompensa_nome := public.first_json_text(payload, 'recompensaNome', 'nomeRecompensa', 'recompensa.nome', 'recompensa.titulo', 'nome');
+  recompensa_nome := coalesce(recompensa_nome, public.first_json_text(recompensa_payload, 'nome', 'titulo', 'name', 'recompensaNome'));
 
   payload := payload || jsonb_strip_nulls(jsonb_build_object(
     'clienteNome', cliente_nome,
     'servicoNome', servico_nome,
     'profissionalNome', profissional_nome,
+    'produtoNome', produto_nome,
+    'recompensaNome', recompensa_nome,
     'servicoId', servico_id,
-    'profissionalId', profissional_id
+    'profissionalId', profissional_id,
+    'produtoId', produto_id,
+    'recompensaId', recompensa_id
   ));
 
   if tg_table_name = 'agendamentos' then
     if tg_op = 'INSERT' then
-      titulo_ref := public.text_or_dash(cliente_nome);
+      titulo_ref := public.text_or_dash(coalesce(cliente_nome, cliente_id));
       perform public.upsert_admin_notification(
         'auto_agendamento_novo_' || ref_id,
         'agendamento',
         'Novo agendamento',
-        'Novo agendamento de ' || titulo_ref || ' para ' || public.text_or_dash(servico_nome) ||
+        'Novo agendamento de ' || titulo_ref || ' para ' || public.text_or_dash(coalesce(servico_nome, servico_id)) ||
           case when profissional_nome is not null then ' com ' || profissional_nome else '' end || '.',
         '/agendamentos',
         payload,
@@ -395,7 +420,7 @@ begin
         cliente_id,
         'agendamento',
         'Agendamento recebido',
-        'Recebemos seu agendamento para ' || public.text_or_dash(servico_nome) || '.',
+        'Recebemos seu agendamento para ' || public.text_or_dash(coalesce(servico_nome, servico_id)) || '.',
         '/cliente/agendamentos',
         payload,
         jsonb_build_object('tabela', tg_table_name, 'icone', 'event')
@@ -405,7 +430,7 @@ begin
         'auto_agendamento_status_' || ref_id || '_' || coalesce(status_atual, 'status'),
         'agendamento',
         'Status do agendamento alterado',
-        'Agendamento de ' || public.text_or_dash(cliente_nome) || ' para ' || public.text_or_dash(servico_nome) ||
+        'Agendamento de ' || public.text_or_dash(coalesce(cliente_nome, cliente_id)) || ' para ' || public.text_or_dash(coalesce(servico_nome, servico_id)) ||
           ' alterado para ' || public.text_or_dash(status_atual) || '.',
         '/agendamentos',
         payload,
@@ -417,7 +442,7 @@ begin
         cliente_id,
         'agendamento',
         'Agendamento atualizado',
-        'Seu agendamento para ' || public.text_or_dash(servico_nome) || ' foi alterado para ' || public.text_or_dash(status_atual) || '.',
+        'Seu agendamento para ' || public.text_or_dash(coalesce(servico_nome, servico_id)) || ' foi alterado para ' || public.text_or_dash(status_atual) || '.',
         '/cliente/agendamentos',
         payload,
         jsonb_build_object('tabela', tg_table_name, 'icone', 'event_available')
@@ -427,10 +452,10 @@ begin
 
   if tg_table_name = 'clientes' and tg_op = 'INSERT' then
     perform public.upsert_admin_notification(
-      'auto_cliente_novo_' || ref_id,
-      'cliente',
-      'Novo cliente cadastrado',
-      public.text_or_dash(coalesce(payload->>'nome', payload->>'clienteNome')) || ' foi cadastrado no sistema.',
+        'auto_cliente_novo_' || ref_id,
+        'cliente',
+        'Novo cliente cadastrado',
+        public.text_or_dash(coalesce(cliente_nome, payload->>'nome')) || ' foi cadastrado no sistema.',
       '/clientes',
       payload,
       jsonb_build_object('tabela', tg_table_name, 'icone', 'person_add')
@@ -445,7 +470,7 @@ begin
         'auto_estoque_baixo_' || ref_id,
         'estoque',
         'Estoque baixo',
-        public.text_or_dash(payload->>'nome') || ' está com estoque baixo (' || quantidade::text || ' disponível).',
+        public.text_or_dash(coalesce(produto_nome, produto_id, ref_id)) || ' está com estoque baixo (' || quantidade::text || ' disponível).',
         '/estoque',
         payload,
         jsonb_build_object('tabela', tg_table_name, 'icone', 'inventory', 'prioridade', 'alta')
@@ -471,7 +496,8 @@ begin
       'auto_atendimento_' || ref_id || '_' || coalesce(status_atual, 'novo'),
       'atendimento',
       'Atendimento ' || public.text_or_dash(status_atual),
-      'Atendimento de ' || public.text_or_dash(cliente_nome) || ' atualizado.',
+      'Atendimento de ' || public.text_or_dash(coalesce(cliente_nome, cliente_id)) ||
+        case when servico_nome is not null then ' para ' || servico_nome else '' end || ' atualizado.',
       '/atendimentos',
       payload,
       jsonb_build_object('tabela', tg_table_name, 'icone', 'content_cut')
@@ -480,10 +506,10 @@ begin
     if status_atual in ('finalizado', 'concluido', 'concluído') then
       perform public.upsert_cliente_notification(
         'auto_cliente_atendimento_finalizado_' || ref_id,
-        cliente_id,
-        'atendimento',
-        'Atendimento finalizado',
-        'Seu atendimento foi finalizado. Obrigado pela preferência!',
+      cliente_id,
+      'atendimento',
+      'Atendimento finalizado',
+      'Seu atendimento' || case when servico_nome is not null then ' de ' || servico_nome else '' end || ' foi finalizado. Obrigado pela preferência!',
         '/cliente/historico',
         payload,
         jsonb_build_object('tabela', tg_table_name, 'icone', 'check_circle')
@@ -496,7 +522,7 @@ begin
       'auto_anamnese_respondida_' || ref_id,
       'anamnese',
       'Anamnese respondida',
-      public.text_or_dash(cliente_nome) || ' respondeu uma anamnese.',
+      public.text_or_dash(coalesce(cliente_nome, cliente_id)) || ' respondeu uma anamnese.',
       '/anamnese/respostas',
       payload,
       jsonb_build_object('tabela', tg_table_name, 'icone', 'assignment_turned_in')
@@ -504,12 +530,25 @@ begin
   end if;
 
   if tg_table_name = 'pontuacao' and tg_op = 'INSERT' then
+    perform public.upsert_admin_notification(
+      'auto_pontuacao_' || ref_id,
+      'pontos',
+      case when coalesce(payload->>'tipo', 'credito') = 'debito' then 'Pontos utilizados' else 'Pontos ganhos' end,
+      public.text_or_dash(coalesce(cliente_nome, cliente_id)) || ' teve movimentação de ' ||
+        public.text_or_dash(coalesce(payload->>'quantidade', payload->>'pontos')) || ' pontos: ' ||
+        public.text_or_dash(payload->>'motivo') || '.',
+      '/fidelidade/gerenciar',
+      payload,
+      jsonb_build_object('tabela', tg_table_name, 'icone', 'star')
+    );
+
     perform public.upsert_cliente_notification(
       'auto_cliente_pontos_' || ref_id,
       cliente_id,
       'pontos',
       case when coalesce(payload->>'tipo', 'credito') = 'debito' then 'Pontos utilizados' else 'Pontos ganhos' end,
-      'Movimentação de ' || public.text_or_dash(coalesce(payload->>'quantidade', payload->>'pontos')) || ' pontos: ' || public.text_or_dash(payload->>'motivo') || '.',
+      'Movimentação de ' || public.text_or_dash(coalesce(payload->>'quantidade', payload->>'pontos')) ||
+        ' pontos para ' || public.text_or_dash(coalesce(cliente_nome, cliente_id)) || ': ' || public.text_or_dash(payload->>'motivo') || '.',
       '/cliente/pontos',
       payload,
       jsonb_build_object('tabela', tg_table_name, 'icone', 'star')
@@ -517,12 +556,23 @@ begin
   end if;
 
   if tg_table_name = 'resgates_fidelidade' and tg_op = 'INSERT' then
+    perform public.upsert_admin_notification(
+      'auto_resgate_' || ref_id,
+      'resgate',
+      'Resgate realizado',
+      public.text_or_dash(coalesce(cliente_nome, cliente_id)) || ' resgatou ' ||
+        public.text_or_dash(coalesce(recompensa_nome, recompensa_id)) || '.',
+      '/fidelidade/gerenciar?tab=resgates',
+      payload,
+      jsonb_build_object('tabela', tg_table_name, 'icone', 'redeem')
+    );
+
     perform public.upsert_cliente_notification(
       'auto_cliente_resgate_' || ref_id,
       cliente_id,
       'resgate',
       'Resgate realizado',
-      'Você resgatou ' || public.text_or_dash(coalesce(payload->>'recompensaNome', payload->>'nomeRecompensa')) || '.',
+      'Você resgatou ' || public.text_or_dash(coalesce(recompensa_nome, recompensa_id)) || '.',
       '/cliente/recompensas',
       payload,
       jsonb_build_object('tabela', tg_table_name, 'icone', 'redeem')
