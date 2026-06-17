@@ -42,16 +42,61 @@ begin
 end;
 $$ language plpgsql;
 
+create or replace function public.ensure_notification_jsonb_data(p_table_name text)
+returns void as $$
+declare
+  v_data_type text;
+  v_legacy_column text;
+  v_counter integer := 0;
+begin
+  select data_type
+    into v_data_type
+    from information_schema.columns
+   where table_schema = 'public'
+     and table_name = p_table_name
+     and column_name = 'data';
+
+  if v_data_type is null then
+    perform public.ensure_notification_column(p_table_name, 'data', 'jsonb not null default ''{}''::jsonb');
+    return;
+  end if;
+
+  if v_data_type <> 'jsonb' then
+    v_legacy_column := 'data_legacy';
+    while exists (
+      select 1
+        from information_schema.columns
+       where table_schema = 'public'
+         and table_name = p_table_name
+         and column_name = v_legacy_column
+    ) loop
+      v_counter := v_counter + 1;
+      v_legacy_column := 'data_legacy_' || v_counter::text;
+    end loop;
+
+    execute format('alter table public.%I rename column data to %I', p_table_name, v_legacy_column);
+    perform public.ensure_notification_column(p_table_name, 'data', 'jsonb not null default ''{}''::jsonb');
+
+    raise notice 'Coluna %.data era do tipo %, renomeada para %.% e recriada como jsonb.',
+      p_table_name,
+      v_data_type,
+      p_table_name,
+      v_legacy_column;
+  end if;
+end;
+$$ language plpgsql;
+
 create or replace function public.ensure_notification_table(p_table_name text)
 returns void as $$
 begin
   perform public.ensure_notification_column(p_table_name, 'document_id', 'text');
-  perform public.ensure_notification_column(p_table_name, 'data', 'jsonb not null default ''{}''::jsonb');
+  perform public.ensure_notification_jsonb_data(p_table_name);
   perform public.ensure_notification_column(p_table_name, 'created_at', 'timestamptz not null default now()');
   perform public.ensure_notification_column(p_table_name, 'updated_at', 'timestamptz not null default now()');
 
   execute format('update public.%I set document_id = coalesce(document_id, id::text) where document_id is null', p_table_name);
   execute format('create unique index if not exists %I on public.%I (document_id)', p_table_name || '_document_id_uidx', p_table_name);
+  execute format('drop index if exists public.%I', p_table_name || '_data_gin_idx');
   execute format('create index if not exists %I on public.%I using gin (data)', p_table_name || '_data_gin_idx', p_table_name);
 
   execute format('create index if not exists %I on public.%I ((data->>''empresaId''))', p_table_name || '_empresa_idx', p_table_name);
