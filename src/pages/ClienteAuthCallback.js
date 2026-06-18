@@ -95,9 +95,16 @@ function ClienteAuthCallback() {
         navigate('/cliente/dashboard', { replace: true });
       } catch (err) {
         console.error('❌ Erro no callback Google do cliente:', err);
-        setError(err.message || 'Erro ao autenticar com Google');
+        const mensagemErro = String(err.message || 'Erro ao autenticar com Google');
+        const mensagemAmigavel = mensagemErro.includes('Unable to exchange external code')
+          ? 'O Google não concluiu a autenticação. Tente entrar novamente e selecione sua conta Google outra vez.'
+          : mensagemErro;
+        setError(mensagemAmigavel);
+        localStorage.removeItem('supabase.auth.session');
+        localStorage.removeItem('supabase.access_token');
+        const empresaSlug = new URLSearchParams(window.location.search).get('empresa') || window.sessionStorage.getItem('empresa_publica_slug');
         setTimeout(() => {
-          navigate('/cliente/login', { replace: true });
+          navigate(`/cliente/login${empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : ''}`, { replace: true });
         }, 3000);
       }
     };

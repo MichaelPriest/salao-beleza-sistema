@@ -228,15 +228,27 @@ export const AuthClienteProvider = ({ children }) => {
       if (empresaSlug) {
         callbackUrl.searchParams.set('empresa', empresaSlug);
       }
-      const redirectTo = encodeURIComponent(callbackUrl.toString());
-      
-      // URL do Supabase OAuth
-      const authUrl = `${supabaseConfig.url}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+
+      // Limpar tokens antigos evita reaproveitar código OAuth expirado/consumido em nova tentativa.
+      localStorage.removeItem('supabase.auth.session');
+      localStorage.removeItem('supabase.access_token');
+      sessionStorage.setItem('cliente_google_oauth_started_at', new Date().toISOString());
+
+      // URL do Supabase OAuth montada por URLSearchParams para evitar dupla codificação.
+      // O fluxo implícito retorna tokens diretamente no callback e evita falha de troca PKCE
+      // quando o login é iniciado manualmente pela URL REST do Supabase.
+      const authUrl = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
+      authUrl.searchParams.set('provider', 'google');
+      authUrl.searchParams.set('redirect_to', callbackUrl.toString());
+      authUrl.searchParams.set('flow_type', 'implicit');
+      authUrl.searchParams.set('response_type', 'token');
+      authUrl.searchParams.set('prompt', 'select_account');
+      authUrl.searchParams.set('access_type', 'offline');
       
       console.log('🚀 Redirecionando para Google OAuth');
       
       // Redirecionar para o Supabase
-      window.location.href = authUrl;
+      window.location.href = authUrl.toString();
       
       return { success: false, redirecting: true };
       
