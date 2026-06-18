@@ -37,8 +37,8 @@ function ClienteAuthCallback() {
           throw new Error(`Google não concluiu a autenticação: ${authError}`);
         }
 
-        // Consumir o redirect do Supabase (agora com PKCE)
-        console.log('🔄 Processando callback OAuth com PKCE...');
+        // Consumir o redirect do Supabase.
+        console.log('🔄 Processando callback OAuth...');
         const session = await consumeSupabaseAuthRedirect();
         const user = session?.user;
 
