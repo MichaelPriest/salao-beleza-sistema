@@ -236,16 +236,14 @@ export const AuthClienteProvider = ({ children }) => {
       sessionStorage.removeItem('pending_google_user');
       sessionStorage.setItem('cliente_google_oauth_started_at', new Date().toISOString());
 
-      // 🔥 CORREÇÃO: Usar fluxo PKCE (código) em vez de implícito
+      // Usar fluxo implícito, compatível com a troca de sessão feita no frontend.
       const authUrl = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
       authUrl.searchParams.set('provider', 'google');
       authUrl.searchParams.set('redirect_to', callbackUrl.toString());
-      authUrl.searchParams.set('flow_type', 'pkce');          // ← Mudar para pkce
-      authUrl.searchParams.set('response_type', 'code');      // ← Mudar para code
+      authUrl.searchParams.set('response_type', 'token');
       authUrl.searchParams.set('prompt', 'select_account');
-      authUrl.searchParams.set('access_type', 'offline');     // ← Agora é permitido com code
       
-      console.log('🚀 Redirecionando para Google OAuth (PKCE)');
+      console.log('🚀 Redirecionando para Google OAuth');
       console.log('🔗 URL:', authUrl.toString());
       
       // Redirecionar para o Supabase

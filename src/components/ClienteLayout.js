@@ -43,6 +43,7 @@ import {
   Assignment as AssignmentIcon,
   Close as CloseIcon,
   HelpCenter as HelpCenterIcon,
+  AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
@@ -67,6 +68,24 @@ const MENU_ITEMS = [
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
   { text: 'Manual de Uso', icon: <HelpCenterIcon />, path: '/cliente/manual' },
 ];
+
+
+const PAGE_TITLES = {
+  '/cliente/dashboard': 'Dashboard do Cliente',
+  '/cliente/agendamentos': 'Meus Agendamentos',
+  '/cliente/recompensas': 'Recompensas',
+  '/cliente/pontos': 'Meus Pontos',
+  '/cliente/historico': 'Histórico',
+  '/cliente/perfil': 'Meu Perfil',
+  '/cliente/notificacoes': 'Notificações',
+  '/cliente/anamnese': 'Anamnese',
+  '/cliente/manual': 'Manual de Uso',
+};
+
+const getBrasiliaTime = () => ({
+  data: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }),
+  hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
+});
 
 const NOTIFICATION_ICONS = {
   agendamento: <EventIcon sx={{ color: '#9c27b0' }} />,
@@ -146,6 +165,7 @@ function ClienteLayout() {
   
   // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
+  const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
 
   // ==========================================
   // FUNÇÃO PARA CARREGAR NOTIFICAÇÕES
@@ -313,6 +333,11 @@ function ClienteLayout() {
     }
   }, [cliente, firebaseUser, navigate]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setHoraBrasilia(getBrasiliaTime()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // ==========================================
   // EFEITO PARA CARREGAR DADOS INICIAIS
   // ==========================================
@@ -405,6 +430,8 @@ function ClienteLayout() {
       .slice(0, 2);
   };
 
+  const currentTitle = PAGE_TITLES[location.pathname] || (location.pathname.includes('/anamnese') ? 'Anamnese' : 'Área do Cliente');
+
   // ==========================================
   // DRAWER
   // ==========================================
@@ -488,21 +515,66 @@ function ClienteLayout() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Box sx={{ display: 'flex', flex: 1 }}>
-        {/* AppBar Mobile */}
-        {isMobile && (
-          <AppBar position="fixed" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 1200 }}>
-            <Toolbar sx={{ px: { xs: 1, sm: 2 }, minHeight: { xs: 64, sm: 72 } }}>
-              <IconButton color="inherit" edge="start" onClick={handleDrawerToggle}><MenuIcon /></IconButton>
-              <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'center', color: '#9c27b0', fontSize: { xs: '1rem', sm: '1.25rem' } }}>BeautyPro</Typography>
-              <IconButton color="inherit" onClick={handleNotificacoesClick}>
-                <Badge badgeContent={notificacoesNaoLidas} color="secondary"><NotificationsIcon /></Badge>
+        {/* Header do cliente inspirado no cabeçalho administrativo */}
+        <AppBar
+          position="fixed"
+          color="inherit"
+          elevation={0}
+          sx={{
+            left: { md: isMobile ? 0 : 280 },
+            width: { xs: '100%', md: isMobile ? '100%' : 'calc(100% - 280px)' },
+            borderBottom: '1px solid rgba(156,39,176,0.12)',
+            backdropFilter: 'blur(20px)',
+            backgroundColor: 'rgba(255,255,255,0.94)',
+            zIndex: 1200,
+          }}
+        >
+          <Toolbar sx={{ px: { xs: 1.5, sm: 2.5, md: 3 }, minHeight: { xs: 64, sm: 72 } }}>
+            {isMobile && (
+              <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 1 }}>
+                <MenuIcon />
               </IconButton>
-              <Avatar src={cliente?.foto} sx={{ width: 32, height: 32, bgcolor: '#9c27b0', ml: 1 }}>
+            )}
+
+            <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }}>
+              <Avatar sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, mr: 1.5, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
+                <SpaIcon />
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', display: { xs: 'none', sm: 'block' } }}>
+                  Área do Cliente
+                </Typography>
+                <Typography variant="h6" noWrap sx={{ color: '#2c2c2c', fontWeight: 800, fontSize: { xs: '1rem', sm: '1.2rem', md: '1.35rem' } }}>
+                  {currentTitle}
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', bgcolor: '#f5f5f5', borderRadius: 3, px: 2, py: 0.75, mr: 2 }}>
+              <CalendarIcon sx={{ fontSize: 18, color: '#9c27b0', mr: 1 }} />
+              <Typography variant="body2" sx={{ fontWeight: 500, mr: 1 }}>{horaBrasilia.data}</Typography>
+              <AccessTimeIcon sx={{ fontSize: 18, color: '#ff4081', mr: 1 }} />
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#ff4081' }}>{horaBrasilia.hora}</Typography>
+            </Box>
+
+            <IconButton color="inherit" onClick={handleNotificacoesClick} sx={{ mr: { xs: 0.5, sm: 1 }, bgcolor: 'rgba(156,39,176,0.06)', '&:hover': { bgcolor: 'rgba(156,39,176,0.12)' } }}>
+              <Badge badgeContent={notificacoesNaoLidas} color="secondary"><NotificationsIcon /></Badge>
+            </IconButton>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar src={cliente?.foto} sx={{ width: { xs: 34, sm: 40 }, height: { xs: 34, sm: 40 }, bgcolor: '#9c27b0' }}>
                 {!cliente?.foto && getInitials(cliente?.nome)}
               </Avatar>
-            </Toolbar>
-          </AppBar>
-        )}
+              <Box sx={{ display: { xs: 'none', lg: 'block' }, maxWidth: 180 }}>
+                <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700 }}>{cliente?.nome || 'Cliente'}</Typography>
+                <Typography variant="caption" color="textSecondary" noWrap>{cliente?.email || cliente?.empresaNome || 'Portal do cliente'}</Typography>
+              </Box>
+              <IconButton onClick={handleLogout} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: '#f44336' }}>
+                <LogoutIcon />
+              </IconButton>
+            </Box>
+          </Toolbar>
+        </AppBar>
 
         {/* Drawer Desktop */}
         {!isMobile && (
@@ -517,16 +589,7 @@ function ClienteLayout() {
         </SwipeableDrawer>
 
         {/* Conteúdo Principal */}
-        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.5, sm: 2, md: 3 }, pt: isMobile ? { xs: '76px', sm: '84px' } : 3, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
-          {/* Botão de Notificações Desktop */}
-          {!isMobile && (
-            <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
-              <IconButton onClick={handleNotificacoesClick} sx={{ bgcolor: 'white', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', '&:hover': { bgcolor: '#f5f5f5' } }}>
-                <Badge badgeContent={notificacoesNaoLidas} color="secondary"><NotificationsIcon /></Badge>
-              </IconButton>
-            </Box>
-          )}
-
+        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.5, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
           {/* Badge Formulários Pendentes */}
           {formulariosPendentes > 0 && (
             <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: { xs: 12, sm: 20 }, left: { xs: 12, sm: 'auto' }, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
