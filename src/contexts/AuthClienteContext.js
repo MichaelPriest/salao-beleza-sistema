@@ -12,9 +12,9 @@ import {
   setTenantContextFromUser, 
   setTenantContext, 
   getTenantContext, 
-  clearTenantContext 
+  clearTenantContext,
+  consumeSupabaseAuthRedirect
 } from '../services/firebase';
-
 
 const AuthClienteContext = createContext({});
 
@@ -211,6 +211,7 @@ export const AuthClienteProvider = ({ children }) => {
     }
   };
 
+  // ✅ FUNÇÃO CORRIGIDA - Login com Google usando PKCE
   const loginComGoogle = async (dadosTenant = {}) => {
     try {
       setLoading(true);
@@ -223,29 +224,29 @@ export const AuthClienteProvider = ({ children }) => {
       sessionStorage.setItem('empresa_publica_nome', empresaNome || '');
       sessionStorage.setItem('empresa_publica_slug', empresaSlug || '');
       
-      // Construir URL de callback mantendo o slug da empresa no retorno do OAuth.
+      // Construir URL de callback mantendo o slug da empresa
       const callbackUrl = new URL('/cliente/auth/callback', window.location.origin);
       if (empresaSlug) {
         callbackUrl.searchParams.set('empresa', empresaSlug);
       }
 
-      // Limpar tokens antigos evita reaproveitar código OAuth expirado/consumido em nova tentativa.
+      // Limpar tokens antigos
       localStorage.removeItem('supabase.auth.session');
       localStorage.removeItem('supabase.access_token');
+      sessionStorage.removeItem('pending_google_user');
       sessionStorage.setItem('cliente_google_oauth_started_at', new Date().toISOString());
 
-      // URL do Supabase OAuth montada por URLSearchParams para evitar dupla codificação.
-      // O fluxo implícito retorna tokens diretamente no callback e evita falha de troca PKCE
-      // quando o login é iniciado manualmente pela URL REST do Supabase.
+      // 🔥 CORREÇÃO: Usar fluxo PKCE (código) em vez de implícito
       const authUrl = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
       authUrl.searchParams.set('provider', 'google');
       authUrl.searchParams.set('redirect_to', callbackUrl.toString());
-      authUrl.searchParams.set('flow_type', 'implicit');
-      authUrl.searchParams.set('response_type', 'token');
+      authUrl.searchParams.set('flow_type', 'pkce');          // ← Mudar para pkce
+      authUrl.searchParams.set('response_type', 'code');      // ← Mudar para code
       authUrl.searchParams.set('prompt', 'select_account');
-      authUrl.searchParams.set('access_type', 'offline');
+      authUrl.searchParams.set('access_type', 'offline');     // ← Agora é permitido com code
       
-      console.log('🚀 Redirecionando para Google OAuth');
+      console.log('🚀 Redirecionando para Google OAuth (PKCE)');
+      console.log('🔗 URL:', authUrl.toString());
       
       // Redirecionar para o Supabase
       window.location.href = authUrl.toString();
