@@ -266,7 +266,19 @@ const buildSessionFromUrl = () => {
   
   const hashParams = new URLSearchParams(paramsString);
   const searchParams = new URLSearchParams(window.location.search);
+  
+  // Suporta tanto 'code' (PKCE) quanto 'access_token' (implícito)
+  const code = hashParams.get('code') || searchParams.get('code');
   const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+
+  // Se tiver 'code', é fluxo PKCE
+  if (code) {
+    console.log('🔐 buildSessionFromUrl - Código PKCE encontrado:', code.substring(0, 20) + '...');
+    return {
+      code: code,
+      type: 'pkce'
+    };
+  }
 
   if (!accessToken) return null;
 
@@ -893,7 +905,55 @@ export const getCurrentAuthUser = async () => {
 
 export const consumeSupabaseAuthRedirect = async () => {
   const sessionFromUrl = buildSessionFromUrl();
-  if (!sessionFromUrl) return getStoredSession();
+  
+  // Se tem 'code', precisamos trocar por token via PKCE
+  if (sessionFromUrl?.code) {
+    console.log('🔄 Trocando código PKCE por token...');
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=authorization_code`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          code: sessionFromUrl.code
+        })
+      });
+
+      const text = await response.text();
+      const tokenData = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        console.error('❌ Erro na troca de código:', tokenData);
+        throw new Error(tokenData?.message || tokenData?.error_description || 'Falha ao trocar código por token');
+      }
+
+      console.log('✅ Token obtido com sucesso via PKCE');
+      
+      // Salvar a sessão com os tokens
+      setStoredSession(tokenData);
+      
+      // Buscar dados do usuário
+      const user = await getCurrentAuthUser();
+      const hydratedSession = { ...tokenData, user };
+      setStoredSession(hydratedSession);
+      
+      // Limpar parâmetros da URL
+      clearAuthParamsFromUrl();
+      
+      return hydratedSession;
+    } catch (error) {
+      console.error('❌ Erro ao trocar code por token:', error);
+      throw error;
+    }
+  }
+
+  // Se já tem access_token, é o fluxo implícito (legado)
+  if (!sessionFromUrl?.access_token) {
+    return getStoredSession();
+  }
 
   setStoredSession(sessionFromUrl);
   try {
