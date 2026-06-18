@@ -243,6 +243,7 @@ export const AuthClienteProvider = ({ children }) => {
       authUrl.searchParams.set('flow_type', 'implicit');
       authUrl.searchParams.set('response_type', 'token');
       authUrl.searchParams.set('prompt', 'select_account');
+      authUrl.searchParams.set('access_type', 'offline');
       
       console.log('🚀 Redirecionando para Google OAuth');
       
