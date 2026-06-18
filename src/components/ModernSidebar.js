@@ -1,4 +1,5 @@
-// src/components/ModernSidebar.js
+// src/components/ModernSidebar.js - ATUALIZADO COM NOVAS ROTAS SAAS
+
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -164,7 +165,7 @@ import {
   // Ícones para categorias
   Category as CategoryIcon,
 
-  // 🔥 NOVOS ÍCONES PARA ANAMNESE
+  // Anamnese
   Quiz as QuizIcon,
   QuestionAnswer as QuestionAnswerIcon,
   Checklist as ChecklistIcon,
@@ -181,7 +182,9 @@ import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
 
-// Estrutura do menu com ícones e permissões por cargo - ATUALIZADA
+// ============================================
+// ESTRUTURA DO MENU ATUALIZADA
+// ============================================
 const menuGroups = [
   {
     title: 'INÍCIO',
@@ -422,9 +425,6 @@ const menuGroups = [
       },
     ],
   },
-  // ============================================
-  // 🔥 NOVO GRUPO: ANAMNESE (FORMULÁRIOS)
-  // ============================================
   {
     title: 'ANAMNESE E FORMULÁRIOS',
     icon: <ChecklistIcon />,
@@ -493,13 +493,16 @@ const menuGroups = [
       },
     ],
   },
+  // ============================================
+  // 🔥 ATUALIZADO: ADMIN SAAS COM NOVAS ROTAS
+  // ============================================
   {
     title: 'ADMIN SAAS',
     icon: <WorkspacePremiumIcon />,
     items: [
       {
-        text: 'Painel da Plataforma',
-        icon: <WorkspacePremiumIcon />,
+        text: 'Painel SaaS',
+        icon: <DashboardIcon />,
         path: '/saas-admin',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
@@ -514,14 +517,6 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
-        text: 'Acessar empresa',
-        icon: <SwapHorizIcon />,
-        path: '/selecionar-empresa',
-        permission: 'admin_saas',
-        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
-        plataformaOnly: true
-      },
-      {
         text: 'Planos e Assinaturas',
         icon: <WorkspacePremiumIcon />,
         path: '/saas-admin/assinaturas',
@@ -530,7 +525,7 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
-        text: 'Cobranças SaaS',
+        text: 'Cobranças',
         icon: <ReceiptLongIcon />,
         path: '/saas-admin/cobrancas',
         permission: 'admin_saas',
@@ -538,9 +533,9 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
-        text: 'Chamados das Empresas',
-        icon: <SupportAgentIcon />,
-        path: '/chamados',
+        text: 'Config. Pagamentos',
+        icon: <PaymentsIcon />,
+        path: '/saas-admin/pagamentos',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
@@ -554,51 +549,69 @@ const menuGroups = [
         plataformaOnly: true
       },
       {
-        text: 'APIs de Pagamento',
-        icon: <PaymentsIcon />,
-        path: '/saas-admin/pagamentos',
+        text: 'Chamados',
+        icon: <SupportAgentIcon />,
+        path: '/chamados',
+        permission: 'admin_saas',
+        cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
+        plataformaOnly: true
+      },
+      {
+        text: 'Acessar Empresa',
+        icon: <SwapHorizIcon />,
+        path: '/selecionar-empresa',
         permission: 'admin_saas',
         cargos: ['superadmin', 'admin_saas', 'saas_admin', 'admin_plataforma'],
         plataformaOnly: true
       },
     ],
   },
+  // ============================================
+  // 🔥 ATUALIZADO: MINHA EMPRESA COM NOVAS ROTAS
+  // ============================================
   {
     title: 'MINHA EMPRESA',
     icon: <BusinessIcon />,
     items: [
       {
-        text: 'Empresa',
+        text: 'Dados da Empresa',
         icon: <BusinessIcon />,
-        path: '/configuracoes?tab=empresa&empresaTab=dados',
+        path: '/empresa',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
         text: 'Unidades',
         icon: <ApartmentIcon />,
-        path: '/configuracoes?tab=empresa&empresaTab=unidades',
+        path: '/empresa/unidades',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
       {
-        text: 'Assinatura',
+        text: 'Planos',
         icon: <WorkspacePremiumIcon />,
-        path: '/configuracoes?tab=empresa&empresaTab=assinatura',
+        path: '/empresa/planos',
         permission: 'configurar_sistema',
         cargos: ['admin']
       },
       {
-        text: 'Cobrança SaaS',
+        text: 'Assinatura',
+        icon: <WorkspacePremiumIcon />,
+        path: '/empresa/assinatura',
+        permission: 'configurar_sistema',
+        cargos: ['admin']
+      },
+      {
+        text: 'Cobrança',
         icon: <PaymentsIcon />,
-        path: '/configuracoes?tab=empresa&empresaTab=cobranca',
+        path: '/empresa/cobranca',
         permission: 'financeiro',
         cargos: ['admin', 'gerente']
       },
       {
-        text: 'Página inicial',
+        text: 'Página Pública',
         icon: <LanguageIcon />,
-        path: '/configuracoes?tab=empresa&empresaTab=site',
+        path: '/empresa/site',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
@@ -629,7 +642,7 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
       {
-        text: 'Suporte SaaS',
+        text: 'Suporte',
         icon: <SupportAgentIcon />,
         path: '/chamados',
         permission: 'visualizar_chamados',
@@ -653,7 +666,9 @@ const menuGroups = [
   },
 ];
 
-// Ícones extras que podem ser usados em badges ou situações específicas
+// ============================================
+// ÍCONES EXTRAS
+// ============================================
 export const extraIcons = {
   success: <CheckCircleIcon />,
   warning: <WarningIcon />,
@@ -682,7 +697,6 @@ export const extraIcons = {
   campaign: <CampaignIcon />,
   category: <CategoryIcon />,
   schedule: <ScheduleIcon />,
-  // 🔥 NOVOS ÍCONES
   assignment: <AssignmentIcon />,
   quiz: <QuizIcon />,
   questionAnswer: <QuestionAnswerIcon />,
@@ -698,7 +712,9 @@ export const extraIcons = {
   language: <LanguageIcon />,
 };
 
-// Componente Mobile Sidebar (mantido igual)
+// ============================================
+// COMPONENTE MOBILE SIDEBAR
+// ============================================
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
 
@@ -716,17 +732,15 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
     return fotoUrl && fotoUrl !== 'null' && fotoUrl !== 'undefined' && fotoUrl.trim() !== '';
   };
 
-  // Função para renderizar o perfil do usuário
   const renderUserProfile = () => (
     <Box
       sx={{
         p: 2,
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* Elementos decorativos */}
       <Box
         sx={{
           position: 'absolute',
@@ -790,7 +804,6 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
     </Box>
   );
 
-  // Função para renderizar um grupo do menu
   const renderGroup = (group) => {
     const groupActive = isGroupActive(group);
     const isOpen = openGroups[group.title] || false;
@@ -804,7 +817,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             px: 2,
             borderRadius: 2,
             mx: 1,
-            backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
+            backgroundColor: groupActive && !isOpen ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
             '&:hover': {
               backgroundColor: alpha(theme.palette.primary.main, 0.08),
             },
@@ -821,7 +834,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
             primaryTypographyProps={{
               fontSize: '0.9rem',
               fontWeight: 600,
-              color: groupActive ? '#9c27b0' : 'textSecondary',
+              color: groupActive ? theme.palette.primary.main : 'textSecondary',
             }}
           />
           {isOpen ? <ExpandLessIcon sx={{ color: 'textSecondary' }} /> : <ExpandMoreIcon sx={{ color: 'textSecondary' }} />}
@@ -844,7 +857,6 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
                   transition={{ duration: 0.2 }}
                 >
                   <ListItem
-                    button
                     component={Link}
                     to={item.path}
                     onClick={onClose}
@@ -910,10 +922,8 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         },
       }}
     >
-      {/* Perfil do Usuário */}
       {renderUserProfile()}
 
-      {/* Menu Mobile */}
       <Box
         sx={{
           flex: 1,
@@ -934,7 +944,6 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         {filteredGroups.map(renderGroup)}
       </Box>
 
-      {/* Versão e Fechar */}
       <Paper
         elevation={0}
         sx={{
@@ -947,7 +956,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
         }}
       >
         <Typography variant="caption" color="textSecondary">
-          Versão 2.0.0
+          Versão 3.0.0
         </Typography>
         <IconButton size="small" onClick={onClose} sx={{ color: 'textSecondary' }}>
           <CloseIcon fontSize="small" />
@@ -957,7 +966,9 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
   );
 };
 
-// Componente Desktop Sidebar (mantido igual)
+// ============================================
+// COMPONENTE DESKTOP SIDEBAR
+// ============================================
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
   const getInitials = (name) => {
@@ -989,7 +1000,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
           boxSizing: 'border-box',
           backgroundColor: theme.palette.background.paper,
           borderRight: `1px solid ${theme.palette.divider}`,
-          boxShadow: theme.palette.mode === 'dark' ? '4px 0 20px rgba(0,0,0,0.25)' : '4px 0 20px rgba(0,0,0,0.05)',
+          boxShadow: '4px 0 20px rgba(0,0,0,0.05)',
           overflowX: 'hidden',
           transition: theme => theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -998,7 +1009,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         },
       }}
     >
-      {/* Logo com botão de colapso */}
+      {/* Logo */}
       <Box
         sx={{
           p: collapsed ? 1 : 3,
@@ -1012,9 +1023,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         {!collapsed ? (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpaIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />
-              <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
-                Beauty<span style={{ color: theme.palette.secondary.main }}>Pro</span>
+              <SpaIcon sx={{ fontSize: 40, color: '#667eea' }} />
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#667eea' }}>
+                Beauty<span style={{ color: '#764ba2' }}>Pro</span>
               </Typography>
             </Box>
             <Tooltip title="Recolher menu" placement="right">
@@ -1032,58 +1043,47 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         )}
       </Box>
 
-      {/* Perfil do Usuário */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={collapsed ? 'collapsed' : 'expanded'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+      {/* Perfil */}
+      <Box sx={{ px: 2, py: 3, mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            p: collapsed ? 1 : 2,
+            backgroundColor: alpha('#667eea', 0.08),
+            borderRadius: 3,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+          }}
         >
-          <Box sx={{ px: 2, py: 3, mb: 2 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                p: collapsed ? 1 : 2,
-                backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                borderRadius: 3,
-                justifyContent: collapsed ? 'center' : 'flex-start',
-              }}
-            >
-              <Avatar
-                alt={usuario?.nome || 'Usuário'}
-                src={temFotoValida() ? fotoUrl : undefined}
-                sx={{
-                  width: collapsed ? 40 : 56,
-                  height: collapsed ? 40 : 56,
-                  background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-                }}
-              >
-                {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
-              </Avatar>
+          <Avatar
+            src={temFotoValida() ? fotoUrl : undefined}
+            sx={{
+              width: collapsed ? 40 : 56,
+              height: collapsed ? 40 : 56,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            }}
+          >
+            {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
+          </Avatar>
 
-              {!collapsed && (
-                <Box sx={{ overflow: 'hidden' }}>
-                  <Typography variant="subtitle2" color="textSecondary" noWrap>
-                    Bem-vindo(a)
-                  </Typography>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
-                    {usuario?.nome?.split(' ')[0] || 'Usuário'}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }} noWrap>
-                    {usuario?.cargo || 'Usuário'}
-                  </Typography>
-                </Box>
-              )}
+          {!collapsed && (
+            <Box sx={{ overflow: 'hidden' }}>
+              <Typography variant="subtitle2" color="textSecondary" noWrap>
+                Bem-vindo(a)
+              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+                {usuario?.nome?.split(' ')[0] || 'Usuário'}
+              </Typography>
+              <Typography variant="caption" color="textSecondary" sx={{ textTransform: 'capitalize' }} noWrap>
+                {usuario?.cargo || 'Usuário'}
+              </Typography>
             </Box>
-          </Box>
-        </motion.div>
-      </AnimatePresence>
+          )}
+        </Box>
+      </Box>
 
-      {/* Menu Itens Agrupados */}
+      {/* Menu */}
       <Box
         sx={{
           flex: 1,
@@ -1097,7 +1097,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
             background: theme.palette.action.hover,
           },
           '&::-webkit-scrollbar-thumb': {
-            background: theme.palette.primary.main,
+            background: '#667eea',
             borderRadius: '4px',
           },
         }}
@@ -1116,13 +1116,13 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       py: 1,
                       px: 2,
                       borderRadius: 2,
-                      backgroundColor: groupActive && !isOpen ? alpha('#9c27b0', 0.08) : 'transparent',
+                      backgroundColor: groupActive && !isOpen ? alpha('#667eea', 0.08) : 'transparent',
                       '&:hover': {
-                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                        backgroundColor: alpha('#667eea', 0.08),
                       },
                     }}
                   >
-                    <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#9c27b0' : alpha('#000', 0.54) }}>
+                    <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#667eea' : alpha('#000', 0.54) }}>
                       {group.icon}
                     </ListItemIcon>
                     <ListItemText
@@ -1130,7 +1130,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       primaryTypographyProps={{
                         fontSize: '0.85rem',
                         fontWeight: 600,
-                        color: groupActive ? '#9c27b0' : 'textSecondary',
+                        color: groupActive ? '#667eea' : 'textSecondary',
                       }}
                     />
                     {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -1151,7 +1151,6 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                             whileTap={{ scale: 0.98 }}
                           >
                             <ListItem
-                              button
                               component={Link}
                               to={item.path}
                               sx={{
@@ -1159,13 +1158,13 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                                 py: 0.8,
                                 borderRadius: '0 20px 20px 0',
                                 mr: 1,
-                                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
-                                color: isActive ? theme.palette.primary.main : 'text.primary',
+                                backgroundColor: isActive ? alpha('#667eea', 0.12) : 'transparent',
+                                color: isActive ? '#667eea' : 'text.primary',
                                 '&:hover': {
-                                  backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                                  backgroundColor: alpha('#667eea', 0.08),
                                 },
                                 '& .MuiListItemIcon-root': {
-                                  color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                                  color: isActive ? '#667eea' : theme.palette.text.secondary,
                                   minWidth: 36,
                                 },
                               }}
@@ -1201,10 +1200,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                       sx={{
                         width: 48,
                         height: 48,
-                        backgroundColor: groupActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
-                        color: groupActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                        backgroundColor: groupActive ? alpha('#667eea', 0.12) : 'transparent',
+                        color: groupActive ? '#667eea' : theme.palette.text.secondary,
                         '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                          backgroundColor: alpha('#667eea', 0.08),
                         },
                       }}
                     >
@@ -1225,10 +1224,10 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
                           sx={{
                             width: 40,
                             height: 40,
-                            backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
-                            color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                            backgroundColor: isActive ? alpha('#667eea', 0.12) : 'transparent',
+                            color: isActive ? '#667eea' : theme.palette.text.secondary,
                             '&:hover': {
-                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                              backgroundColor: alpha('#667eea', 0.08),
                             },
                           }}
                         >
@@ -1250,12 +1249,11 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         })}
       </Box>
 
-      {/* Rodapé */}
       {!collapsed && (
         <Box sx={{ mt: 'auto', p: 2, textAlign: 'center' }}>
           <Divider sx={{ mb: 2 }} />
           <Typography variant="caption" color="textSecondary">
-            Versão 2.0.0
+            Versão 3.0.0
           </Typography>
         </Box>
       )}
@@ -1263,6 +1261,9 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
   );
 };
 
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 function ModernSidebar() {
   const location = useLocation();
   const theme = useTheme();
@@ -1276,12 +1277,10 @@ function ModernSidebar() {
   const [recursosPlano, setRecursosPlano] = useState([]);
   const { fidelidadeAtiva } = useFidelidadeAtiva();
 
-  // Função para carregar usuário do localStorage
   const carregarUsuario = () => {
     try {
       const user = usuariosService.getUsuarioAtual();
       setUsuario(user);
-
       if (user?.avatar && user.avatar !== 'null' && user.avatar !== 'undefined' && user.avatar.trim() !== '') {
         setFotoUrl(user.avatar);
       } else {
@@ -1310,17 +1309,15 @@ function ModernSidebar() {
       const plano = await saasService.buscarPlano(assinatura?.planoId || user.planoId || user.empresa?.planoId).catch(() => null);
       setRecursosPlano(plano?.recursos || assinatura?.recursos || user.recursosPlano || []);
     } catch (error) {
-      console.error('Erro ao carregar recursos do plano no menu:', error);
+      console.error('Erro ao carregar recursos do plano:', error);
       setRecursosPlano([]);
     }
   };
 
   useEffect(() => {
     carregarUsuario();
-    carregarNotificacoes();
     carregarRecursosPlano();
 
-    // Inicializar todos os grupos como FECHADOS
     const initialOpenState = {};
     menuGroups.forEach(group => {
       initialOpenState[group.title] = false;
@@ -1332,19 +1329,8 @@ function ModernSidebar() {
       carregarRecursosPlano();
     };
 
-    const handleStorageChange = (e) => {
-      if (e.key === 'usuario') {
-        carregarUsuario();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('usuarioAtualizado', handleUsuarioAtualizado);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('usuarioAtualizado', handleUsuarioAtualizado);
-    };
+    return () => window.removeEventListener('usuarioAtualizado', handleUsuarioAtualizado);
   }, []);
 
   const carregarNotificacoes = async () => {
@@ -1354,7 +1340,6 @@ function ModernSidebar() {
         const data = await firebaseService.query('notificacoes', [
           { field: 'usuarioId', operator: '==', value: user.uid }
         ], 'data');
-
         setUnreadCount(data.filter(n => !n.lida).length);
       }
     } catch (error) {
@@ -1362,53 +1347,28 @@ function ModernSidebar() {
     }
   };
 
-  const recursoDoItem = (item) => {
-    if (item.recursoPlano) return item.recursoPlano;
-    const path = item.path || '';
-    if (path.includes('/agendamento') || path === '/agenda') return 'agenda';
-    if (path.includes('/cliente')) return 'clientes';
-    if (path.includes('/servico')) return 'servicos';
-    if (path.includes('/profissional')) return 'profissionais';
-    if (path.includes('/fidelidade') || path.includes('/meus-pontos') || path.includes('/recompensas') || path.includes('/indicacoes')) return 'fidelidade';
-    if (path.includes('/estoque') || path.includes('/fornecedor') || path.includes('/entradas') || path.includes('/compras')) return 'estoque';
-    if (path.includes('/financeiro')) return path.includes('/fluxo') ? 'financeiro_completo' : 'financeiro_basico';
-    if (path.includes('/relatorio') || path.includes('/performance') || path.includes('/analise')) return 'relatorios_rede';
-    if (path.includes('/empresa/unidades') || path.includes('empresaTab=unidades')) return 'multiunidades';
-    if (path.includes('/empresa/site') || path.includes('empresaTab=site')) return 'site_publico';
-    return null;
-  };
-
   const recursoLiberadoNoPlano = (item) => {
-    const recurso = recursoDoItem(item);
-    if (!recurso || recursosPlano.length === 0) return true;
+    if (!item.recursoPlano && recursosPlano.length === 0) return true;
+    const recurso = item.recursoPlano || null;
+    if (!recurso) return true;
     return recursosPlano.includes(recurso);
   };
 
-  // Função para verificar permissão baseada no cargo
   const temPermissao = (item) => {
     if (!usuario) return false;
-
     if (!recursoLiberadoNoPlano(item)) return false;
-    if (recursoDoItem(item) === 'fidelidade' && !fidelidadeAtiva) {
-      const podeConfigurarFidelidade = item.path === '/fidelidade' && ['admin', 'gerente'].includes(usuario.cargo);
-      if (!podeConfigurarFidelidade) return false;
-    }
 
     if (item.plataformaOnly) {
       return isSaasPlatformAdmin(usuario);
     }
 
     if (isSaasPlatformAdmin(usuario) && getTenantContext().empresaId) return true;
-
-    // Admin da empresa tem acesso às áreas do tenant, mas não à área isolada da plataforma SaaS.
     if (usuario.cargo === 'admin') return true;
 
-    // Verificar se o cargo do usuário está na lista de cargos permitidos para o item
     if (item.cargos && Array.isArray(item.cargos)) {
       return item.cargos.includes(usuario.cargo);
     }
 
-    // Fallback para o sistema antigo de permissões
     if (item.permission) {
       return usuario.permissoes?.includes(item.permission) || false;
     }
@@ -1416,17 +1376,9 @@ function ModernSidebar() {
     return true;
   };
 
-  const toggleCollapse = () => {
-    setCollapsed(!collapsed);
-  };
-
-  const handleMobileOpen = () => {
-    setMobileOpen(true);
-  };
-
-  const handleMobileClose = () => {
-    setMobileOpen(false);
-  };
+  const toggleCollapse = () => setCollapsed(!collapsed);
+  const handleMobileOpen = () => setMobileOpen(true);
+  const handleMobileClose = () => setMobileOpen(false);
 
   const handleGroupClick = (groupTitle) => {
     setOpenGroups(prev => ({
@@ -1444,7 +1396,6 @@ function ModernSidebar() {
     });
   };
 
-  // Abrir grupo automaticamente se um item estiver ativo
   useEffect(() => {
     const newOpenGroups = { ...openGroups };
     let changed = false;
@@ -1457,12 +1408,9 @@ function ModernSidebar() {
       }
     });
 
-    if (changed) {
-      setOpenGroups(newOpenGroups);
-    }
+    if (changed) setOpenGroups(newOpenGroups);
   }, [location.pathname, location.search]);
 
-  // Filtrar grupos baseado nas permissões (agora por cargo)
   const filteredGroups = menuGroups
     .map(group => ({
       ...group,
@@ -1470,11 +1418,9 @@ function ModernSidebar() {
     }))
     .filter(group => group.items.length > 0);
 
-  // Versão Mobile com Floating Action Button
   if (isMobile) {
     return (
       <>
-        {/* Botão flutuante para abrir o menu mobile */}
         <Zoom in={!mobileOpen}>
           <Fab
             color="primary"
@@ -1485,10 +1431,10 @@ function ModernSidebar() {
               bottom: 16,
               left: 16,
               zIndex: 1000,
-              background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-              boxShadow: '0 4px 12px rgba(156,39,176,0.3)',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              boxShadow: '0 4px 12px rgba(102,126,234,0.3)',
               '&:hover': {
-                background: 'linear-gradient(135deg, #7b1fa2 0%, #f50057 100%)',
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8a 100%)',
               },
             }}
           >
@@ -1496,7 +1442,6 @@ function ModernSidebar() {
           </Fab>
         </Zoom>
 
-        {/* Mobile Drawer */}
         <MobileSidebar
           open={mobileOpen}
           onClose={handleMobileClose}
@@ -1513,7 +1458,6 @@ function ModernSidebar() {
     );
   }
 
-  // Versão Desktop
   return (
     <DesktopSidebar
       collapsed={collapsed}
