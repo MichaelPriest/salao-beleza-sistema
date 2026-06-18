@@ -4,7 +4,7 @@ import axios from 'axios';
 const getBaseURL = () => {
   if (process.env.NODE_ENV === 'production') {
     // Em produção, usa a URL do Vercel
-    return 'https://salao-beleza-sistema.vercel.app/api';
+    return 'sysbeautypro.vercel.app/api';
   }
   // Em desenvolvimento, usa localhost
   return 'http://localhost:3001/api';
