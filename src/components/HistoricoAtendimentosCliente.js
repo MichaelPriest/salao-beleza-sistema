@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
 import { toast } from 'react-hot-toast';
+import { ReportHeader, ReportMetricCard, ReportSectionCard, reportTableSx } from './ReportDesign';
 
 export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
   const [loading, setLoading] = useState(true);
@@ -171,77 +172,32 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
 
   return (
     <Box sx={{ mt: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#9c27b0' }}>
-        Histórico de Atendimentos {clienteNome && `- ${clienteNome}`}
-      </Typography>
+      <ReportHeader
+        title="Histórico de Atendimentos"
+        subtitle={clienteNome ? `Cliente: ${clienteNome}` : 'Linha do tempo de serviços, valores e status do cliente.'}
+        icon={<ReceiptIcon />}
+        badge="Histórico"
+      />
 
       {/* Cards de resumo */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined" sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}>
-                  <ReceiptIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Total de Atendimentos
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                    {stats.total}
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <ReportMetricCard icon={<ReceiptIcon />} title="Total de Atendimentos" value={stats.total} />
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined" sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: '#4caf50', width: 48, height: 48 }}>
-                  <MoneyIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Total Gasto
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                    {formatarMoeda(stats.valorTotal)}
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <ReportMetricCard icon={<MoneyIcon />} title="Total Gasto" value={formatarMoeda(stats.valorTotal)} color="#4caf50" />
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card variant="outlined" sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ bgcolor: '#ff9800', width: 48, height: 48 }}>
-                  <CalendarIcon />
-                </Avatar>
-                <Box>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Última Visita
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                    {stats.ultimaVisita ? formatarData(stats.ultimaVisita) : '-'}
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <ReportMetricCard icon={<CalendarIcon />} title="Última Visita" value={stats.ultimaVisita ? formatarData(stats.ultimaVisita) : '-'} color="#ff9800" />
         </Grid>
       </Grid>
 
       {/* Tabela de atendimentos */}
-      <Card variant="outlined">
+      <ReportSectionCard title="Atendimentos do cliente" subtitle="Tabela padronizada de serviços, profissionais, valores e status.">
         <TableContainer>
-          <Table size="small">
+          <Table size="small" sx={reportTableSx}>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                 <TableCell><strong>Data</strong></TableCell>
@@ -296,7 +252,7 @@ export const HistoricoAtendimentosCliente = ({ clienteId, clienteNome }) => {
             </TableBody>
           </Table>
         </TableContainer>
-      </Card>
+      </ReportSectionCard>
 
       {atendimentos.length > 0 && (
         <Alert severity="info" sx={{ mt: 2 }}>

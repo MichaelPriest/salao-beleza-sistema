@@ -1,0 +1,35 @@
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff !important;
+  }
+
+  .MuiDrawer-root,
+  .MuiAppBar-root,
+  .MuiBottomNavigation-root,
+  .MuiSpeedDial-root,
+  .MuiSnackbar-root,
+  .MuiFab-root,
+  .no-print {
+    display: none !important;
+  }
+
+  .MuiContainer-root,
+  .MuiBox-root {
+    box-shadow: none !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}

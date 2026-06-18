@@ -63,6 +63,7 @@ import { firebaseService, getTenantContext, setTenantContext } from '../services
 import { usuariosService } from '../services/usuariosService';
 import { notificacoesService } from '../services/notificacoesService';
 import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
+import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 
 // 🔥 FUNÇÃO PARA OBTER DATA E HORA NO HORÁRIO DE BRASÍLIA
 const getBrasiliaTime = () => {
@@ -962,11 +963,7 @@ function ModernHeader() {
         await carregarNotificacoes(true);
       }
       
-      if (notification.link) {
-        navigate(notification.link);
-      } else if (notification.detalhes?.link) {
-        navigate(notification.detalhes.link);
-      }
+      navigate(normalizarLinkNotificacao(notification, 'admin'));
       
       handleNotificationsClose();
     } catch (error) {

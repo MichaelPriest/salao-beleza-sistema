@@ -17,6 +17,10 @@ import {
   Avatar,
   Paper,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -31,12 +35,15 @@ import {
   EmojiEvents as TrophyIcon,
   Redeem as RedeemIcon,
   ArrowBack as ArrowBackIcon,
+  Visibility as VisibilityIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
+import { montarDetalhesNotificacao, normalizarLinkNotificacao } from '../utils/notificationUtils';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -63,6 +70,7 @@ function ClienteNotificacoes() {
   const [notificacoes, setNotificacoes] = useState([]);
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState(null);
+  const [notificacaoSelecionada, setNotificacaoSelecionada] = useState(null);
 
   useEffect(() => {
     carregarNotificacoes();
@@ -118,10 +126,17 @@ function ClienteNotificacoes() {
     toast.success('Todas as notificações excluídas');
   };
 
-  const handleNotificacaoClick = (notificacao) => {
-    if (notificacao.link) {
-      navigate(notificacao.link);
+  const handleNotificacaoClick = async (notificacao) => {
+    setNotificacaoSelecionada(notificacao);
+    if (notificacao?.id && !notificacao.lida) {
+      await handleMarcarComoLida(notificacao.id);
     }
+  };
+
+  const handleIrParaNotificacao = (notificacao) => {
+    if (!notificacao) return;
+    setNotificacaoSelecionada(null);
+    navigate(normalizarLinkNotificacao(notificacao, 'cliente'));
   };
 
   const getIconeNotificacao = (tipo) => {
@@ -259,6 +274,7 @@ function ClienteNotificacoes() {
           onClick={handleNotificacaoClick}
           getIcone={getIconeNotificacao}
           formatarData={formatarData}
+          onIr={handleIrParaNotificacao}
         />
       </TabPanel>
 
@@ -270,6 +286,7 @@ function ClienteNotificacoes() {
           onClick={handleNotificacaoClick}
           getIcone={getIconeNotificacao}
           formatarData={formatarData}
+          onIr={handleIrParaNotificacao}
         />
       </TabPanel>
 
@@ -281,13 +298,36 @@ function ClienteNotificacoes() {
           onClick={handleNotificacaoClick}
           getIcone={getIconeNotificacao}
           formatarData={formatarData}
+          onIr={handleIrParaNotificacao}
         />
       </TabPanel>
+
+      <Dialog open={Boolean(notificacaoSelecionada)} onClose={() => setNotificacaoSelecionada(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>Detalhes da notificação</DialogTitle>
+        <DialogContent>
+          {notificacaoSelecionada && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" gutterBottom>{notificacaoSelecionada.titulo}</Typography>
+              <Typography variant="body1" paragraph>{notificacaoSelecionada.mensagem}</Typography>
+              <Divider sx={{ my: 2 }} />
+              {montarDetalhesNotificacao(notificacaoSelecionada).map(([key, value]) => (
+                <Typography key={key} variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                </Typography>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNotificacaoSelecionada(null)}>Fechar</Button>
+          <Button variant="contained" onClick={() => handleIrParaNotificacao(notificacaoSelecionada)}>Ir para página relacionada</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
 
-function ListaNotificacoes({ notificacoes, onMarcarLida, onExcluir, onClick, getIcone, formatarData }) {
+function ListaNotificacoes({ notificacoes, onMarcarLida, onExcluir, onClick, onIr, getIcone, formatarData }) {
   if (notificacoes.length === 0) {
     return (
       <Paper sx={{ p: 6, textAlign: 'center', mt: 3 }}>
@@ -369,7 +409,31 @@ function ListaNotificacoes({ notificacoes, onMarcarLida, onExcluir, onClick, get
                 </Grid>
                 
                 <Grid item xs={12} sm={2}>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+                    <Tooltip title="Ir para página relacionada">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onIr(notificacao);
+                        }}
+                        sx={{ color: '#1976d2' }}
+                      >
+                        <OpenInNewIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Ver detalhes">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClick(notificacao);
+                        }}
+                        sx={{ color: '#9c27b0' }}
+                      >
+                        <VisibilityIcon />
+                      </IconButton>
+                    </Tooltip>
                     {!notificacao.lida && (
                       <Tooltip title="Marcar como lida">
                         <IconButton

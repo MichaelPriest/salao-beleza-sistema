@@ -60,6 +60,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { exportRowsToPdf, exportRowsToExcel } from '../../utils/reportExportUtils';
 import {
   LineChart,
   Line,
@@ -240,10 +241,42 @@ function RelatorioAnamnese() {
 
   };
 
+  const getDadosExportacao = () => respostas.map(r => ({
+    Cliente: r.clienteNome,
+    Formulário: formularios.find(f => f.id === r.formularioId)?.titulo,
+    'Data Resposta': format(new Date(r.respondidoEm || r.criadoEm), 'dd/MM/yyyy'),
+    Status: r.status,
+    'Nº Respostas': r.respostas?.length || 0
+  }));
+
   const handleExportar = (formato) => {
+    const dados = getDadosExportacao();
+
+    if (formato === 'pdf') {
+      exportRowsToPdf({
+        title: 'Relatórios de Anamnese',
+        subtitle: `Respostas: ${respostas.length} • Gerado em ${new Date().toLocaleString('pt-BR')}`,
+        rows: dados,
+        filename: `relatorio-anamnese-${format(new Date(), 'yyyyMMdd')}.pdf`,
+      });
+      toast.success('PDF exportado com sucesso!');
+      return;
+    }
+
+    if (formato === 'excel') {
+      exportRowsToExcel({
+        title: 'Relatórios de Anamnese',
+        subtitle: `Respostas: ${respostas.length} • Gerado em ${new Date().toLocaleString('pt-BR')}`,
+        rows: dados,
+        filename: `relatorio-anamnese-${format(new Date(), 'yyyyMMdd')}.xlsx`,
+      });
+      toast.success('Excel exportado com sucesso!');
+      return;
+    }
+
     if (formato === 'csv') {
       // Gerar CSV
-      const dados = respostas.map(r => ({
+      const dadosCsv = respostas.map(r => ({
         Cliente: r.clienteNome,
         Formulário: formularios.find(f => f.id === r.formularioId)?.titulo,
         'Data Resposta': format(new Date(r.respondidoEm || r.criadoEm), 'dd/MM/yyyy'),
@@ -252,8 +285,8 @@ function RelatorioAnamnese() {
       }));
 
       const csvContent = [
-        Object.keys(dados[0] || {}).join(','),
-        ...dados.map(row => Object.values(row).join(','))
+        Object.keys(dadosCsv[0] || {}).join(','),
+        ...dadosCsv.map(row => Object.values(row).join(','))
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -297,6 +330,8 @@ function RelatorioAnamnese() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleExportar('pdf')}>PDF</Button>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleExportar('excel')}>Excel</Button>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}

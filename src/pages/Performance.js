@@ -166,6 +166,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import { ReportHeader, ReportSectionCard, reportPageSx } from '../components/ReportDesign';
+import { exportRowsToPdf, exportRowsToExcel } from '../utils/reportExportUtils';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -677,13 +679,28 @@ function Performance() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const getLinhasPerformance = () => [
+    ...graficos.rankingProfissionais.map((item) => ({ tipo: 'Profissional', nome: item.nome, atendimentos: item.atendimentos, faturamento: item.faturamento })),
+    ...graficos.rankingServicos.map((item) => ({ tipo: 'Serviço', nome: item.nome, atendimentos: item.quantidade, faturamento: item.faturamento })),
+  ];
+
   const handleExportar = (formato) => {
-    if (formato === 'csv') {
-      toast.success('Dados exportados para CSV');
-    } else if (formato === 'pdf') {
+    const rows = getLinhasPerformance();
+    const summary = [
+      { label: 'Faturamento', value: formatarMoeda(metricas.faturamento.atual) },
+      { label: 'Clientes', value: metricas.clientes.atual },
+      { label: 'Ticket médio', value: formatarMoeda(metricas.ticketMedio.atual) },
+      { label: 'Satisfação', value: metricas.satisfacao.atual.toFixed(1) },
+    ];
+
+    if (formato === 'pdf') {
+      exportRowsToPdf({ title: 'Performance', subtitle: 'Indicadores de desempenho do negócio', summary, rows, filename: `performance-${format(new Date(), 'yyyyMMdd')}.pdf` });
       toast.success('Relatório PDF gerado');
     } else if (formato === 'excel') {
+      exportRowsToExcel({ title: 'Performance', subtitle: 'Indicadores de desempenho do negócio', summary, rows, filename: `performance-${format(new Date(), 'yyyyMMdd')}.xlsx` });
       toast.success('Planilha Excel gerada');
+    } else if (formato === 'csv') {
+      toast.success('Dados exportados para CSV');
     }
   };
 
@@ -721,45 +738,22 @@ function Performance() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Box>
-        {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-              Performance
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Acompanhe os principais indicadores de desempenho do negócio
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={() => handleExportar('excel')}
-            >
-              Exportar
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={() => window.print()}
-            >
-              Imprimir
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={carregarDados}
-            >
-              Atualizar
-            </Button>
-          </Box>
-        </Box>
+      <Box sx={reportPageSx}>
+        <ReportHeader
+          title="Performance"
+          subtitle="Acompanhe os principais indicadores de desempenho do negócio."
+          icon={<AssessmentIcon />}
+          badge="Indicadores"
+          actions={<>
+            <Button variant="contained" color="error" startIcon={<DownloadIcon />} onClick={() => handleExportar('pdf')}>PDF</Button>
+            <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => handleExportar('excel')}>Excel</Button>
+            <Button variant="outlined" startIcon={<PrintIcon />} onClick={() => window.print()} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>Imprimir</Button>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={carregarDados} sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>Atualizar</Button>
+          </>}
+        />
 
         {/* Filtro de Período */}
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
+        <ReportSectionCard title="Filtros de performance" subtitle="Selecione período e métrica para comparar os indicadores." sx={{ mb: 4 }}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
@@ -807,8 +801,7 @@ function Performance() {
                 </Box>
               </Grid>
             </Grid>
-          </CardContent>
-        </Card>
+        </ReportSectionCard>
 
         {/* Cards de Métricas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
