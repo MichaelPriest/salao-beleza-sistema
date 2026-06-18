@@ -618,6 +618,49 @@ function ModernAgendamentos() {
     };
   };
 
+
+  const getClienteIdsUsuarioAtual = () => Array.from(new Set([
+    usuario?.clienteId,
+    usuario?.id,
+    usuario?.uid,
+    usuario?.authUid,
+    usuario?.googleUid,
+    usuario?.email,
+  ].filter(Boolean).map(String)));
+
+  const isEventoDoClienteAtual = (evento) => {
+    const idsCliente = getClienteIdsUsuarioAtual();
+    if (!idsCliente.length) return false;
+    const idsEvento = [
+      evento?.clienteId,
+      evento?.clienteUid,
+      evento?.authUid,
+      evento?.googleUid,
+      evento?.clienteEmail,
+      evento?.email,
+    ].filter(Boolean).map(String);
+    return idsEvento.some((id) => idsCliente.includes(id));
+  };
+
+  const formatarMoeda = (valor) => Number(valor || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+
+  const formatDateBR = (data) => {
+    if (!data) return 'Data a confirmar';
+    try {
+      return new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR');
+    } catch {
+      return data;
+    }
+  };
+
+  const calcularDuracaoEvento = (event) => {
+    const servicosLista = Array.isArray(event?.servicos) ? event.servicos : [];
+    return servicosLista.reduce((total, servico) => total + Number(servico.duracao || servico.tempo || 0), 0) || Number(event?.duracao || 0);
+  };
+
   const formatarTelefone = (telefone) => {
     if (!telefone || telefone === 'Não informado') return telefone;
     const numeros = telefone.replace(/\D/g, '');
@@ -952,8 +995,8 @@ function ModernAgendamentos() {
   const filtrarEventosPorUsuario = (eventos) => {
     if (!usuario) return eventos;
 
-    if (cargo === 'cliente' && usuario.clienteId) {
-      return eventos.filter(e => e.clienteId === usuario.clienteId);
+    if (cargo === 'cliente') {
+      return eventos.filter(isEventoDoClienteAtual);
     }
 
     if (cargo === 'profissional' && usuario.profissionalId) {
@@ -2243,7 +2286,7 @@ function ModernAgendamentos() {
       setSelectedProfessional(user.profissionalId);
     }
 
-    if (user?.cargo === 'cliente' && user?.clienteId) {
+    if (user?.cargo === 'cliente') {
       setSelectedProfessional('all');
     }
   }, []);
@@ -2715,12 +2758,11 @@ function ModernAgendamentos() {
                           <AnimatePresence>
                             <Grid container spacing={2}>
                               {eventsAtTime.map(event => {
-                                const cliente = getClienteData(event.clienteId);
+                                const cliente = getClienteData(event.clienteId) || { nome: event.clienteNome || 'Cliente', telefone: event.clienteTelefone, foto: event.clienteFoto };
                                 const profissional = getProfissionalData(event.profissionalId);
                                 const servicosLista = event.servicos || [];
                                 const temFormularioPendente = formulariosPendentes[event.id];
-
-                                if (!cliente) return null;
+                                const duracaoTotal = calcularDuracaoEvento(event);
 
                                 return (
                                   <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
@@ -2803,21 +2845,34 @@ function ModernAgendamentos() {
                                             </Typography>
                                           </Grid>
 
-                                          {cargo !== 'cliente' && (
-                                            <Grid item xs={12} sm={6} md={2}>
-                                              <Typography variant="body2">
-                                                {profissional?.nome || 'N/A'}
+                                          <Grid item xs={12} sm={6} md={2}>
+                                            <Typography variant="subtitle2" color="textSecondary">
+                                              Profissional
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                              {profissional?.nome || event.profissionalNome || 'A definir'}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                              {getTipoIcon(event.tipo)}
+                                              <Typography variant="caption" color="textSecondary">
+                                                {getTipoLabel(event.tipo)}
                                               </Typography>
-                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                                {getTipoIcon(event.tipo)}
-                                                <Typography variant="caption" color="textSecondary">
-                                                  {getTipoLabel(event.tipo)}
-                                                </Typography>
-                                              </Box>
+                                            </Box>
+                                          </Grid>
+
+                                          {cargo === 'cliente' && (
+                                            <Grid item xs={12} sm={6} md={2}>
+                                              <Typography variant="subtitle2" color="textSecondary">Data e duração</Typography>
+                                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                {formatDateBR(event.data)} às {event.horario}
+                                              </Typography>
+                                              <Typography variant="caption" color="textSecondary">
+                                                {duracaoTotal ? `${duracaoTotal} min` : 'Duração a confirmar'} • {formatarMoeda(event.valorTotal)}
+                                              </Typography>
                                             </Grid>
                                           )}
 
-                                          <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 3 : 2}>
+                                          <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 2 : 2}>
                                             <Chip
                                               icon={getStatusIcon(event.status)}
                                               label={getStatusLabel(event.status)}
@@ -2826,6 +2881,24 @@ function ModernAgendamentos() {
                                               sx={{ fontWeight: 500 }}
                                             />
                                           </Grid>
+
+                                          {cargo === 'cliente' && (
+                                            <Grid item xs={12}>
+                                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                {servicosLista.map((servico, idx) => (
+                                                  <Chip
+                                                    key={servico.id || idx}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    label={`${servico.nome || 'Serviço'}${servico.preco ? ` • ${formatarMoeda(servico.preco)}` : ''}`}
+                                                  />
+                                                ))}
+                                                {event.observacoes && (
+                                                  <Chip size="small" color="info" variant="outlined" label={`Obs: ${event.observacoes}`} />
+                                                )}
+                                              </Box>
+                                            </Grid>
+                                          )}
 
                                           <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
                                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
@@ -3029,7 +3102,7 @@ function ModernAgendamentos() {
                                   )
                                 )}
                                 <Typography variant="caption" noWrap>
-                                  {event.horario} - {cliente?.nome?.split(' ')[0]} ({servicosLista.length})
+                                  {event.horario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]} ({servicosLista.length})
                                 </Typography>
                               </Box>
                             );
@@ -3148,7 +3221,7 @@ function ModernAgendamentos() {
                                     }}
                                   />
                                   <Typography variant="caption" noWrap sx={{ fontSize: '0.65rem' }}>
-                                    {event.horario} - {cliente?.nome?.split(' ')[0]} ({servicosLista.length})
+                                    {event.horario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]} ({servicosLista.length})
                                   </Typography>
                                 </Box>
                               );
@@ -3188,12 +3261,11 @@ function ModernAgendamentos() {
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {selectedDayDetails?.events.map(event => {
-              const cliente = getClienteData(event.clienteId);
+              const cliente = getClienteData(event.clienteId) || { nome: event.clienteNome || 'Cliente', telefone: event.clienteTelefone, foto: event.clienteFoto };
               const profissional = getProfissionalData(event.profissionalId);
               const servicosLista = event.servicos || [];
               const temFormularioPendente = formulariosPendentes[event.id];
-
-              if (!cliente) return null;
+              const duracaoTotal = calcularDuracaoEvento(event);
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
@@ -3234,8 +3306,18 @@ function ModernAgendamentos() {
                       </Box>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle2" color="textSecondary">Horário</Typography>
-                      <Typography variant="body1">{event.horario}</Typography>
+                      <Typography variant="subtitle2" color="textSecondary">Data/Horário</Typography>
+                      <Typography variant="body1">{formatDateBR(event.data)} às {event.horario}</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {duracaoTotal ? `${duracaoTotal} min` : 'Duração a confirmar'} • {formatarMoeda(event.valorTotal)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="textSecondary">Profissional</Typography>
+                      <Typography variant="body1">{profissional?.nome || event.profissionalNome || 'A definir'}</Typography>
+                      {profissional?.especialidade && (
+                        <Typography variant="caption" color="textSecondary">{profissional.especialidade}</Typography>
+                      )}
                     </Grid>
                     <Grid item xs={12}>
                       <Typography variant="subtitle2" color="textSecondary">Serviços</Typography>
@@ -3243,14 +3325,14 @@ function ModernAgendamentos() {
                         {servicosLista.map(servico => (
                           <Chip
                             key={servico.id}
-                            label={`${servico.nome} - R$ ${servico.preco?.toFixed(2)}`}
+                            label={`${servico.nome} - ${formatarMoeda(servico.preco)}`}
                             size="small"
                             variant="outlined"
                           />
                         ))}
                       </Box>
                       <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
-                        Total: R$ {event.valorTotal?.toFixed(2)}
+                        Total: {formatarMoeda(event.valorTotal)}
                       </Typography>
                     </Grid>
                     {cargo !== 'cliente' && (

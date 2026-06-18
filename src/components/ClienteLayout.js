@@ -50,6 +50,7 @@ import { notificacoesPushService } from '../services/notificacoesPushService';
 import { firebaseService } from '../services/firebase';
 import Footer from './Footer';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
+import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 
 // ============================================
 // CONSTANTES
@@ -367,9 +368,7 @@ function ClienteLayout() {
       await marcarNotificacaoComoLida(notificacao.id);
     }
     
-    if (notificacao.link) {
-      navigate(notificacao.link);
-    }
+    navigate(normalizarLinkNotificacao(notificacao, 'cliente'));
     
     handleNotificacoesClose();
   };

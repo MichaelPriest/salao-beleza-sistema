@@ -71,8 +71,7 @@ import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf } from '../utils/reportExportUtils';
 import { useNavigate } from 'react-router-dom';
 
 // Níveis de fidelidade
@@ -455,92 +454,35 @@ function MeusPontos() {
 
   const handlePrintPDF = async () => {
     try {
-      const doc = new jsPDF();
-      
-      doc.setFillColor(156, 39, 176);
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('EXTRATO DE PONTOS', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(cliente?.nome || 'Cliente', 105, 30, { align: 'center' });
+      const rows = ultimosPontos.map(p => ({
+        data: formatDate(p.data),
+        tipo: p.tipo === 'credito' ? 'Crédito' : 'Débito',
+        descricao: p.motivo || '—',
+        pontos: `${p.tipo === 'credito' ? '+' : '-'}${p.quantidade}`,
+      }));
 
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 30, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Nível:', 25, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(nivel.toUpperCase(), 50, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Saldo:', 100, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(saldo), 120, yPos + 10);
-      
-      if (nivel !== 'platina') {
-        doc.setFont('helvetica', 'bold');
-        doc.text('Próximo nível:', 25, yPos + 22);
-        doc.setFont('helvetica', 'normal');
-        const proximo = nivel === 'bronze' ? 'prata' : nivel === 'prata' ? 'ouro' : 'platina';
-        doc.text(`${proximo.toUpperCase()} (faltam ${pontosFaltantes} pontos)`, 60, yPos + 22);
-      }
-      
-      yPos += 50;
+      exportRowsToPdf({
+        title: 'Extrato de Pontos',
+        subtitle: `${cliente?.nome || 'Cliente'} • Nível ${nivel.toUpperCase()} • Saldo ${saldo}`,
+        summary: [
+          { label: 'Nível', value: nivel.toUpperCase() },
+          { label: 'Saldo', value: saldo },
+          { label: 'Próximo nível', value: nivel !== 'platina' ? `${pontosFaltantes} pontos restantes` : 'Nível máximo' },
+        ],
+        rows,
+        filename: `extrato_pontos_${format(new Date(), 'yyyy-MM-dd')}.pdf`,
+      });
 
-      const tableColumn = ['Data', 'Tipo', 'Descrição', 'Pontos'];
-      const tableRows = [];
-      
-      ultimosPontos.forEach(p => {
-        const row = [
-          formatDate(p.data),
-          p.tipo === 'credito' ? 'Crédito' : 'Débito',
-          p.motivo || '—',
-          `${p.tipo === 'credito' ? '+' : '-'}${p.quantidade}`,
-        ];
-        tableRows.push(row);
-      });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
-      });
-      
       await auditoriaService.registrar('exportar_extrato_pontos', {
         entidade: 'fidelidade',
         entidadeId: cliente?.id,
         detalhes: 'Exportação de extrato de pontos',
-        dados: {
-          formato: 'PDF',
-          saldo,
-          nivel
-        }
+        dados: { formato: 'PDF', saldo }
       });
-      
-      window.open(doc.output('bloburl'), '_blank');
-      setOpenPrintDialog(false);
+
+      setOpenExportDialog(false);
       mostrarSnackbar('PDF gerado com sucesso!');
-      
+      return;
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');

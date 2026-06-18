@@ -1157,7 +1157,10 @@ export const firebaseService = {
         ...data,
         ...(current?.unidadeId && data?.unidadeId === undefined ? { unidadeId: current.unidadeId } : {}),
       };
-      const tenantData = applyTenantMetadata(collectionName, dataParaAtualizar);
+      const dadosBaseAtualizacao = NOTIFICATION_COLLECTIONS.has(collectionName) && current
+        ? { ...current, ...dataParaAtualizar }
+        : dataParaAtualizar;
+      const tenantData = applyTenantMetadata(collectionName, dadosBaseAtualizacao);
       const documentData = sanitizeForSupabase({
         ...(current || {}),
         ...tenantData,

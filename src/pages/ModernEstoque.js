@@ -69,6 +69,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { registrarAlteracaoPrecoProduto } from '../services/produtosHistoricoService';
 import { useReactToPrint } from 'react-to-print';
+import { getEmpresaImpressao, setEmpresaImpressaoCache } from '../utils/reportExportUtils';
 import {
   BarChart,
   Bar,
@@ -280,6 +281,7 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
 // Componente de relatório para impressão
 const RelatorioEstoque = React.forwardRef((props, ref) => {
   const { produtos, categorias, fornecedores, stats, SETORES, getUnidadeSimbolo } = props;
+  const empresa = getEmpresaImpressao();
   
   const getEstoqueStatus = (quantidade, minimo) => {
     const qtd = Number(quantidade || 0);
@@ -291,13 +293,41 @@ const RelatorioEstoque = React.forwardRef((props, ref) => {
 
   return (
     <Box ref={ref} sx={{ p: 4, backgroundColor: 'white', minWidth: '800px' }}>
-      {/* Cabeçalho */}
+      {/* Cabeçalho da empresa */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center', mb: 3, p: 2, border: '1px solid rgba(156, 39, 176, 0.18)', borderLeft: '8px solid #9c27b0', borderRadius: 2, bgcolor: '#f8f5fb' }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {empresa.logo && (
+            <Box component="img" src={empresa.logo} alt="Logo da empresa" sx={{ width: 72, height: 72, objectFit: 'contain', bgcolor: 'white', borderRadius: 2, p: 0.5 }} />
+          )}
+          <Box>
+            <Typography variant="h5" sx={{ color: '#9c27b0', fontWeight: 800 }}>
+              {empresa.nome}
+            </Typography>
+            {empresa.razaoSocial && <Typography variant="body2">{empresa.razaoSocial}</Typography>}
+            {empresa.cnpj && <Typography variant="body2">CNPJ: {empresa.cnpj}</Typography>}
+            {empresa.endereco && <Typography variant="body2" color="textSecondary">{empresa.endereco}</Typography>}
+            {[empresa.telefone, empresa.whatsapp, empresa.email].filter(Boolean).length > 0 && (
+              <Typography variant="body2" color="textSecondary">
+                {[empresa.telefone, empresa.whatsapp, empresa.email].filter(Boolean).join(' • ')}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>Gerado em</Typography>
+          <Typography variant="body2" color="textSecondary">
+            {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Título */}
       <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #9c27b0', pb: 2 }}>
         <Typography variant="h3" sx={{ color: '#9c27b0', fontWeight: 700, mb: 1 }}>
           RELATÓRIO DE ESTOQUE
         </Typography>
         <Typography variant="h6" color="textSecondary">
-          Data: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+          Lista detalhada de produtos, valores, fornecedores, localização e status de estoque
         </Typography>
       </Box>
 
@@ -605,17 +635,19 @@ function ModernEstoque() {
     try {
       setLoading(true);
       
-      const [produtosData, categoriasData, fornecedoresData, historicoData] = await Promise.all([
+      const [produtosData, categoriasData, fornecedoresData, historicoData, configuracoesData] = await Promise.all([
         firebaseService.getAll('produtos').catch(() => []),
         firebaseService.getAll('categorias_produtos').catch(() => []),
         firebaseService.getAll('fornecedores').catch(() => []),
         firebaseService.getAll('movimentacoes_estoque').catch(() => []),
+        firebaseService.getAll('configuracoes').catch(() => []),
       ]);
       
       setProdutos(produtosData || []);
       setCategorias(categoriasData || []);
       setFornecedores(fornecedoresData || []);
       setHistoricoPrecos((historicoData || []).filter(item => item.tipo === 'alteracao_preco'));
+      if (configuracoesData?.[0]) setEmpresaImpressaoCache(configuracoesData[0]);
       
       // Inicializar mapa
       inicializarMapa();

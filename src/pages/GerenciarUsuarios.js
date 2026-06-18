@@ -92,8 +92,7 @@ import { firebaseService } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf } from '../utils/reportExportUtils';
 
 // Constantes para cargos e permissões
 const CARGOS = {
@@ -942,87 +941,34 @@ function GerenciarUsuarios() {
 
   const handlePrintPDF = async () => {
     try {
-      const doc = new jsPDF();
-      
-      doc.setFillColor(156, 39, 176);
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('RELATÓRIO DE USUÁRIOS', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 50, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Usuários:', 25, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.total), 70, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Ativos:', 100, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.ativos), 120, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Inativos:', 140, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.inativos), 160, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Clientes:', 25, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.clientes), 50, yPos + 25);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Pontos:', 80, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(statsFidelidade.totalPontos), 120, yPos + 25);
-      
-      yPos += 70;
-
-      const tableColumn = ['Nome', 'Email', 'Cargo', 'Status', 'Pontos'];
-      const tableRows = [];
-      
-      usuariosFiltrados.slice(0, 50).forEach(u => {
-        const pontosCliente = u.clienteId ? pontuacaoClientes[u.clienteId]?.total || 0 : 0;
-        
-        const row = [
-          u.nome,
-          u.email,
-          CARGOS[u.cargo]?.nome || u.cargo,
-          u.status === 'ativo' ? 'Ativo' : 'Inativo',
-          u.cargo === 'cliente' ? String(pontosCliente) : '-',
-        ];
-        tableRows.push(row);
+      exportRowsToPdf({
+        title: 'Relatório de Usuários',
+        subtitle: `Usuários filtrados: ${usuariosFiltrados.length} • Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+        filename: `relatorio_usuarios_${new Date().toISOString().split('T')[0]}.pdf`,
+        summary: [
+          { label: 'Total de usuários', value: stats.total },
+          { label: 'Ativos', value: stats.ativos },
+          { label: 'Inativos', value: stats.inativos },
+          { label: 'Clientes', value: stats.clientes },
+          { label: 'Total de pontos', value: statsFidelidade.totalPontos },
+        ],
+        columns: ['nome', 'email', 'telefone', 'cargo', 'status', 'vinculo', 'pontos'],
+        rows: usuariosFiltrados.map((u) => {
+          const pontosCliente = u.clienteId ? pontuacaoClientes[u.clienteId]?.total || 0 : 0;
+          const profissionalVinculado = profissionais.find((p) => p.id === u.profissionalId);
+          const clienteVinculado = clientes.find((c) => c.id === u.clienteId);
+          return {
+            nome: u.nome || '—',
+            email: u.email || '—',
+            telefone: u.telefone || '—',
+            cargo: CARGOS[u.cargo]?.nome || u.cargo || '—',
+            status: u.status === 'ativo' ? 'Ativo' : 'Inativo',
+            vinculo: profissionalVinculado?.nome || clienteVinculado?.nome || '—',
+            pontos: u.cargo === 'cliente' ? pontosCliente : '—',
+          };
+        }),
       });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
-      });
-      
+
       await auditoriaService.registrar('exportar_relatorio_usuarios', {
         entidade: 'usuarios',
         detalhes: 'Exportação de relatório de usuários',
@@ -1032,16 +978,14 @@ function GerenciarUsuarios() {
           stats
         }
       });
-      
-      window.open(doc.output('bloburl'), '_blank');
+
       setOpenPrintDialog(false);
       mostrarSnackbar('PDF gerado com sucesso!');
-      
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+
+      await auditoriaService.registrarErro(error, {
         acao: 'exportar_relatorio_usuarios_pdf'
       });
     }

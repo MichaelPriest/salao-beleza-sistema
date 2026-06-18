@@ -102,8 +102,7 @@ import { auditoriaService } from '../services/auditoriaService';
 import { resgateFidelidadeService } from '../services/resgateFidelidadeService';
 import { format, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { exportRowsToPdf } from '../utils/reportExportUtils';
 
 // Níveis de fidelidade
 const niveis = {
@@ -932,108 +931,40 @@ function GerenciarFidelidade() {
 
   const handlePrintPDF = async () => {
     try {
-      const doc = new jsPDF();
-      
-      doc.setFillColor(156, 39, 176);
-      doc.rect(0, 0, 210, 40, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text('RELATÓRIO DE FIDELIDADE', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Emitido em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      
-      let yPos = 50;
-      
-      doc.setFillColor(245, 245, 245);
-      doc.rect(20, yPos, 170, 60, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Clientes:', 25, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.totalClientes), 70, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Pontos:', 100, yPos + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.totalPontos), 130, yPos + 10);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Resgates:', 25, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.totalResgates), 70, yPos + 25);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total de Recompensas:', 100, yPos + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(String(stats.totalRecompensas), 145, yPos + 25);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Distribuição por Nível:', 25, yPos + 40);
-      
-      let xPos = 25;
-      Object.entries(stats.niveis).forEach(([nivel, count]) => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(nivel.toUpperCase() + ':', xPos, yPos + 50);
-        doc.setFont('helvetica', 'normal');
-        doc.text(String(count), xPos + 30, yPos + 50);
-        xPos += 60;
-      });
-      
-      yPos += 70;
-
-      const tableColumn = ['Cliente', 'Nível', 'Pontos', 'Resgates'];
-      const tableRows = [];
-      
-      clientes.slice(0, 30).forEach(cliente => {
+      const rows = clientes.map(cliente => {
         const saldo = calcularSaldoCliente(cliente.id);
-        const nivel = getNivelCliente(saldo);
-        const resgatesCliente = resgates.filter(r => r.clienteId === cliente.id).length;
-        
-        const row = [
-          cliente.nome,
-          nivel.toUpperCase(),
-          String(saldo),
-          String(resgatesCliente),
-        ];
-        tableRows.push(row);
+        return {
+          cliente: cliente.nome,
+          telefone: cliente.telefone || '-',
+          email: cliente.email || '-',
+          nivel: getNivelCliente(saldo).toUpperCase(),
+          pontos: saldo,
+          resgates: resgates.filter(r => r.clienteId === cliente.id).length,
+        };
       });
-      
-      doc.autoTable({
-        startY: yPos,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [156, 39, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
+
+      exportRowsToPdf({
+        title: 'Relatório de Fidelidade',
+        subtitle: `Clientes: ${stats.totalClientes} • Pontos: ${stats.totalPontos} • Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+        summary: [
+          { label: 'Total de Clientes', value: stats.totalClientes },
+          { label: 'Total de Pontos', value: stats.totalPontos },
+          { label: 'Total de Resgates', value: stats.totalResgates },
+          { label: 'Total de Recompensas', value: stats.totalRecompensas },
+        ],
+        rows,
+        filename: `fidelidade_${format(new Date(), 'yyyy-MM-dd')}.pdf`,
       });
-      
+
       await auditoriaService.registrar('exportar_relatorio_fidelidade', {
         entidade: 'fidelidade',
         detalhes: 'Exportação de relatório de fidelidade',
-        dados: {
-          formato: 'PDF',
-          stats
-        }
+        dados: { formato: 'PDF', stats }
       });
-      
-      window.open(doc.output('bloburl'), '_blank');
+
       setOpenPrintDialog(false);
       mostrarSnackbar('PDF gerado com sucesso!');
-      
+      return;
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       mostrarSnackbar('Erro ao gerar PDF', 'error');
