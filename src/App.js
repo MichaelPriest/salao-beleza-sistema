@@ -1,4 +1,4 @@
-// src/App.js - VERSÃO COMPLETA ATUALIZADA COM PÁGINAS SAAS MELHORADAS
+// src/App.js - VERSÃO COMPLETA ATUALIZADA COM TODAS AS PÁGINAS SAAS
 
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -12,15 +12,15 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import 'dayjs/locale/pt-br';
 
-// Configurar dayjs globalmente para horário de Brasília
+// ============================================
+// CONFIGURAÇÃO DE HORÁRIO DE BRASÍLIA
+// ============================================
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale('pt-br');
 
-// Configuração fixa do fuso horário de Brasília
 export const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
 
-// Funções globais para horário de Brasília
 export const formatBrasiliaTime = (date, format = 'DD/MM/YYYY HH:mm:ss') => {
   if (!date) return '';
   return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
@@ -50,7 +50,6 @@ export const isSameDayBrasilia = (date1, date2) => {
   return d1.isSame(d2, 'day');
 };
 
-// Hook customizado para usar horário de Brasília
 export const useBrasiliaTime = () => {
   const [currentTime, setCurrentTime] = useState(dayjs().tz(BRASILIA_TIMEZONE));
 
@@ -71,16 +70,22 @@ export const useBrasiliaTime = () => {
   };
 };
 
-// Contextos
+// ============================================
+// CONTEXTOS
+// ============================================
 import { FeedbackProvider } from './contexts/FeedbackContext';
 import { DadosProvider } from './contexts/DadosContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthClienteProvider } from './contexts/AuthClienteContext';
 
-// Services
+// ============================================
+// SERVICES
+// ============================================
 import firebaseService from './services/firebase';
 
-// Components
+// ============================================
+// COMPONENTS
+// ============================================
 import ModernHeader from './components/ModernHeader';
 import ModernSidebar from './components/ModernSidebar';
 import PrivateRoute from './components/PrivateRoute';
@@ -93,17 +98,17 @@ import FidelidadeRoute from './components/FidelidadeRoute';
 import Footer from './components/Footer';
 
 // ============================================
-// PAGES - Organizadas por categoria
+// PAGES - PRINCIPAIS
 // ============================================
-
-// Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
 import ModernLogin from './pages/ModernLogin';
 import ModernPerfil from './pages/ModernPerfil';
 import ModernNotificacoes from './pages/ModernNotificacoes';
 import ModernConfiguracoes from './pages/ModernConfiguracoes';
 
-// Pages Operacionais
+// ============================================
+// PAGES - OPERACIONAIS
+// ============================================
 import ModernClientes from './pages/ModernClientes';
 import ModernServicos from './pages/ModernServicos';
 import ModernProfissionais from './pages/ModernProfissionais';
@@ -112,14 +117,20 @@ import ModernAgendamentos from './pages/ModernAgendamentos';
 import ModernAtendimentos from './pages/ModernAtendimentos';
 import ModernAtendimento from './pages/ModernAtendimento';
 
-// Pages Fidelidade
+// ============================================
+// PAGES - FIDELIDADE
+// ============================================
 import Fidelidade from './pages/Fidelidade';
 import GerenciarFidelidade from './pages/GerenciarFidelidade';
 import Recompensas from './pages/Recompensas';
 import MeusPontos from './pages/MeusPontos';
 import FidelidadeHistorico from './pages/FidelidadeHistorico';
+import Indicacoes from './pages/Indicacoes';
+import CadastroIndicacao from './pages/CadastroIndicacao';
 
-// Pages Financeiras
+// ============================================
+// PAGES - FINANCEIRO
+// ============================================
 import ModernFinanceiro from './pages/ModernFinanceiro';
 import ModernCompras from './pages/ModernCompras';
 import ModernRelatorios from './pages/ModernRelatorios';
@@ -127,49 +138,55 @@ import ContasPagar from './pages/ContasPagar';
 import ContasReceber from './pages/ContasReceber';
 import FluxoCaixa from './pages/FluxoCaixa';
 
-// Pages Estoque
+// ============================================
+// PAGES - ESTOQUE
+// ============================================
 import ModernEstoque from './pages/ModernEstoque';
 import Fornecedores from './pages/Fornecedores';
 import Entradas from './pages/Entradas';
+import CategoriasProdutos from './pages/CategoriasProdutos';
 
-// Pages Administrativas
+// ============================================
+// PAGES - ADMINISTRATIVAS
+// ============================================
 import GerenciarUsuarios from './pages/GerenciarUsuarios';
 import HistoricoAtendimentos from './pages/HistoricoAtendimentos';
 import Auditoria from './pages/Auditoria';
 import MinhasComissoes from './pages/MinhasComissoes';
 
-// Pages de Cupons e Marketing
+// ============================================
+// PAGES - MARKETING
+// ============================================
 import GerenciarCupons from './pages/GerenciarCupons';
 import Campanhas from './pages/Campanhas';
 import AnaliseCupons from './pages/AnaliseCupons';
 import PromocaoVisualizar from './pages/PromocaoVisualizar';
 
-// Pages de Disponibilidade
-import Disponibilidade from './pages/Disponibilidade';
-
-// Pages de Indicações
-import Indicacoes from './pages/Indicacoes';
-import CadastroIndicacao from './pages/CadastroIndicacao';
-
-// Pages de Categorias
-import CategoriasProdutos from './pages/CategoriasProdutos';
-
-// Pages de Análise e Performance
+// ============================================
+// PAGES - ANÁLISE E PERFORMANCE
+// ============================================
 import AnaliseVendas from './pages/AnaliseVendas';
 import Performance from './pages/Performance';
 
-// Pages de Backup e Logs
+// ============================================
+// PAGES - SISTEMA
+// ============================================
+import Disponibilidade from './pages/Disponibilidade';
 import Backup from './pages/Backup';
 import Logs from './pages/Logs';
+import ImportarServicos from './pages/ImportarServicos';
+import TesteAPI from './pages/TesteAPI';
 
-// Pages de Anamnese
+// ============================================
+// PAGES - ANAMNESE
+// ============================================
 import FormulariosAnamnese from './pages/Anamnese/FormulariosAnamnese';
 import RespostasAnamnese from './pages/Anamnese/RespostasAnamnese';
 import ModelosAnamnese from './pages/Anamnese/ModelosAnamnese';
 import RelatorioAnamnese from './pages/Anamnese/RelatorioAnamnese';
 
 // ============================================
-// PÁGINAS SAAS (MELHORADAS)
+// PAGES - SAAS (MELHORADAS)
 // ============================================
 import SaasLanding from './pages/SaasLanding';
 import SaasAdmin from './pages/SaasAdmin';
@@ -178,10 +195,11 @@ import SaasCobrancas from './pages/SaasCobrancas';
 import SaasPlanos from './pages/SaasPlanos';
 import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
 import SaasRelatorios from './pages/SaasRelatorios';
-import SaasGestao from './pages/SaasGestao'; // Página de gestão da própria empresa
+import SaasGestao from './pages/SaasGestao';
+import SuperAdminSelecionarEmpresa from './pages/SuperAdminSelecionarEmpresa';
 
 // ============================================
-// PÁGINAS DO CLIENTE
+// PAGES - CLIENTE
 // ============================================
 import ClienteLogin from './pages/ClienteLogin';
 import ClienteAuthCallback from './pages/ClienteAuthCallback';
@@ -201,20 +219,17 @@ import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 import ClienteChamados from './pages/ClienteChamados';
 
 // ============================================
-// OUTRAS PÁGINAS
+// PAGES - PÚBLICAS E ERROS
 // ============================================
-import Page404 from './pages/404';
-import Page403 from './pages/403';
-import Page500 from './pages/500';
-import Manutencao from './pages/Manutencao';
-import ImportarServicos from './pages/ImportarServicos';
-import TesteAPI from './pages/TesteAPI';
 import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import ManualSistema from './pages/ManualSistema';
-import SuperAdminSelecionarEmpresa from './pages/SuperAdminSelecionarEmpresa';
 import AdminChamados from './pages/AdminChamados';
+import Page404 from './pages/404';
+import Page403 from './pages/403';
+import Page500 from './pages/500';
+import Manutencao from './pages/Manutencao';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -286,9 +301,10 @@ firebaseService.update = async function(collectionName, id, data) {
   }
   return originalUpdate.call(this, collectionName, id, data);
 };
-// ============================================
 
-// Componente de Loading
+// ============================================
+// COMPONENTES DE LAYOUT
+// ============================================
 const AppLoading = () => (
   <Box sx={{
     display: 'flex',
@@ -301,7 +317,6 @@ const AppLoading = () => (
   </Box>
 );
 
-// Layout para páginas do sistema (com sidebar)
 const SistemaLayout = ({ children, theme }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
     <Box sx={{ display: 'flex', flex: 1 }}>
@@ -327,7 +342,6 @@ const SistemaLayout = ({ children, theme }) => (
   </Box>
 );
 
-// Layout para páginas públicas e login (sem sidebar)
 const SimpleLayout = ({ children }) => (
   <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
     <Box sx={{ flex: 1 }}>
@@ -337,6 +351,9 @@ const SimpleLayout = ({ children }) => (
   </Box>
 );
 
+// ============================================
+// APP PRINCIPAL
+// ============================================
 function App() {
   const [modoEscuro, setModoEscuro] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -417,44 +434,28 @@ function App() {
                 {/* ROTAS PÚBLICAS */}
                 {/* ============================================ */}
                 <Route path="/" element={
-                  <SimpleLayout>
-                    <SiteSalao />
-                  </SimpleLayout>
-                } />
-                <Route path="/promocoes/:id" element={
-                  <SimpleLayout>
-                    <PromocaoVisualizar />
-                  </SimpleLayout>
+                  <SimpleLayout><SiteSalao /></SimpleLayout>
                 } />
                 <Route path="/e/:slug" element={
-                  <SimpleLayout>
-                    <SiteSalao />
-                  </SimpleLayout>
+                  <SimpleLayout><SiteSalao /></SimpleLayout>
+                } />
+                <Route path="/promocoes/:id" element={
+                  <SimpleLayout><PromocaoVisualizar /></SimpleLayout>
                 } />
                 <Route path="/login" element={
-                  <SimpleLayout>
-                    <ModernLogin />
-                  </SimpleLayout>
+                  <SimpleLayout><ModernLogin /></SimpleLayout>
                 } />
                 <Route path="/cadastro" element={
-                  <SimpleLayout>
-                    <CadastroIndicacao />
-                  </SimpleLayout>
+                  <SimpleLayout><CadastroIndicacao /></SimpleLayout>
                 } />
                 <Route path="/teste" element={
-                  <SimpleLayout>
-                    <TesteAPI />
-                  </SimpleLayout>
+                  <SimpleLayout><TesteAPI /></SimpleLayout>
                 } />
                 <Route path="/termos-uso" element={
-                  <SimpleLayout>
-                    <TermosUso />
-                  </SimpleLayout>
+                  <SimpleLayout><TermosUso /></SimpleLayout>
                 } />
                 <Route path="/politica-privacidade" element={
-                  <SimpleLayout>
-                    <PoliticaPrivacidade />
-                  </SimpleLayout>
+                  <SimpleLayout><PoliticaPrivacidade /></SimpleLayout>
                 } />
 
                 {/* Páginas de Erro */}
@@ -466,9 +467,7 @@ function App() {
                 {/* SAAS - LANDING PAGE */}
                 {/* ============================================ */}
                 <Route path="/saas" element={
-                  <SimpleLayout>
-                    <SaasLanding />
-                  </SimpleLayout>
+                  <SimpleLayout><SaasLanding /></SimpleLayout>
                 } />
 
                 {/* ============================================ */}
@@ -476,44 +475,31 @@ function App() {
                 {/* ============================================ */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
-                    <SimpleLayout>
-                      <ClienteLogin />
-                    </SimpleLayout>
+                    <SimpleLayout><ClienteLogin /></SimpleLayout>
                   </AuthClienteProvider>
                 } />
-
                 <Route path="/cliente/auth/callback" element={
                   <AuthClienteProvider>
-                    <SimpleLayout>
-                      <ClienteAuthCallback />
-                    </SimpleLayout>
+                    <SimpleLayout><ClienteAuthCallback /></SimpleLayout>
                   </AuthClienteProvider>
                 } />
-
                 <Route path="/cliente/cadastro" element={
                   <AuthClienteProvider>
-                    <SimpleLayout>
-                      <ClienteCadastro />
-                    </SimpleLayout>
+                    <SimpleLayout><ClienteCadastro /></SimpleLayout>
                   </AuthClienteProvider>
                 } />
-
                 <Route path="/cliente/cadastro-complementar" element={
                   <AuthClienteProvider>
-                    <SimpleLayout>
-                      <ClienteCadastroComplementar />
-                    </SimpleLayout>
+                    <SimpleLayout><ClienteCadastroComplementar /></SimpleLayout>
                   </AuthClienteProvider>
                 } />
-
                 <Route path="/cliente/recuperar-senha" element={
                   <AuthClienteProvider>
-                    <SimpleLayout>
-                      <ClienteRecuperarSenha />
-                    </SimpleLayout>
+                    <SimpleLayout><ClienteRecuperarSenha /></SimpleLayout>
                   </AuthClienteProvider>
                 } />
 
+                {/* Área do Cliente Logado */}
                 <Route path="/cliente" element={
                   <AuthClienteProvider>
                     <ClientePrivateRoute>
@@ -534,59 +520,60 @@ function App() {
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
                   <Route path="atendimento/:atendimentoId/anamnese" element={<ClienteAnamnese />} />
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
+                  <Route index element={<Navigate to="dashboard" replace />} />
                 </Route>
 
                 {/* ============================================ */}
-                {/* SAAS ADMIN - PAINEL ADMINISTRATIVO */}
+                {/* SAAS ADMIN - PAINEL PRINCIPAL */}
                 {/* ============================================ */}
                 <Route path="/saas-admin" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasAdmin />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasAdmin /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/empresas" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasEmpresas />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasEmpresas /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/empresas/:id" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao embedded />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao embedded /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/assinaturas" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasPlanos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasPlanos /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/cobrancas" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasCobrancas />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasCobrancas /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/pagamentos" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasPagamentosConfig />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasPagamentosConfig /></SistemaLayout>
                   </SaasAdminRoute>
                 } />
                 <Route path="/saas-admin/relatorios" element={
                   <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasRelatorios />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasRelatorios /></SistemaLayout>
                   </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/config" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}><SaasPagamentosConfig /></SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+
+                {/* ============================================ */}
+                {/* SUPERADMIN - SELEÇÃO DE EMPRESA */}
+                {/* ============================================ */}
+                <Route path="/selecionar-empresa" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><SuperAdminSelecionarEmpresa /></SistemaLayout>
+                  </PrivateRoute>
                 } />
 
                 {/* ============================================ */}
@@ -594,97 +581,79 @@ function App() {
                 {/* ============================================ */}
                 <Route path="/empresa" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/empresa/unidades" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={1} />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao initialTab={1} /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/planos" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><SaasGestao initialTab={2} /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/empresa/assinatura" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={3} />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao initialTab={3} /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/empresa/cobranca" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={4} />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao initialTab={4} /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/empresa/site" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasGestao initialTab={5} />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><SaasGestao initialTab={5} /></SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Redirecionamentos de /configuracoes para /empresa */}
+                <Route path="/configuracoes" element={<Navigate to="/empresa" replace />} />
 
                 {/* ============================================ */}
                 {/* ROTAS DO SISTEMA PRINCIPAL */}
                 {/* ============================================ */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernDashboard />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernDashboard /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/clientes" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernClientes />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernClientes /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/servicos" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernServicos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernServicos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/profissionais" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernProfissionais />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernProfissionais /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/agendamentos" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernAgendamentos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernAgendamentos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/agenda" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Agenda />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Agenda /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/atendimentos" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernAtendimentos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernAtendimentos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/atendimento/:id" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernAtendimento />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernAtendimento /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
@@ -735,241 +704,165 @@ function App() {
                 {/* Financeiro */}
                 <Route path="/financeiro" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernFinanceiro />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernFinanceiro /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/financeiro/pagar" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ContasPagar />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ContasPagar /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/financeiro/receber" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ContasReceber />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ContasReceber /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/financeiro/fluxo" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <FluxoCaixa />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><FluxoCaixa /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
-                {/* Outras páginas do sistema */}
+                {/* Outras Páginas */}
                 <Route path="/compras" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernCompras />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernCompras /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/relatorios" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernRelatorios />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernRelatorios /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/estoque" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernEstoque />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernEstoque /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/fornecedores" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Fornecedores />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Fornecedores /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/entradas" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Entradas />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Entradas /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/categorias-produtos" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><CategoriasProdutos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/usuarios" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <GerenciarUsuarios />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><GerenciarUsuarios /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/historico" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <HistoricoAtendimentos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><HistoricoAtendimentos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/auditoria" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Auditoria />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Auditoria /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/perfil" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernPerfil />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernPerfil /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/notificacoes" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernNotificacoes />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/configuracoes" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernConfiguracoes />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/selecionar-empresa" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SuperAdminSelecionarEmpresa />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModernNotificacoes /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/chamados" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <AdminChamados />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><AdminChamados /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/manual" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ManualSistema audience="admin" />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ManualSistema audience="admin" /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/minhas-comissoes" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <MinhasComissoes />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><MinhasComissoes /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/importar-servicos" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ImportarServicos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ImportarServicos /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
                 {/* Anamnese */}
                 <Route path="/anamnese/formularios" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <FormulariosAnamnese />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><FormulariosAnamnese /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/anamnese/respostas" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <RespostasAnamnese />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><RespostasAnamnese /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/anamnese/modelos" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModelosAnamnese />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><ModelosAnamnese /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/anamnese/relatorios" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <RelatorioAnamnese />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><RelatorioAnamnese /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
                 {/* Cupons e Marketing */}
                 <Route path="/cupons" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <GerenciarCupons />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><GerenciarCupons /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/campanhas" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Campanhas />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Campanhas /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/analise-cupons" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <AnaliseCupons />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><AnaliseCupons /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
-                {/* Outras funcionalidades */}
+                {/* Análise e Performance */}
                 <Route path="/disponibilidade" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Disponibilidade />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
-                <Route path="/categorias-produtos" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <CategoriasProdutos />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Disponibilidade /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/analise-vendas" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <AnaliseVendas />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><AnaliseVendas /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/performance" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Performance />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Performance /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/backup" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Backup />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Backup /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/logs" element={
                   <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <Logs />
-                    </SistemaLayout>
+                    <SistemaLayout theme={currentTheme}><Logs /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
@@ -977,9 +870,7 @@ function App() {
                 {/* ROTA 404 */}
                 {/* ============================================ */}
                 <Route path="*" element={
-                  <SimpleLayout>
-                    <Page404 />
-                  </SimpleLayout>
+                  <SimpleLayout><Page404 /></SimpleLayout>
                 } />
               </Routes>
             </Router>
