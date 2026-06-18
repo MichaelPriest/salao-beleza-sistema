@@ -24,10 +24,10 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import { consumeSupabaseAuthRedirect, supabaseConfig } from '../services/firebase';
 
-// Importações diretas do Supabase
-const SUPABASE_URL = 'https://kvjrerxqwtrxttiiqkgf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
+const SUPABASE_URL = supabaseConfig.url;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
 
 function ModernLogin() {
   const navigate = useNavigate();
@@ -210,8 +210,8 @@ function ModernLogin() {
 
     try {
       // Redirecionar para Supabase OAuth
-      const redirectTo = encodeURIComponent(`${window.location.origin}/dashboard`);
-      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+      const redirectTo = encodeURIComponent(`${window.location.origin}/login`);
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}&response_type=token&prompt=select_account`;
       
     } catch (error) {
       console.error('Erro no login com Google:', error);
@@ -225,25 +225,15 @@ function ModernLogin() {
   // 🔥 PROCESSAR RETORNO DO GOOGLE (quando voltar do OAuth)
   React.useEffect(() => {
     const processGoogleRedirect = async () => {
-      // Verificar se tem token na URL
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      const accessToken = hashParams.get('access_token');
-      
-      if (!accessToken) return;
+      const hasOAuthParams = window.location.hash.includes('access_token=') || window.location.search.includes('code=');
+      if (!hasOAuthParams) return;
       
       console.log('🔐 Processando retorno do Google OAuth...');
       setLoading(true);
       
       try {
-        // Buscar usuário do Supabase com o token
-        const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
-        
-        const supabaseUser = await userResponse.json();
+        const session = await consumeSupabaseAuthRedirect();
+        const supabaseUser = session?.user;
         console.log('📊 Usuário Supabase:', supabaseUser);
         
         if (supabaseUser && supabaseUser.email) {
@@ -270,9 +260,7 @@ function ModernLogin() {
             localStorage.setItem('usuario', JSON.stringify(criarResultado.data));
             toast.success(`Bem-vindo, ${criarResultado.data.nome || criarResultado.data.email}!`);
             
-            // Limpar hash da URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-            navigate('/dashboard');
+            navigate('/dashboard', { replace: true });
             return;
           }
           
@@ -280,9 +268,7 @@ function ModernLogin() {
           localStorage.setItem('usuario', JSON.stringify(resultado.data));
           toast.success(`Bem-vindo, ${resultado.data.nome || resultado.data.email}!`);
           
-          // Limpar hash da URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-          navigate('/dashboard');
+          navigate('/dashboard', { replace: true });
         }
         
       } catch (error) {
