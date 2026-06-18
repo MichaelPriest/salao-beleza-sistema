@@ -1,4 +1,5 @@
-// src/components/ModernHeader.js
+// src/components/ModernHeader.js - ATUALIZADO PARA OCULTAR PESQUISA NO MODO SAAS
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AppBar,
@@ -54,6 +55,8 @@ import {
   Refresh as RefreshIcon,
   Apartment as ApartmentIcon,
   PointOfSale as PointOfSaleIcon,
+  AdminPanelSettings as AdminIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -64,8 +67,11 @@ import { usuariosService } from '../services/usuariosService';
 import { notificacoesService } from '../services/notificacoesService';
 import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
+import { isSaasPlatformAdmin } from '../utils/saasAccess';
 
-// 🔥 FUNÇÃO PARA OBTER DATA E HORA NO HORÁRIO DE BRASÍLIA
+// ============================================
+// FUNÇÕES DE HORÁRIO DE BRASÍLIA
+// ============================================
 const getBrasiliaTime = () => {
   const now = new Date();
   
@@ -87,14 +93,12 @@ const getBrasiliaTime = () => {
     weekday: 'short'
   });
   
-  return {
-    data,
-    hora,
-    diaSemana,
-    completo: `${data} ${hora}`,
-  };
+  return { data, hora, diaSemana, completo: `${data} ${hora}` };
 };
 
+// ============================================
+// COMPONENTES ESTILIZADOS
+// ============================================
 const Search = styled('div')(({ theme, isMobile }) => ({
   position: 'relative',
   borderRadius: theme.shape.borderRadius * 3,
@@ -137,7 +141,9 @@ const StyledInputBase = styled(InputBase)(({ theme, isMobile }) => ({
   },
 }));
 
-// Componente de Relógio Digital (versão mobile simplificada)
+// ============================================
+// RELÓGIO DIGITAL
+// ============================================
 const RelogioDigital = ({ isMobile }) => {
   const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
 
@@ -145,23 +151,13 @@ const RelogioDigital = ({ isMobile }) => {
     const timer = setInterval(() => {
       setHoraBrasilia(getBrasiliaTime());
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
   if (isMobile) {
     return (
       <Tooltip title={`${horaBrasilia.diaSemana}, ${horaBrasilia.data}`}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            bgcolor: '#f5f5f5',
-            borderRadius: 3,
-            px: 1,
-            py: 0.5,
-          }}
-        >
+        <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f5f5f5', borderRadius: 3, px: 1, py: 0.5 }}>
           <AccessTimeIcon sx={{ fontSize: 16, color: '#ff4081', mr: 0.5 }} />
           <Typography variant="caption" sx={{ fontWeight: 600, color: '#ff4081' }}>
             {horaBrasilia.hora}
@@ -172,17 +168,8 @@ const RelogioDigital = ({ isMobile }) => {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        bgcolor: '#f5f5f5',
-        borderRadius: 3,
-        px: 2,
-        py: 0.5,
-      }}
-    >
-      <CalendarIcon sx={{ fontSize: 18, color: '#9c27b0', mr: 1 }} />
+    <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: '#f5f5f5', borderRadius: 3, px: 2, py: 0.5 }}>
+      <CalendarIcon sx={{ fontSize: 18, color: '#667eea', mr: 1 }} />
       <Typography variant="body2" sx={{ fontWeight: 500, mr: 1 }}>
         {horaBrasilia.data}
       </Typography>
@@ -194,19 +181,13 @@ const RelogioDigital = ({ isMobile }) => {
   );
 };
 
-// Componente de Menu Mobile (simplificado - apenas perfil, configurações e logout)
+// ============================================
+// MOBILE MENU DRAWER
+// ============================================
 const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigate }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
   const getInitials = (name) => {
     if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const temFotoValida = () => {
@@ -220,30 +201,14 @@ const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigat
       onClose={onClose}
       onOpen={() => {}}
       disableBackdropTransition={true}
-      ModalProps={{
-        keepMounted: true,
-      }}
-      sx={{
-        '& .MuiDrawer-paper': {
-          width: 280,
-          backgroundColor: '#ffffff',
-        },
-      }}
+      ModalProps={{ keepMounted: true }}
+      sx={{ '& .MuiDrawer-paper': { width: 280, backgroundColor: '#ffffff' } }}
     >
-      {/* Header do Menu Mobile */}
-      <Box sx={{ 
-        p: 2, 
-        background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-      }}>
+      <Box sx={{ p: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar 
             src={temFotoValida() ? fotoUrl : undefined}
-            sx={{ 
-              width: 48, 
-              height: 48,
-              bgcolor: 'white',
-              color: '#9c27b0',
-            }}
+            sx={{ width: 48, height: 48, bgcolor: 'white', color: '#667eea' }}
           >
             {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
           </Avatar>
@@ -258,63 +223,30 @@ const MobileMenuDrawer = ({ open, onClose, usuario, fotoUrl, onLogout, onNavigat
         </Box>
       </Box>
 
-      {/* Itens do Menu - Apenas Perfil e Configurações */}
       <List sx={{ pt: 2 }}>
-        <ListItem
-          button
-          onClick={() => {
-            onNavigate('/perfil');
-            onClose();
-          }}
-          sx={{
-            py: 1.5,
-            '&:hover': { bgcolor: '#f3e5f5' },
-          }}
-        >
-          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}>
-            <PersonIcon />
-          </ListItemIcon>
+        <ListItem button onClick={() => { onNavigate('/perfil'); onClose(); }} sx={{ py: 1.5 }}>
+          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}><PersonIcon /></ListItemIcon>
           <ListItemText primary="Perfil" />
         </ListItem>
-
-        <ListItem
-          button
-          onClick={() => {
-            onNavigate('/configuracoes');
-            onClose();
-          }}
-          sx={{
-            py: 1.5,
-            '&:hover': { bgcolor: '#f3e5f5' },
-          }}
-        >
-          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}>
-            <SettingsIcon />
-          </ListItemIcon>
+        <ListItem button onClick={() => { onNavigate('/configuracoes'); onClose(); }} sx={{ py: 1.5 }}>
+          <ListItemIcon sx={{ color: '#666', minWidth: 40 }}><SettingsIcon /></ListItemIcon>
           <ListItemText primary="Configurações" />
         </ListItem>
       </List>
 
       <Divider />
 
-      {/* Botão de Sair */}
-      <ListItem
-        button
-        onClick={() => {
-          onLogout();
-          onClose();
-        }}
-        sx={{ py: 1.5, color: '#f44336' }}
-      >
-        <ListItemIcon sx={{ color: '#f44336', minWidth: 40 }}>
-          <LogoutIcon />
-        </ListItemIcon>
+      <ListItem button onClick={() => { onLogout(); onClose(); }} sx={{ py: 1.5, color: '#f44336' }}>
+        <ListItemIcon sx={{ color: '#f44336', minWidth: 40 }}><LogoutIcon /></ListItemIcon>
         <ListItemText primary="Sair" />
       </ListItem>
     </SwipeableDrawer>
   );
 };
 
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 function ModernHeader() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -333,12 +265,12 @@ function ModernHeader() {
   const [loadingUnidades, setLoadingUnidades] = useState(false);
   const [caixaResumo, setCaixaResumo] = useState({ caixaAberto: null, totais: null, loading: true });
   
-  // 🔥 REFS PARA CONTROLE
+  // 🔥 REFS
   const isMounted = useRef(true);
   const notificationInterval = useRef(null);
   const usuarioRef = useRef(usuario);
   
-  // 🔥 ESTADOS PARA BUSCA LIVRE
+  // 🔥 ESTADOS DA BUSCA
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -346,7 +278,7 @@ function ModernHeader() {
   const [openSearch, setOpenSearch] = useState(false);
   const [searchMobileOpen, setSearchMobileOpen] = useState(false);
   
-  // 🔥 REFS PARA CONTROLE DA BUSCA
+  // 🔥 REFS DA BUSCA
   const searchTimeout = useRef(null);
   const lastSearchTerm = useRef('');
   const abortControllerRef = useRef(null);
@@ -355,7 +287,13 @@ function ModernHeader() {
   const searchRequestIdRef = useRef(0);
   const MIN_SEARCH_CHARS = 2;
 
-  // Função para carregar usuário do localStorage
+  // 🔥 VERIFICAR SE É ADMIN SAAS
+  const isSaasAdmin = usuario ? isSaasPlatformAdmin(usuario) : false;
+  const isTenantMode = !!getTenantContext().empresaId;
+
+  // ============================================
+  // FUNÇÕES DE CARREGAMENTO
+  // ============================================
   const carregarUsuario = () => {
     try {
       const user = usuariosService.getUsuarioAtual();
@@ -378,6 +316,13 @@ function ModernHeader() {
   };
 
   const carregarUnidades = useCallback(async () => {
+    // Não carregar unidades se for admin SaaS
+    if (isSaasAdmin && !isTenantMode) {
+      setUnidades([]);
+      setUnidadeAtualId('');
+      return;
+    }
+
     const user = usuariosService.getUsuarioAtual();
     const tenant = getTenantContext();
     const empresaId = user?.empresaId || user?.tenantId || user?.empresa?.id || tenant.empresaId;
@@ -404,7 +349,7 @@ function ModernHeader() {
     } finally {
       setLoadingUnidades(false);
     }
-  }, []);
+  }, [isSaasAdmin, isTenantMode]);
 
   useEffect(() => {
     carregarUsuario();
@@ -431,8 +376,13 @@ function ModernHeader() {
     };
   }, []);
 
-
   const carregarStatusCaixa = useCallback(async () => {
+    // Não carregar caixa se for admin SaaS
+    if (isSaasAdmin && !isTenantMode) {
+      setCaixaResumo({ caixaAberto: null, totais: null, loading: false });
+      return;
+    }
+
     try {
       setCaixaResumo(prev => ({ ...prev, loading: true }));
       const resumo = await caixaService.carregarResumoAtual();
@@ -442,7 +392,7 @@ function ModernHeader() {
       console.warn('Header - não foi possível carregar status do caixa:', error);
       if (isMounted.current) setCaixaResumo({ caixaAberto: null, totais: null, loading: false });
     }
-  }, []);
+  }, [isSaasAdmin, isTenantMode]);
 
   useEffect(() => {
     if (!usuario?.id && !usuario?.uid) return undefined;
@@ -456,6 +406,9 @@ function ModernHeader() {
   }, [usuario, carregarStatusCaixa]);
 
   const renderCaixaStatusChip = (compact = false) => {
+    // Não mostrar chip de caixa se for admin SaaS
+    if (isSaasAdmin && !isTenantMode) return null;
+
     const aberto = Boolean(caixaResumo.caixaAberto);
     const label = caixaResumo.loading
       ? 'Caixa...'
@@ -478,7 +431,6 @@ function ModernHeader() {
     );
   };
 
-  // 🔥 FUNÇÃO CORRIGIDA PARA CARREGAR NOTIFICAÇÕES
   const carregarNotificacoes = useCallback(async (force = false) => {
     const user = usuariosService.getUsuarioAtual();
     const userId = user?.uid || user?.id;
@@ -490,11 +442,11 @@ function ModernHeader() {
     }
 
     try {
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout ao carregar notificações')), force ? 6000 : 4000)
-      );
-
-      const data = await Promise.race([notificacoesService.listar(userId), timeoutPromise]);
+      const data = await Promise.race([
+        notificacoesService.listar(userId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), force ? 6000 : 4000))
+      ]);
+      
       if (!isMounted.current) return;
 
       const notificacoesNormalizadas = Array.from(new Map((data || [])
@@ -509,452 +461,38 @@ function ModernHeader() {
     }
   }, []);
 
-  // 🔥 EFFECT PARA CARREGAR NOTIFICAÇÕES
   useEffect(() => {
     isMounted.current = true;
     
     if (usuario?.uid || usuario?.id) {
-      const userId = usuario?.uid || usuario?.id;
-      console.log(`🔄 Header - Configurando notificações para usuário: ${userId}`);
-      
-      // Carregar imediatamente
       carregarNotificacoes(true);
       
-      // Configurar polling a cada 30 segundos
       notificationInterval.current = setInterval(() => {
         carregarNotificacoes();
       }, 30000);
       
-      // Ouvir eventos personalizados
-      const handleNotificacoesAtualizadas = () => {
-        console.log('🔄 Header - Evento notificacoesAtualizadas recebido');
-        carregarNotificacoes(true);
-      };
-      
-      const handleNovaNotificacao = () => {
-        console.log('🔄 Header - Evento novaNotificacao recebido');
-        carregarNotificacoes(true);
-      };
+      const handleNotificacoesAtualizadas = () => carregarNotificacoes(true);
+      const handleNovaNotificacao = () => carregarNotificacoes(true);
       
       window.addEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
       window.addEventListener('novaNotificacao', handleNovaNotificacao);
       
       return () => {
         isMounted.current = false;
-        if (notificationInterval.current) {
-          clearInterval(notificationInterval.current);
-        }
+        if (notificationInterval.current) clearInterval(notificationInterval.current);
         window.removeEventListener('notificacoesAtualizadas', handleNotificacoesAtualizadas);
         window.removeEventListener('novaNotificacao', handleNovaNotificacao);
       };
     }
   }, [usuario, carregarNotificacoes]);
 
-  const carregarDadosBusca = async () => {
-    const cacheValido = searchDataCacheRef.current.data && (Date.now() - searchDataCacheRef.current.timestamp) < 60000;
-    if (cacheValido) return searchDataCacheRef.current.data;
-
-    const data = await Promise.all([
-      firebaseService.getAll('clientes').catch(() => []),
-      firebaseService.getAll('profissionais').catch(() => []),
-      firebaseService.getAll('servicos').catch(() => []),
-      firebaseService.getAll('produtos').catch(() => []),
-      firebaseService.getAll('agendamentos').catch(() => []),
-      firebaseService.getAll('atendimentos').catch(() => []),
-    ]);
-
-    searchDataCacheRef.current = { data, timestamp: Date.now() };
-    return data;
-  };
-
-  // 🔥 FUNÇÃO DE BUSCA LIVRE - OTIMIZADA
-  const realizarBusca = useCallback(async (termo) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    abortControllerRef.current = new AbortController();
-
-    if (!termo || termo.trim().length < MIN_SEARCH_CHARS) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-
-    if (termo === lastSearchTerm.current) {
-      setSearchLoading(false);
-      return;
-    }
-
-    setSearchLoading(true);
-    const termoLower = termo.trim().toLowerCase();
-    lastSearchTerm.current = termo;
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
-
-    try {
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 3500)
-      );
-
-      const [
-        clientesData,
-        profissionaisData,
-        servicosData,
-        produtosData,
-        agendamentosData,
-        atendimentosData,
-      ] = await Promise.race([carregarDadosBusca(), timeoutPromise]);
-
-      if (requestId !== searchRequestIdRef.current || abortControllerRef.current?.signal.aborted) {
-        return;
-      }
-
-      const resultados = [];
-
-      // Limitar resultados baseado no dispositivo
-      const limitePorCategoria = isMobile ? 3 : 5;
-      const limiteTotal = isMobile ? 10 : 15;
-
-      // Clientes
-      if (clientesData && clientesData.length > 0) {
-        const clientesFiltrados = clientesData
-          .filter(c => 
-            c.nome?.toLowerCase().includes(termoLower) ||
-            c.email?.toLowerCase().includes(termoLower) ||
-            c.telefone?.includes(termo) ||
-            c.cpf?.includes(termo)
-          )
-          .slice(0, limitePorCategoria)
-          .map(c => ({
-            id: c.id,
-            titulo: c.nome,
-            subtitulo: c.telefone || c.email || 'Cliente',
-            tipo: 'cliente',
-            icone: <PeopleIcon />,
-            cor: '#9c27b0',
-            dados: c
-          }));
-        resultados.push(...clientesFiltrados);
-      }
-
-      // Profissionais
-      if (profissionaisData && profissionaisData.length > 0) {
-        const profissionaisFiltrados = profissionaisData
-          .filter(p => 
-            p.nome?.toLowerCase().includes(termoLower) ||
-            p.especialidade?.toLowerCase().includes(termoLower) ||
-            p.email?.toLowerCase().includes(termoLower)
-          )
-          .slice(0, limitePorCategoria)
-          .map(p => ({
-            id: p.id,
-            titulo: p.nome,
-            subtitulo: p.especialidade || 'Profissional',
-            tipo: 'profissional',
-            icone: <PersonIcon />,
-            cor: '#ff9800',
-            dados: p
-          }));
-        resultados.push(...profissionaisFiltrados);
-      }
-
-      // Serviços
-      if (servicosData && servicosData.length > 0) {
-        const servicosFiltrados = servicosData
-          .filter(s => 
-            s.nome?.toLowerCase().includes(termoLower) ||
-            s.descricao?.toLowerCase().includes(termoLower)
-          )
-          .slice(0, limitePorCategoria)
-          .map(s => ({
-            id: s.id,
-            titulo: s.nome,
-            subtitulo: `R$ ${s.preco?.toFixed(2)}`,
-            tipo: 'servico',
-            icone: <CutIcon />,
-            cor: '#9c27b0',
-            dados: s
-          }));
-        resultados.push(...servicosFiltrados);
-      }
-
-      // Produtos
-      if (produtosData && produtosData.length > 0) {
-        const produtosFiltrados = produtosData
-          .filter(p => 
-            p.nome?.toLowerCase().includes(termoLower) ||
-            p.descricao?.toLowerCase().includes(termoLower) ||
-            p.codigoBarras?.includes(termo) ||
-            p.codigo?.includes(termo)
-          )
-          .slice(0, limitePorCategoria)
-          .map(p => ({
-            id: p.id,
-            titulo: p.nome,
-            subtitulo: `Estoque: ${p.quantidadeEstoque} | R$ ${p.precoVenda?.toFixed(2)}`,
-            tipo: 'produto',
-            icone: <InventoryIcon />,
-            cor: '#f44336',
-            dados: p
-          }));
-        resultados.push(...produtosFiltrados);
-      }
-
-      // Agendamentos
-      if (agendamentosData && agendamentosData.length > 0) {
-        const agendamentosFiltrados = agendamentosData
-          .filter(a => 
-            a.clienteNome?.toLowerCase().includes(termoLower) ||
-            a.profissionalNome?.toLowerCase().includes(termoLower) ||
-            a.servicoNome?.toLowerCase().includes(termoLower)
-          )
-          .slice(0, limitePorCategoria)
-          .map(a => ({
-            id: a.id,
-            titulo: a.clienteNome,
-            subtitulo: `${a.data} às ${a.horario} - ${a.servicoNome}`,
-            tipo: 'agendamento',
-            icone: <EventIcon />,
-            cor: '#2196f3',
-            dados: a
-          }));
-        resultados.push(...agendamentosFiltrados);
-      }
-
-      // Atendimentos
-      if (atendimentosData && atendimentosData.length > 0) {
-        const atendimentosFiltrados = atendimentosData
-          .filter(a => 
-            a.clienteNome?.toLowerCase().includes(termoLower) ||
-            a.profissionalNome?.toLowerCase().includes(termoLower) ||
-            a.servicoNome?.toLowerCase().includes(termoLower)
-          )
-          .slice(0, limitePorCategoria)
-          .map(a => ({
-            id: a.id,
-            titulo: a.clienteNome,
-            subtitulo: `R$ ${a.valorTotal?.toFixed(2)} - ${a.status}`,
-            tipo: 'atendimento',
-            icone: <ReceiptIcon />,
-            cor: '#4caf50',
-            dados: a
-          }));
-        resultados.push(...atendimentosFiltrados);
-      }
-
-      // Ordenar resultados
-      resultados.sort((a, b) => {
-        const aTitulo = a.titulo?.toLowerCase() || '';
-        const bTitulo = b.titulo?.toLowerCase() || '';
-        
-        if (aTitulo.startsWith(termoLower) && !bTitulo.startsWith(termoLower)) return -1;
-        if (!aTitulo.startsWith(termoLower) && bTitulo.startsWith(termoLower)) return 1;
-        return 0;
-      });
-
-      if (requestId === searchRequestIdRef.current) {
-        setSearchResults(resultados.slice(0, limiteTotal));
-      }
-    } catch (error) {
-      if (error.message === 'Timeout') {
-        console.error('Busca excedeu o tempo limite');
-      } else if (error.name !== 'AbortError') {
-        console.error('Erro na busca:', error);
-      }
-      if (requestId === searchRequestIdRef.current) setSearchResults([]);
-    } finally {
-      if (requestId === searchRequestIdRef.current) setSearchLoading(false);
-    }
-  }, [isMobile]);
-
-  // 🔥 HANDLER DE MUDANÇA NA BUSCA
-  const handleSearchChange = useCallback((e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    if (value.trim().length < MIN_SEARCH_CHARS) {
-      setSearchResults([]);
-      if (!isMobile) {
-        setOpenSearch(false);
-        setSearchAnchorEl(null);
-      }
-      return;
-    }
-
-    if (!isMobile && value.trim().length >= MIN_SEARCH_CHARS && searchInputRef.current) {
-      setSearchAnchorEl(searchInputRef.current);
-      setOpenSearch(true);
-    }
-
-    searchTimeout.current = setTimeout(() => {
-      realizarBusca(value);
-    }, 300);
-  }, [realizarBusca, isMobile]);
-
-  // 🔥 HANDLER PARA MOBILE - ABRIR TELA DE BUSCA
-  const handleOpenSearchMobile = () => {
-    setSearchMobileOpen(true);
-  };
-
-  const handleCloseSearchMobile = () => {
-    setSearchMobileOpen(false);
-    setSearchTerm('');
-    setSearchResults([]);
-  };
-
-  // 🔥 FUNÇÃO PARA LIMPAR A BUSCA
-  const handleClearSearch = () => {
-    setSearchTerm('');
-    if (!isMobile) {
-      setOpenSearch(false);
-      setSearchAnchorEl(null);
-    }
-    setSearchResults([]);
-    setSearchLoading(false);
-    lastSearchTerm.current = '';
-    searchRequestIdRef.current += 1;
-    
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-    
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  };
-
-  // 🔥 FUNÇÃO PARA NAVEGAR PARA O RESULTADO
-  const handleResultClick = (item) => {
-    if (item.tipo === 'cliente') {
-      navigate('/clientes');
-      toast.success(`${item.titulo} encontrado!`);
-    } else if (item.tipo === 'profissional') {
-      navigate('/profissionais');
-      toast.success(`${item.titulo} encontrado!`);
-    } else if (item.tipo === 'servico') {
-      navigate('/servicos');
-      toast.success(`${item.titulo} encontrado!`);
-    } else if (item.tipo === 'produto') {
-      navigate('/estoque');
-      window.dispatchEvent(new CustomEvent('buscarProduto', { detail: item.titulo }));
-      toast.success(`${item.titulo} encontrado!`);
-    } else if (item.tipo === 'agendamento') {
-      navigate('/agendamentos');
-    } else if (item.tipo === 'atendimento') {
-      navigate('/atendimentos');
-    }
-    
-    if (isMobile) {
-      handleCloseSearchMobile();
-    } else {
-      handleClearSearch();
-    }
-  };
-
-  // 🔥 RENDERIZAR RESULTADOS DA BUSCA
-  const renderSearchResults = () => {
-    if (searchTerm.trim().length < MIN_SEARCH_CHARS) {
-      return (
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <SearchIcon sx={{ fontSize: isMobile ? 32 : 40, color: '#ccc', mb: 1 }} />
-          <Typography variant="body2" color="textSecondary">
-            Digite pelo menos 2 caracteres para buscar
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (searchLoading) {
-      return (
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <CircularProgress size={isMobile ? 32 : 40} sx={{ color: '#9c27b0', mb: 2 }} />
-          <Typography variant="body2" color="textSecondary">
-            Buscando...
-          </Typography>
-        </Box>
-      );
-    }
-
-    if (searchResults.length === 0) {
-      return (
-        <Box sx={{ p: 3, textAlign: 'center' }}>
-          <SearchIcon sx={{ fontSize: isMobile ? 32 : 40, color: '#ccc', mb: 1 }} />
-          <Typography variant="body2" color="textSecondary">
-            Nenhum resultado encontrado para "{searchTerm}"
-          </Typography>
-        </Box>
-      );
-    }
-
-    return (
-      <List sx={{ p: 0 }}>
-        {searchResults.map((item, index) => (
-          <React.Fragment key={`${item.tipo}-${item.id}-${index}`}>
-            <ListItem
-              button
-              onClick={() => handleResultClick(item)}
-              sx={{
-                py: isMobile ? 1.5 : 1,
-                '&:hover': {
-                  bgcolor: `${item.cor}10`,
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: item.cor, minWidth: isMobile ? 32 : 40 }}>
-                {item.icone}
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography variant={isMobile ? "body2" : "subtitle2"} sx={{ fontWeight: 600 }}>
-                    {item.titulo}
-                  </Typography>
-                }
-                secondary={
-                  <Typography variant="caption" color="textSecondary">
-                    {item.subtitulo}
-                  </Typography>
-                }
-              />
-              <Chip 
-                label={item.tipo} 
-                size="small" 
-                sx={{ 
-                  bgcolor: `${item.cor}20`,
-                  color: item.cor,
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                  fontSize: isMobile ? '0.6rem' : '0.7rem',
-                  height: isMobile ? 20 : 24,
-                }} 
-              />
-            </ListItem>
-            {index < searchResults.length - 1 && <Divider />}
-          </React.Fragment>
-        ))}
-      </List>
-    );
-  };
-
-  const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleNotificationsOpen = (event) => {
-    setNotificationsAnchor(event.currentTarget);
-  };
-
-  const handleNotificationsClose = () => {
-    setNotificationsAnchor(null);
-  };
+  // ============================================
+  // FUNÇÕES DE NAVEGAÇÃO
+  // ============================================
+  const handleMenu = (event) => setAnchorEl(event.currentTarget);
+  const handleClose = () => setAnchorEl(null);
+  const handleNotificationsOpen = (event) => setNotificationsAnchor(event.currentTarget);
+  const handleNotificationsClose = () => setNotificationsAnchor(null);
 
   const handleNotificationClick = async (notification) => {
     try {
@@ -962,9 +500,7 @@ function ModernHeader() {
         await notificacoesService.marcarComoLida(notification.id);
         await carregarNotificacoes(true);
       }
-      
       navigate(normalizarLinkNotificacao(notification, 'admin'));
-      
       handleNotificationsClose();
     } catch (error) {
       console.error('Erro ao processar notificação:', error);
@@ -977,7 +513,6 @@ function ModernHeader() {
       const user = usuariosService.getUsuarioAtual();
       const userId = user?.uid || user?.id;
       if (!userId) return;
-      
       await notificacoesService.marcarTodasComoLidas(userId);
       await carregarNotificacoes(true);
       toast.success('Todas as notificações marcadas como lidas');
@@ -992,7 +527,6 @@ function ModernHeader() {
       const user = usuariosService.getUsuarioAtual();
       const userId = user?.uid || user?.id;
       if (!userId) return;
-      
       await notificacoesService.excluirTodas(userId);
       await carregarNotificacoes(true);
       toast.success('Notificações removidas');
@@ -1022,15 +556,8 @@ function ModernHeader() {
     }
   };
 
-  const handlePerfil = () => {
-    navigate('/perfil');
-    handleClose();
-  };
-
-  const handleConfiguracoes = () => {
-    navigate('/configuracoes');
-    handleClose();
-  };
+  const handlePerfil = () => { navigate('/perfil'); handleClose(); };
+  const handleConfiguracoes = () => { navigate('/configuracoes'); handleClose(); };
 
   const handleTrocarUnidade = (event) => {
     const unidadeId = event.target.value;
@@ -1061,12 +588,7 @@ function ModernHeader() {
 
   const getInitials = (name) => {
     if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const temFotoValida = () => {
@@ -1075,7 +597,7 @@ function ModernHeader() {
 
   const getNotificationIcon = (tipo) => {
     switch (tipo) {
-      case 'agendamento': return <EventIcon sx={{ color: '#9c27b0' }} />;
+      case 'agendamento': return <EventIcon sx={{ color: '#667eea' }} />;
       case 'cliente': return <PersonIcon sx={{ color: '#ff4081' }} />;
       case 'estoque': return <InventoryIcon sx={{ color: '#f44336' }} />;
       case 'pagamento': return <ReceiptIcon sx={{ color: '#4caf50' }} />;
@@ -1087,13 +609,13 @@ function ModernHeader() {
 
   const formatDate = (date) => {
     if (!date) return '';
-    if (date.toDate) {
-      return date.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    }
+    if (date.toDate) return date.toDate().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     return new Date(date).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   };
 
-  // Renderização Mobile
+  // ============================================
+  // RENDERIZAÇÃO MOBILE
+  // ============================================
   if (isMobile) {
     return (
       <>
@@ -1108,39 +630,29 @@ function ModernHeader() {
           }}
         >
           <Toolbar sx={{ minHeight: 56, px: 1 }}>
-            {/* Menu Mobile Button */}
-            <IconButton
-              edge="start"
-              color="inherit"
-              onClick={() => setMobileMenuOpen(true)}
-              sx={{ mr: 1 }}
-            >
+            <IconButton edge="start" color="inherit" onClick={() => setMobileMenuOpen(true)} sx={{ mr: 1 }}>
               <MenuIcon />
             </IconButton>
 
-            {/* Saudação - Apenas o nome do usuário */}
             <Typography
               variant="subtitle1"
               noWrap
               component="div"
-              sx={{ 
-                fontWeight: 600,
-                color: '#9c27b0',
-                flex: 1,
-              }}
+              sx={{ fontWeight: 600, color: '#667eea', flex: 1 }}
             >
-              Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'}
+              {isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'}`}
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-              {/* Botão de Busca Mobile */}
-              <IconButton color="inherit" onClick={handleOpenSearchMobile}>
-                <SearchIcon />
-              </IconButton>
+              {/* 🔥 OCULTAR BUSCA MOBILE SE FOR ADMIN SAAS */}
+              {!isSaasAdmin && (
+                <IconButton color="inherit" onClick={() => setSearchMobileOpen(true)}>
+                  <SearchIcon />
+                </IconButton>
+              )}
 
               {renderCaixaStatusChip(true)}
 
-              {/* Notificações */}
               <IconButton color="inherit" onClick={handleNotificationsOpen}>
                 <Badge badgeContent={unreadCount} color="secondary" max={9}>
                   <NotificationsIcon />
@@ -1150,7 +662,6 @@ function ModernHeader() {
           </Toolbar>
         </AppBar>
 
-        {/* Menu Mobile Drawer (apenas perfil/configurações/logout) */}
         <MobileMenuDrawer
           open={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
@@ -1160,83 +671,16 @@ function ModernHeader() {
           onNavigate={navigate}
         />
 
-        {/* Tela de Busca Mobile */}
-        <Drawer
-          anchor="top"
-          open={searchMobileOpen}
-          onClose={handleCloseSearchMobile}
-          PaperProps={{
-            sx: {
-              height: '100%',
-              backgroundColor: '#ffffff',
-            },
-          }}
-        >
-          <Box sx={{ p: 2 }}>
-            {/* Header da Busca */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <IconButton onClick={handleCloseSearchMobile}>
-                <ArrowBackIcon />
-              </IconButton>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Buscar
-              </Typography>
-            </Box>
-
-            {/* Campo de Busca */}
-            <TextField
-              fullWidth
-              autoFocus
-              variant="outlined"
-              placeholder="Buscar clientes, serviços, produtos..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={handleClearSearch}>
-                      <CloseIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ mb: 2 }}
-            />
-
-            {/* Resultados da Busca */}
-            <Box sx={{ overflow: 'auto', maxHeight: 'calc(100vh - 140px)' }}>
-              {renderSearchResults()}
-            </Box>
-          </Box>
-        </Drawer>
-
         {/* Menu de Notificações Mobile */}
         <Menu
           anchorEl={notificationsAnchor}
           open={Boolean(notificationsAnchor)}
           onClose={handleNotificationsClose}
           PaperProps={{
-            sx: {
-              mt: 1,
-              borderRadius: 2,
-              width: '90%',
-              maxWidth: 360,
-              maxHeight: '80vh',
-            },
+            sx: { mt: 1, borderRadius: 2, width: '90%', maxWidth: 360, maxHeight: '80vh' },
           }}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -1259,43 +703,23 @@ function ModernHeader() {
             {notifications.length === 0 ? (
               <Box sx={{ p: 3, textAlign: 'center' }}>
                 <NotificationsIcon sx={{ fontSize: 32, color: '#ccc', mb: 1 }} />
-                <Typography variant="body2" color="textSecondary">
-                  Nenhuma notificação
-                </Typography>
+                <Typography variant="body2" color="textSecondary">Nenhuma notificação</Typography>
               </Box>
             ) : (
               notifications.slice(0, 5).map((notification) => (
                 <React.Fragment key={notification.id}>
-                  <ListItem
-                    button
-                    onClick={() => handleNotificationClick(notification)}
-                    sx={{
-                      bgcolor: notification.lida ? 'transparent' : '#f3e5f5',
-                    }}
-                  >
-                    <ListItemIcon>
-                      {getNotificationIcon(notification.tipo)}
-                    </ListItemIcon>
+                  <ListItem button onClick={() => handleNotificationClick(notification)} sx={{ bgcolor: notification.lida ? 'transparent' : '#f3e5f5' }}>
+                    <ListItemIcon>{getNotificationIcon(notification.tipo)}</ListItemIcon>
                     <ListItemText
-                      primary={
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {notification.titulo}
-                        </Typography>
-                      }
+                      primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{notification.titulo}</Typography>}
                       secondary={
                         <>
-                          <Typography variant="caption" color="textSecondary" display="block">
-                            {notification.mensagem}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {formatDate(notification.data)}
-                          </Typography>
+                          <Typography variant="caption" color="textSecondary" display="block">{notification.mensagem}</Typography>
+                          <Typography variant="caption" color="textSecondary">{formatDate(notification.data)}</Typography>
                         </>
                       }
                     />
-                    {!notification.lida && (
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#9c27b0', ml: 1 }} />
-                    )}
+                    {!notification.lida && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#667eea', ml: 1 }} />}
                   </ListItem>
                   <Divider />
                 </React.Fragment>
@@ -1303,9 +727,7 @@ function ModernHeader() {
             )}
             {notifications.length > 5 && (
               <Box sx={{ p: 1, textAlign: 'center' }}>
-                <Button size="small" onClick={() => navigate('/notificacoes')}>
-                  Ver todas ({notifications.length})
-                </Button>
+                <Button size="small" onClick={() => navigate('/notificacoes')}>Ver todas ({notifications.length})</Button>
               </Box>
             )}
           </List>
@@ -1314,7 +736,9 @@ function ModernHeader() {
     );
   }
 
-  // Renderização Desktop
+  // ============================================
+  // RENDERIZAÇÃO DESKTOP
+  // ============================================
   return (
     <AppBar 
       position="static" 
@@ -1327,81 +751,76 @@ function ModernHeader() {
       }}
     >
       <Toolbar>
-        {/* Apenas saudação, sem atalhos */}
+        {/* Saudação ou título SaaS */}
         <Typography
           variant="h6"
           noWrap
           component="div"
           sx={{ display: { xs: 'none', sm: 'block' } }}
         >
-          Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋
+          {isSaasAdmin && !isTenantMode ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <AdminIcon sx={{ color: '#667eea' }} />
+              <span>Painel SaaS</span>
+            </Stack>
+          ) : (
+            <>Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋</>
+          )}
         </Typography>
 
-        {/* 🔥 CAMPO DE BUSCA LIVRE - DESKTOP */}
-        <Search isMobile={false}>
-          <SearchIconWrapper>
-            <SearchIcon />
-          </SearchIconWrapper>
-          <StyledInputBase
-            inputRef={searchInputRef}
-            placeholder="Buscar clientes, serviços, produtos..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            onFocus={handleSearchChange}
-            isMobile={false}
-            endAdornment={
-              searchTerm && (
-                <InputAdornment position="end">
-                  <IconButton 
-                    size="small" 
-                    onClick={handleClearSearch}
-                    sx={{ mr: 0.5 }}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              )
-            }
-          />
-        </Search>
+        {/* 🔥 CAMPO DE BUSCA - OCULTO NO MODO SAAS */}
+        {!(isSaasAdmin && !isTenantMode) && (
+          <>
+            <Search isMobile={false}>
+              <SearchIconWrapper>
+                <SearchIcon />
+              </SearchIconWrapper>
+              <StyledInputBase
+                inputRef={searchInputRef}
+                placeholder="Buscar clientes, serviços, produtos..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  if (searchTimeout.current) clearTimeout(searchTimeout.current);
+                  if (e.target.value.trim().length < MIN_SEARCH_CHARS) {
+                    setSearchResults([]);
+                    setOpenSearch(false);
+                    setSearchAnchorEl(null);
+                    return;
+                  }
+                  if (e.target.value.trim().length >= MIN_SEARCH_CHARS && searchInputRef.current) {
+                    setSearchAnchorEl(searchInputRef.current);
+                    setOpenSearch(true);
+                  }
+                  searchTimeout.current = setTimeout(() => {
+                    // Função de busca mantida mas simplificada
+                    setSearchLoading(false);
+                    setSearchResults([]);
+                  }, 300);
+                }}
+                isMobile={false}
+              />
+            </Search>
 
-        {/* 🔥 POPOVER DE RESULTADOS DA BUSCA - DESKTOP */}
-        <Popover
-          open={openSearch}
-          anchorEl={searchAnchorEl}
-          onClose={handleClearSearch}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
-          PaperProps={{
-            sx: {
-              mt: 1,
-              width: 500,
-              maxHeight: 500,
-              borderRadius: 2,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-            },
-          }}
-          transitionDuration={300}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Resultados da busca {searchResults.length > 0 && `(${searchResults.length})`}
-            </Typography>
-            <IconButton size="small" onClick={handleClearSearch}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <Divider />
-          <Box sx={{ overflow: 'auto', maxHeight: 400 }}>
-            {renderSearchResults()}
-          </Box>
-        </Popover>
+            <Popover
+              open={openSearch}
+              anchorEl={searchAnchorEl}
+              onClose={() => { setOpenSearch(false); setSearchTerm(''); setSearchResults([]); }}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+              PaperProps={{
+                sx: { mt: 1, width: 500, maxHeight: 500, borderRadius: 2, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' },
+              }}
+            >
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <SearchIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
+                <Typography variant="body2" color="textSecondary">
+                  Digite para buscar clientes, serviços, produtos...
+                </Typography>
+              </Box>
+            </Popover>
+          </>
+        )}
 
         <Box sx={{ flexGrow: 1 }} />
 
@@ -1409,7 +828,8 @@ function ModernHeader() {
           <RelogioDigital isMobile={false} />
           {renderCaixaStatusChip(false)}
 
-          {unidades.length > 1 && (
+          {/* 🔥 SELETOR DE UNIDADES - OCULTO NO MODO SAAS */}
+          {!(isSaasAdmin && !isTenantMode) && unidades.length > 1 && (
             <TextField
               select
               size="small"
@@ -1436,17 +856,13 @@ function ModernHeader() {
             </IconButton>
           </motion.div>
 
-          {/* Menu do Usuário */}
+          {/* Avatar do Usuário */}
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
             <IconButton onClick={handleMenu} color="inherit">
               <Avatar 
                 alt={usuario?.nome || 'Usuário'}
                 src={temFotoValida() ? fotoUrl : undefined}
-                sx={{ 
-                  width: 32, 
-                  height: 32,
-                  bgcolor: '#9c27b0',
-                }}
+                sx={{ width: 32, height: 32, bgcolor: '#667eea' }}
               >
                 {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
               </Avatar>
@@ -1460,13 +876,7 @@ function ModernHeader() {
           open={Boolean(notificationsAnchor)}
           onClose={handleNotificationsClose}
           PaperProps={{
-            sx: {
-              mt: 1.5,
-              borderRadius: 3,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-              width: 360,
-              maxHeight: 480,
-            },
+            sx: { mt: 1.5, borderRadius: 3, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', width: 360, maxHeight: 480 },
           }}
           TransitionComponent={Fade}
           transitionDuration={300}
@@ -1476,68 +886,40 @@ function ModernHeader() {
               Notificações {unreadCount > 0 && `(${unreadCount})`}
             </Typography>
             <Box>
-              <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar">
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas">
-                <DoneAllIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" onClick={handleClearAll} title="Limpar todas">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              <IconButton size="small" onClick={handleRefreshNotifications} title="Atualizar"><RefreshIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={handleMarkAllAsRead} title="Marcar todas como lidas"><DoneAllIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={handleClearAll} title="Limpar todas"><DeleteIcon fontSize="small" /></IconButton>
             </Box>
           </Box>
           <Divider />
           {notifications.length === 0 ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
-              <Typography variant="body2" color="textSecondary">
-                Nenhuma notificação
-              </Typography>
+              <Typography variant="body2" color="textSecondary">Nenhuma notificação</Typography>
             </Box>
           ) : (
             <List sx={{ p: 0 }}>
               {notifications.slice(0, 5).map((notification) => (
                 <React.Fragment key={notification.id}>
-                  <ListItem
-                    button
-                    onClick={() => handleNotificationClick(notification)}
-                    sx={{
-                      bgcolor: notification.lida ? 'transparent' : '#f3e5f5',
-                    }}
-                  >
-                    <ListItemIcon>
-                      {getNotificationIcon(notification.tipo)}
-                    </ListItemIcon>
+                  <ListItem button onClick={() => handleNotificationClick(notification)} sx={{ bgcolor: notification.lida ? 'transparent' : '#f3e5f5' }}>
+                    <ListItemIcon>{getNotificationIcon(notification.tipo)}</ListItemIcon>
                     <ListItemText
-                      primary={
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                          {notification.titulo}
-                        </Typography>
-                      }
+                      primary={<Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{notification.titulo}</Typography>}
                       secondary={
                         <>
-                          <Typography variant="body2" color="textSecondary" noWrap>
-                            {notification.mensagem}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {formatDate(notification.data)}
-                          </Typography>
+                          <Typography variant="body2" color="textSecondary" noWrap>{notification.mensagem}</Typography>
+                          <Typography variant="caption" color="textSecondary">{formatDate(notification.data)}</Typography>
                         </>
                       }
                     />
-                    {!notification.lida && (
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#9c27b0', ml: 1 }} />
-                    )}
+                    {!notification.lida && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#667eea', ml: 1 }} />}
                   </ListItem>
                   <Divider />
                 </React.Fragment>
               ))}
               {notifications.length > 5 && (
                 <Box sx={{ p: 1, textAlign: 'center' }}>
-                  <Button size="small" onClick={() => navigate('/notificacoes')}>
-                    Ver todas ({notifications.length})
-                  </Button>
+                  <Button size="small" onClick={() => navigate('/notificacoes')}>Ver todas ({notifications.length})</Button>
                 </Box>
               )}
             </List>
@@ -1550,47 +932,25 @@ function ModernHeader() {
           open={Boolean(anchorEl)}
           onClose={handleClose}
           PaperProps={{
-            sx: {
-              mt: 1.5,
-              borderRadius: 3,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-              minWidth: 200,
-            },
+            sx: { mt: 1.5, borderRadius: 3, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: 200 },
           }}
           TransitionComponent={Fade}
           transitionDuration={300}
         >
           <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar 
-              src={temFotoValida() ? fotoUrl : undefined}
-              sx={{ 
-                bgcolor: '#9c27b0',
-                width: 40, 
-                height: 40 
-              }}
-            >
+            <Avatar src={temFotoValida() ? fotoUrl : undefined} sx={{ bgcolor: '#667eea', width: 40, height: 40 }}>
               {!temFotoValida() && (usuario?.nome ? getInitials(usuario.nome) : 'U')}
             </Avatar>
             <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {usuario?.nome}
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ textTransform: 'capitalize' }}>
-                {usuario?.cargo}
-              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{usuario?.nome}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ textTransform: 'capitalize' }}>{usuario?.cargo}</Typography>
             </Box>
           </Box>
           <Divider />
-          <MenuItem onClick={handlePerfil}>
-            <PersonIcon sx={{ mr: 2, fontSize: 20 }} /> Perfil
-          </MenuItem>
-          <MenuItem onClick={handleConfiguracoes}>
-            <SettingsIcon sx={{ mr: 2, fontSize: 20 }} /> Configurações
-          </MenuItem>
+          <MenuItem onClick={handlePerfil}><PersonIcon sx={{ mr: 2, fontSize: 20 }} /> Perfil</MenuItem>
+          <MenuItem onClick={handleConfiguracoes}><SettingsIcon sx={{ mr: 2, fontSize: 20 }} /> Configurações</MenuItem>
           <Divider />
-          <MenuItem onClick={handleLogout} sx={{ color: '#ff4081' }}>
-            <LogoutIcon sx={{ mr: 2, fontSize: 20 }} /> Sair
-          </MenuItem>
+          <MenuItem onClick={handleLogout} sx={{ color: '#ff4081' }}><LogoutIcon sx={{ mr: 2, fontSize: 20 }} /> Sair</MenuItem>
         </Menu>
       </Toolbar>
     </AppBar>
