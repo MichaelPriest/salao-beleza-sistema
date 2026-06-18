@@ -1,4 +1,4 @@
-// src/App.js - VERSÃO COMPLETA COM HORÁRIO DE BRASÍLIA E ROTAS CORRIGIDAS
+// src/App.js - VERSÃO COMPLETA ATUALIZADA COM PÁGINAS SAAS MELHORADAS
 
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -20,35 +20,30 @@ dayjs.locale('pt-br');
 // Configuração fixa do fuso horário de Brasília
 export const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
 
-// Função global para formatar datas no horário de Brasília
+// Funções globais para horário de Brasília
 export const formatBrasiliaTime = (date, format = 'DD/MM/YYYY HH:mm:ss') => {
   if (!date) return '';
   return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
 };
 
-// Função para formatar apenas a data
 export const formatBrasiliaDate = (date, format = 'DD/MM/YYYY') => {
   if (!date) return '';
   return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
 };
 
-// Função para formatar apenas a hora
 export const formatBrasiliaTimeOnly = (date, format = 'HH:mm:ss') => {
   if (!date) return '';
   return dayjs(date).tz(BRASILIA_TIMEZONE).format(format);
 };
 
-// Função para obter data/hora atual de Brasília
 export const getCurrentBrasiliaTime = () => {
   return dayjs().tz(BRASILIA_TIMEZONE);
 };
 
-// Função para converter qualquer data para Brasília
 export const toBrasiliaTime = (date) => {
   return dayjs(date).tz(BRASILIA_TIMEZONE);
 };
 
-// Função para comparar se duas datas são no mesmo dia (horário Brasília)
 export const isSameDayBrasilia = (date1, date2) => {
   const d1 = dayjs(date1).tz(BRASILIA_TIMEZONE);
   const d2 = dayjs(date2).tz(BRASILIA_TIMEZONE);
@@ -63,7 +58,6 @@ export const useBrasiliaTime = () => {
     const interval = setInterval(() => {
       setCurrentTime(dayjs().tz(BRASILIA_TIMEZONE));
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -97,6 +91,10 @@ import ClientePrivateRoute from './components/ClientePrivateRoute';
 import SaasAdminRoute from './components/SaasAdminRoute';
 import FidelidadeRoute from './components/FidelidadeRoute';
 import Footer from './components/Footer';
+
+// ============================================
+// PAGES - Organizadas por categoria
+// ============================================
 
 // Pages Principais
 import ModernDashboard from './pages/ModernDashboard';
@@ -156,10 +154,8 @@ import CadastroIndicacao from './pages/CadastroIndicacao';
 // Pages de Categorias
 import CategoriasProdutos from './pages/CategoriasProdutos';
 
-// Pages de Análise de Vendas
+// Pages de Análise e Performance
 import AnaliseVendas from './pages/AnaliseVendas';
-
-// Pages de Performance
 import Performance from './pages/Performance';
 
 // Pages de Backup e Logs
@@ -172,7 +168,21 @@ import RespostasAnamnese from './pages/Anamnese/RespostasAnamnese';
 import ModelosAnamnese from './pages/Anamnese/ModelosAnamnese';
 import RelatorioAnamnese from './pages/Anamnese/RelatorioAnamnese';
 
-// Páginas do Cliente
+// ============================================
+// PÁGINAS SAAS (MELHORADAS)
+// ============================================
+import SaasLanding from './pages/SaasLanding';
+import SaasAdmin from './pages/SaasAdmin';
+import SaasEmpresas from './pages/SaasEmpresas';
+import SaasCobrancas from './pages/SaasCobrancas';
+import SaasPlanos from './pages/SaasPlanos';
+import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
+import SaasRelatorios from './pages/SaasRelatorios';
+import SaasGestao from './pages/SaasGestao'; // Página de gestão da própria empresa
+
+// ============================================
+// PÁGINAS DO CLIENTE
+// ============================================
 import ClienteLogin from './pages/ClienteLogin';
 import ClienteAuthCallback from './pages/ClienteAuthCallback';
 import ClienteCadastro from './pages/ClienteCadastro';
@@ -190,7 +200,9 @@ import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 import ClienteChamados from './pages/ClienteChamados';
 
-// Páginas de Erro
+// ============================================
+// OUTRAS PÁGINAS
+// ============================================
 import Page404 from './pages/404';
 import Page403 from './pages/403';
 import Page500 from './pages/500';
@@ -201,13 +213,6 @@ import SiteSalao from './pages/SiteSalao';
 import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import ManualSistema from './pages/ManualSistema';
-import SaasAdmin from './pages/SaasAdmin';
-import SaasPagamentosConfig from './pages/SaasPagamentosConfig';
-import SaasEmpresas from './pages/SaasEmpresas';
-import SaasCobrancas from './pages/SaasCobrancas';
-import SaasPlanos from './pages/SaasPlanos';
-import SaasRelatorios from './pages/SaasRelatorios';
-import SaasLanding from './pages/SaasLanding';
 import SuperAdminSelecionarEmpresa from './pages/SuperAdminSelecionarEmpresa';
 import AdminChamados from './pages/AdminChamados';
 
@@ -408,7 +413,9 @@ function App() {
 
             <Router>
               <Routes>
-                {/* Rotas Públicas com Footer */}
+                {/* ============================================ */}
+                {/* ROTAS PÚBLICAS */}
+                {/* ============================================ */}
                 <Route path="/" element={
                   <SimpleLayout>
                     <SiteSalao />
@@ -429,28 +436,44 @@ function App() {
                     <ModernLogin />
                   </SimpleLayout>
                 } />
+                <Route path="/cadastro" element={
+                  <SimpleLayout>
+                    <CadastroIndicacao />
+                  </SimpleLayout>
+                } />
                 <Route path="/teste" element={
                   <SimpleLayout>
                     <TesteAPI />
                   </SimpleLayout>
                 } />
-                <Route path="/403" element={
+                <Route path="/termos-uso" element={
                   <SimpleLayout>
-                    <Page403 />
+                    <TermosUso />
                   </SimpleLayout>
                 } />
-                <Route path="/500" element={
+                <Route path="/politica-privacidade" element={
                   <SimpleLayout>
-                    <Page500 />
-                  </SimpleLayout>
-                } />
-                <Route path="/manutencao" element={
-                  <SimpleLayout>
-                    <Manutencao />
+                    <PoliticaPrivacidade />
                   </SimpleLayout>
                 } />
 
-                {/* Rotas do Cliente */}
+                {/* Páginas de Erro */}
+                <Route path="/403" element={<SimpleLayout><Page403 /></SimpleLayout>} />
+                <Route path="/500" element={<SimpleLayout><Page500 /></SimpleLayout>} />
+                <Route path="/manutencao" element={<SimpleLayout><Manutencao /></SimpleLayout>} />
+
+                {/* ============================================ */}
+                {/* SAAS - LANDING PAGE */}
+                {/* ============================================ */}
+                <Route path="/saas" element={
+                  <SimpleLayout>
+                    <SaasLanding />
+                  </SimpleLayout>
+                } />
+
+                {/* ============================================ */}
+                {/* ROTAS DO CLIENTE */}
+                {/* ============================================ */}
                 <Route path="/cliente/login" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -459,7 +482,6 @@ function App() {
                   </AuthClienteProvider>
                 } />
 
-                {/* 🔥 ROTA DE CALLBACK DO GOOGLE - IMPORTANTE */}
                 <Route path="/cliente/auth/callback" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -476,13 +498,6 @@ function App() {
                   </AuthClienteProvider>
                 } />
 
-                {/* Rota para cadastro via indicação */}
-                <Route
-                  path="/cadastro"
-                  element={<CadastroIndicacao />}
-                />
-
-                {/* Rota para cadastro complementar após login Google */}
                 <Route path="/cliente/cadastro-complementar" element={
                   <AuthClienteProvider>
                     <SimpleLayout>
@@ -513,6 +528,7 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
                   <Route path="anamnese/:respostaId" element={<ClienteAnamneseVisualizar />} />
@@ -520,7 +536,101 @@ function App() {
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                 </Route>
 
-                {/* Rotas do Sistema com Sidebar e Footer */}
+                {/* ============================================ */}
+                {/* SAAS ADMIN - PAINEL ADMINISTRATIVO */}
+                {/* ============================================ */}
+                <Route path="/saas-admin" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasAdmin />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/empresas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasEmpresas />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/empresas/:id" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao embedded />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/assinaturas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPlanos />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/cobrancas" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasCobrancas />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/pagamentos" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasPagamentosConfig />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+                <Route path="/saas-admin/relatorios" element={
+                  <SaasAdminRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasRelatorios />
+                    </SistemaLayout>
+                  </SaasAdminRoute>
+                } />
+
+                {/* ============================================ */}
+                {/* GESTÃO DA EMPRESA (TENANT) */}
+                {/* ============================================ */}
+                <Route path="/empresa" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/unidades" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={1} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/assinatura" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={3} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/cobranca" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={4} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/empresa/site" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <SaasGestao initialTab={5} />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
+
+                {/* ============================================ */}
+                {/* ROTAS DO SISTEMA PRINCIPAL */}
+                {/* ============================================ */}
                 <Route path="/dashboard" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -577,6 +687,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Fidelidade */}
                 <Route path="/fidelidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -619,6 +731,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Financeiro */}
                 <Route path="/financeiro" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -647,6 +761,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Outras páginas do sistema */}
                 <Route path="/compras" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -682,54 +798,6 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/saas" element={<SimpleLayout><SaasLanding /></SimpleLayout>} />
-                <Route path="/saas-admin" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasAdmin />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/saas-admin/empresas" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasEmpresas />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/saas-admin/assinaturas" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasPlanos />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/saas-admin/cobrancas" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasCobrancas />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/saas-admin/pagamentos" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasPagamentosConfig />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/saas-admin/relatorios" element={
-                  <SaasAdminRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <SaasRelatorios />
-                    </SistemaLayout>
-                  </SaasAdminRoute>
-                } />
-                <Route path="/empresa" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=dados" replace />} />
-                <Route path="/empresa/unidades" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=unidades" replace />} />
-                <Route path="/empresa/assinatura" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=assinatura" replace />} />
-                <Route path="/empresa/cobranca" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=cobranca" replace />} />
-                <Route path="/empresa/site" element={<Navigate to="/configuracoes?tab=empresa&empresaTab=site" replace />} />
                 <Route path="/usuarios" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -765,6 +833,13 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+                <Route path="/configuracoes" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}>
+                      <ModernConfiguracoes />
+                    </SistemaLayout>
+                  </PrivateRoute>
+                } />
                 <Route path="/selecionar-empresa" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -786,13 +861,6 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                <Route path="/configuracoes" element={
-                  <PrivateRoute>
-                    <SistemaLayout theme={currentTheme}>
-                      <ModernConfiguracoes />
-                    </SistemaLayout>
-                  </PrivateRoute>
-                } />
                 <Route path="/minhas-comissoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -807,6 +875,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Anamnese */}
                 <Route path="/anamnese/formularios" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -835,6 +905,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Cupons e Marketing */}
                 <Route path="/cupons" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -856,6 +928,8 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
+
+                {/* Outras funcionalidades */}
                 <Route path="/disponibilidade" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}>
@@ -898,18 +972,10 @@ function App() {
                     </SistemaLayout>
                   </PrivateRoute>
                 } />
-                {/* Rotas de Termos e Privacidade */}
-                <Route path="/termos-uso" element={
-                  <SimpleLayout>
-                    <TermosUso />
-                  </SimpleLayout>
-                } />
-                <Route path="/politica-privacidade" element={
-                  <SimpleLayout>
-                    <PoliticaPrivacidade />
-                  </SimpleLayout>
-                } />
-                {/* Rota 404 com Footer */}
+
+                {/* ============================================ */}
+                {/* ROTA 404 */}
+                {/* ============================================ */}
                 <Route path="*" element={
                   <SimpleLayout>
                     <Page404 />
