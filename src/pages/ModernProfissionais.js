@@ -46,6 +46,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 import {
   AreaChart,
   Area,
@@ -555,6 +556,7 @@ function ModernProfissionais() {
 
   return (
     <Box>
+      <ProfissionaisSectionNav />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Profissionais

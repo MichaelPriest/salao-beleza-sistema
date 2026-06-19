@@ -58,6 +58,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 import * as XLSX from 'xlsx';
 
 const categories = ['Cabelo', 'Unhas', 'Barba', 'Maquiagem', 'Estética', 'Depilação', 'Massagem'];
@@ -673,6 +674,7 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
 
   return (
     <Box>
+      <ProfissionaisSectionNav />
       {/* HEADER */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>

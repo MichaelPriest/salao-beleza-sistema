@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 
 const RH_EVENTOS_KEY = 'rh.eventos';
 
@@ -173,6 +174,7 @@ function RecursosHumanos() {
 
   return (
     <Box>
+      <ProfissionaisSectionNav subtitle="Painel de RH conectado a profissionais, disponibilidade, serviços e comissões." />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
