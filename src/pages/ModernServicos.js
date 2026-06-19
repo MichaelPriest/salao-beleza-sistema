@@ -383,24 +383,130 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
     XLSX.writeFile(workbook, `${nomeBase}.${formato === 'ods' ? 'ods' : 'xlsx'}`, { bookType: formato === 'ods' ? 'ods' : 'xlsx' });
   };
 
-  const normalizarServico = (servico = {}) => ({
-    id: servico.id || servico.ID || '',
-    nome: servico.nome || servico.Nome || '',
-    descricao: servico.descricao || servico.Descrição || servico.Descricao || '',
-    categoria: servico.categoria || servico.Categoria || 'Cabelo',
-    duracao: Number(servico.duracao || servico['Duração (min)'] || servico.Duracao || 60),
-    preco: Number(String(servico.preco || servico['Preço'] || servico.Preco || 0).replace(',', '.')),
-    comissaoProfissional: Number(servico.comissaoProfissional || servico['Comissão (%)'] || servico.Comissao || 50),
-    ativo: typeof (servico.ativo ?? servico.Ativo) === 'boolean'
-      ? (servico.ativo ?? servico.Ativo)
-      : String(servico.ativo ?? servico.Ativo ?? 'true').toLowerCase() !== 'false',
-    profissionaisIds: Array.isArray(servico.profissionaisIds)
-      ? servico.profissionaisIds
-      : String(servico.profissionaisIds || servico['Profissionais IDs'] || '')
-        .split(/[;,]/)
-        .map((id) => id.trim())
-        .filter(Boolean),
-  });
+  const normalizarChave = (valor = '') => String(valor)
+    .replace(/^\uFEFF/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  const obterValor = (registro, aliases) => {
+    const mapa = Object.entries(registro || {}).reduce((acc, [chave, valor]) => {
+      acc[normalizarChave(chave)] = valor;
+      return acc;
+    }, {});
+
+    for (const alias of aliases) {
+      const valor = mapa[normalizarChave(alias)];
+      if (valor !== undefined && valor !== null && String(valor).trim() !== '') return valor;
+    }
+    return undefined;
+  };
+
+  const parseNumero = (valor, padrao = 0) => {
+    if (valor === undefined || valor === null || valor === '') return padrao;
+    if (typeof valor === 'number') return valor;
+
+    const texto = String(valor)
+      .replace(/R\$/gi, '')
+      .replace(/\s/g, '')
+      .trim();
+    const normalizado = texto.includes(',')
+      ? texto.replace(/\./g, '').replace(',', '.')
+      : texto;
+    const numero = Number(normalizado.replace(/[^0-9.-]/g, ''));
+    return Number.isNaN(numero) ? padrao : numero;
+  };
+
+  const parseBoolean = (valor, padrao = true) => {
+    if (valor === undefined || valor === null || valor === '') return padrao;
+    if (typeof valor === 'boolean') return valor;
+    const texto = String(valor).trim().toLowerCase();
+    return !['false', 'falso', 'nao', 'não', '0', 'inativo', 'inativa'].includes(texto);
+  };
+
+  const normalizarServico = (registro = {}) => {
+    const id = obterValor(registro, ['id', 'ID', 'codigo', 'código', 'cod']);
+    const nome = obterValor(registro, ['nome', 'Nome', 'servico', 'serviço', 'servio', 'nome do serviço', 'descricao do servico']);
+    const descricao = obterValor(registro, ['descricao', 'descrição', 'descrio', 'Descrição', 'detalhes', 'observacoes', 'observações']);
+    const categoria = obterValor(registro, ['categoria', 'Categoria', 'grupo', 'tipo']);
+    const duracao = obterValor(registro, ['duracao', 'duração', 'durao', 'Duração (min)', 'duracao min', 'tempo', 'tempo min', 'minutos']);
+    const preco = obterValor(registro, ['preco', 'preço', 'preo', 'Preço', 'valor', 'valor do serviço', 'preco venda', 'preço venda']);
+    const comissao = obterValor(registro, ['comissaoProfissional', 'comissão (%)', 'comisso', 'Comissão (%)', 'comissao', 'comissão', 'percentual comissao']);
+    const ativo = obterValor(registro, ['ativo', 'Ativo', 'status', 'situacao', 'situação']);
+    const profissionais = obterValor(registro, ['profissionaisIds', 'Profissionais IDs', 'profissionais', 'profissional ids', 'ids profissionais']);
+
+    return {
+      id: id ? String(id).trim() : '',
+      nome: nome ? String(nome).trim() : '',
+      descricao: descricao ? String(descricao).trim() : '',
+      categoria: categoria ? String(categoria).trim() : 'Cabelo',
+      duracao: parseNumero(duracao, 60),
+      preco: parseNumero(preco, 0),
+      comissaoProfissional: parseNumero(comissao, 50),
+      ativo: parseBoolean(ativo, true),
+      profissionaisIds: Array.isArray(profissionais)
+        ? profissionais
+        : String(profissionais || '')
+          .split(/[;,]/)
+          .map((profissionalId) => profissionalId.trim())
+          .filter(Boolean),
+    };
+  };
+
+  const detectarSeparador = (linha = '') => {
+    const separadores = [';', ',', '\t', '|'];
+    return separadores.reduce((melhor, separador) => (
+      linha.split(separador).length > linha.split(melhor).length ? separador : melhor
+    ), ';');
+  };
+
+  const parseLinhaCsv = (linha, separador) => {
+    const colunas = [];
+    let atual = '';
+    let dentroAspas = false;
+
+    for (let i = 0; i < linha.length; i += 1) {
+      const char = linha[i];
+      const proximo = linha[i + 1];
+
+      if (char === '"' && proximo === '"') {
+        atual += '"';
+        i += 1;
+      } else if (char === '"') {
+        dentroAspas = !dentroAspas;
+      } else if (char === separador && !dentroAspas) {
+        colunas.push(atual.trim());
+        atual = '';
+      } else {
+        atual += char;
+      }
+    }
+
+    colunas.push(atual.trim());
+    return colunas;
+  };
+
+  const parseCsvOuTxt = (texto = '') => {
+    const linhas = texto
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((linha) => linha.trim())
+      .filter(Boolean);
+
+    if (linhas.length < 2) return [];
+
+    const separador = detectarSeparador(linhas[0]);
+    const cabecalhos = parseLinhaCsv(linhas[0], separador);
+
+    return linhas.slice(1).map((linha) => {
+      const valores = parseLinhaCsv(linha, separador);
+      return cabecalhos.reduce((acc, cabecalho, index) => {
+        acc[cabecalho] = valores[index] ?? '';
+        return acc;
+      }, {});
+    });
+  };
 
   const prepararLinhasExportacao = () => servicosFiltrados.map((servico) => ({
     ID: servico.id || '',
@@ -466,10 +572,16 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
         const texto = new TextDecoder('utf-8').decode(buffer);
         const json = JSON.parse(texto);
         registros = json?.dados?.servicos || json?.servicos || (Array.isArray(json) ? json : []);
+      } else if (['csv', 'txt'].includes(extensao)) {
+        const textoUtf8 = new TextDecoder('utf-8').decode(buffer);
+        const texto = textoUtf8.includes('�')
+          ? new TextDecoder('windows-1252').decode(buffer)
+          : textoUtf8;
+        registros = parseCsvOuTxt(texto);
       } else {
         const workbook = XLSX.read(buffer, { type: 'array' });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        registros = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        registros = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
       }
 
       if (!Array.isArray(registros) || registros.length === 0) {
@@ -479,11 +591,15 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
 
       let importados = 0;
       let atualizados = 0;
+      let ignorados = 0;
       const servicosAtualizados = [...servicos];
 
       for (const registro of registros) {
         const servico = normalizarServico(registro);
-        if (!servico.nome || !servico.preco || !servico.duracao) continue;
+        if (!servico.nome || servico.preco <= 0 || servico.duracao <= 0) {
+          ignorados += 1;
+          continue;
+        }
 
         const payload = { ...servico, updatedAt: new Date().toISOString() };
         const existenteIndex = servicosAtualizados.findIndex((item) => item.id && item.id === servico.id);
@@ -501,7 +617,11 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
       }
 
       setServicos(servicosAtualizados);
-      mostrarSnackbar(`Importação concluída: ${importados} novos e ${atualizados} atualizados.`);
+      if (importados === 0 && atualizados === 0) {
+        mostrarSnackbar(`Nenhum serviço importado. ${ignorados} linha(s) ignorada(s). Verifique se o CSV possui colunas de nome e preço.`, 'warning');
+      } else {
+        mostrarSnackbar(`Importação concluída: ${importados} novos, ${atualizados} atualizados e ${ignorados} ignorados.`);
+      }
     } catch (error) {
       console.error('Erro ao importar serviços:', error);
       mostrarSnackbar('Erro ao importar serviços. Verifique o formato do arquivo.', 'error');
