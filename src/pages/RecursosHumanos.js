@@ -36,10 +36,12 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
 import { firebaseService } from '../services/firebase';
 import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 
 const RH_EVENTOS_KEY = 'rh.eventos';
+const RH_PONTOS_KEY = 'rh.pontos';
 
 const tiposEvento = [
   { value: 'ferias', label: 'Férias', color: 'info' },
@@ -86,6 +88,14 @@ function RecursosHumanos() {
       return [];
     }
   });
+  const [pontos, setPontos] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(RH_PONTOS_KEY) || '[]');
+    } catch (error) {
+      return [];
+    }
+  });
+  const [pontoProfissionalId, setPontoProfissionalId] = useState('');
   const [openEventoDialog, setOpenEventoDialog] = useState(false);
   const [eventoForm, setEventoForm] = useState({
     profissionalId: '',
@@ -103,6 +113,10 @@ function RecursosHumanos() {
   useEffect(() => {
     localStorage.setItem(RH_EVENTOS_KEY, JSON.stringify(eventos));
   }, [eventos]);
+
+  useEffect(() => {
+    localStorage.setItem(RH_PONTOS_KEY, JSON.stringify(pontos));
+  }, [pontos]);
 
   const carregarDados = async () => {
     try {
@@ -213,10 +227,78 @@ function RecursosHumanos() {
     });
   };
 
-  const atualizarStatusEvento = (id, status) => {
-    setEventos(eventos.map((evento) => (
-      evento.id === id ? { ...evento, status, updatedAt: new Date().toISOString() } : evento
-    )));
+  const sincronizarEventoComDisponibilidade = async (evento, status) => {
+    if (status !== 'aprovado' || evento.ausenciaId || !['ferias', 'folga', 'licenca', 'treinamento'].includes(evento.tipo)) return null;
+
+    const ausencia = await firebaseService.add('ausencias', {
+      profissionalId: evento.profissionalId,
+      tipo: evento.tipo === 'licenca' ? 'licenca' : evento.tipo,
+      dataInicio: evento.dataInicio,
+      dataFim: evento.dataFim,
+      motivo: `${getTipo(evento.tipo).label} aprovada no módulo de RH`,
+      observacoes: evento.observacoes || '',
+      status: 'aprovado',
+      origem: 'rh',
+      rhEventoId: evento.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return ausencia?.id;
+  };
+
+  const atualizarStatusEvento = async (id, status) => {
+    const evento = eventos.find((item) => item.id === id);
+    if (!evento) return;
+
+    try {
+      const ausenciaId = await sincronizarEventoComDisponibilidade(evento, status);
+      setEventos(eventos.map((item) => (
+        item.id === id ? { ...item, status, ausenciaId: ausenciaId || item.ausenciaId, updatedAt: new Date().toISOString() } : item
+      )));
+    } catch (error) {
+      console.error('Erro ao sincronizar evento RH:', error);
+      setEventos(eventos.map((item) => (
+        item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+      )));
+    }
+  };
+
+  const registrarPonto = (tipo) => {
+    if (!pontoProfissionalId) return;
+    const profissional = profissionais.find((item) => item.id === pontoProfissionalId);
+    const hoje = new Date().toISOString().split('T')[0];
+    const agora = new Date().toISOString();
+    const pontoAberto = pontos.find((ponto) => ponto.profissionalId === pontoProfissionalId && ponto.data === hoje && !ponto.saida);
+
+    if (tipo === 'saida' && pontoAberto) {
+      setPontos(pontos.map((ponto) => (
+        ponto.id === pontoAberto.id ? { ...ponto, saida: agora, updatedAt: agora } : ponto
+      )));
+      return;
+    }
+
+    if (tipo === 'entrada' && !pontoAberto) {
+      setPontos([{ id: crypto.randomUUID(), profissionalId: pontoProfissionalId, profissionalNome: profissional?.nome || 'Profissional', data: hoje, entrada: agora, saida: '', createdAt: agora }, ...pontos]);
+    }
+  };
+
+  const exportarRelatorioPdf = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Relatório Integrado de RH', 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 14, 26);
+    let y = 38;
+    relatorioProfissionais.slice(0, 28).forEach((item) => {
+      doc.text(`${item.nome} | ${item.status} | Atend.: ${item.atendimentos} | Fat.: ${formatarMoeda(item.faturamento)} | Com.: ${formatarMoeda(item.comissoes)} | Escalas: ${item.escalasAtivas}`, 14, y);
+      y += 8;
+      if (y > 280) {
+        doc.addPage();
+        y = 18;
+      }
+    });
+    doc.save(`relatorio_rh_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const getTipo = (tipo) => tiposEvento.find((item) => item.value === tipo) || tiposEvento[0];
@@ -264,6 +346,7 @@ function RecursosHumanos() {
           <Tab label="Escalas e ponto" icon={<CalendarIcon />} iconPosition="start" />
           <Tab label="Folha e comissões" icon={<PaymentsIcon />} iconPosition="start" />
           <Tab label="Documentos e eventos" icon={<DescriptionIcon />} iconPosition="start" />
+          <Tab label="Ponto eletrônico" icon={<ScheduleIcon />} iconPosition="start" />
           <Tab label="Relatórios" icon={<DescriptionIcon />} iconPosition="start" />
         </Tabs>
       </Paper>
@@ -353,10 +436,50 @@ function RecursosHumanos() {
 
 
       {tab === 4 && (
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Ponto eletrônico</Typography>
+                <TextField select fullWidth label="Profissional" value={pontoProfissionalId} onChange={(e) => setPontoProfissionalId(e.target.value)} sx={{ mb: 2 }}>
+                  {profissionaisAtivos.map((profissional) => <MenuItem key={profissional.id} value={profissional.id}>{profissional.nome}</MenuItem>)}
+                </TextField>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button fullWidth variant="contained" onClick={() => registrarPonto('entrada')}>Entrada</Button>
+                  <Button fullWidth variant="outlined" onClick={() => registrarPonto('saida')}>Saída</Button>
+                </Box>
+                <Alert severity="info" sx={{ mt: 2 }}>Os registros ficam disponíveis no relatório de ponto e podem ser conferidos por dia.</Alert>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead><TableRow><TableCell>Profissional</TableCell><TableCell>Data</TableCell><TableCell>Entrada</TableCell><TableCell>Saída</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
+                <TableBody>
+                  {pontos.map((ponto) => (
+                    <TableRow key={ponto.id} hover>
+                      <TableCell>{ponto.profissionalNome}</TableCell>
+                      <TableCell>{ponto.data}</TableCell>
+                      <TableCell>{ponto.entrada ? new Date(ponto.entrada).toLocaleTimeString('pt-BR') : '-'}</TableCell>
+                      <TableCell>{ponto.saida ? new Date(ponto.saida).toLocaleTimeString('pt-BR') : '-'}</TableCell>
+                      <TableCell><Chip size="small" label={ponto.saida ? 'Fechado' : 'Aberto'} color={ponto.saida ? 'success' : 'warning'} /></TableCell>
+                    </TableRow>
+                  ))}
+                  {pontos.length === 0 && <TableRow><TableCell colSpan={5}><Alert severity="info">Nenhum ponto registrado.</Alert></TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
+        </Grid>
+      )}
+
+
+      {tab === 5 && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>Relatório integrado de profissionais</Typography>
-            <Button variant="outlined" onClick={exportarRelatorioRh}>Exportar CSV</Button>
+            <Box sx={{ display: 'flex', gap: 1 }}><Button variant="outlined" onClick={exportarRelatorioRh}>Exportar CSV</Button><Button variant="contained" onClick={exportarRelatorioPdf}>Exportar PDF</Button></Box>
           </Box>
           <TableContainer component={Paper}>
             <Table>
