@@ -610,8 +610,12 @@ function App() {
                   </PrivateRoute>
                 } />
 
-                {/* Redirecionamentos de /configuracoes para /empresa */}
-                <Route path="/configuracoes" element={<Navigate to="/empresa" replace />} />
+                // Página de configurações do sistema
+                <Route path="/configuracoes" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><ModernConfiguracoes /></SistemaLayout>
+                  </PrivateRoute>
+                } />
 
                 {/* ============================================ */}
                 {/* ROTAS DO SISTEMA PRINCIPAL */}
