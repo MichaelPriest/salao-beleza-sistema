@@ -1,5 +1,5 @@
 // src/pages/ModernServicos.js (versão corrigida)
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -49,6 +49,7 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   FileDownload as ExportIcon,
+  FileUpload as ImportIcon,
   FilterList as FilterIcon,
   Category as CategoryIcon,
   Person as PersonIcon,
@@ -56,6 +57,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import * as XLSX from 'xlsx';
 
 const categories = ['Cabelo', 'Unhas', 'Barba', 'Maquiagem', 'Estética', 'Depilação', 'Massagem'];
 
@@ -81,6 +83,7 @@ function ModernServicos() {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const fileInputRef = useRef(null);
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -254,8 +257,8 @@ function ModernServicos() {
         ));
         mostrarSnackbar('Serviço atualizado com sucesso!');
       } else {
-        const novoId = await firebaseService.add('servicos', serviceData);
-        setServicos([...servicos, { ...serviceData, id: novoId }]);
+        const novoServico = await firebaseService.add('servicos', serviceData);
+        setServicos([...servicos, { ...serviceData, ...novoServico, id: novoServico?.id || serviceData.id }]);
         mostrarSnackbar('Serviço adicionado com sucesso!');
       }
       
@@ -266,29 +269,143 @@ function ModernServicos() {
     }
   };
 
-  // EXPORTAR DADOS
-  const exportarDados = () => {
+  const camposExportacao = [
+    { key: 'id', label: 'ID' },
+    { key: 'nome', label: 'Nome' },
+    { key: 'descricao', label: 'Descrição' },
+    { key: 'categoria', label: 'Categoria' },
+    { key: 'duracao', label: 'Duração (min)' },
+    { key: 'preco', label: 'Preço' },
+    { key: 'comissaoProfissional', label: 'Comissão (%)' },
+    { key: 'ativo', label: 'Ativo' },
+    { key: 'profissionaisIds', label: 'Profissionais IDs' },
+  ];
+
+  const normalizarServico = (servico = {}) => ({
+    id: servico.id || servico.ID || '',
+    nome: servico.nome || servico.Nome || '',
+    descricao: servico.descricao || servico.Descrição || servico.Descricao || '',
+    categoria: servico.categoria || servico.Categoria || 'Cabelo',
+    duracao: Number(servico.duracao || servico['Duração (min)'] || servico.Duracao || 60),
+    preco: Number(String(servico.preco || servico['Preço'] || servico.Preco || 0).replace(',', '.')),
+    comissaoProfissional: Number(servico.comissaoProfissional || servico['Comissão (%)'] || servico.Comissao || 50),
+    ativo: typeof (servico.ativo ?? servico.Ativo) === 'boolean'
+      ? (servico.ativo ?? servico.Ativo)
+      : String(servico.ativo ?? servico.Ativo ?? 'true').toLowerCase() !== 'false',
+    profissionaisIds: Array.isArray(servico.profissionaisIds)
+      ? servico.profissionaisIds
+      : String(servico.profissionaisIds || servico['Profissionais IDs'] || '')
+        .split(/[;,]/)
+        .map((id) => id.trim())
+        .filter(Boolean),
+  });
+
+  const prepararLinhasExportacao = () => servicosFiltrados.map((servico) => ({
+    ID: servico.id || '',
+    Nome: servico.nome || '',
+    Descrição: servico.descricao || '',
+    Categoria: servico.categoria || '',
+    'Duração (min)': servico.duracao || '',
+    Preço: servico.preco || 0,
+    'Comissão (%)': servico.comissaoProfissional ?? 50,
+    Ativo: servico.ativo !== false,
+    'Profissionais IDs': (servico.profissionaisIds || []).join(';'),
+  }));
+
+  const baixarArquivo = (conteudo, nomeArquivo, tipo) => {
+    const blob = new Blob([conteudo], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarDados = (formato = 'json') => {
     try {
-      const dadosExport = {
-        dataBackup: new Date().toISOString(),
-        versao: '2.0',
-        totalServicos: servicosFiltrados.length,
-        dados: {
-          servicos: servicosFiltrados
-        }
-      };
-      
-      const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `servicos_backup_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      
-      mostrarSnackbar('Dados exportados com sucesso!');
+      const data = new Date().toISOString().split('T')[0];
+      const linhas = prepararLinhasExportacao();
+
+      if (formato === 'json') {
+        baixarArquivo(JSON.stringify({ dataBackup: new Date().toISOString(), versao: '2.0', totalServicos: servicosFiltrados.length, dados: { servicos: servicosFiltrados } }, null, 2), `servicos_backup_${data}.json`, 'application/json;charset=utf-8');
+      } else if (formato === 'csv') {
+        const worksheet = XLSX.utils.json_to_sheet(linhas);
+        const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: ';' });
+        baixarArquivo(csv, `servicos_${data}.csv`, 'text/csv;charset=utf-8');
+      } else if (formato === 'txt') {
+        const texto = linhas.map((linha) => camposExportacao.map(({ label }) => `${label}: ${linha[label] ?? ''}`).join(' | ')).join('\n');
+        baixarArquivo(texto, `servicos_${data}.txt`, 'text/plain;charset=utf-8');
+      } else {
+        const worksheet = XLSX.utils.json_to_sheet(linhas);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Serviços');
+        XLSX.writeFile(workbook, `servicos_${data}.${formato === 'ods' ? 'ods' : 'xlsx'}`, { bookType: formato === 'ods' ? 'ods' : 'xlsx' });
+      }
+
+      mostrarSnackbar(`Serviços exportados em ${formato.toUpperCase()} com sucesso!`);
     } catch (error) {
       console.error('Erro ao exportar:', error);
       mostrarSnackbar('Erro ao exportar dados', 'error');
+    }
+  };
+
+  const importarArquivo = async (event) => {
+    const arquivo = event.target.files?.[0];
+    if (!arquivo) return;
+
+    try {
+      setLoading(true);
+      const extensao = arquivo.name.split('.').pop()?.toLowerCase();
+      const buffer = await arquivo.arrayBuffer();
+      let registros = [];
+
+      if (extensao === 'json') {
+        const texto = new TextDecoder('utf-8').decode(buffer);
+        const json = JSON.parse(texto);
+        registros = json?.dados?.servicos || json?.servicos || (Array.isArray(json) ? json : []);
+      } else {
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        registros = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      }
+
+      if (!Array.isArray(registros) || registros.length === 0) {
+        mostrarSnackbar('Arquivo sem serviços para importar', 'warning');
+        return;
+      }
+
+      let importados = 0;
+      let atualizados = 0;
+      const servicosAtualizados = [...servicos];
+
+      for (const registro of registros) {
+        const servico = normalizarServico(registro);
+        if (!servico.nome || !servico.preco || !servico.duracao) continue;
+
+        const payload = { ...servico, updatedAt: new Date().toISOString() };
+        const existenteIndex = servicosAtualizados.findIndex((item) => item.id && item.id === servico.id);
+
+        if (servico.id && existenteIndex >= 0) {
+          await firebaseService.update('servicos', servico.id, payload);
+          servicosAtualizados[existenteIndex] = { ...servicosAtualizados[existenteIndex], ...payload };
+          atualizados += 1;
+        } else {
+          const { id, ...dadosNovoServico } = payload;
+          const novoServico = await firebaseService.add('servicos', dadosNovoServico);
+          servicosAtualizados.push({ ...dadosNovoServico, ...novoServico, id: novoServico?.id || id });
+          importados += 1;
+        }
+      }
+
+      setServicos(servicosAtualizados);
+      mostrarSnackbar(`Importação concluída: ${importados} novos e ${atualizados} atualizados.`);
+    } catch (error) {
+      console.error('Erro ao importar serviços:', error);
+      mostrarSnackbar('Erro ao importar serviços. Verifique o formato do arquivo.', 'error');
+    } finally {
+      setLoading(false);
+      event.target.value = '';
     }
   };
 
@@ -346,16 +463,41 @@ function ModernServicos() {
         </Box>
         
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Tooltip title="Exportar dados">
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept=".json,.csv,.xlsx,.xls,.ods,.txt"
+            onChange={importarArquivo}
+          />
+
+          <Tooltip title="Importar serviços de JSON, CSV, Excel, ODS ou TXT">
             <Button
               variant="outlined"
-              startIcon={<ExportIcon />}
-              onClick={exportarDados}
+              startIcon={<ImportIcon />}
+              onClick={() => fileInputRef.current?.click()}
               sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
             >
-              Exportar
+              Importar
             </Button>
           </Tooltip>
+
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <InputLabel>Exportar</InputLabel>
+            <Select
+              value=""
+              label="Exportar"
+              displayEmpty
+              startAdornment={<ExportIcon fontSize="small" sx={{ mr: 1, color: '#9c27b0' }} />}
+              onChange={(e) => exportarDados(e.target.value)}
+            >
+              <MenuItem value="json">JSON</MenuItem>
+              <MenuItem value="csv">CSV</MenuItem>
+              <MenuItem value="xlsx">Excel (.xlsx)</MenuItem>
+              <MenuItem value="ods">ODS</MenuItem>
+              <MenuItem value="txt">TXT</MenuItem>
+            </Select>
+          </FormControl>
           
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
