@@ -117,6 +117,8 @@ import Agenda from './pages/agenda';
 import ModernAgendamentos from './pages/ModernAgendamentos';
 import ModernAtendimentos from './pages/ModernAtendimentos';
 import ModernAtendimento from './pages/ModernAtendimento';
+import PainelChamada from './pages/PainelChamada';
+import RecepcaoChamada from './pages/RecepcaoChamada';
 
 // ============================================
 // PAGES - FIDELIDADE
@@ -666,6 +668,12 @@ function App() {
                     <SistemaLayout theme={currentTheme}><ModernAtendimento /></SistemaLayout>
                   </PrivateRoute>
                 } />
+                <Route path="/recepcao-chamada" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><RecepcaoChamada /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/painel-chamada" element={<PainelChamada />} />
 
                 {/* Fidelidade */}
                 <Route path="/fidelidade" element={

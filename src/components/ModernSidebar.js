@@ -226,6 +226,13 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'profissional']
       },
       {
+        text: 'Recepção / Chamada',
+        icon: <EventAvailableIcon />,
+        path: '/recepcao-chamada',
+        permission: 'gerenciar_atendimentos',
+        cargos: ['admin', 'gerente', 'atendente']
+      },
+      {
         text: 'Histórico de Atendimentos',
         icon: <HistoryIcon />,
         path: '/historico',

@@ -269,18 +269,26 @@ function RecursosHumanos() {
     const profissional = profissionais.find((item) => item.id === pontoProfissionalId);
     const hoje = new Date().toISOString().split('T')[0];
     const agora = new Date().toISOString();
-    const pontoAberto = pontos.find((ponto) => ponto.profissionalId === pontoProfissionalId && ponto.data === hoje && !ponto.saida);
+    const pontoDoDia = pontos.find((ponto) => ponto.profissionalId === pontoProfissionalId && ponto.data === hoje);
 
-    if (tipo === 'saida' && pontoAberto) {
-      setPontos(pontos.map((ponto) => (
-        ponto.id === pontoAberto.id ? { ...ponto, saida: agora, updatedAt: agora } : ponto
-      )));
+    if (!pontoDoDia) {
+      if (tipo !== 'entrada') return;
+      setPontos([{ id: crypto.randomUUID(), profissionalId: pontoProfissionalId, profissionalNome: profissional?.nome || 'Profissional', data: hoje, entrada: agora, intervaloSaida: '', intervaloRetorno: '', saida: '', createdAt: agora }, ...pontos]);
       return;
     }
 
-    if (tipo === 'entrada' && !pontoAberto) {
-      setPontos([{ id: crypto.randomUUID(), profissionalId: pontoProfissionalId, profissionalNome: profissional?.nome || 'Profissional', data: hoje, entrada: agora, saida: '', createdAt: agora }, ...pontos]);
-    }
+    const campoPorTipo = {
+      entrada: 'entrada',
+      intervaloSaida: 'intervaloSaida',
+      intervaloRetorno: 'intervaloRetorno',
+      saida: 'saida',
+    };
+    const campo = campoPorTipo[tipo];
+    if (!campo || pontoDoDia[campo]) return;
+
+    setPontos(pontos.map((ponto) => (
+      ponto.id === pontoDoDia.id ? { ...ponto, [campo]: agora, updatedAt: agora } : ponto
+    )));
   };
 
   const exportarRelatorioPdf = () => {
@@ -444,29 +452,33 @@ function RecursosHumanos() {
                 <TextField select fullWidth label="Profissional" value={pontoProfissionalId} onChange={(e) => setPontoProfissionalId(e.target.value)} sx={{ mb: 2 }}>
                   {profissionaisAtivos.map((profissional) => <MenuItem key={profissional.id} value={profissional.id}>{profissional.nome}</MenuItem>)}
                 </TextField>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button fullWidth variant="contained" onClick={() => registrarPonto('entrada')}>Entrada</Button>
-                  <Button fullWidth variant="outlined" onClick={() => registrarPonto('saida')}>Saída</Button>
-                </Box>
-                <Alert severity="info" sx={{ mt: 2 }}>Os registros ficam disponíveis no relatório de ponto e podem ser conferidos por dia.</Alert>
+                <Grid container spacing={1}>
+                  <Grid item xs={6}><Button fullWidth variant="contained" onClick={() => registrarPonto('entrada')}>1ª Entrada</Button></Grid>
+                  <Grid item xs={6}><Button fullWidth variant="outlined" onClick={() => registrarPonto('intervaloSaida')}>2ª Saída intervalo</Button></Grid>
+                  <Grid item xs={6}><Button fullWidth variant="outlined" onClick={() => registrarPonto('intervaloRetorno')}>3ª Retorno</Button></Grid>
+                  <Grid item xs={6}><Button fullWidth variant="contained" onClick={() => registrarPonto('saida')}>4ª Saída</Button></Grid>
+                </Grid>
+                <Alert severity="info" sx={{ mt: 2 }}>O ponto eletrônico agora usa quatro marcações: entrada, saída para intervalo, retorno e saída final.</Alert>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={8}>
             <TableContainer component={Paper}>
               <Table>
-                <TableHead><TableRow><TableCell>Profissional</TableCell><TableCell>Data</TableCell><TableCell>Entrada</TableCell><TableCell>Saída</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
+                <TableHead><TableRow><TableCell>Profissional</TableCell><TableCell>Data</TableCell><TableCell>Entrada</TableCell><TableCell>Saída intervalo</TableCell><TableCell>Retorno</TableCell><TableCell>Saída final</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
                 <TableBody>
                   {pontos.map((ponto) => (
                     <TableRow key={ponto.id} hover>
                       <TableCell>{ponto.profissionalNome}</TableCell>
                       <TableCell>{ponto.data}</TableCell>
                       <TableCell>{ponto.entrada ? new Date(ponto.entrada).toLocaleTimeString('pt-BR') : '-'}</TableCell>
+                      <TableCell>{ponto.intervaloSaida ? new Date(ponto.intervaloSaida).toLocaleTimeString('pt-BR') : '-'}</TableCell>
+                      <TableCell>{ponto.intervaloRetorno ? new Date(ponto.intervaloRetorno).toLocaleTimeString('pt-BR') : '-'}</TableCell>
                       <TableCell>{ponto.saida ? new Date(ponto.saida).toLocaleTimeString('pt-BR') : '-'}</TableCell>
                       <TableCell><Chip size="small" label={ponto.saida ? 'Fechado' : 'Aberto'} color={ponto.saida ? 'success' : 'warning'} /></TableCell>
                     </TableRow>
                   ))}
-                  {pontos.length === 0 && <TableRow><TableCell colSpan={5}><Alert severity="info">Nenhum ponto registrado.</Alert></TableCell></TableRow>}
+                  {pontos.length === 0 && <TableRow><TableCell colSpan={7}><Alert severity="info">Nenhum ponto registrado.</Alert></TableCell></TableRow>}
                 </TableBody>
               </Table>
             </TableContainer>
