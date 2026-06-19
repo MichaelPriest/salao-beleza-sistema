@@ -1,5 +1,5 @@
 // src/pages/ModernServicos.js (versão corrigida)
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -42,6 +42,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Warning as WarningIcon,
   AccessTime as AccessTimeIcon,
   AttachMoney as AttachMoneyIcon,
   GridView as GridViewIcon,
@@ -68,7 +69,7 @@ function ModernServicos() {
   const [profissionais, setProfissionais] = useState([]);
   
   // NOVOS ESTADOS
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' ou 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' ou 'list'
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('todos');
   const [filterStatus, setFilterStatus] = useState('todos'); // 'todos', 'ativo', 'inativo'
@@ -82,6 +83,18 @@ function ModernServicos() {
   const [selectedService, setSelectedService] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState(null);
+  const [openDeleteAllDialog, setOpenDeleteAllDialog] = useState(false);
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState('');
+  const [openModeloDialog, setOpenModeloDialog] = useState(false);
+  const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
+  const [novaCategoria, setNovaCategoria] = useState('');
+  const [categoriasCustomizadas, setCategoriasCustomizadas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('servicos.categoriasCustomizadas') || '[]');
+    } catch (error) {
+      return [];
+    }
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const fileInputRef = useRef(null);
   
@@ -96,6 +109,16 @@ function ModernServicos() {
     ativo: true,
     profissionaisIds: [] // 👈 IMPORTANTE: Array para associar profissionais
   });
+
+  const categoriasDisponiveis = useMemo(() => Array.from(new Set([
+    ...categories,
+    ...categoriasCustomizadas,
+    ...servicos.map((servico) => servico.categoria).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categoriasCustomizadas, servicos]);
+
+  useEffect(() => {
+    localStorage.setItem('servicos.categoriasCustomizadas', JSON.stringify(categoriasCustomizadas));
+  }, [categoriasCustomizadas]);
 
   useEffect(() => {
     carregarDados();
@@ -177,7 +200,7 @@ function ModernServicos() {
           descricao: selectedService.descricao || '',
           duracao: selectedService.duracao || 60,
           preco: selectedService.preco || '',
-          categoria: selectedService.categoria || 'Cabelo',
+          categoria: selectedService.categoria || categoriasDisponiveis[0] || 'Cabelo',
           comissaoProfissional: selectedService.comissaoProfissional || 50,
           ativo: selectedService.ativo !== undefined ? selectedService.ativo : true,
           profissionaisIds: selectedService.profissionaisIds || [] // 👈 Carregar profissionais associados
@@ -188,14 +211,14 @@ function ModernServicos() {
           descricao: '',
           duracao: 60,
           preco: '',
-          categoria: 'Cabelo',
+          categoria: categoriasDisponiveis[0] || 'Cabelo',
           comissaoProfissional: 50,
           ativo: true,
           profissionaisIds: [] // 👈 Iniciar vazio
         });
       }
     }
-  }, [openDialog, selectedService]);
+  }, [openDialog, selectedService, categoriasDisponiveis]);
 
   const handleAdd = () => {
     setSelectedService(null);
@@ -225,6 +248,46 @@ function ModernServicos() {
     setServiceToDelete(null);
   };
 
+  const confirmDeleteAll = async () => {
+    if (deleteAllConfirm !== 'EXCLUIR TODOS') {
+      mostrarSnackbar('Digite EXCLUIR TODOS para confirmar a exclusão em massa.', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const idsParaExcluir = servicos.map((servico) => servico.id).filter(Boolean);
+      await Promise.all(idsParaExcluir.map((id) => firebaseService.delete('servicos', id)));
+      setServicos([]);
+      setOpenDeleteAllDialog(false);
+      setDeleteAllConfirm('');
+      mostrarSnackbar(`${idsParaExcluir.length} serviços excluídos com sucesso.`);
+    } catch (error) {
+      console.error('Erro ao excluir todos os serviços:', error);
+      mostrarSnackbar('Erro ao excluir todos os serviços', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const salvarCategoria = () => {
+    const categoria = novaCategoria.trim();
+    if (!categoria) {
+      mostrarSnackbar('Informe o nome da categoria.', 'error');
+      return;
+    }
+    if (categoriasDisponiveis.some((item) => item.toLowerCase() === categoria.toLowerCase())) {
+      mostrarSnackbar('Essa categoria já existe.', 'warning');
+      return;
+    }
+
+    setCategoriasCustomizadas([...categoriasCustomizadas, categoria]);
+    setFormData({ ...formData, categoria });
+    setNovaCategoria('');
+    setOpenCategoriaDialog(false);
+    mostrarSnackbar('Categoria cadastrada com sucesso!');
+  };
+
   const handleSave = async (event) => {
     event.preventDefault();
     
@@ -251,9 +314,9 @@ function ModernServicos() {
       };
 
       if (selectedService) {
-        await firebaseService.update('servicos', selectedService.id, serviceData);
+        const servicoAtualizado = await firebaseService.update('servicos', selectedService.id, serviceData);
         setServicos(servicos.map(s => 
-          s.id === selectedService.id ? { ...serviceData, id: selectedService.id } : s
+          s.id === selectedService.id ? { ...s, ...serviceData, ...servicoAtualizado, id: selectedService.id } : s
         ));
         mostrarSnackbar('Serviço atualizado com sucesso!');
       } else {
@@ -280,6 +343,45 @@ function ModernServicos() {
     { key: 'ativo', label: 'Ativo' },
     { key: 'profissionaisIds', label: 'Profissionais IDs' },
   ];
+
+  const linhaModeloImportacao = {
+    Nome: 'Corte Feminino',
+    Descrição: 'Corte, lavagem e finalização',
+    Categoria: 'Cabelo',
+    'Duração (min)': 60,
+    Preço: 120,
+    'Comissão (%)': 50,
+    Ativo: true,
+    'Profissionais IDs': 'id_profissional_1;id_profissional_2',
+  };
+
+  const baixarModeloImportacao = (formato = 'xlsx') => {
+    const nomeBase = `modelo_importacao_servicos`;
+
+    if (formato === 'json') {
+      baixarArquivo(JSON.stringify([linhaModeloImportacao], null, 2), `${nomeBase}.json`, 'application/json;charset=utf-8');
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet([linhaModeloImportacao]);
+
+    if (formato === 'csv') {
+      baixarArquivo(XLSX.utils.sheet_to_csv(worksheet, { FS: ';' }), `${nomeBase}.csv`, 'text/csv;charset=utf-8');
+      return;
+    }
+
+    if (formato === 'txt') {
+      const cabecalho = Object.keys(linhaModeloImportacao).join('	');
+      const valores = Object.values(linhaModeloImportacao).join('	');
+      baixarArquivo(`${cabecalho}
+${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Serviços');
+    XLSX.writeFile(workbook, `${nomeBase}.${formato === 'ods' ? 'ods' : 'xlsx'}`, { bookType: formato === 'ods' ? 'ods' : 'xlsx' });
+  };
 
   const normalizarServico = (servico = {}) => ({
     id: servico.id || servico.ID || '',
@@ -482,6 +584,33 @@ function ModernServicos() {
             </Button>
           </Tooltip>
 
+          <Button
+            variant="outlined"
+            onClick={() => setOpenModeloDialog(true)}
+            sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+          >
+            Modelo
+          </Button>
+
+          <Button
+            variant="outlined"
+            startIcon={<CategoryIcon />}
+            onClick={() => setOpenCategoriaDialog(true)}
+            sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+          >
+            Categorias
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            disabled={servicos.length === 0}
+            onClick={() => setOpenDeleteAllDialog(true)}
+          >
+            Excluir tudo
+          </Button>
+
           <FormControl size="small" sx={{ minWidth: 170 }}>
             <InputLabel>Exportar</InputLabel>
             <Select
@@ -552,7 +681,7 @@ function ModernServicos() {
                 onChange={(e) => setFilterCategory(e.target.value)}
               >
                 <MenuItem value="todos">Todas as categorias</MenuItem>
-                {categories.map(cat => (
+                {categoriasDisponiveis.map(cat => (
                   <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                 ))}
               </Select>
@@ -951,11 +1080,19 @@ function ModernServicos() {
                     label="Categoria"
                     onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                   >
-                    {categories.map(cat => (
+                    {categoriasDisponiveis.map(cat => (
                       <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenCategoriaDialog(true)}
+                  sx={{ mt: 1, color: '#9c27b0' }}
+                >
+                  Nova categoria
+                </Button>
               </Grid>
 
               <Grid item xs={12}>
@@ -1091,6 +1228,109 @@ function ModernServicos() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Dialog com modelo de importação */}
+      <Dialog open={openModeloDialog} onClose={() => setOpenModeloDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+          Modelo para Importar Serviços
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+            Use uma linha por serviço. Os campos obrigatórios são Nome, Duração (min) e Preço. Para vincular profissionais, informe os IDs separados por ponto e vírgula.
+          </Alert>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {Object.keys(linhaModeloImportacao).map((coluna) => (
+                    <TableCell key={coluna}><strong>{coluna}</strong></TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  {Object.values(linhaModeloImportacao).map((valor, index) => (
+                    <TableCell key={index}>{String(valor)}</TableCell>
+                  ))}
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+            Também é possível importar JSON no formato de lista de objetos ou no formato de backup com dados.servicos.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={() => baixarModeloImportacao('json')}>Baixar JSON</Button>
+          <Button onClick={() => baixarModeloImportacao('csv')}>Baixar CSV</Button>
+          <Button onClick={() => baixarModeloImportacao('xlsx')}>Baixar Excel</Button>
+          <Button onClick={() => baixarModeloImportacao('ods')}>Baixar ODS</Button>
+          <Button onClick={() => baixarModeloImportacao('txt')}>Baixar TXT</Button>
+          <Button variant="contained" onClick={() => setOpenModeloDialog(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de cadastro de categorias */}
+      <Dialog open={openCategoriaDialog} onClose={() => setOpenCategoriaDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+          Cadastrar Categoria
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Nova categoria"
+            value={novaCategoria}
+            onChange={(e) => setNovaCategoria(e.target.value)}
+            sx={{ mt: 2, mb: 2 }}
+            placeholder="Ex: Sobrancelhas"
+          />
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Categorias disponíveis:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {categoriasDisponiveis.map((categoria) => (
+              <Chip key={categoria} label={categoria} size="small" />
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenCategoriaDialog(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={salvarCategoria}>Salvar Categoria</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de exclusão em massa */}
+      <Dialog open={openDeleteAllDialog} onClose={() => setOpenDeleteAllDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ffebee', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="error" /> Excluir todos os serviços
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+            Esta ação exclui todos os {servicos.length} serviços cadastrados e não poderá ser desfeita.
+          </Alert>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Para confirmar, digite exatamente <strong>EXCLUIR TODOS</strong> no campo abaixo.
+          </Typography>
+          <TextField
+            fullWidth
+            value={deleteAllConfirm}
+            onChange={(e) => setDeleteAllConfirm(e.target.value)}
+            placeholder="EXCLUIR TODOS"
+            error={deleteAllConfirm.length > 0 && deleteAllConfirm !== 'EXCLUIR TODOS'}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => { setOpenDeleteAllDialog(false); setDeleteAllConfirm(''); }}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleteAllConfirm !== 'EXCLUIR TODOS'}
+            onClick={confirmDeleteAll}
+          >
+            Excluir definitivamente
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Dialog de Confirmação de Exclusão */}
