@@ -40,6 +40,8 @@ import {
   WhatsApp as WhatsAppIcon,
   PhotoCamera as PhotoCameraIcon,
   Close as CloseIcon,
+  Block as BlockIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -85,6 +87,7 @@ function ModernProfissionais() {
   const [profissionais, setProfissionais] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
   const [servicos, setServicos] = useState([]);
+  const [disponibilidades, setDisponibilidades] = useState([]);
   
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
@@ -105,6 +108,8 @@ function ModernProfissionais() {
     dataContratacao: new Date().toISOString().split('T')[0],
     status: 'ativo',
     comissao: 40,
+    precoHora: '',
+    historicoPrecos: [],
     foto: null,
     redes: {
       instagram: '',
@@ -123,15 +128,17 @@ function ModernProfissionais() {
     try {
       setLoading(true);
       
-      const [profissionaisData, atendimentosData, servicosData] = await Promise.all([
+      const [profissionaisData, atendimentosData, servicosData, disponibilidadesData] = await Promise.all([
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('disponibilidades').catch(() => []),
       ]);
       
       setProfissionais(profissionaisData || []);
       setAtendimentos(atendimentosData || []);
       setServicos(servicosData || []);
+      setDisponibilidades(disponibilidadesData || []);
       toast.success('Dados carregados!');
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -161,6 +168,8 @@ function ModernProfissionais() {
           dataContratacao: selectedProfessional.dataContratacao?.split('T')[0] || new Date().toISOString().split('T')[0],
           status: selectedProfessional.status || 'ativo',
           comissao: selectedProfessional.comissao || 40,
+          precoHora: selectedProfessional.precoHora || '',
+          historicoPrecos: selectedProfessional.historicoPrecos || [],
           foto: selectedProfessional.foto || null,
           redes: {
             instagram: selectedProfessional.redes?.instagram || '',
@@ -180,6 +189,8 @@ function ModernProfissionais() {
           dataContratacao: new Date().toISOString().split('T')[0],
           status: 'ativo',
           comissao: 40,
+          precoHora: '',
+          historicoPrecos: [],
           foto: null,
           redes: {
             instagram: '',
@@ -298,16 +309,24 @@ function ModernProfissionais() {
   };
 
   const confirmDelete = async () => {
+    if (!professionalToDelete) return;
+
     try {
+      setLoading(true);
+      const disponibilidadesProfissional = disponibilidades.filter((item) => item.profissionalId === professionalToDelete);
+      await Promise.all(disponibilidadesProfissional.map((item) => firebaseService.delete('disponibilidades', item.id)));
       await firebaseService.delete('profissionais', professionalToDelete);
+      setDisponibilidades(disponibilidades.filter((item) => item.profissionalId !== professionalToDelete));
       setProfissionais(profissionais.filter(p => p.id !== professionalToDelete));
-      mostrarSnackbar('Profissional removido com sucesso!');
+      mostrarSnackbar('Profissional e horários vinculados removidos com sucesso!');
     } catch (error) {
       console.error('Erro ao remover profissional:', error);
-      mostrarSnackbar('Erro ao remover profissional', 'error');
+      mostrarSnackbar(error.message || 'Erro ao remover profissional', 'error');
+    } finally {
+      setLoading(false);
+      setOpenDeleteDialog(false);
+      setProfessionalToDelete(null);
     }
-    setOpenDeleteDialog(false);
-    setProfessionalToDelete(null);
   };
 
   const handleViewDetails = (professional) => {
@@ -347,6 +366,82 @@ function ModernProfissionais() {
     setFormData({ ...formData, foto: null });
   };
 
+  const diasSemanaDisponibilidade = {
+    Domingo: 0,
+    Segunda: 1,
+    Terça: 2,
+    Quarta: 3,
+    Quinta: 4,
+    Sexta: 5,
+    Sábado: 6,
+  };
+
+  const parseHorarioTrabalho = (horarioTrabalho = '') => {
+    const [inicio = '09:00', fim = '18:00'] = horarioTrabalho
+      .split('-')
+      .map((parte) => parte.trim());
+
+    return {
+      horarioInicio: /^\d{2}:\d{2}$/.test(inicio) ? inicio : '09:00',
+      horarioFim: /^\d{2}:\d{2}$/.test(fim) ? fim : '18:00',
+    };
+  };
+
+  const sincronizarDisponibilidades = async (profissionalId, dadosProfissional) => {
+    const diasSelecionados = (dadosProfissional.diasTrabalho || [])
+      .map((dia) => diasSemanaDisponibilidade[dia])
+      .filter((dia) => dia !== undefined);
+    const { horarioInicio, horarioFim } = parseHorarioTrabalho(dadosProfissional.horarioTrabalho);
+    const disponibilidadesProfissional = disponibilidades.filter((item) => item.profissionalId === profissionalId);
+    const novasDisponibilidades = [...disponibilidades];
+
+    for (const diaSemana of Object.values(diasSemanaDisponibilidade)) {
+      const existente = disponibilidadesProfissional.find((item) => item.diaSemana === diaSemana);
+      const ativo = dadosProfissional.status === 'ativo' && diasSelecionados.includes(diaSemana);
+      const payload = {
+        profissionalId,
+        diaSemana,
+        diasSemana: [diaSemana],
+        horarioInicio,
+        horarioFim,
+        intervaloInicio: '',
+        intervaloFim: '',
+        usarIntervalo: false,
+        ativo,
+        observacoes: ativo
+          ? 'Sincronizado pelo cadastro de profissionais'
+          : 'Inativado pelo cadastro de profissionais',
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (existente) {
+        const atualizado = await firebaseService.update('disponibilidades', existente.id, payload);
+        const index = novasDisponibilidades.findIndex((item) => item.id === existente.id);
+        if (index >= 0) novasDisponibilidades[index] = { ...novasDisponibilidades[index], ...payload, ...atualizado, id: existente.id };
+      } else if (diasSelecionados.includes(diaSemana)) {
+        const criada = await firebaseService.add('disponibilidades', payload);
+        novasDisponibilidades.push({ ...payload, ...criada, id: criada?.id || payload.id });
+      }
+    }
+
+    setDisponibilidades(novasDisponibilidades);
+  };
+
+  const inativarProfissional = async (professional) => {
+    try {
+      const dadosAtualizados = { ...professional, status: 'inativo', ativo: false, updatedAt: new Date().toISOString() };
+      const atualizado = await firebaseService.update('profissionais', professional.id, dadosAtualizados);
+      await sincronizarDisponibilidades(professional.id, dadosAtualizados);
+      setProfissionais(profissionais.map((item) => (
+        item.id === professional.id ? { ...item, ...dadosAtualizados, ...atualizado, id: professional.id } : item
+      )));
+      mostrarSnackbar('Profissional inativado e horários removidos da disponibilidade.');
+    } catch (error) {
+      console.error('Erro ao inativar profissional:', error);
+      mostrarSnackbar('Erro ao inativar profissional', 'error');
+    }
+  };
+
   const handleSave = async (event) => {
     event.preventDefault();
     
@@ -361,32 +456,68 @@ function ModernProfissionais() {
       
       // Se houver uma nova foto, fazer upload (simulado - em produção, enviaria para um servidor)
       if (fotoFile) {
-        // Simular upload - em produção, você enviaria para um serviço como Cloudinary, S3, etc.
-        fotoUrl = fotoPreview; // Por enquanto, usamos o preview como URL
+        fotoUrl = fotoPreview;
+      }
+
+      const precoHoraNumerico = formData.precoHora === '' ? '' : Number(String(formData.precoHora).replace(',', '.'));
+      if (precoHoraNumerico !== '' && (Number.isNaN(precoHoraNumerico) || precoHoraNumerico < 0)) {
+        mostrarSnackbar('Valor/hora inválido', 'error');
+        return;
+      }
+
+      const historicoPrecos = Array.isArray(selectedProfessional?.historicoPrecos)
+        ? [...selectedProfessional.historicoPrecos]
+        : [];
+      const precoAnterior = selectedProfessional?.precoHora ?? '';
+      if (selectedProfessional && String(precoAnterior) !== String(precoHoraNumerico)) {
+        historicoPrecos.push({
+          data: new Date().toISOString(),
+          valorAnterior: precoAnterior || 0,
+          valorNovo: precoHoraNumerico || 0,
+          motivo: 'Atualização no cadastro do profissional',
+        });
+      } else if (!selectedProfessional && precoHoraNumerico !== '') {
+        historicoPrecos.push({
+          data: new Date().toISOString(),
+          valorAnterior: 0,
+          valorNovo: precoHoraNumerico,
+          motivo: 'Preço inicial do profissional',
+        });
       }
 
       const profissionalData = {
         ...formData,
+        comissao: Number(formData.comissao) || 0,
+        precoHora: precoHoraNumerico,
+        historicoPrecos,
         foto: fotoUrl,
+        ativo: formData.status === 'ativo',
         updatedAt: new Date().toISOString()
       };
 
       if (selectedProfessional) {
-        await firebaseService.update('profissionais', selectedProfessional.id, profissionalData);
+        const profissionalAtualizado = await firebaseService.update('profissionais', selectedProfessional.id, profissionalData);
+        await sincronizarDisponibilidades(selectedProfessional.id, profissionalData);
         setProfissionais(profissionais.map(p => 
-          p.id === selectedProfessional.id ? { ...profissionalData, id: selectedProfessional.id } : p
+          p.id === selectedProfessional.id ? { ...p, ...profissionalData, ...profissionalAtualizado, id: selectedProfessional.id } : p
         ));
         mostrarSnackbar('Profissional atualizado com sucesso!');
       } else {
-        const novoId = await firebaseService.add('profissionais', profissionalData);
-        setProfissionais([...profissionais, { ...profissionalData, id: novoId }]);
+        const novoProfissional = await firebaseService.add('profissionais', profissionalData);
+        const profissionalCriado = { ...profissionalData, ...novoProfissional, id: novoProfissional?.id || profissionalData.id };
+        if (profissionalCriado.id) {
+          await sincronizarDisponibilidades(profissionalCriado.id, profissionalCriado);
+        }
+        setProfissionais([...profissionais, profissionalCriado]);
         mostrarSnackbar('Profissional adicionado com sucesso!');
       }
       
       setOpenDialog(false);
+      setSelectedProfessional(null);
+      setFotoFile(null);
     } catch (error) {
       console.error('Erro ao salvar profissional:', error);
-      mostrarSnackbar('Erro ao salvar profissional', 'error');
+      mostrarSnackbar(error.message || 'Erro ao salvar profissional', 'error');
     }
   };
 
@@ -621,6 +752,14 @@ function ModernProfissionais() {
                           )}
                         </Box>
 
+                        {professional.precoHora !== '' && professional.precoHora !== undefined && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                              Valor/hora: {formatarFaturamento(Number(professional.precoHora) || 0)}
+                            </Typography>
+                          </Box>
+                        )}
+
                         {/* Horário */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <ScheduleIcon fontSize="small" color="action" />
@@ -639,6 +778,19 @@ function ModernProfissionais() {
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
+                          {professional.status !== 'inativo' && (
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                inativarProfissional(professional);
+                              }}
+                              sx={{ color: '#ff9800' }}
+                              title="Inativar profissional"
+                            >
+                              <BlockIcon fontSize="small" />
+                            </IconButton>
+                          )}
                           <IconButton 
                             size="small" 
                             onClick={(e) => {
@@ -756,6 +908,12 @@ function ModernProfissionais() {
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2" color="textSecondary">Valor/Hora:</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500, color: '#4caf50' }}>
+                              {formatarFaturamento(Number(selectedProfessionalDetail.precoHora) || 0)}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="textSecondary">Serviços Realizados:</Typography>
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                               {stats.servicosRealizados}
@@ -815,6 +973,29 @@ function ModernProfissionais() {
                         </Grid>
                       </Paper>
                     </Grid>
+
+                    {(selectedProfessionalDetail.historicoPrecos || []).length > 0 && (
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <HistoryIcon fontSize="small" /> Histórico de Preços
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2 }}>
+                          {(selectedProfessionalDetail.historicoPrecos || []).slice(-5).reverse().map((item, index) => (
+                            <Box key={`${item.data}-${index}`} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 1, borderBottom: index === 4 ? 'none' : '1px solid #eee' }}>
+                              <Typography variant="body2" color="textSecondary">
+                                {new Date(item.data).toLocaleString('pt-BR')}
+                              </Typography>
+                              <Typography variant="body2">
+                                {formatarFaturamento(Number(item.valorAnterior) || 0)} → {formatarFaturamento(Number(item.valorNovo) || 0)}
+                              </Typography>
+                              <Typography variant="body2" color="textSecondary">
+                                {item.motivo}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Paper>
+                      </Grid>
+                    )}
 
                     {/* Performance */}
                     {performanceData.some(item => item.atendimentos > 0) && (
@@ -1038,6 +1219,19 @@ function ModernProfissionais() {
                   InputProps={{
                     endAdornment: <Typography>%</Typography>,
                     inputProps: { min: 0, max: 100 }
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Valor/Hora"
+                  value={formData.precoHora}
+                  onChange={(e) => setFormData({ ...formData, precoHora: e.target.value })}
+                  type="number"
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>R$</Typography>,
+                    inputProps: { min: 0, step: 0.01 }
                   }}
                 />
               </Grid>
