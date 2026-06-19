@@ -3,9 +3,17 @@ import { Alert, Box, Button, Card, CardContent, Chip, Grid, MenuItem, Paper, Tab
 import { firebaseService } from '../services/firebase';
 
 const CHAMADAS_KEY = 'painel.chamadas';
+const CONFIG_KEY = 'painel.config';
+const SALAS_KEY = 'painel.salas';
 
 const carregarChamadas = () => {
   try { return JSON.parse(localStorage.getItem(CHAMADAS_KEY) || '[]'); } catch (error) { return []; }
+};
+const carregarConfig = () => {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{\"nomeEmpresa\":\"Salão de Beleza\",\"logoUrl\":\"\",\"mensagem\":\"Aguarde sua chamada\"}'); } catch (error) { return { nomeEmpresa: 'Salão de Beleza', logoUrl: '', mensagem: 'Aguarde sua chamada' }; }
+};
+const carregarSalas = () => {
+  try { return JSON.parse(localStorage.getItem(SALAS_KEY) || '[\"Recepção\",\"Sala 1\",\"Sala 2\",\"Lavagem\"]'); } catch (error) { return ['Recepção', 'Sala 1', 'Sala 2', 'Lavagem']; }
 };
 
 const hojeIso = () => new Date().toISOString().split('T')[0];
@@ -25,6 +33,9 @@ function RecepcaoChamada() {
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [chamadas, setChamadas] = useState(carregarChamadas);
+  const [config, setConfig] = useState(carregarConfig);
+  const [salas, setSalas] = useState(carregarSalas);
+  const [novaSala, setNovaSala] = useState('');
   const [form, setForm] = useState({ agendamentoId: '', clienteId: '', clienteNome: '', destino: 'Recepção' });
 
   useEffect(() => {
@@ -50,6 +61,20 @@ function RecepcaoChamada() {
   const salvarChamadas = (lista) => {
     setChamadas(lista);
     localStorage.setItem(CHAMADAS_KEY, JSON.stringify(lista));
+  };
+
+  const salvarConfig = (novaConfig) => {
+    setConfig(novaConfig);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(novaConfig));
+  };
+
+  const adicionarSala = () => {
+    const sala = novaSala.trim();
+    if (!sala || salas.includes(sala)) return;
+    const novasSalas = [...salas, sala];
+    setSalas(novasSalas);
+    localStorage.setItem(SALAS_KEY, JSON.stringify(novasSalas));
+    setNovaSala('');
   };
 
   const montarChamada = () => {
@@ -117,11 +142,20 @@ function RecepcaoChamada() {
         <Grid item xs={12} md={3}><Card><CardContent><Typography variant="h5">{agendamentosHoje.length}</Typography><Typography>Agendados hoje</Typography></CardContent></Card></Grid>
       </Grid>
       <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Configuração do painel</Typography>
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} md={4}><TextField fullWidth label="Nome da empresa" value={config.nomeEmpresa || ''} onChange={(e) => salvarConfig({ ...config, nomeEmpresa: e.target.value })} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth label="URL do logo" value={config.logoUrl || ''} onChange={(e) => salvarConfig({ ...config, logoUrl: e.target.value })} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth label="Mensagem do painel" value={config.mensagem || ''} onChange={(e) => salvarConfig({ ...config, mensagem: e.target.value })} /></Grid>
+          <Grid item xs={12} md={10}><TextField fullWidth label="Nova sala/guichê" value={novaSala} onChange={(e) => setNovaSala(e.target.value)} /></Grid>
+          <Grid item xs={12} md={2}><Button fullWidth variant="outlined" onClick={adicionarSala}>Criar sala</Button></Grid>
+        </Grid>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Adicionar cliente à fila</Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}><TextField select fullWidth label="Agendamento de hoje" value={form.agendamentoId} onChange={(e) => setForm({ ...form, agendamentoId: e.target.value, clienteId: '', clienteNome: '' })}><MenuItem value="">Sem agendamento</MenuItem>{agendamentosHoje.map((agendamento) => <MenuItem key={agendamento.id} value={agendamento.id}>{agendamento.clienteNome || clientes.find(c => c.id === agendamento.clienteId)?.nome || 'Cliente'} - {agendamento.hora || agendamento.horario || ''}</MenuItem>)}</TextField></Grid>
           <Grid item xs={12} md={3}><TextField select fullWidth label="Cliente cadastrado" value={form.clienteId} disabled={!!form.agendamentoId} onChange={(e) => setForm({ ...form, clienteId: e.target.value, clienteNome: '' })}><MenuItem value="">Digitar nome manualmente</MenuItem>{clientes.map((cliente) => <MenuItem key={cliente.id} value={cliente.id}>{cliente.nome}</MenuItem>)}</TextField></Grid>
           <Grid item xs={12} md={3}><TextField fullWidth label="Nome do cliente" value={form.clienteNome} disabled={!!form.clienteId || !!form.agendamentoId} onChange={(e) => setForm({ ...form, clienteNome: e.target.value })} /></Grid>
-          <Grid item xs={12} md={1}><TextField fullWidth label="Destino" value={form.destino} onChange={(e) => setForm({ ...form, destino: e.target.value })} /></Grid>
+          <Grid item xs={12} md={1}><TextField select fullWidth label="Sala" value={form.destino} onChange={(e) => setForm({ ...form, destino: e.target.value })}>{salas.map((sala) => <MenuItem key={sala} value={sala}>{sala}</MenuItem>)}</TextField></Grid>
           <Grid item xs={12} md={1}><Button fullWidth variant="contained" onClick={adicionar}>Add</Button></Grid>
         </Grid>
       </Paper>

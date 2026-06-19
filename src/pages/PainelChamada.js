@@ -1,48 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Chip, Grid, Typography } from '@mui/material';
+import React, { useEffect, useRef, useState } from 'react';
+import { Avatar, Box, Card, CardContent, Chip, Grid, Typography } from '@mui/material';
 
 const CHAMADAS_KEY = 'painel.chamadas';
+const CONFIG_KEY = 'painel.config';
 
 const carregarChamadas = () => {
-  try {
-    return JSON.parse(localStorage.getItem(CHAMADAS_KEY) || '[]');
-  } catch (error) {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(CHAMADAS_KEY) || '[]'); } catch (error) { return []; }
+};
+
+const carregarConfig = () => {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch (error) { return {}; }
 };
 
 function PainelChamada() {
   const [chamadas, setChamadas] = useState(carregarChamadas);
+  const [config, setConfig] = useState(carregarConfig);
+  const ultimaFaladoRef = useRef('');
 
   useEffect(() => {
-    const interval = setInterval(() => setChamadas(carregarChamadas()), 2000);
+    const interval = setInterval(() => {
+      setChamadas(carregarChamadas());
+      setConfig(carregarConfig());
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  const ultimaChamada = chamadas[0];
+  const ultimaChamada = chamadas.find((item) => ['chamado', 'em_atendimento'].includes(item.status)) || chamadas[0];
   const aguardando = chamadas.filter((item) => item.status === 'aguardando');
+  const emAtendimento = chamadas.filter((item) => item.status === 'em_atendimento');
+
+  useEffect(() => {
+    if (!ultimaChamada || ultimaFaladoRef.current === ultimaChamada.id || ultimaChamada.status !== 'chamado') return;
+    ultimaFaladoRef.current = ultimaChamada.id;
+    if ('speechSynthesis' in window) {
+      const destino = ultimaChamada.destino || ultimaChamada.profissionalNome || 'recepção';
+      const frase = `${ultimaChamada.clienteNome}, por favor dirigir-se a ${destino}`;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(frase));
+    }
+  }, [ultimaChamada]);
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#111827', color: 'white', p: 4 }}>
-      <Typography variant="h3" sx={{ fontWeight: 800, mb: 3, textAlign: 'center' }}>Painel de Chamada</Typography>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#0f1020', color: 'white', p: { xs: 2, md: 4 }, background: 'radial-gradient(circle at top left, #4a148c 0, #111827 38%, #020617 100%)' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar src={config.logoUrl} sx={{ width: 72, height: 72, bgcolor: 'white', color: '#9c27b0', fontWeight: 800 }}>{(config.nomeEmpresa || 'S').charAt(0)}</Avatar>
+          <Box>
+            <Typography variant="h3" sx={{ fontWeight: 900 }}>{config.nomeEmpresa || 'Salão de Beleza'}</Typography>
+            <Typography variant="h6" sx={{ opacity: 0.8 }}>{config.mensagem || 'Acompanhe sua chamada no painel'}</Typography>
+          </Box>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="h5">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Typography>
+          <Typography>{new Date().toLocaleDateString('pt-BR')}</Typography>
+        </Box>
+      </Box>
+
       {ultimaChamada ? (
-        <Card sx={{ mb: 4, bgcolor: '#9c27b0', color: 'white' }}>
-          <CardContent sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="h2" sx={{ fontWeight: 900 }}>{ultimaChamada.clienteNome}</Typography>
-            <Typography variant="h4">{ultimaChamada.destino || ultimaChamada.profissionalNome || 'Recepção'}</Typography>
-            <Typography variant="h6">{ultimaChamada.servicoNome || 'Atendimento'}</Typography>
-            <Chip sx={{ mt: 2, bgcolor: 'white', color: '#9c27b0', fontWeight: 700 }} label={ultimaChamada.status === 'chamado' ? 'CHAMADO' : 'AGUARDANDO'} />
+        <Card sx={{ mb: 4, bgcolor: '#ffffff', color: '#111827', borderRadius: 4, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
+          <CardContent sx={{ textAlign: 'center', py: { xs: 4, md: 8 } }}>
+            <Typography variant="h2" sx={{ fontWeight: 900, color: '#9c27b0' }}>{ultimaChamada.clienteNome}</Typography>
+            <Typography variant="h4" sx={{ mt: 1 }}>{ultimaChamada.destino || ultimaChamada.profissionalNome || 'Recepção'}</Typography>
+            <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>{ultimaChamada.servicoNome || 'Atendimento'}</Typography>
+            <Chip sx={{ mt: 3, px: 2, py: 3, fontSize: 20, bgcolor: '#9c27b0', color: 'white', fontWeight: 900 }} label={ultimaChamada.status === 'em_atendimento' ? 'EM ATENDIMENTO' : 'CHAMADO'} />
           </CardContent>
         </Card>
       ) : (
         <Typography variant="h5" sx={{ textAlign: 'center', mb: 4 }}>Nenhum cliente aguardando.</Typography>
       )}
+
       <Grid container spacing={2}>
-        {aguardando.slice(0, 8).map((item) => (
-          <Grid item xs={12} md={3} key={item.id}>
-            <Card sx={{ bgcolor: '#1f2937', color: 'white' }}><CardContent><Typography variant="h6">{item.clienteNome}</Typography><Typography>{item.servicoNome || item.destino || 'Aguardando'}</Typography><Typography variant="caption">{item.profissionalNome || item.destino || ''}</Typography></CardContent></Card>
+        <Grid item xs={12} md={8}>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Aguardando</Typography>
+          <Grid container spacing={2}>
+            {aguardando.slice(0, 8).map((item) => (
+              <Grid item xs={12} md={6} key={item.id}>
+                <Card sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: 'white', border: '1px solid rgba(255,255,255,0.12)' }}><CardContent><Typography variant="h6">{item.clienteNome}</Typography><Typography>{item.servicoNome || item.destino || 'Aguardando'}</Typography><Typography variant="caption">{item.profissionalNome || item.destino || ''}</Typography></CardContent></Card>
+              </Grid>
+            ))}
           </Grid>
-        ))}
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Em atendimento</Typography>
+          {emAtendimento.slice(0, 5).map((item) => <Card key={item.id} sx={{ mb: 1, bgcolor: '#064e3b', color: 'white' }}><CardContent><Typography>{item.clienteNome}</Typography><Typography variant="caption">{item.destino || item.profissionalNome}</Typography></CardContent></Card>)}
+        </Grid>
       </Grid>
     </Box>
   );
