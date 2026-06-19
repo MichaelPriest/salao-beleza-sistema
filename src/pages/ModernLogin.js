@@ -210,8 +210,12 @@ function ModernLogin() {
 
     try {
       // Redirecionar para Supabase OAuth
-      const redirectTo = encodeURIComponent(`${window.location.origin}/login`);
-      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}&response_type=token&prompt=select_account`;
+      const redirectTo = `${window.location.origin}/login`;
+      const authUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
+      authUrl.searchParams.set('provider', 'google');
+      authUrl.searchParams.set('redirect_to', redirectTo);
+      authUrl.searchParams.set('prompt', 'select_account');
+      window.location.href = authUrl.toString();
       
     } catch (error) {
       console.error('Erro no login com Google:', error);
