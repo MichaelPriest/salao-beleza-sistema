@@ -58,6 +58,7 @@ import {
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 import { auditoriaService } from '../services/auditoriaService';
 import { format, isValid, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1792,6 +1793,7 @@ function MinhasComissoes() {
       minHeight: '100vh',
       bgcolor: '#f5f5f5'
     }}>
+      <ProfissionaisSectionNav subtitle="Acompanhe comissões conectadas ao cadastro de profissionais e atendimentos." />
       {/* Cabeçalho Mobile */}
       <Box sx={{
         display: 'flex',

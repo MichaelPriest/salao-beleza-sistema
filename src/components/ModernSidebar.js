@@ -294,6 +294,13 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente']
       },
       {
+        text: 'RH',
+        icon: <GroupsIcon />,
+        path: '/rh',
+        permission: 'gerenciar_profissionais',
+        cargos: ['admin', 'gerente']
+      },
+      {
         text: 'Serviços',
         icon: <HandymanIcon />,
         path: '/servicos',

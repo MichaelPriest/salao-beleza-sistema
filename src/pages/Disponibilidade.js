@@ -94,6 +94,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 import { auditoriaService } from '../services/auditoriaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -736,9 +737,11 @@ function Disponibilidade() {
     return [];
   };
 
+  const profissionaisAtivos = profissionais.filter((profissional) => profissional.status !== 'inativo' && profissional.ativo !== false);
+
   const profissionaisFiltrados = profissionalSelecionado === 'todos'
-    ? profissionais
-    : profissionais.filter(p => p.id === profissionalSelecionado);
+    ? profissionaisAtivos
+    : profissionaisAtivos.filter(p => p.id === profissionalSelecionado);
 
   const diasVisao = getDiasSemana();
   const horariosDia = gerarHorarios(dataReferencia);
@@ -763,6 +766,7 @@ function Disponibilidade() {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box>
+        <ProfissionaisSectionNav subtitle="Gerencie escalas sincronizadas com profissionais, serviços e comissões." />
         {/* Cabeçalho */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
           <Box>
@@ -814,7 +818,7 @@ function Disponibilidade() {
                     onChange={(e) => setProfissionalSelecionado(e.target.value)}
                   >
                     <MenuItem value="todos">Todos os profissionais</MenuItem>
-                    {profissionais.map(prof => (
+                    {profissionaisAtivos.map(prof => (
                       <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                     ))}
                   </Select>
@@ -1225,7 +1229,7 @@ function Disponibilidade() {
                     onChange={handleInputChange}
                     required
                   >
-                    {profissionais.map(prof => (
+                    {profissionaisAtivos.map(prof => (
                       <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                     ))}
                   </Select>
@@ -1411,7 +1415,7 @@ function Disponibilidade() {
                     onChange={handleAusenciaInputChange}
                     required
                   >
-                    {profissionais.map(prof => (
+                    {profissionaisAtivos.map(prof => (
                       <MenuItem key={prof.id} value={prof.id}>{prof.nome}</MenuItem>
                     ))}
                   </Select>
