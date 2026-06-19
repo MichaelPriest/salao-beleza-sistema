@@ -50,7 +50,7 @@ import { useNavigate } from 'react-router-dom';
 import { notificacoesService } from '../services/notificacoesService';
 import { anamneseService } from '../services/anamneseService'; // 🔥 Importar serviço de anamnese
 import { firebaseService } from '../services/firebase';
-import { montarDetalhesNotificacao, normalizarLinkNotificacao } from '../utils/notificationUtils';
+import { getNotificationPayload, montarDetalhesNotificacao, normalizarLinkNotificacao } from '../utils/notificationUtils';
 
 function ModernNotificacoes() {
   const navigate = useNavigate();
@@ -72,6 +72,8 @@ function ModernNotificacoes() {
   const [loadingAnamnese, setLoadingAnamnese] = useState(false);
   const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
   const [selectedAnamnese, setSelectedAnamnese] = useState(null);
+
+  const getDetalhesAnamnese = (notification) => getNotificationPayload(notification);
 
   // Carregar usuário do localStorage apenas uma vez
   useEffect(() => {
@@ -853,20 +855,31 @@ function ModernNotificacoes() {
                                 {formatDate(notification.data)}
                               </Typography>
 
-                              {notification.tipo === 'anamnese' && notification.detalhes && (
-                                <Box sx={{ mt: 1 }}>
-                                  <Chip
-                                    size="small"
-                                    label={`${notification.detalhes.dataFormatada} às ${notification.detalhes.horario}`}
-                                    sx={{ mr: 1 }}
-                                  />
-                                  <Chip
-                                    size="small"
-                                    label={notification.detalhes.servicoNome}
-                                    sx={{ bgcolor: '#e3f2fd' }}
-                                  />
-                                </Box>
-                              )}
+                              {notification.tipo === 'anamnese' && (() => {
+                                const detalhesAnamnese = getDetalhesAnamnese(notification);
+                                const dataHorario = [detalhesAnamnese.dataFormatada, detalhesAnamnese.horario]
+                                  .filter(Boolean)
+                                  .join(' às ');
+
+                                return (dataHorario || detalhesAnamnese.servicoNome) ? (
+                                  <Box sx={{ mt: 1 }}>
+                                    {dataHorario && (
+                                      <Chip
+                                        size="small"
+                                        label={dataHorario}
+                                        sx={{ mr: 1 }}
+                                      />
+                                    )}
+                                    {detalhesAnamnese.servicoNome && (
+                                      <Chip
+                                        size="small"
+                                        label={detalhesAnamnese.servicoNome}
+                                        sx={{ bgcolor: '#e3f2fd' }}
+                                      />
+                                    )}
+                                  </Box>
+                                ) : null;
+                              })()}
                             </Grid>
 
                             <Grid item xs={12} sm={2}>
@@ -975,23 +988,30 @@ function ModernNotificacoes() {
 
                   {notificationDetails.tipo === 'anamnese' ? (
                     // 🔥 DETALHES ESPECÍFICOS PARA ANAMNESE
-                    <>
-                      <Typography variant="body2">
-                        <strong>Cliente:</strong> {notificationDetails.detalhes.clienteNome}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Serviço:</strong> {notificationDetails.detalhes.servicoNome}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Profissional:</strong> {notificationDetails.detalhes.profissionalNome}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Data/Horário:</strong> {notificationDetails.detalhes.dataFormatada} às {notificationDetails.detalhes.horario}
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Formulário:</strong> {notificationDetails.detalhes.formularioTitulo}
-                      </Typography>
-                    </>
+                    (() => {
+                      const detalhesAnamnese = getDetalhesAnamnese(notificationDetails);
+                      const camposAnamnese = [
+                        ['Cliente', detalhesAnamnese.clienteNome || notificationDetails.clienteNome],
+                        ['Serviço', detalhesAnamnese.servicoNome || notificationDetails.servicoNome],
+                        ['Profissional', detalhesAnamnese.profissionalNome || notificationDetails.profissionalNome],
+                        ['Data/Horário', [detalhesAnamnese.dataFormatada || detalhesAnamnese.data, detalhesAnamnese.horario].filter(Boolean).join(' às ')],
+                        ['Formulário', detalhesAnamnese.formularioTitulo],
+                      ].filter(([, valor]) => valor);
+
+                      return camposAnamnese.length > 0 ? (
+                        <>
+                          {camposAnamnese.map(([label, valor]) => (
+                            <Typography key={label} variant="body2">
+                              <strong>{label}:</strong> {valor}
+                            </Typography>
+                          ))}
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          Nenhum detalhe adicional disponível para esta anamnese.
+                        </Typography>
+                      );
+                    })()
                   ) : (
                     montarDetalhesNotificacao(notificationDetails).map(([key, value]) => (
                       <Typography key={key} variant="body2" sx={{ mb: 0.5 }}>
