@@ -80,9 +80,13 @@ No painel do Supabase, acesse **Authentication > URL Configuration** e configure
 
 - **Site URL**: URL pública da aplicação em produção.
 - **Redirect URLs**:
+  - `http://localhost:3000/login`
   - `http://localhost:3000/cliente/login`
+  - `http://localhost:3000/cliente/auth/callback`
   - `http://localhost:3000/cliente/recuperar-senha`
+  - `https://SEU-DOMINIO/login`
   - `https://SEU-DOMINIO/cliente/login`
+  - `https://SEU-DOMINIO/cliente/auth/callback`
   - `https://SEU-DOMINIO/cliente/recuperar-senha`
 
 Em **Authentication > Email Templates**, mantenha os templates de **Confirm signup** e **Reset password** usando o link de confirmação do Supabase (`{{ .ConfirmationURL }}`). O sistema já envia os redirects corretos: confirmação para `/cliente/login` e recuperação para `/cliente/recuperar-senha`.

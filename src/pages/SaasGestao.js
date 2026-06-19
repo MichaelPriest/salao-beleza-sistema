@@ -87,6 +87,26 @@ const formatDate = (value) => {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 };
 
+const withTimeout = (promise, timeoutMs, fallbackValue, timeoutMessage) => {
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(timeoutMessage);
+      resolve(fallbackValue);
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+};
+
+const getUsuarioAtual = () => {
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || 'null');
+  } catch (error) {
+    return null;
+  }
+};
+
 const getStatusColor = (status) => {
   const colors = {
     [STATUS_ASSINATURA.TRIAL]: 'info',
@@ -174,8 +194,264 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     ];
   }, [empresa, unidades, assinatura]);
 
-  // ... (resto das funções permanecem iguais: carregarDados, salvarEmpresa, etc.)
-  // Mantenha todas as funções do código original
+  const preencherFormulariosEmpresa = (dadosEmpresa = {}) => {
+    const cobranca = dadosEmpresa.cobranca || {};
+    setEmpresaForm({
+      nome: dadosEmpresa.nome || '',
+      documento: dadosEmpresa.documento || '',
+      razaoSocial: dadosEmpresa.razaoSocial || cobranca.razaoSocial || '',
+      email: dadosEmpresa.email || '',
+      telefone: dadosEmpresa.telefone || '',
+      planoId: dadosEmpresa.planoId || 'individual',
+      responsavelFinanceiro: cobranca.responsavelFinanceiro || '',
+      emailFinanceiro: cobranca.emailFinanceiro || '',
+      telefoneFinanceiro: cobranca.telefoneFinanceiro || '',
+      documentoCobranca: cobranca.documentoCobranca || '',
+      enderecoCobranca: cobranca.enderecoCobranca || '',
+      diaVencimento: cobranca.diaVencimento || 5,
+      observacoesCobranca: cobranca.observacoes || ''
+    });
+
+    const sitePublico = dadosEmpresa.sitePublico || {};
+    setPortalForm((prev) => ({
+      ...prev,
+      slug: dadosEmpresa.slug || '',
+      titulo: sitePublico.titulo || dadosEmpresa.nome || '',
+      subtitulo: sitePublico.subtitulo || prev.subtitulo,
+      corPrimaria: sitePublico.corPrimaria || prev.corPrimaria,
+      ativo: sitePublico.ativo !== false,
+      mostrarServicos: sitePublico.mostrarServicos !== false,
+      mostrarProfissionais: sitePublico.mostrarProfissionais !== false,
+      logo: sitePublico.logo || '',
+      bannerUrl: sitePublico.bannerUrl || '',
+      whatsapp: sitePublico.whatsapp || '',
+      temaLayout: sitePublico.temaLayout || 'moderno',
+      mostrarContato: sitePublico.mostrarContato !== false,
+      mostrarAreaRestrita: sitePublico.mostrarAreaRestrita !== false,
+      mostrarRedesSociais: sitePublico.mostrarRedesSociais !== false,
+      mostrarBanner: sitePublico.mostrarBanner !== false,
+    }));
+
+    setPaymentConfig({
+      ...CONFIG_COBRANCA_PADRAO,
+      ...(dadosEmpresa.cobranca?.configPagamento || dadosEmpresa.cobranca || {})
+    });
+  };
+
+  const carregarDados = async () => {
+    setLoading(true);
+    try {
+      const usuario = getUsuarioAtual();
+      const contexto = saasService.getContextoAtual();
+      const empresaId = contexto.empresaId || usuario?.empresaId || usuario?.tenantId || usuario?.empresa?.id;
+
+      let empresaData = contexto.empresa || usuario?.empresa || null;
+      const [planosData, configCobranca, empresaDataResolvida] = await Promise.all([
+        withTimeout(
+          saasService.listarPlanos(),
+          8000,
+          Object.values(PLANOS_PADRAO),
+          'Tempo limite ao carregar planos SaaS. Usando planos padrão.'
+        ),
+        withTimeout(
+          saasService.buscarConfigCobranca(),
+          8000,
+          CONFIG_COBRANCA_PADRAO,
+          'Tempo limite ao carregar configuração de cobrança. Usando padrão.'
+        ),
+        empresaId
+          ? withTimeout(
+            firebaseService.getById('empresas', empresaId).catch(() => empresaData),
+            8000,
+            empresaData,
+            'Tempo limite ao carregar empresa. Usando dados locais.'
+          )
+          : Promise.resolve(empresaData)
+      ]);
+
+      setPlanos(planosData.length ? planosData : Object.values(PLANOS_PADRAO));
+      setPaymentConfig(configCobranca);
+      empresaData = empresaDataResolvida;
+
+      if (!empresaData) {
+        preencherFormulariosEmpresa({ nome: usuario?.empresaNome || usuario?.nomeEmpresa || '' });
+        return;
+      }
+
+      setEmpresa(empresaData);
+      setTenantContext({ empresaId: empresaData.id, empresa: empresaData });
+      preencherFormulariosEmpresa(empresaData);
+
+      const [unidadesData, assinaturaData, faturasData, pagamentosData] = await Promise.all([
+        withTimeout(saasService.listarUnidades(empresaData.id).catch(() => []), 8000, [], 'Tempo limite ao carregar unidades.'),
+        withTimeout(saasService.buscarAssinaturaAtual(empresaData.id).catch(() => null), 8000, null, 'Tempo limite ao carregar assinatura.'),
+        withTimeout(firebaseService.query('faturas_saas', [{ field: 'empresaId', operator: '==', value: empresaData.id }]).catch(() => []), 8000, [], 'Tempo limite ao carregar faturas.'),
+        withTimeout(firebaseService.query('pagamentos_saas', [{ field: 'empresaId', operator: '==', value: empresaData.id }]).catch(() => []), 8000, [], 'Tempo limite ao carregar pagamentos.')
+      ]);
+
+      setUnidades(unidadesData);
+      setAssinatura(assinaturaData);
+      setFaturas(faturasData);
+      setPagamentos(pagamentosData);
+    } catch (error) {
+      console.error('Erro ao carregar dados da empresa:', error);
+      toast.error('Não foi possível carregar todos os dados da empresa.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
+  const salvarEmpresa = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (empresa?.id) {
+        const payload = {
+          nome: empresaForm.nome,
+          documento: empresaForm.documento,
+          razaoSocial: empresaForm.razaoSocial,
+          email: empresaForm.email,
+          telefone: empresaForm.telefone,
+          planoId: empresaForm.planoId,
+          cobranca: {
+            ...(empresa.cobranca || {}),
+            responsavelFinanceiro: empresaForm.responsavelFinanceiro,
+            emailFinanceiro: empresaForm.emailFinanceiro,
+            telefoneFinanceiro: empresaForm.telefoneFinanceiro,
+            documentoCobranca: empresaForm.documentoCobranca,
+            enderecoCobranca: empresaForm.enderecoCobranca,
+            diaVencimento: Number(empresaForm.diaVencimento || 5),
+            observacoes: empresaForm.observacoesCobranca,
+          },
+          updatedAt: new Date().toISOString()
+        };
+        await firebaseService.update('empresas', empresa.id, payload);
+        const empresaAtualizada = { ...empresa, ...payload };
+        setEmpresa(empresaAtualizada);
+        setTenantContext({ empresaId: empresaAtualizada.id, empresa: empresaAtualizada });
+        toast.success('Empresa atualizada com sucesso!');
+      } else {
+        const resultado = await saasService.criarEmpresa(empresaForm);
+        setEmpresa(resultado.empresa);
+        setUnidades([resultado.unidade]);
+        setAssinatura(resultado.assinatura);
+        preencherFormulariosEmpresa(resultado.empresa);
+        setTab(1);
+        toast.success('Empresa criada com sucesso!');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar empresa:', error);
+      toast.error(error.message || 'Erro ao salvar empresa.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const criarUnidade = async (event) => {
+    event.preventDefault();
+    if (!empresa?.id) return;
+    setSaving(true);
+    try {
+      const unidade = await saasService.criarUnidade({
+        empresaId: empresa.id,
+        nome: unidadeForm.nome,
+        telefone: unidadeForm.telefone,
+        endereco: { descricao: unidadeForm.endereco }
+      });
+      setUnidades((prev) => [...prev, unidade]);
+      setUnidadeForm({ nome: '', telefone: '', endereco: '' });
+      toast.success('Unidade criada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao criar unidade:', error);
+      toast.error(error.message || 'Erro ao criar unidade.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const trocarUnidade = async (unidade) => {
+    await saasService.trocarUnidade(unidade);
+    toast.success(`Unidade ${unidade.nome} selecionada.`);
+  };
+
+  const iniciarCheckout = async () => {
+    setCheckoutLoading(true);
+    try {
+      const resultado = await saasService.iniciarCheckout({
+        empresaId: empresa?.id,
+        planoId: empresaForm.planoId,
+        provider: paymentConfig.provider,
+        metodosPagamento: paymentConfig.metodosPagamento,
+        dadosPagamento: paymentConfig
+      });
+      setCheckout(resultado);
+      if (resultado?.checkoutUrl) window.open(resultado.checkoutUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Erro ao iniciar checkout:', error);
+      toast.error(error.message || 'Erro ao iniciar checkout.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const salvarConfiguracaoPagamentoEmpresa = async () => {
+    if (!empresa?.id) return;
+    setSaving(true);
+    try {
+      const payload = {
+        cobranca: {
+          ...(empresa.cobranca || {}),
+          configPagamento: paymentConfig,
+          provider: paymentConfig.provider,
+          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+        },
+        updatedAt: new Date().toISOString()
+      };
+      await firebaseService.update('empresas', empresa.id, payload);
+      setEmpresa((prev) => ({ ...prev, ...payload }));
+      toast.success('Método de cobrança salvo!');
+    } catch (error) {
+      console.error('Erro ao salvar cobrança:', error);
+      toast.error(error.message || 'Erro ao salvar cobrança.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const salvarPortalEmpresa = async (event) => {
+    event.preventDefault();
+    if (!empresa?.id) return;
+    setSaving(true);
+    try {
+      const empresaAtualizada = await saasService.salvarPortalEmpresa(empresa.id, {
+        slug: portalForm.slug,
+        sitePublico: portalForm
+      });
+      setEmpresa(empresaAtualizada);
+      preencherFormulariosEmpresa(empresaAtualizada);
+      toast.success('Página pública salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar página pública:', error);
+      toast.error(error.message || 'Erro ao salvar página pública.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copiarLinkEmpresa = async () => {
+    const link = empresa?.linkPublico || (portalForm.slug ? `${window.location.origin}/e/${portalForm.slug}` : '');
+    if (!link) return;
+    await navigator.clipboard?.writeText(link);
+    toast.success('Link copiado!');
+  };
 
   if (loading) {
     return (

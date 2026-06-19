@@ -236,11 +236,10 @@ export const AuthClienteProvider = ({ children }) => {
       sessionStorage.removeItem('pending_google_user');
       sessionStorage.setItem('cliente_google_oauth_started_at', new Date().toISOString());
 
-      // Usar fluxo implícito, compatível com a troca de sessão feita no frontend.
+      // Não enviar response_type: o Supabase precisa controlar code/state no callback do Google.
       const authUrl = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
       authUrl.searchParams.set('provider', 'google');
       authUrl.searchParams.set('redirect_to', callbackUrl.toString());
-      authUrl.searchParams.set('response_type', 'token');
       authUrl.searchParams.set('prompt', 'select_account');
       
       console.log('🚀 Redirecionando para Google OAuth');
