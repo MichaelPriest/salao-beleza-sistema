@@ -29,7 +29,8 @@ function PainelChamada() {
         <Card sx={{ mb: 4, bgcolor: '#9c27b0', color: 'white' }}>
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
             <Typography variant="h2" sx={{ fontWeight: 900 }}>{ultimaChamada.clienteNome}</Typography>
-            <Typography variant="h4">{ultimaChamada.destino || 'Recepção'}</Typography>
+            <Typography variant="h4">{ultimaChamada.destino || ultimaChamada.profissionalNome || 'Recepção'}</Typography>
+            <Typography variant="h6">{ultimaChamada.servicoNome || 'Atendimento'}</Typography>
             <Chip sx={{ mt: 2, bgcolor: 'white', color: '#9c27b0', fontWeight: 700 }} label={ultimaChamada.status === 'chamado' ? 'CHAMADO' : 'AGUARDANDO'} />
           </CardContent>
         </Card>
@@ -39,7 +40,7 @@ function PainelChamada() {
       <Grid container spacing={2}>
         {aguardando.slice(0, 8).map((item) => (
           <Grid item xs={12} md={3} key={item.id}>
-            <Card sx={{ bgcolor: '#1f2937', color: 'white' }}><CardContent><Typography variant="h6">{item.clienteNome}</Typography><Typography>{item.destino || 'Aguardando'}</Typography></CardContent></Card>
+            <Card sx={{ bgcolor: '#1f2937', color: 'white' }}><CardContent><Typography variant="h6">{item.clienteNome}</Typography><Typography>{item.servicoNome || item.destino || 'Aguardando'}</Typography><Typography variant="caption">{item.profissionalNome || item.destino || ''}</Typography></CardContent></Card>
           </Grid>
         ))}
       </Grid>
