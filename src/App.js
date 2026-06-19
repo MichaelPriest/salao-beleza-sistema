@@ -112,6 +112,7 @@ import ModernConfiguracoes from './pages/ModernConfiguracoes';
 import ModernClientes from './pages/ModernClientes';
 import ModernServicos from './pages/ModernServicos';
 import ModernProfissionais from './pages/ModernProfissionais';
+import RecursosHumanos from './pages/RecursosHumanos';
 import Agenda from './pages/agenda';
 import ModernAgendamentos from './pages/ModernAgendamentos';
 import ModernAtendimentos from './pages/ModernAtendimentos';
@@ -638,6 +639,11 @@ function App() {
                 <Route path="/profissionais" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}><ModernProfissionais /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/rh" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><RecursosHumanos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/agendamentos" element={

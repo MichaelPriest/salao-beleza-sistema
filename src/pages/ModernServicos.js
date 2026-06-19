@@ -1,5 +1,5 @@
 // src/pages/ModernServicos.js (versão corrigida)
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -42,6 +42,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Warning as WarningIcon,
   AccessTime as AccessTimeIcon,
   AttachMoney as AttachMoneyIcon,
   GridView as GridViewIcon,
@@ -49,6 +50,7 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   FileDownload as ExportIcon,
+  FileUpload as ImportIcon,
   FilterList as FilterIcon,
   Category as CategoryIcon,
   Person as PersonIcon,
@@ -56,6 +58,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
+import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
+import * as XLSX from 'xlsx';
 
 const categories = ['Cabelo', 'Unhas', 'Barba', 'Maquiagem', 'Estética', 'Depilação', 'Massagem'];
 
@@ -66,7 +70,7 @@ function ModernServicos() {
   const [profissionais, setProfissionais] = useState([]);
   
   // NOVOS ESTADOS
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' ou 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' ou 'list'
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('todos');
   const [filterStatus, setFilterStatus] = useState('todos'); // 'todos', 'ativo', 'inativo'
@@ -80,7 +84,20 @@ function ModernServicos() {
   const [selectedService, setSelectedService] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState(null);
+  const [openDeleteAllDialog, setOpenDeleteAllDialog] = useState(false);
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState('');
+  const [openModeloDialog, setOpenModeloDialog] = useState(false);
+  const [openCategoriaDialog, setOpenCategoriaDialog] = useState(false);
+  const [novaCategoria, setNovaCategoria] = useState('');
+  const [categoriasCustomizadas, setCategoriasCustomizadas] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('servicos.categoriasCustomizadas') || '[]');
+    } catch (error) {
+      return [];
+    }
+  });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const fileInputRef = useRef(null);
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -93,6 +110,16 @@ function ModernServicos() {
     ativo: true,
     profissionaisIds: [] // 👈 IMPORTANTE: Array para associar profissionais
   });
+
+  const categoriasDisponiveis = useMemo(() => Array.from(new Set([
+    ...categories,
+    ...categoriasCustomizadas,
+    ...servicos.map((servico) => servico.categoria).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categoriasCustomizadas, servicos]);
+
+  useEffect(() => {
+    localStorage.setItem('servicos.categoriasCustomizadas', JSON.stringify(categoriasCustomizadas));
+  }, [categoriasCustomizadas]);
 
   useEffect(() => {
     carregarDados();
@@ -174,7 +201,7 @@ function ModernServicos() {
           descricao: selectedService.descricao || '',
           duracao: selectedService.duracao || 60,
           preco: selectedService.preco || '',
-          categoria: selectedService.categoria || 'Cabelo',
+          categoria: selectedService.categoria || categoriasDisponiveis[0] || 'Cabelo',
           comissaoProfissional: selectedService.comissaoProfissional || 50,
           ativo: selectedService.ativo !== undefined ? selectedService.ativo : true,
           profissionaisIds: selectedService.profissionaisIds || [] // 👈 Carregar profissionais associados
@@ -185,14 +212,14 @@ function ModernServicos() {
           descricao: '',
           duracao: 60,
           preco: '',
-          categoria: 'Cabelo',
+          categoria: categoriasDisponiveis[0] || 'Cabelo',
           comissaoProfissional: 50,
           ativo: true,
           profissionaisIds: [] // 👈 Iniciar vazio
         });
       }
     }
-  }, [openDialog, selectedService]);
+  }, [openDialog, selectedService, categoriasDisponiveis]);
 
   const handleAdd = () => {
     setSelectedService(null);
@@ -222,6 +249,46 @@ function ModernServicos() {
     setServiceToDelete(null);
   };
 
+  const confirmDeleteAll = async () => {
+    if (deleteAllConfirm !== 'EXCLUIR TODOS') {
+      mostrarSnackbar('Digite EXCLUIR TODOS para confirmar a exclusão em massa.', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const idsParaExcluir = servicos.map((servico) => servico.id).filter(Boolean);
+      await Promise.all(idsParaExcluir.map((id) => firebaseService.delete('servicos', id)));
+      setServicos([]);
+      setOpenDeleteAllDialog(false);
+      setDeleteAllConfirm('');
+      mostrarSnackbar(`${idsParaExcluir.length} serviços excluídos com sucesso.`);
+    } catch (error) {
+      console.error('Erro ao excluir todos os serviços:', error);
+      mostrarSnackbar('Erro ao excluir todos os serviços', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const salvarCategoria = () => {
+    const categoria = novaCategoria.trim();
+    if (!categoria) {
+      mostrarSnackbar('Informe o nome da categoria.', 'error');
+      return;
+    }
+    if (categoriasDisponiveis.some((item) => item.toLowerCase() === categoria.toLowerCase())) {
+      mostrarSnackbar('Essa categoria já existe.', 'warning');
+      return;
+    }
+
+    setCategoriasCustomizadas([...categoriasCustomizadas, categoria]);
+    setFormData({ ...formData, categoria });
+    setNovaCategoria('');
+    setOpenCategoriaDialog(false);
+    mostrarSnackbar('Categoria cadastrada com sucesso!');
+  };
+
   const handleSave = async (event) => {
     event.preventDefault();
     
@@ -248,14 +315,14 @@ function ModernServicos() {
       };
 
       if (selectedService) {
-        await firebaseService.update('servicos', selectedService.id, serviceData);
+        const servicoAtualizado = await firebaseService.update('servicos', selectedService.id, serviceData);
         setServicos(servicos.map(s => 
-          s.id === selectedService.id ? { ...serviceData, id: selectedService.id } : s
+          s.id === selectedService.id ? { ...s, ...serviceData, ...servicoAtualizado, id: selectedService.id } : s
         ));
         mostrarSnackbar('Serviço atualizado com sucesso!');
       } else {
-        const novoId = await firebaseService.add('servicos', serviceData);
-        setServicos([...servicos, { ...serviceData, id: novoId }]);
+        const novoServico = await firebaseService.add('servicos', serviceData);
+        setServicos([...servicos, { ...serviceData, ...novoServico, id: novoServico?.id || serviceData.id }]);
         mostrarSnackbar('Serviço adicionado com sucesso!');
       }
       
@@ -266,29 +333,302 @@ function ModernServicos() {
     }
   };
 
-  // EXPORTAR DADOS
-  const exportarDados = () => {
+  const camposExportacao = [
+    { key: 'id', label: 'ID' },
+    { key: 'nome', label: 'Nome' },
+    { key: 'descricao', label: 'Descrição' },
+    { key: 'categoria', label: 'Categoria' },
+    { key: 'duracao', label: 'Duração (min)' },
+    { key: 'preco', label: 'Preço' },
+    { key: 'comissaoProfissional', label: 'Comissão (%)' },
+    { key: 'ativo', label: 'Ativo' },
+    { key: 'profissionaisIds', label: 'Profissionais IDs' },
+  ];
+
+  const linhaModeloImportacao = {
+    Nome: 'Corte Feminino',
+    Descrição: 'Corte, lavagem e finalização',
+    Categoria: 'Cabelo',
+    'Duração (min)': 60,
+    Preço: 120,
+    'Comissão (%)': 50,
+    Ativo: true,
+    'Profissionais IDs': 'id_profissional_1;id_profissional_2',
+  };
+
+  const baixarModeloImportacao = (formato = 'xlsx') => {
+    const nomeBase = `modelo_importacao_servicos`;
+
+    if (formato === 'json') {
+      baixarArquivo(JSON.stringify([linhaModeloImportacao], null, 2), `${nomeBase}.json`, 'application/json;charset=utf-8');
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet([linhaModeloImportacao]);
+
+    if (formato === 'csv') {
+      baixarArquivo(XLSX.utils.sheet_to_csv(worksheet, { FS: ';' }), `${nomeBase}.csv`, 'text/csv;charset=utf-8');
+      return;
+    }
+
+    if (formato === 'txt') {
+      const cabecalho = Object.keys(linhaModeloImportacao).join('	');
+      const valores = Object.values(linhaModeloImportacao).join('	');
+      baixarArquivo(`${cabecalho}
+${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Serviços');
+    XLSX.writeFile(workbook, `${nomeBase}.${formato === 'ods' ? 'ods' : 'xlsx'}`, { bookType: formato === 'ods' ? 'ods' : 'xlsx' });
+  };
+
+  const normalizarChave = (valor = '') => String(valor)
+    .replace(/^\uFEFF/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  const obterValor = (registro, aliases) => {
+    const mapa = Object.entries(registro || {}).reduce((acc, [chave, valor]) => {
+      acc[normalizarChave(chave)] = valor;
+      return acc;
+    }, {});
+
+    for (const alias of aliases) {
+      const valor = mapa[normalizarChave(alias)];
+      if (valor !== undefined && valor !== null && String(valor).trim() !== '') return valor;
+    }
+    return undefined;
+  };
+
+  const parseNumero = (valor, padrao = 0) => {
+    if (valor === undefined || valor === null || valor === '') return padrao;
+    if (typeof valor === 'number') return valor;
+
+    const texto = String(valor)
+      .replace(/R\$/gi, '')
+      .replace(/\s/g, '')
+      .trim();
+    const normalizado = texto.includes(',')
+      ? texto.replace(/\./g, '').replace(',', '.')
+      : texto;
+    const numero = Number(normalizado.replace(/[^0-9.-]/g, ''));
+    return Number.isNaN(numero) ? padrao : numero;
+  };
+
+  const parseBoolean = (valor, padrao = true) => {
+    if (valor === undefined || valor === null || valor === '') return padrao;
+    if (typeof valor === 'boolean') return valor;
+    const texto = String(valor).trim().toLowerCase();
+    return !['false', 'falso', 'nao', 'não', '0', 'inativo', 'inativa'].includes(texto);
+  };
+
+  const normalizarServico = (registro = {}) => {
+    const id = obterValor(registro, ['id', 'ID', 'codigo', 'código', 'cod']);
+    const nome = obterValor(registro, ['nome', 'Nome', 'servico', 'serviço', 'servio', 'nome do serviço', 'descricao do servico']);
+    const descricao = obterValor(registro, ['descricao', 'descrição', 'descrio', 'Descrição', 'detalhes', 'observacoes', 'observações']);
+    const categoria = obterValor(registro, ['categoria', 'Categoria', 'grupo', 'tipo']);
+    const duracao = obterValor(registro, ['duracao', 'duração', 'durao', 'Duração (min)', 'duracao min', 'tempo', 'tempo min', 'minutos']);
+    const preco = obterValor(registro, ['preco', 'preço', 'preo', 'Preço', 'valor', 'valor do serviço', 'preco venda', 'preço venda']);
+    const comissao = obterValor(registro, ['comissaoProfissional', 'comissão (%)', 'comisso', 'Comissão (%)', 'comissao', 'comissão', 'percentual comissao']);
+    const ativo = obterValor(registro, ['ativo', 'Ativo', 'status', 'situacao', 'situação']);
+    const profissionais = obterValor(registro, ['profissionaisIds', 'Profissionais IDs', 'profissionais', 'profissional ids', 'ids profissionais']);
+
+    return {
+      id: id ? String(id).trim() : '',
+      nome: nome ? String(nome).trim() : '',
+      descricao: descricao ? String(descricao).trim() : '',
+      categoria: categoria ? String(categoria).trim() : 'Cabelo',
+      duracao: parseNumero(duracao, 60),
+      preco: parseNumero(preco, 0),
+      comissaoProfissional: parseNumero(comissao, 50),
+      ativo: parseBoolean(ativo, true),
+      profissionaisIds: Array.isArray(profissionais)
+        ? profissionais
+        : String(profissionais || '')
+          .split(/[;,]/)
+          .map((profissionalId) => profissionalId.trim())
+          .filter(Boolean),
+    };
+  };
+
+  const detectarSeparador = (linha = '') => {
+    const separadores = [';', ',', '\t', '|'];
+    return separadores.reduce((melhor, separador) => (
+      linha.split(separador).length > linha.split(melhor).length ? separador : melhor
+    ), ';');
+  };
+
+  const parseLinhaCsv = (linha, separador) => {
+    const colunas = [];
+    let atual = '';
+    let dentroAspas = false;
+
+    for (let i = 0; i < linha.length; i += 1) {
+      const char = linha[i];
+      const proximo = linha[i + 1];
+
+      if (char === '"' && proximo === '"') {
+        atual += '"';
+        i += 1;
+      } else if (char === '"') {
+        dentroAspas = !dentroAspas;
+      } else if (char === separador && !dentroAspas) {
+        colunas.push(atual.trim());
+        atual = '';
+      } else {
+        atual += char;
+      }
+    }
+
+    colunas.push(atual.trim());
+    return colunas;
+  };
+
+  const parseCsvOuTxt = (texto = '') => {
+    const linhas = texto
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((linha) => linha.trim())
+      .filter(Boolean);
+
+    if (linhas.length < 2) return [];
+
+    const separador = detectarSeparador(linhas[0]);
+    const cabecalhos = parseLinhaCsv(linhas[0], separador);
+
+    return linhas.slice(1).map((linha) => {
+      const valores = parseLinhaCsv(linha, separador);
+      return cabecalhos.reduce((acc, cabecalho, index) => {
+        acc[cabecalho] = valores[index] ?? '';
+        return acc;
+      }, {});
+    });
+  };
+
+  const prepararLinhasExportacao = () => servicosFiltrados.map((servico) => ({
+    ID: servico.id || '',
+    Nome: servico.nome || '',
+    Descrição: servico.descricao || '',
+    Categoria: servico.categoria || '',
+    'Duração (min)': servico.duracao || '',
+    Preço: servico.preco || 0,
+    'Comissão (%)': servico.comissaoProfissional ?? 50,
+    Ativo: servico.ativo !== false,
+    'Profissionais IDs': (servico.profissionaisIds || []).join(';'),
+  }));
+
+  const baixarArquivo = (conteudo, nomeArquivo, tipo) => {
+    const blob = new Blob([conteudo], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarDados = (formato = 'json') => {
     try {
-      const dadosExport = {
-        dataBackup: new Date().toISOString(),
-        versao: '2.0',
-        totalServicos: servicosFiltrados.length,
-        dados: {
-          servicos: servicosFiltrados
-        }
-      };
-      
-      const blob = new Blob([JSON.stringify(dadosExport, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `servicos_backup_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      
-      mostrarSnackbar('Dados exportados com sucesso!');
+      const data = new Date().toISOString().split('T')[0];
+      const linhas = prepararLinhasExportacao();
+
+      if (formato === 'json') {
+        baixarArquivo(JSON.stringify({ dataBackup: new Date().toISOString(), versao: '2.0', totalServicos: servicosFiltrados.length, dados: { servicos: servicosFiltrados } }, null, 2), `servicos_backup_${data}.json`, 'application/json;charset=utf-8');
+      } else if (formato === 'csv') {
+        const worksheet = XLSX.utils.json_to_sheet(linhas);
+        const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: ';' });
+        baixarArquivo(csv, `servicos_${data}.csv`, 'text/csv;charset=utf-8');
+      } else if (formato === 'txt') {
+        const texto = linhas.map((linha) => camposExportacao.map(({ label }) => `${label}: ${linha[label] ?? ''}`).join(' | ')).join('\n');
+        baixarArquivo(texto, `servicos_${data}.txt`, 'text/plain;charset=utf-8');
+      } else {
+        const worksheet = XLSX.utils.json_to_sheet(linhas);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Serviços');
+        XLSX.writeFile(workbook, `servicos_${data}.${formato === 'ods' ? 'ods' : 'xlsx'}`, { bookType: formato === 'ods' ? 'ods' : 'xlsx' });
+      }
+
+      mostrarSnackbar(`Serviços exportados em ${formato.toUpperCase()} com sucesso!`);
     } catch (error) {
       console.error('Erro ao exportar:', error);
       mostrarSnackbar('Erro ao exportar dados', 'error');
+    }
+  };
+
+  const importarArquivo = async (event) => {
+    const arquivo = event.target.files?.[0];
+    if (!arquivo) return;
+
+    try {
+      setLoading(true);
+      const extensao = arquivo.name.split('.').pop()?.toLowerCase();
+      const buffer = await arquivo.arrayBuffer();
+      let registros = [];
+
+      if (extensao === 'json') {
+        const texto = new TextDecoder('utf-8').decode(buffer);
+        const json = JSON.parse(texto);
+        registros = json?.dados?.servicos || json?.servicos || (Array.isArray(json) ? json : []);
+      } else if (['csv', 'txt'].includes(extensao)) {
+        const textoUtf8 = new TextDecoder('utf-8').decode(buffer);
+        const texto = textoUtf8.includes('�')
+          ? new TextDecoder('windows-1252').decode(buffer)
+          : textoUtf8;
+        registros = parseCsvOuTxt(texto);
+      } else {
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        registros = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+      }
+
+      if (!Array.isArray(registros) || registros.length === 0) {
+        mostrarSnackbar('Arquivo sem serviços para importar', 'warning');
+        return;
+      }
+
+      let importados = 0;
+      let atualizados = 0;
+      let ignorados = 0;
+      const servicosAtualizados = [...servicos];
+
+      for (const registro of registros) {
+        const servico = normalizarServico(registro);
+        if (!servico.nome || servico.preco <= 0 || servico.duracao <= 0) {
+          ignorados += 1;
+          continue;
+        }
+
+        const payload = { ...servico, updatedAt: new Date().toISOString() };
+        const existenteIndex = servicosAtualizados.findIndex((item) => item.id && item.id === servico.id);
+
+        if (servico.id && existenteIndex >= 0) {
+          await firebaseService.update('servicos', servico.id, payload);
+          servicosAtualizados[existenteIndex] = { ...servicosAtualizados[existenteIndex], ...payload };
+          atualizados += 1;
+        } else {
+          const { id, ...dadosNovoServico } = payload;
+          const novoServico = await firebaseService.add('servicos', dadosNovoServico);
+          servicosAtualizados.push({ ...dadosNovoServico, ...novoServico, id: novoServico?.id || id });
+          importados += 1;
+        }
+      }
+
+      setServicos(servicosAtualizados);
+      if (importados === 0 && atualizados === 0) {
+        mostrarSnackbar(`Nenhum serviço importado. ${ignorados} linha(s) ignorada(s). Verifique se o CSV possui colunas de nome e preço.`, 'warning');
+      } else {
+        mostrarSnackbar(`Importação concluída: ${importados} novos, ${atualizados} atualizados e ${ignorados} ignorados.`);
+      }
+    } catch (error) {
+      console.error('Erro ao importar serviços:', error);
+      mostrarSnackbar('Erro ao importar serviços. Verifique o formato do arquivo.', 'error');
+    } finally {
+      setLoading(false);
+      event.target.value = '';
     }
   };
 
@@ -334,6 +674,7 @@ function ModernServicos() {
 
   return (
     <Box>
+      <ProfissionaisSectionNav />
       {/* HEADER */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
@@ -346,16 +687,68 @@ function ModernServicos() {
         </Box>
         
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Tooltip title="Exportar dados">
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept=".json,.csv,.xlsx,.xls,.ods,.txt"
+            onChange={importarArquivo}
+          />
+
+          <Tooltip title="Importar serviços de JSON, CSV, Excel, ODS ou TXT">
             <Button
               variant="outlined"
-              startIcon={<ExportIcon />}
-              onClick={exportarDados}
+              startIcon={<ImportIcon />}
+              onClick={() => fileInputRef.current?.click()}
               sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
             >
-              Exportar
+              Importar
             </Button>
           </Tooltip>
+
+          <Button
+            variant="outlined"
+            onClick={() => setOpenModeloDialog(true)}
+            sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+          >
+            Modelo
+          </Button>
+
+          <Button
+            variant="outlined"
+            startIcon={<CategoryIcon />}
+            onClick={() => setOpenCategoriaDialog(true)}
+            sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+          >
+            Categorias
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteIcon />}
+            disabled={servicos.length === 0}
+            onClick={() => setOpenDeleteAllDialog(true)}
+          >
+            Excluir tudo
+          </Button>
+
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <InputLabel>Exportar</InputLabel>
+            <Select
+              value=""
+              label="Exportar"
+              displayEmpty
+              startAdornment={<ExportIcon fontSize="small" sx={{ mr: 1, color: '#9c27b0' }} />}
+              onChange={(e) => exportarDados(e.target.value)}
+            >
+              <MenuItem value="json">JSON</MenuItem>
+              <MenuItem value="csv">CSV</MenuItem>
+              <MenuItem value="xlsx">Excel (.xlsx)</MenuItem>
+              <MenuItem value="ods">ODS</MenuItem>
+              <MenuItem value="txt">TXT</MenuItem>
+            </Select>
+          </FormControl>
           
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
@@ -410,7 +803,7 @@ function ModernServicos() {
                 onChange={(e) => setFilterCategory(e.target.value)}
               >
                 <MenuItem value="todos">Todas as categorias</MenuItem>
-                {categories.map(cat => (
+                {categoriasDisponiveis.map(cat => (
                   <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                 ))}
               </Select>
@@ -809,11 +1202,19 @@ function ModernServicos() {
                     label="Categoria"
                     onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
                   >
-                    {categories.map(cat => (
+                    {categoriasDisponiveis.map(cat => (
                       <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => setOpenCategoriaDialog(true)}
+                  sx={{ mt: 1, color: '#9c27b0' }}
+                >
+                  Nova categoria
+                </Button>
               </Grid>
 
               <Grid item xs={12}>
@@ -949,6 +1350,109 @@ function ModernServicos() {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Dialog com modelo de importação */}
+      <Dialog open={openModeloDialog} onClose={() => setOpenModeloDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+          Modelo para Importar Serviços
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+            Use uma linha por serviço. Os campos obrigatórios são Nome, Duração (min) e Preço. Para vincular profissionais, informe os IDs separados por ponto e vírgula.
+          </Alert>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {Object.keys(linhaModeloImportacao).map((coluna) => (
+                    <TableCell key={coluna}><strong>{coluna}</strong></TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  {Object.values(linhaModeloImportacao).map((valor, index) => (
+                    <TableCell key={index}>{String(valor)}</TableCell>
+                  ))}
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+            Também é possível importar JSON no formato de lista de objetos ou no formato de backup com dados.servicos.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={() => baixarModeloImportacao('json')}>Baixar JSON</Button>
+          <Button onClick={() => baixarModeloImportacao('csv')}>Baixar CSV</Button>
+          <Button onClick={() => baixarModeloImportacao('xlsx')}>Baixar Excel</Button>
+          <Button onClick={() => baixarModeloImportacao('ods')}>Baixar ODS</Button>
+          <Button onClick={() => baixarModeloImportacao('txt')}>Baixar TXT</Button>
+          <Button variant="contained" onClick={() => setOpenModeloDialog(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de cadastro de categorias */}
+      <Dialog open={openCategoriaDialog} onClose={() => setOpenCategoriaDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#faf5ff' }}>
+          Cadastrar Categoria
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Nova categoria"
+            value={novaCategoria}
+            onChange={(e) => setNovaCategoria(e.target.value)}
+            sx={{ mt: 2, mb: 2 }}
+            placeholder="Ex: Sobrancelhas"
+          />
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Categorias disponíveis:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {categoriasDisponiveis.map((categoria) => (
+              <Chip key={categoria} label={categoria} size="small" />
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenCategoriaDialog(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={salvarCategoria}>Salvar Categoria</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de exclusão em massa */}
+      <Dialog open={openDeleteAllDialog} onClose={() => setOpenDeleteAllDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#ffebee', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="error" /> Excluir todos os serviços
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+            Esta ação exclui todos os {servicos.length} serviços cadastrados e não poderá ser desfeita.
+          </Alert>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Para confirmar, digite exatamente <strong>EXCLUIR TODOS</strong> no campo abaixo.
+          </Typography>
+          <TextField
+            fullWidth
+            value={deleteAllConfirm}
+            onChange={(e) => setDeleteAllConfirm(e.target.value)}
+            placeholder="EXCLUIR TODOS"
+            error={deleteAllConfirm.length > 0 && deleteAllConfirm !== 'EXCLUIR TODOS'}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => { setOpenDeleteAllDialog(false); setDeleteAllConfirm(''); }}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleteAllConfirm !== 'EXCLUIR TODOS'}
+            onClick={confirmDeleteAll}
+          >
+            Excluir definitivamente
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Dialog de Confirmação de Exclusão */}
