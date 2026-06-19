@@ -117,6 +117,18 @@ const LoadingSpinner = () => (
   </Box>
 );
 
+const withTimeout = (promise, timeoutMs, fallbackValue, timeoutMessage) => {
+  let timeoutId;
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(timeoutMessage);
+      resolve(fallbackValue);
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+};
+
 
 const CONFIG_TAB_INDEX = {
   salao: 0,
@@ -431,7 +443,12 @@ function ModernConfiguracoes() {
   useEffect(() => {
     const carregarFidelidadeConfig = async () => {
       try {
-        const fidelidade = await firebaseService.getAll('config_fidelidade').catch(() => []);
+        const fidelidade = await withTimeout(
+          firebaseService.getAll('config_fidelidade').catch(() => []),
+          8000,
+          [],
+          'Tempo limite ao carregar configurações de fidelidade. Mantendo padrão local.'
+        );
         if (fidelidade && fidelidade.length > 0) {
           setFidelidadeConfig(fidelidade[0]);
         }
@@ -467,7 +484,15 @@ function ModernConfiguracoes() {
       setLoading(true);
       setError(null);
       
-      const configuracoes = await firebaseService.getAll('configuracoes').catch(() => []);
+      const configuracoes = await withTimeout(
+        firebaseService.getAll('configuracoes').catch((erroBusca) => {
+          console.error('❌ Erro ao buscar configurações:', erroBusca);
+          return [];
+        }),
+        8000,
+        [],
+        'Tempo limite ao carregar configurações. Usando configuração padrão local.'
+      );
       
       if (!configuracoes || configuracoes.length === 0) {
         const configPadrao = {
@@ -531,8 +556,21 @@ function ModernConfiguracoes() {
           updatedAt: new Date().toISOString()
         };
         
-        const novoId = await firebaseService.add('configuracoes', configPadrao);
-        setConfig({ ...configPadrao, id: novoId });
+        setConfig({ ...configPadrao, id: 'configuracoes_padrao' });
+        firebaseService.add('configuracoes', configPadrao)
+          .then((novoId) => {
+            if (novoId) {
+              setConfig((configAtual) => (
+                configAtual?.id === 'configuracoes_padrao'
+                  ? { ...configAtual, id: novoId }
+                  : configAtual
+              ));
+            }
+          })
+          .catch((erroCriacao) => {
+            console.error('❌ Erro ao criar configuração padrão:', erroCriacao);
+            mostrarSnackbar('Configurações padrão carregadas localmente. Salve novamente quando a conexão normalizar.', 'warning');
+          });
         if (configPadrao.salao.logo) {
           setLogoPreview(configPadrao.salao.logo);
         }
@@ -588,8 +626,13 @@ function ModernConfiguracoes() {
         updatedAt: new Date().toISOString()
       };
       
-      await firebaseService.update('configuracoes', config.id, configAtualizada);
-      setConfig(configAtualizada);
+      if (config.id === 'configuracoes_padrao') {
+        const novoId = await firebaseService.add('configuracoes', configAtualizada);
+        setConfig({ ...configAtualizada, id: novoId });
+      } else {
+        await firebaseService.update('configuracoes', config.id, configAtualizada);
+        setConfig(configAtualizada);
+      }
       
       // Salvar configurações de fidelidade
       await salvarFidelidadeConfig();
