@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Avatar, Box, Card, CardContent, Chip, Grid, Typography } from '@mui/material';
+import { firebaseService } from '../services/firebase';
 
 const CHAMADAS_KEY = 'painel.chamadas';
 const CONFIG_KEY = 'painel.config';
@@ -11,6 +12,13 @@ const carregarChamadas = () => {
 const carregarConfig = () => {
   try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch (error) { return {}; }
 };
+const formatarTempo = (inicio) => {
+  if (!inicio) return '00:00';
+  const diff = Math.max(0, Date.now() - new Date(inicio).getTime());
+  const min = Math.floor(diff / 60000);
+  const seg = Math.floor((diff % 60000) / 1000);
+  return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+};
 
 function PainelChamada() {
   const [chamadas, setChamadas] = useState(carregarChamadas);
@@ -18,6 +26,12 @@ function PainelChamada() {
   const ultimaFaladoRef = useRef('');
 
   useEffect(() => {
+    firebaseService.getAll('configuracoes').then((dados) => {
+      const cfg = dados?.[0] || {};
+      if (cfg.nomeEmpresa || cfg.logoUrl || cfg.logo) {
+        setConfig((atual) => ({ ...atual, nomeEmpresa: cfg.nomeEmpresa || cfg.nomeSalao || atual.nomeEmpresa, logoUrl: cfg.logoUrl || cfg.logo || atual.logoUrl, mensagem: atual.mensagem }));
+      }
+    }).catch(() => null);
     const interval = setInterval(() => {
       setChamadas(carregarChamadas());
       setConfig(carregarConfig());
@@ -82,7 +96,7 @@ function PainelChamada() {
         </Grid>
         <Grid item xs={12} md={4}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Em atendimento</Typography>
-          {emAtendimento.slice(0, 5).map((item) => <Card key={item.id} sx={{ mb: 1, bgcolor: '#064e3b', color: 'white' }}><CardContent><Typography>{item.clienteNome}</Typography><Typography variant="caption">{item.destino || item.profissionalNome}</Typography></CardContent></Card>)}
+          {emAtendimento.slice(0, 5).map((item) => <Card key={item.id} sx={{ mb: 1, bgcolor: '#064e3b', color: 'white' }}><CardContent><Typography>{item.clienteNome}</Typography><Typography variant="caption">{item.destino || item.profissionalNome} • {formatarTempo(item.updatedAt || item.createdAt)}</Typography></CardContent></Card>)}
         </Grid>
       </Grid>
     </Box>

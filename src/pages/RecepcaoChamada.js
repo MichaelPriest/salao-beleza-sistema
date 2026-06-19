@@ -17,6 +17,13 @@ const carregarSalas = () => {
 };
 
 const hojeIso = () => new Date().toISOString().split('T')[0];
+const formatarTempo = (inicio) => {
+  if (!inicio) return '00:00';
+  const diff = Math.max(0, Date.now() - new Date(inicio).getTime());
+  const min = Math.floor(diff / 60000);
+  const seg = Math.floor((diff % 60000) / 1000);
+  return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+};
 
 const getDataAgendamento = (agendamento) => {
   const valor = agendamento.data || agendamento.dataAgendamento || agendamento.inicio;
@@ -45,12 +52,15 @@ function RecepcaoChamada() {
       firebaseService.getAll('atendimentos').catch(() => []),
       firebaseService.getAll('profissionais').catch(() => []),
       firebaseService.getAll('servicos').catch(() => []),
-    ]).then(([clientesData, agendamentosData, atendimentosData, profissionaisData, servicosData]) => {
+      firebaseService.getAll('configuracoes').catch(() => []),
+    ]).then(([clientesData, agendamentosData, atendimentosData, profissionaisData, servicosData, configuracoesData]) => {
       setClientes(clientesData || []);
       setAgendamentos(agendamentosData || []);
       setAtendimentos(atendimentosData || []);
       setProfissionais(profissionaisData || []);
       setServicos(servicosData || []);
+      const cfg = configuracoesData?.[0] || {};
+      if (cfg.nomeEmpresa || cfg.logoUrl || cfg.logo) salvarConfig({ ...config, nomeEmpresa: cfg.nomeEmpresa || cfg.nomeSalao || config.nomeEmpresa, logoUrl: cfg.logoUrl || cfg.logo || config.logoUrl });
     });
   }, []);
 
@@ -107,6 +117,31 @@ function RecepcaoChamada() {
     setForm({ agendamentoId: '', clienteId: '', clienteNome: '', destino: 'Recepção' });
   };
 
+  const importarAgendaHoje = () => {
+    const agendamentosNaFila = new Set(chamadas.map((item) => item.agendamentoId).filter(Boolean));
+    const novasChamadas = agendamentosHoje
+      .filter((agendamento) => !agendamentosNaFila.has(agendamento.id))
+      .map((agendamento) => {
+        const cliente = clientes.find((item) => item.id === agendamento.clienteId);
+        const profissional = profissionais.find((item) => item.id === agendamento.profissionalId);
+        const servico = servicos.find((item) => item.id === agendamento.servicoId);
+        return {
+          id: crypto.randomUUID(),
+          agendamentoId: agendamento.id,
+          clienteId: cliente?.id || agendamento.clienteId || '',
+          clienteNome: cliente?.nome || agendamento.clienteNome || 'Cliente agendado',
+          profissionalId: profissional?.id || agendamento.profissionalId || '',
+          profissionalNome: profissional?.nome || agendamento.profissionalNome || '',
+          servicoId: servico?.id || agendamento.servicoId || '',
+          servicoNome: servico?.nome || agendamento.servicoNome || '',
+          destino: profissional?.nome || agendamento.profissionalNome || 'Recepção',
+          status: 'aguardando',
+          createdAt: new Date().toISOString(),
+        };
+      });
+    if (novasChamadas.length) salvarChamadas([...novasChamadas, ...chamadas]);
+  };
+
   const atualizarStatus = async (id, status) => {
     const chamada = chamadas.find((item) => item.id === id);
     salvarChamadas(chamadas.map((item) => item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item));
@@ -136,10 +171,9 @@ function RecepcaoChamada() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0', mb: 3 }}>Recepção - Chamada de Clientes</Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'aguardando').length}</Typography><Typography>Aguardando</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} md={3}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'chamado').length}</Typography><Typography>Chamados</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} md={3}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'em_atendimento').length}</Typography><Typography>Em atendimento</Typography></CardContent></Card></Grid>
-        <Grid item xs={12} md={3}><Card><CardContent><Typography variant="h5">{agendamentosHoje.length}</Typography><Typography>Agendados hoje</Typography></CardContent></Card></Grid>
+        <Grid item xs={12} md={4}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'aguardando').length}</Typography><Typography>Aguardando</Typography></CardContent></Card></Grid>
+        <Grid item xs={12} md={4}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'em_atendimento').length}</Typography><Typography>Em atendimento</Typography></CardContent></Card></Grid>
+        <Grid item xs={12} md={4}><Card><CardContent><Typography variant="h5">{chamadas.filter(c => c.status === 'atendido').length}</Typography><Typography>Atendidos</Typography></CardContent></Card></Grid>
       </Grid>
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Configuração do painel</Typography>
@@ -157,10 +191,11 @@ function RecepcaoChamada() {
           <Grid item xs={12} md={3}><TextField fullWidth label="Nome do cliente" value={form.clienteNome} disabled={!!form.clienteId || !!form.agendamentoId} onChange={(e) => setForm({ ...form, clienteNome: e.target.value })} /></Grid>
           <Grid item xs={12} md={1}><TextField select fullWidth label="Sala" value={form.destino} onChange={(e) => setForm({ ...form, destino: e.target.value })}>{salas.map((sala) => <MenuItem key={sala} value={sala}>{sala}</MenuItem>)}</TextField></Grid>
           <Grid item xs={12} md={1}><Button fullWidth variant="contained" onClick={adicionar}>Add</Button></Grid>
+          <Grid item xs={12}><Button variant="outlined" onClick={importarAgendaHoje}>Importar agenda de hoje para aguardando</Button></Grid>
         </Grid>
       </Paper>
-      <Alert severity="info" sx={{ mb: 2 }}>Abra o painel público em /painel-chamada. Chamadas com agendamento atualizam também o status do agendamento; ao iniciar atendimento, um atendimento é criado.</Alert>
-      <TableContainer component={Paper}><Table><TableHead><TableRow><TableCell>Cliente</TableCell><TableCell>Serviço</TableCell><TableCell>Profissional/Destino</TableCell><TableCell>Status</TableCell><TableCell>Ações</TableCell></TableRow></TableHead><TableBody>{chamadas.map((item) => <TableRow key={item.id}><TableCell>{item.clienteNome}</TableCell><TableCell>{item.servicoNome || '-'}</TableCell><TableCell>{item.profissionalNome || item.destino}</TableCell><TableCell><Chip size="small" label={item.status} /></TableCell><TableCell><Button onClick={() => atualizarStatus(item.id, 'chamado')}>Chamar</Button><Button onClick={() => iniciarAtendimento(item)}>Iniciar atendimento</Button><Button onClick={() => atualizarStatus(item.id, 'atendido')}>Atendido</Button><Button color="error" onClick={() => salvarChamadas(chamadas.filter(c => c.id !== item.id))}>Remover</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer>
+      <Alert severity="info" sx={{ mb: 2 }}>Abra o painel público em /painel-chamada. Chamadas com agendamento atualizam também o status do agendamento; ao iniciar atendimento, um atendimento é criado. <Button size="small" onClick={() => window.open('/painel-chamada', '_blank')}>Abrir painel</Button></Alert>
+      <TableContainer component={Paper}><Table><TableHead><TableRow><TableCell>Cliente</TableCell><TableCell>Serviço</TableCell><TableCell>Profissional/Destino</TableCell><TableCell>Status</TableCell><TableCell>Tempo</TableCell><TableCell>Ações</TableCell></TableRow></TableHead><TableBody>{chamadas.map((item) => <TableRow key={item.id}><TableCell>{item.clienteNome}</TableCell><TableCell>{item.servicoNome || '-'}</TableCell><TableCell>{item.profissionalNome || item.destino}</TableCell><TableCell><Chip size="small" label={item.status} /></TableCell><TableCell>{item.status === 'em_atendimento' ? formatarTempo(item.updatedAt || item.createdAt) : '-'}</TableCell><TableCell><Button onClick={() => atualizarStatus(item.id, 'chamado')}>Chamar</Button><Button onClick={() => iniciarAtendimento(item)}>Iniciar atendimento</Button><Button onClick={() => atualizarStatus(item.id, 'atendido')}>Atendido</Button><Button color="error" onClick={() => salvarChamadas(chamadas.filter(c => c.id !== item.id))}>Remover</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer>
     </Box>
   );
 }
