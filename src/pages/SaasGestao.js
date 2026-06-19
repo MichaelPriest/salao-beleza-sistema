@@ -1,9 +1,7 @@
-// src/pages/SaasGestao.js - CORRIGIDO (Removendo abas vazias)
+// src/pages/SaasGestao.js
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Avatar,
-  Badge,
   Box,
   Button,
   Card,
@@ -13,28 +11,20 @@ import {
   Divider,
   FormControlLabel,
   Grid,
-  IconButton,
-  InputAdornment,
-  LinearProgress,
   MenuItem,
   Paper,
   Stack,
-  Step,
-  StepLabel,
-  Stepper,
-  Switch,
   Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Tabs,
+  Switch,
   TextField,
-  Tooltip,
   Typography,
-  useTheme,
 } from '@mui/material';
 import {
   Apartment as ApartmentIcon,
@@ -43,21 +33,11 @@ import {
   ContentCopy as ContentCopyIcon,
   CreditCard as CreditCardIcon,
   DomainAdd as DomainAddIcon,
-  Edit as EditIcon,
   Language as LanguageIcon,
   Launch as LaunchIcon,
-  PhotoCamera as PhotoCameraIcon,
-  Save as SaveIcon,
   WorkspacePremium as WorkspacePremiumIcon,
-  ReceiptLong as ReceiptIcon,
-  Payments as PaymentsIcon,
-  Assessment as AssessmentIcon,
-  Settings as SettingsIcon,
-  ArrowForward as ArrowForwardIcon,
-  WhatsApp as WhatsAppIcon,
-  Palette as PaletteIcon,
-  Public as PublicIcon,
 } from '@mui/icons-material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
@@ -87,26 +67,6 @@ const formatDate = (value) => {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 };
 
-const withTimeout = (promise, timeoutMs, fallbackValue, timeoutMessage) => {
-  let timeoutId;
-  const timeoutPromise = new Promise((resolve) => {
-    timeoutId = setTimeout(() => {
-      console.warn(timeoutMessage);
-      resolve(fallbackValue);
-    }, timeoutMs);
-  });
-
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
-};
-
-const getUsuarioAtual = () => {
-  try {
-    return JSON.parse(localStorage.getItem('usuario') || 'null');
-  } catch (error) {
-    return null;
-  }
-};
-
 const getStatusColor = (status) => {
   const colors = {
     [STATUS_ASSINATURA.TRIAL]: 'info',
@@ -119,36 +79,12 @@ const getStatusColor = (status) => {
   return colors[status] || 'default';
 };
 
-const TabPanel = ({ children, value, index }) => {
+function TabPanel({ children, value, index }) {
   if (value !== index) return null;
   return <Box sx={{ mt: 3 }}>{children}</Box>;
-};
-
-const StatusBadge = ({ status, size = 'medium' }) => {
-  const statusMap = {
-    [STATUS_ASSINATURA.TRIAL]: { color: 'info', label: 'Trial', icon: '🎯' },
-    [STATUS_ASSINATURA.ATIVA]: { color: 'success', label: 'Ativa', icon: '✅' },
-    [STATUS_ASSINATURA.PENDENTE]: { color: 'warning', label: 'Pendente', icon: '⏳' },
-    [STATUS_ASSINATURA.INADIMPLENTE]: { color: 'error', label: 'Inadimplente', icon: '⚠️' },
-    [STATUS_ASSINATURA.CANCELADA]: { color: 'default', label: 'Cancelada', icon: '❌' },
-    [STATUS_ASSINATURA.EXPIRADA]: { color: 'error', label: 'Expirada', icon: '⏰' },
-  };
-  
-  const config = statusMap[status] || { color: 'default', label: status || 'Indefinido', icon: '❓' };
-  
-  return (
-    <Chip 
-      label={`${config.icon} ${config.label}`}
-      color={config.color}
-      size={size}
-      variant="outlined"
-      sx={{ fontWeight: 600 }}
-    />
-  );
-};
+}
 
 function SaasGestao({ initialTab = 0, embedded = false }) {
-  const theme = useTheme();
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -161,22 +97,24 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   const [pagamentos, setPagamentos] = useState([]);
   const [checkout, setCheckout] = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
-  
-  const [empresaForm, setEmpresaForm] = useState({
-    nome: '', documento: '', razaoSocial: '', email: '', telefone: '',
-    planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '',
-    telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '',
-    diaVencimento: 5, observacoesCobranca: ''
-  });
-  
+  const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
   const [unidadeForm, setUnidadeForm] = useState({ nome: '', telefone: '', endereco: '' });
-  
   const [portalForm, setPortalForm] = useState({
-    slug: '', titulo: '', subtitulo: 'Agende seus serviços online com facilidade.',
-    corPrimaria: '#9c27b0', ativo: true, mostrarServicos: true,
-    mostrarProfissionais: true, logo: '', bannerUrl: '', whatsapp: '',
-    temaLayout: 'moderno', mostrarContato: true, mostrarAreaRestrita: true,
-    mostrarRedesSociais: true, mostrarBanner: true,
+    slug: '',
+    titulo: '',
+    subtitulo: 'Agende seus serviços online com facilidade.',
+    corPrimaria: '#9c27b0',
+    ativo: true,
+    mostrarServicos: true,
+    mostrarProfissionais: true,
+    logo: '',
+    bannerUrl: '',
+    whatsapp: '',
+    temaLayout: 'moderno',
+    mostrarContato: true,
+    mostrarAreaRestrita: true,
+    mostrarRedesSociais: true,
+    mostrarBanner: true,
   });
 
   const planoAtual = useMemo(() => {
@@ -184,191 +122,267 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     return planos.find((plano) => plano.id === planoId) || PLANOS_PADRAO[planoId] || PLANOS_PADRAO.individual;
   }, [assinatura?.planoId, empresa?.planoId, empresaForm.planoId, planos]);
 
-  const completionSteps = useMemo(() => {
-    return [
-      { label: 'Empresa', completed: !!empresa?.nome },
-      { label: 'Unidade', completed: unidades.length > 0 },
-      { label: 'Plano', completed: !!assinatura?.planoId },
-      { label: 'Cobrança', completed: !!empresa?.cobranca?.provider },
-      { label: 'Página', completed: !!empresa?.slug },
-    ];
-  }, [empresa, unidades, assinatura]);
-
-  const preencherFormulariosEmpresa = (dadosEmpresa = {}) => {
-    const cobranca = dadosEmpresa.cobranca || {};
-    setEmpresaForm({
-      nome: dadosEmpresa.nome || '',
-      documento: dadosEmpresa.documento || '',
-      razaoSocial: dadosEmpresa.razaoSocial || cobranca.razaoSocial || '',
-      email: dadosEmpresa.email || '',
-      telefone: dadosEmpresa.telefone || '',
-      planoId: dadosEmpresa.planoId || 'individual',
-      responsavelFinanceiro: cobranca.responsavelFinanceiro || '',
-      emailFinanceiro: cobranca.emailFinanceiro || '',
-      telefoneFinanceiro: cobranca.telefoneFinanceiro || '',
-      documentoCobranca: cobranca.documentoCobranca || '',
-      enderecoCobranca: cobranca.enderecoCobranca || '',
-      diaVencimento: cobranca.diaVencimento || 5,
-      observacoesCobranca: cobranca.observacoes || ''
-    });
-
-    const sitePublico = dadosEmpresa.sitePublico || {};
-    setPortalForm((prev) => ({
-      ...prev,
-      slug: dadosEmpresa.slug || '',
-      titulo: sitePublico.titulo || dadosEmpresa.nome || '',
-      subtitulo: sitePublico.subtitulo || prev.subtitulo,
-      corPrimaria: sitePublico.corPrimaria || prev.corPrimaria,
-      ativo: sitePublico.ativo !== false,
-      mostrarServicos: sitePublico.mostrarServicos !== false,
-      mostrarProfissionais: sitePublico.mostrarProfissionais !== false,
-      logo: sitePublico.logo || '',
-      bannerUrl: sitePublico.bannerUrl || '',
-      whatsapp: sitePublico.whatsapp || '',
-      temaLayout: sitePublico.temaLayout || 'moderno',
-      mostrarContato: sitePublico.mostrarContato !== false,
-      mostrarAreaRestrita: sitePublico.mostrarAreaRestrita !== false,
-      mostrarRedesSociais: sitePublico.mostrarRedesSociais !== false,
-      mostrarBanner: sitePublico.mostrarBanner !== false,
-    }));
-
-    setPaymentConfig({
-      ...CONFIG_COBRANCA_PADRAO,
-      ...(dadosEmpresa.cobranca?.configPagamento || dadosEmpresa.cobranca || {})
-    });
-  };
-
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const usuario = getUsuarioAtual();
       const contexto = saasService.getContextoAtual();
-      const empresaId = contexto.empresaId || usuario?.empresaId || usuario?.tenantId || usuario?.empresa?.id;
+      const planosData = await saasService.listarPlanos();
+      setPlanos(planosData);
 
-      let empresaData = contexto.empresa || usuario?.empresa || null;
-      const [planosData, configCobranca, empresaDataResolvida] = await Promise.all([
-        withTimeout(
-          saasService.listarPlanos(),
-          8000,
-          Object.values(PLANOS_PADRAO),
-          'Tempo limite ao carregar planos SaaS. Usando planos padrão.'
-        ),
-        withTimeout(
-          saasService.buscarConfigCobranca(),
-          8000,
-          CONFIG_COBRANCA_PADRAO,
-          'Tempo limite ao carregar configuração de cobrança. Usando padrão.'
-        ),
-        empresaId
-          ? withTimeout(
-            firebaseService.getById('empresas', empresaId).catch(() => empresaData),
-            8000,
-            empresaData,
-            'Tempo limite ao carregar empresa. Usando dados locais.'
-          )
-          : Promise.resolve(empresaData)
-      ]);
-
-      setPlanos(planosData.length ? planosData : Object.values(PLANOS_PADRAO));
-      setPaymentConfig(configCobranca);
-      empresaData = empresaDataResolvida;
-
-      if (!empresaData) {
-        preencherFormulariosEmpresa({ nome: usuario?.empresaNome || usuario?.nomeEmpresa || '' });
+      if (!contexto.empresaId) {
+        setEmpresa(null);
+        setUnidades([]);
+        setAssinatura(null);
+        setFaturas([]);
+        setPagamentos([]);
+        setPaymentConfig(CONFIG_COBRANCA_PADRAO);
+        setEmpresaForm((current) => ({ ...current, planoId: planosData[0]?.id || 'individual' }));
+        setPortalForm((current) => ({ ...current, slug: '', titulo: '' }));
         return;
       }
 
-      setEmpresa(empresaData);
-      setTenantContext({ empresaId: empresaData.id, empresa: empresaData });
-      preencherFormulariosEmpresa(empresaData);
-
-      const [unidadesData, assinaturaData, faturasData, pagamentosData] = await Promise.all([
-        withTimeout(saasService.listarUnidades(empresaData.id).catch(() => []), 8000, [], 'Tempo limite ao carregar unidades.'),
-        withTimeout(saasService.buscarAssinaturaAtual(empresaData.id).catch(() => null), 8000, null, 'Tempo limite ao carregar assinatura.'),
-        withTimeout(firebaseService.query('faturas_saas', [{ field: 'empresaId', operator: '==', value: empresaData.id }]).catch(() => []), 8000, [], 'Tempo limite ao carregar faturas.'),
-        withTimeout(firebaseService.query('pagamentos_saas', [{ field: 'empresaId', operator: '==', value: empresaData.id }]).catch(() => []), 8000, [], 'Tempo limite ao carregar pagamentos.')
+      const [empresaData, unidadesData, assinaturaData, faturasData, pagamentosData] = await Promise.all([
+        firebaseService.getById('empresas', contexto.empresaId),
+        saasService.listarUnidades(contexto.empresaId),
+        saasService.buscarAssinaturaAtual(contexto.empresaId),
+        firebaseService.query('faturas_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
+        firebaseService.query('pagamentos_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
       ]);
 
+      setEmpresa(empresaData);
       setUnidades(unidadesData);
       setAssinatura(assinaturaData);
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
+      const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
+      const metodosDisponiveis = metodosAtivosNoGateway(configGlobal.provider, configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento);
+      setPaymentConfig({
+        ...configGlobal,
+        dadosCobranca: {
+          responsavel: empresaData?.cobranca?.responsavelFinanceiro || empresaData?.responsavelFinanceiro || '',
+          email: empresaData?.cobranca?.emailFinanceiro || empresaData?.email || '',
+          documento: empresaData?.cobranca?.documentoCobranca || empresaData?.documento || '',
+          ...(empresaData?.cobranca?.configPagamento?.dadosCobranca || {})
+        },
+        provider: configGlobal.provider,
+        metodosDisponiveis,
+        metodosPagamento: metodosSomentePreferencial(empresaData?.cobranca?.metodoPreferencial || primeiroMetodoDisponivel(metodosDisponiveis)),
+        metodoPreferencial: empresaData?.cobranca?.metodoPreferencial || primeiroMetodoDisponivel(metodosDisponiveis)
+      });
+      setEmpresaForm({
+        nome: empresaData?.nome || '',
+        documento: empresaData?.documento || '',
+        razaoSocial: empresaData?.razaoSocial || empresaData?.cobranca?.razaoSocial || '',
+        email: empresaData?.email || '',
+        telefone: empresaData?.telefone || '',
+        planoId: empresaData?.planoId || assinaturaData?.planoId || planosData[0]?.id || 'individual',
+        responsavelFinanceiro: empresaData?.cobranca?.responsavelFinanceiro || empresaData?.responsavelFinanceiro || '',
+        emailFinanceiro: empresaData?.cobranca?.emailFinanceiro || empresaData?.emailFinanceiro || empresaData?.email || '',
+        telefoneFinanceiro: empresaData?.cobranca?.telefoneFinanceiro || empresaData?.telefoneFinanceiro || empresaData?.telefone || '',
+        documentoCobranca: empresaData?.cobranca?.documentoCobranca || empresaData?.documento || '',
+        enderecoCobranca: empresaData?.cobranca?.enderecoCobranca || '',
+        diaVencimento: empresaData?.cobranca?.diaVencimento || assinaturaData?.diaVencimento || 5,
+        observacoesCobranca: empresaData?.cobranca?.observacoes || '',
+      });
+      setPortalForm({
+        slug: empresaData?.slug || '',
+        titulo: empresaData?.sitePublico?.titulo || empresaData?.nome || '',
+        subtitulo: empresaData?.sitePublico?.subtitulo || 'Agende seus serviços online com facilidade.',
+        corPrimaria: empresaData?.sitePublico?.corPrimaria || '#9c27b0',
+        ativo: empresaData?.sitePublico?.ativo !== false,
+        mostrarServicos: empresaData?.sitePublico?.mostrarServicos !== false,
+        mostrarProfissionais: empresaData?.sitePublico?.mostrarProfissionais !== false,
+        logo: empresaData?.sitePublico?.logo || '',
+        bannerUrl: empresaData?.sitePublico?.bannerUrl || '',
+        whatsapp: empresaData?.sitePublico?.whatsapp || empresaData?.telefone || '',
+        temaLayout: empresaData?.sitePublico?.temaLayout || 'moderno',
+        mostrarContato: empresaData?.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: empresaData?.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: empresaData?.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: empresaData?.sitePublico?.mostrarBanner !== false,
+      });
     } catch (error) {
-      console.error('Erro ao carregar dados da empresa:', error);
-      toast.error('Não foi possível carregar todos os dados da empresa.');
+      console.error('Erro ao carregar SaaS:', error);
+      toast.error(error.message || 'Erro ao carregar dados SaaS.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarDados();
-  }, []);
-
-  useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
 
+  useEffect(() => {
+    carregarDados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const salvarEmpresa = async (event) => {
     event.preventDefault();
+    if (!empresaForm.nome.trim()) {
+      toast.error('Informe o nome da empresa.');
+      return;
+    }
+
     setSaving(true);
     try {
-      if (empresa?.id) {
-        const payload = {
-          nome: empresaForm.nome,
-          documento: empresaForm.documento,
-          razaoSocial: empresaForm.razaoSocial,
-          email: empresaForm.email,
-          telefone: empresaForm.telefone,
-          planoId: empresaForm.planoId,
+      if (!empresa?.id) {
+        const criada = await saasService.criarEmpresa(empresaForm);
+        setEmpresa(criada.empresa);
+        setUnidades([criada.unidade]);
+        setAssinatura(criada.assinatura);
+        toast.success('Empresa SaaS criada com trial ativo.');
+      } else {
+        const atualizada = {
+          ...empresa,
+          ...empresaForm,
           cobranca: {
             ...(empresa.cobranca || {}),
+            razaoSocial: empresaForm.razaoSocial,
+            documentoCobranca: empresaForm.documentoCobranca || empresaForm.documento,
             responsavelFinanceiro: empresaForm.responsavelFinanceiro,
-            emailFinanceiro: empresaForm.emailFinanceiro,
-            telefoneFinanceiro: empresaForm.telefoneFinanceiro,
-            documentoCobranca: empresaForm.documentoCobranca,
+            emailFinanceiro: empresaForm.emailFinanceiro || empresaForm.email,
+            telefoneFinanceiro: empresaForm.telefoneFinanceiro || empresaForm.telefone,
             enderecoCobranca: empresaForm.enderecoCobranca,
             diaVencimento: Number(empresaForm.diaVencimento || 5),
             observacoes: empresaForm.observacoesCobranca,
+            provider: paymentConfig.provider,
+            metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+            metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento)),
+            configPagamento: paymentConfig,
+            dadosCobranca: paymentConfig.dadosCobranca || {},
           },
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         };
-        await firebaseService.update('empresas', empresa.id, payload);
-        const empresaAtualizada = { ...empresa, ...payload };
-        setEmpresa(empresaAtualizada);
-        setTenantContext({ empresaId: empresaAtualizada.id, empresa: empresaAtualizada });
-        toast.success('Empresa atualizada com sucesso!');
-      } else {
-        const resultado = await saasService.criarEmpresa(empresaForm);
-        setEmpresa(resultado.empresa);
-        setUnidades([resultado.unidade]);
-        setAssinatura(resultado.assinatura);
-        preencherFormulariosEmpresa(resultado.empresa);
-        setTab(1);
-        toast.success('Empresa criada com sucesso!');
+        await firebaseService.update('empresas', empresa.id, atualizada);
+        if (assinatura?.planoId !== empresaForm.planoId) {
+          const plano = planos.find((item) => item.id === empresaForm.planoId) || PLANOS_PADRAO[empresaForm.planoId];
+          await firebaseService.update('assinaturas', assinatura?.id || empresa.id, {
+            planoId: empresaForm.planoId,
+            valorMensal: plano?.precoMensal || 0,
+            moeda: plano?.moeda || 'BRL',
+            status: assinatura?.status || STATUS_ASSINATURA.ATIVA,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        setTenantContext({ empresa: atualizada });
+        toast.success('Empresa SaaS atualizada.');
       }
+      await carregarDados();
     } catch (error) {
-      console.error('Erro ao salvar empresa:', error);
+      console.error('Erro ao salvar empresa SaaS:', error);
       toast.error(error.message || 'Erro ao salvar empresa.');
     } finally {
       setSaving(false);
     }
   };
 
-  const criarUnidade = async (event) => {
+  const handlePortalImageChange = async (field, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Selecione uma imagem válida.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB.');
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setPortalForm((current) => ({ ...current, [field]: base64 }));
+    } catch (error) {
+      console.error('Erro ao converter imagem:', error);
+      toast.error('Erro ao carregar imagem.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const salvarPortalEmpresa = async (event) => {
     event.preventDefault();
-    if (!empresa?.id) return;
+    if (!empresa?.id) {
+      toast.error('Cadastre a empresa antes de configurar o link público.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const unidade = await saasService.criarUnidade({
-        empresaId: empresa.id,
+      const atualizada = await saasService.salvarPortalEmpresa(empresa.id, {
+        slug: portalForm.slug,
+        sitePublico: {
+          titulo: portalForm.titulo,
+          subtitulo: portalForm.subtitulo,
+          corPrimaria: portalForm.corPrimaria,
+          ativo: portalForm.ativo,
+          mostrarServicos: portalForm.mostrarServicos,
+          mostrarProfissionais: portalForm.mostrarProfissionais,
+          logo: portalForm.logo,
+          bannerUrl: portalForm.bannerUrl,
+          whatsapp: portalForm.whatsapp,
+          temaLayout: portalForm.temaLayout,
+          mostrarContato: portalForm.mostrarContato,
+          mostrarAreaRestrita: portalForm.mostrarAreaRestrita,
+          mostrarRedesSociais: portalForm.mostrarRedesSociais,
+          mostrarBanner: portalForm.mostrarBanner,
+        }
+      });
+      setEmpresa(atualizada);
+      setPortalForm({
+        slug: atualizada.slug || '',
+        titulo: atualizada.sitePublico?.titulo || atualizada.nome || '',
+        subtitulo: atualizada.sitePublico?.subtitulo || 'Agende seus serviços online com facilidade.',
+        corPrimaria: atualizada.sitePublico?.corPrimaria || '#9c27b0',
+        ativo: atualizada.sitePublico?.ativo !== false,
+        mostrarServicos: atualizada.sitePublico?.mostrarServicos !== false,
+        mostrarProfissionais: atualizada.sitePublico?.mostrarProfissionais !== false,
+        logo: atualizada.sitePublico?.logo || '',
+        bannerUrl: atualizada.sitePublico?.bannerUrl || '',
+        whatsapp: atualizada.sitePublico?.whatsapp || '',
+        temaLayout: atualizada.sitePublico?.temaLayout || 'moderno',
+        mostrarContato: atualizada.sitePublico?.mostrarContato !== false,
+        mostrarAreaRestrita: atualizada.sitePublico?.mostrarAreaRestrita !== false,
+        mostrarRedesSociais: atualizada.sitePublico?.mostrarRedesSociais !== false,
+        mostrarBanner: atualizada.sitePublico?.mostrarBanner !== false,
+      });
+      toast.success('Página inicial da empresa atualizada.');
+    } catch (error) {
+      console.error('Erro ao salvar página da empresa:', error);
+      toast.error(error.message || 'Erro ao salvar página inicial.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copiarLinkEmpresa = async () => {
+    const link = empresa?.linkPublico || (portalForm.slug ? saasService.buildEmpresaLink(portalForm.slug) : '');
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('Link copiado.');
+    } catch (error) {
+      toast.error(link);
+    }
+  };
+
+  const criarUnidade = async (event) => {
+    event.preventDefault();
+    if (!unidadeForm.nome.trim()) {
+      toast.error('Informe o nome da unidade.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await saasService.criarUnidade({
         nome: unidadeForm.nome,
         telefone: unidadeForm.telefone,
-        endereco: { descricao: unidadeForm.endereco }
+        endereco: unidadeForm.endereco ? { descricao: unidadeForm.endereco } : {},
       });
-      setUnidades((prev) => [...prev, unidade]);
       setUnidadeForm({ nome: '', telefone: '', endereco: '' });
-      toast.success('Unidade criada com sucesso!');
+      toast.success('Unidade criada com sucesso.');
+      await carregarDados();
     } catch (error) {
       console.error('Erro ao criar unidade:', error);
       toast.error(error.message || 'Erro ao criar unidade.');
@@ -378,267 +392,165 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   };
 
   const trocarUnidade = async (unidade) => {
-    await saasService.trocarUnidade(unidade);
-    toast.success(`Unidade ${unidade.nome} selecionada.`);
+    saasService.trocarUnidade(unidade);
+    toast.success(`Unidade atual alterada para ${unidade.nome}.`);
+    await carregarDados();
   };
 
   const iniciarCheckout = async () => {
     setCheckoutLoading(true);
     try {
-      const resultado = await saasService.iniciarCheckout({
-        empresaId: empresa?.id,
-        planoId: empresaForm.planoId,
+      const metodosAtivos = metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento);
+      const metodoPreferencial = paymentConfig.metodoPreferencial && metodosAtivos[paymentConfig.metodoPreferencial] !== false
+        ? paymentConfig.metodoPreferencial
+        : primeiroMetodoDisponivel(metodosAtivos);
+      const data = await saasService.iniciarCheckout({
+        planoId: planoAtual.id,
         provider: paymentConfig.provider,
-        metodosPagamento: paymentConfig.metodosPagamento,
-        dadosPagamento: paymentConfig
+        metodosPagamento: metodosSomentePreferencial(metodoPreferencial),
+        dadosPagamento: { ...paymentConfig, metodoPreferencial }
       });
-      setCheckout(resultado);
-      if (resultado?.checkoutUrl) window.open(resultado.checkoutUrl, '_blank', 'noopener,noreferrer');
+      setCheckout(data);
+      toast.success(`Checkout ${metodoPagamentoLabel(data.metodoPreferencial || metodoPreferencial)} iniciado.`);
+      if (data.checkoutUrl) {
+        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (error) {
       console.error('Erro ao iniciar checkout:', error);
-      toast.error(error.message || 'Erro ao iniciar checkout.');
+      toast.error(error.message || 'Erro ao iniciar cobrança.');
     } finally {
       setCheckoutLoading(false);
     }
   };
 
+
   const salvarConfiguracaoPagamentoEmpresa = async () => {
     if (!empresa?.id) return;
     setSaving(true);
     try {
-      const payload = {
+      const atualizada = {
+        ...empresa,
         cobranca: {
           ...(empresa.cobranca || {}),
-          configPagamento: paymentConfig,
           provider: paymentConfig.provider,
-          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(paymentConfig.metodosPagamento),
+          metodoPreferencial: paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento)),
+          metodosPagamento: metodosSomentePreferencial(paymentConfig.metodoPreferencial || primeiroMetodoDisponivel(metodosAtivosNoGateway(paymentConfig.provider, paymentConfig.metodosPagamento))),
+          configPagamento: paymentConfig,
+          dadosCobranca: paymentConfig.dadosCobranca || {},
+          diaVencimento: paymentConfig.diaVencimentoPadrao || empresa.cobranca?.diaVencimento || 5,
         },
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
-      await firebaseService.update('empresas', empresa.id, payload);
-      setEmpresa((prev) => ({ ...prev, ...payload }));
-      toast.success('Método de cobrança salvo!');
+      await firebaseService.update('empresas', empresa.id, atualizada);
+      setEmpresa(atualizada);
+      setTenantContext({ empresa: atualizada });
+      toast.success('Método de cobrança da empresa salvo.');
     } catch (error) {
-      console.error('Erro ao salvar cobrança:', error);
-      toast.error(error.message || 'Erro ao salvar cobrança.');
+      console.error('Erro ao salvar pagamentos da empresa:', error);
+      toast.error(error.message || 'Erro ao salvar pagamentos.');
     } finally {
       setSaving(false);
     }
-  };
-
-  const salvarPortalEmpresa = async (event) => {
-    event.preventDefault();
-    if (!empresa?.id) return;
-    setSaving(true);
-    try {
-      const empresaAtualizada = await saasService.salvarPortalEmpresa(empresa.id, {
-        slug: portalForm.slug,
-        sitePublico: portalForm
-      });
-      setEmpresa(empresaAtualizada);
-      preencherFormulariosEmpresa(empresaAtualizada);
-      toast.success('Página pública salva com sucesso!');
-    } catch (error) {
-      console.error('Erro ao salvar página pública:', error);
-      toast.error(error.message || 'Erro ao salvar página pública.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const copiarLinkEmpresa = async () => {
-    const link = empresa?.linkPublico || (portalForm.slug ? `${window.location.origin}/e/${portalForm.slug}` : '');
-    if (!link) return;
-    await navigator.clipboard?.writeText(link);
-    toast.success('Link copiado!');
   };
 
   if (loading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: '60vh',
-        gap: 2
-      }}>
-        <CircularProgress size={60} thickness={4} />
-        <Typography variant="body1" color="text.secondary">
-          Carregando dados da empresa...
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
+        <CircularProgress />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ 
-      p: embedded ? 0 : { xs: 2, md: 4 }, 
-      bgcolor: embedded ? 'transparent' : '#f8f9ff',
-      minHeight: '100vh'
-    }}>
-      {/* Header */}
-      <Card sx={{ mb: 4, boxShadow: 2 }}>
-        <CardContent>
-          <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar 
-                  sx={{ 
-                    width: 64, 
-                    height: 64, 
-                    bgcolor: theme.palette.primary.light,
-                    fontSize: 28,
-                    fontWeight: 700
-                  }}
-                >
-                  {empresa?.nome?.charAt(0)?.toUpperCase() || '🏢'}
-                </Avatar>
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                    {empresa?.nome || 'Minha Empresa'}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    {empresa ? 'Gerencie sua empresa, unidades e assinatura' : 'Configure sua empresa para começar'}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end">
-                <StatusBadge status={assinatura?.status || 'sem_assinatura'} />
-                <Chip 
-                  icon={<WorkspacePremiumIcon />}
-                  label={planoAtual?.nome || 'Sem plano'} 
-                  color="primary"
-                  variant="outlined"
-                  sx={{ fontWeight: 600 }}
-                />
-              </Stack>
-            </Grid>
-          </Grid>
-          
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Progresso da configuração
-            </Typography>
-            <Grid container spacing={1}>
-              {completionSteps.map((step, index) => (
-                <Grid item xs key={index}>
-                  <Paper 
-                    variant="outlined"
-                    sx={{ 
-                      p: 1.5, 
-                      textAlign: 'center',
-                      bgcolor: step.completed ? `${theme.palette.success.light}20` : 'transparent',
-                      borderColor: step.completed ? 'success.main' : 'divider',
-                    }}
-                  >
-                    <Typography 
-                      variant="caption" 
-                      color={step.completed ? 'success.main' : 'text.secondary'}
-                      sx={{ fontWeight: 600 }}
-                    >
-                      {step.completed ? '✅' : '⬜'} {step.label}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-        </CardContent>
-      </Card>
+    <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Minha empresa
+          </Typography>
+          <Typography color="text.secondary">
+            Gerencie somente os dados da sua empresa, unidades, assinatura e cobranças.
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Chip icon={<BusinessIcon />} label={empresa?.nome || 'Sem empresa'} color={empresa ? 'primary' : 'default'} />
+          <Chip icon={<CheckCircleIcon />} label={assinatura?.status || 'sem assinatura'} color={getStatusColor(assinatura?.status)} />
+        </Stack>
+      </Stack>
 
-      {/* Tabs */}
-      <Paper sx={{ borderRadius: 3, mb: 3 }}>
-        <Tabs 
-          value={tab} 
-          onChange={(_, next) => setTab(next)} 
-          variant="scrollable" 
-          scrollButtons="auto"
-          sx={{
-            '& .MuiTab-root': {
-              minHeight: 64,
-              fontWeight: 600,
-            }
-          }}
-        >
+      {!empresa && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Cadastre a sua empresa para ativar o acesso. O sistema vai criar a unidade principal e iniciar um trial automaticamente.
+        </Alert>
+      )}
+
+      <Paper sx={{ borderRadius: 3 }}>
+        <Tabs value={tab} onChange={(_, next) => setTab(next)} variant="scrollable" scrollButtons="auto">
           <Tab icon={<BusinessIcon />} iconPosition="start" label="Empresa" />
           <Tab icon={<ApartmentIcon />} iconPosition="start" label="Unidades" disabled={!empresa} />
-          <Tab icon={<ReceiptIcon />} iconPosition="start" label="Assinatura" disabled={!empresa} />
+          <Tab icon={<WorkspacePremiumIcon />} iconPosition="start" label="Planos" />
+          <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="Assinatura" disabled={!empresa} />
           <Tab icon={<CreditCardIcon />} iconPosition="start" label="Cobrança" disabled={!empresa} />
-          <Tab icon={<LanguageIcon />} iconPosition="start" label="Página Pública" disabled={!empresa} />
+          <Tab icon={<LanguageIcon />} iconPosition="start" label="Página inicial" disabled={!empresa} />
         </Tabs>
       </Paper>
 
-      {/* Aba 0: Empresa */}
       <TabPanel value={tab} index={0}>
-        <Card sx={{ boxShadow: 2 }}>
-          <CardContent component="form" onSubmit={salvarEmpresa} sx={{ p: 4 }}>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-              <Avatar sx={{ bgcolor: theme.palette.primary.light }}>
-                <BusinessIcon />
-              </Avatar>
-              <Box>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                  Dados da Empresa
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Informações principais do seu negócio
-                </Typography>
-              </Box>
-            </Stack>
-            
-            <Grid container spacing={3}>
+        <Card>
+          <CardContent component="form" onSubmit={salvarEmpresa}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Dados da minha empresa</Typography>
+            <Grid container spacing={2}>
               <Grid item xs={12} md={6}>
-                <TextField fullWidth required label="Nome fantasia" value={empresaForm.nome} onChange={(e) => setEmpresaForm({ ...empresaForm, nome: e.target.value })} variant="outlined" />
+                <TextField fullWidth required label="Nome fantasia" value={empresaForm.nome} onChange={(e) => setEmpresaForm({ ...empresaForm, nome: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField fullWidth label="Razão social" value={empresaForm.razaoSocial} onChange={(e) => setEmpresaForm({ ...empresaForm, razaoSocial: e.target.value })} variant="outlined" />
+                <TextField fullWidth label="Razão social" value={empresaForm.razaoSocial} onChange={(e) => setEmpresaForm({ ...empresaForm, razaoSocial: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="CNPJ/CPF" value={empresaForm.documento} onChange={(e) => setEmpresaForm({ ...empresaForm, documento: e.target.value })} variant="outlined" />
+                <TextField fullWidth label="CNPJ/CPF" value={empresaForm.documento} onChange={(e) => setEmpresaForm({ ...empresaForm, documento: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="Telefone comercial" value={empresaForm.telefone} onChange={(e) => setEmpresaForm({ ...empresaForm, telefone: e.target.value })} variant="outlined" />
+                <TextField fullWidth label="Telefone comercial" value={empresaForm.telefone} onChange={(e) => setEmpresaForm({ ...empresaForm, telefone: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth type="email" label="Email principal" value={empresaForm.email} onChange={(e) => setEmpresaForm({ ...empresaForm, email: e.target.value })} variant="outlined" />
+                <TextField fullWidth type="email" label="Email principal" value={empresaForm.email} onChange={(e) => setEmpresaForm({ ...empresaForm, email: e.target.value })} />
               </Grid>
-              
               <Grid item xs={12}>
-                <Divider sx={{ my: 2 }}><Chip label="Dados de Cobrança" color="primary" variant="outlined" /></Divider>
-              </Grid>
-              
-              <Grid item xs={12} md={4}>
-                <TextField fullWidth label="Responsável financeiro" value={empresaForm.responsavelFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, responsavelFinanceiro: e.target.value })} variant="outlined" />
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Dados para cobrança da mensalidade</Typography>
+                <Typography variant="body2" color="text.secondary">Essas informações serão usadas para emitir faturas, enviar cobrança e identificar pagamentos do SaaS.</Typography>
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth type="email" label="Email de cobrança" value={empresaForm.emailFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, emailFinanceiro: e.target.value })} variant="outlined" />
+                <TextField fullWidth label="Responsável financeiro" value={empresaForm.responsavelFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, responsavelFinanceiro: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="WhatsApp financeiro" value={empresaForm.telefoneFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, telefoneFinanceiro: e.target.value })} variant="outlined" InputProps={{ startAdornment: (<InputAdornment position="start"><WhatsAppIcon color="success" /></InputAdornment>) }} />
+                <TextField fullWidth type="email" label="Email de cobrança" value={empresaForm.emailFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, emailFinanceiro: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth label="Documento para nota/cobrança" value={empresaForm.documentoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, documentoCobranca: e.target.value })} variant="outlined" />
+                <TextField fullWidth label="Telefone/WhatsApp financeiro" value={empresaForm.telefoneFinanceiro} onChange={(e) => setEmpresaForm({ ...empresaForm, telefoneFinanceiro: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth type="number" label="Dia de vencimento" value={empresaForm.diaVencimento} onChange={(e) => setEmpresaForm({ ...empresaForm, diaVencimento: e.target.value })} inputProps={{ min: 1, max: 28 }} variant="outlined" />
+                <TextField fullWidth label="Documento para nota/cobrança" value={empresaForm.documentoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, documentoCobranca: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField select fullWidth label="Plano" value={empresaForm.planoId} onChange={(e) => setEmpresaForm({ ...empresaForm, planoId: e.target.value })} variant="outlined">
-                  {planos.map((plano) => (<MenuItem key={plano.id} value={plano.id}>{plano.nome} - {formatCurrency(plano.precoMensal, plano.moeda)}/mês</MenuItem>))}
+                <TextField fullWidth type="number" label="Dia padrão de vencimento" value={empresaForm.diaVencimento} onChange={(e) => setEmpresaForm({ ...empresaForm, diaVencimento: e.target.value })} inputProps={{ min: 1, max: 28 }} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Plano" value={empresaForm.planoId} onChange={(e) => setEmpresaForm({ ...empresaForm, planoId: e.target.value })}>
+                  {planos.map((plano) => (
+                    <MenuItem key={plano.id} value={plano.id}>{plano.nome} - {formatCurrency(plano.precoMensal, plano.moeda)}</MenuItem>
+                  ))}
                 </TextField>
               </Grid>
               <Grid item xs={12} md={8}>
-                <TextField fullWidth multiline minRows={2} label="Endereço de cobrança" value={empresaForm.enderecoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, enderecoCobranca: e.target.value })} variant="outlined" />
+                <TextField fullWidth multiline minRows={2} label="Endereço de cobrança" value={empresaForm.enderecoCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, enderecoCobranca: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField fullWidth multiline minRows={2} label="Observações" value={empresaForm.observacoesCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, observacoesCobranca: e.target.value })} variant="outlined" />
+                <TextField fullWidth multiline minRows={2} label="Observações de cobrança" value={empresaForm.observacoesCobranca} onChange={(e) => setEmpresaForm({ ...empresaForm, observacoesCobranca: e.target.value })} />
               </Grid>
               <Grid item xs={12}>
-                <Button type="submit" variant="contained" size="large" disabled={saving} startIcon={empresa ? <SaveIcon /> : <ArrowForwardIcon />} sx={{ fontWeight: 700 }}>
-                  {empresa ? 'Salvar Alterações' : 'Criar Empresa e Continuar'}
+                <Button type="submit" variant="contained" disabled={saving} startIcon={<BusinessIcon />}>
+                  {empresa ? 'Salvar empresa e cobrança' : 'Criar minha empresa'}
                 </Button>
               </Grid>
             </Grid>
@@ -646,161 +558,248 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         </Card>
       </TabPanel>
 
-      {/* Aba 1: Unidades */}
       <TabPanel value={tab} index={1}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={5}>
-            <Card sx={{ boxShadow: 2 }}>
-              <CardContent component="form" onSubmit={criarUnidade} sx={{ p: 4 }}>
-                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                  <Avatar sx={{ bgcolor: theme.palette.success.light }}><DomainAddIcon /></Avatar>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Nova Unidade</Typography>
-                </Stack>
-                <Stack spacing={3}>
-                  <TextField required label="Nome da unidade" value={unidadeForm.nome} onChange={(e) => setUnidadeForm({ ...unidadeForm, nome: e.target.value })} variant="outlined" />
-                  <TextField label="Telefone" value={unidadeForm.telefone} onChange={(e) => setUnidadeForm({ ...unidadeForm, telefone: e.target.value })} variant="outlined" />
-                  <TextField label="Endereço" multiline minRows={2} value={unidadeForm.endereco} onChange={(e) => setUnidadeForm({ ...unidadeForm, endereco: e.target.value })} variant="outlined" />
-                  <Button type="submit" variant="contained" disabled={saving} startIcon={<DomainAddIcon />} fullWidth size="large">Criar Unidade</Button>
+            <Card>
+              <CardContent component="form" onSubmit={criarUnidade}>
+                <Typography variant="h6" sx={{ mb: 2 }}>Nova unidade</Typography>
+                <Stack spacing={2}>
+                  <TextField required label="Nome da unidade" value={unidadeForm.nome} onChange={(e) => setUnidadeForm({ ...unidadeForm, nome: e.target.value })} />
+                  <TextField label="Telefone" value={unidadeForm.telefone} onChange={(e) => setUnidadeForm({ ...unidadeForm, telefone: e.target.value })} />
+                  <TextField label="Endereço resumido" multiline minRows={2} value={unidadeForm.endereco} onChange={(e) => setUnidadeForm({ ...unidadeForm, endereco: e.target.value })} />
+                  <Button type="submit" variant="contained" disabled={saving} startIcon={<DomainAddIcon />}>Criar unidade</Button>
                 </Stack>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={12} md={7}>
-            <Card sx={{ boxShadow: 2 }}>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: theme.palette.grey[50] }}>
-                      <TableCell sx={{ fontWeight: 700 }}>Unidade</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Principal</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Ações</TableCell>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Unidade</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Principal</TableCell>
+                    <TableCell align="right">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {unidades.map((unidade) => (
+                    <TableRow key={unidade.id}>
+                      <TableCell>{unidade.nome}</TableCell>
+                      <TableCell><Chip size="small" label={unidade.status || 'ativa'} color={unidade.status === 'inativa' ? 'default' : 'success'} /></TableCell>
+                      <TableCell>{unidade.principal ? 'Sim' : 'Não'}</TableCell>
+                      <TableCell align="right"><Button size="small" onClick={() => trocarUnidade(unidade)}>Usar unidade</Button></TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {unidades.map((unidade) => (
-                      <TableRow key={unidade.id} hover>
-                        <TableCell>
-                          <Stack direction="row" spacing={2} alignItems="center">
-                            <Avatar sx={{ bgcolor: theme.palette.info.light }}><ApartmentIcon /></Avatar>
-                            <Box>
-                              <Typography sx={{ fontWeight: 600 }}>{unidade.nome}</Typography>
-                              {unidade.endereco?.descricao && <Typography variant="caption" color="text.secondary">{unidade.endereco.descricao}</Typography>}
-                            </Box>
-                          </Stack>
-                        </TableCell>
-                        <TableCell><Chip size="small" label={unidade.status || 'Ativa'} color={unidade.status === 'inativa' ? 'default' : 'success'} variant="outlined" /></TableCell>
-                        <TableCell>{unidade.principal ? <Chip label="Principal" color="primary" size="small" /> : <Typography variant="body2" color="text.secondary">Não</Typography>}</TableCell>
-                        <TableCell align="right"><Button size="small" variant="outlined" onClick={() => trocarUnidade(unidade)} startIcon={<ArrowForwardIcon />}>Usar Unidade</Button></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Grid>
         </Grid>
       </TabPanel>
 
-      {/* Aba 2: Assinatura */}
       <TabPanel value={tab} index={2}>
-        <Card sx={{ boxShadow: 2 }}>
-          <CardContent sx={{ p: 4 }}>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-              <Avatar sx={{ bgcolor: theme.palette.warning.light }}><ReceiptIcon /></Avatar>
-              <Box>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>Assinatura Atual</Typography>
-                <Typography variant="body2" color="text.secondary">Detalhes da sua assinatura e cobranças</Typography>
-              </Box>
-            </Stack>
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={3}>
-                <Typography color="text.secondary">Plano</Typography>
-                <Typography variant="h6">{planoAtual?.nome || '-'}</Typography>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Typography color="text.secondary">Status</Typography>
-                <StatusBadge status={assinatura?.status || 'sem_assinatura'} />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Typography color="text.secondary">Valor mensal</Typography>
-                <Typography variant="h6">{formatCurrency(assinatura?.valorMensal || planoAtual?.precoMensal, assinatura?.moeda || planoAtual?.moeda)}</Typography>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Typography color="text.secondary">Próxima cobrança</Typography>
-                <Typography variant="h6">{formatDate(assinatura?.proximaCobrancaEm)}</Typography>
-              </Grid>
+        <Grid container spacing={3}>
+          {planos.map((plano) => (
+            <Grid item xs={12} md={6} key={plano.id}>
+              <Card variant={planoAtual?.id === plano.id ? 'elevation' : 'outlined'} sx={{ height: '100%' }}>
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{plano.nome}</Typography>
+                    {planoAtual?.id === plano.id && <Chip label="Atual" color="primary" />}
+                  </Stack>
+                  <Typography variant="h4" color="primary" sx={{ fontWeight: 800 }}>{formatCurrency(plano.precoMensal, plano.moeda)}<Typography component="span" variant="body2">/mês</Typography></Typography>
+                  {plano.precoPorUnidade && <Typography color="text.secondary">+ {formatCurrency(plano.precoPorUnidade, plano.moeda)} por unidade adicional</Typography>}
+                  <Divider sx={{ my: 2 }} />
+                  <Stack spacing={1}>
+                    {(plano.recursos || []).map((recurso) => <Chip key={recurso} label={recurso} variant="outlined" />)}
+                  </Stack>
+                </CardContent>
+              </Card>
             </Grid>
-            
+          ))}
+        </Grid>
+      </TabPanel>
+
+      <TabPanel value={tab} index={3}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2 }}>Assinatura atual</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={3}><Typography color="text.secondary">Plano</Typography><Typography variant="h6">{planoAtual?.nome}</Typography></Grid>
+              <Grid item xs={12} md={3}><Typography color="text.secondary">Status</Typography><Chip label={assinatura?.status || '-'} color={getStatusColor(assinatura?.status)} /></Grid>
+              <Grid item xs={12} md={3}><Typography color="text.secondary">Valor mensal</Typography><Typography variant="h6">{formatCurrency(assinatura?.valorMensal || planoAtual?.precoMensal, assinatura?.moeda || planoAtual?.moeda)}</Typography></Grid>
+              <Grid item xs={12} md={3}><Typography color="text.secondary">Próxima cobrança</Typography><Typography variant="h6">{formatDate(assinatura?.proximaCobrancaEm)}</Typography></Grid>
+            </Grid>
             <Divider sx={{ my: 3 }} />
-            
             <Button variant="contained" disabled={checkoutLoading} startIcon={<LaunchIcon />} onClick={iniciarCheckout}>
               {checkoutLoading ? 'Abrindo...' : 'Abrir checkout'}
             </Button>
-            {checkout && <Alert severity="info" sx={{ mt: 2 }}>Método: {metodoPagamentoLabel(checkout.metodoPreferencial)} · Gateway: {checkout.provider}</Alert>}
+            {checkout && <Alert severity="info" sx={{ mt: 2 }}>Método: {metodoPagamentoLabel(checkout.metodoPreferencial)} · Gateway: {checkout.provider}. {checkout.checkoutUrl || checkout.instrucoes}</Alert>}
           </CardContent>
         </Card>
       </TabPanel>
 
-      {/* Aba 3: Cobrança */}
-      <TabPanel value={tab} index={3}>
+      <TabPanel value={tab} index={4}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Card sx={{ boxShadow: 2 }}>
-              <CardContent sx={{ p: 4 }}>
-                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                  <Avatar sx={{ bgcolor: theme.palette.info.light }}><CreditCardIcon /></Avatar>
+            <Card>
+              <CardContent>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
                   <Box>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>Método de Cobrança</Typography>
-                    <Typography variant="body2" color="text.secondary">Configure como deseja pagar a mensalidade</Typography>
+                    <Typography variant="h6">Método de cobrança da empresa</Typography>
+                    <Typography color="text.secondary">Aqui a empresa escolhe como quer pagar a mensalidade do sistema: cartão, PIX ou boleto. O gateway e as chaves continuam definidos no Admin SaaS.</Typography>
                   </Box>
+                  <Button variant="contained" disabled={saving} onClick={salvarConfiguracaoPagamentoEmpresa}>Salvar método de cobrança</Button>
                 </Stack>
-                
                 <BillingPaymentForms value={paymentConfig} onChange={setPaymentConfig} mode="tenant" />
-                
-                <Button variant="contained" disabled={saving} onClick={salvarConfiguracaoPagamentoEmpresa} startIcon={<SaveIcon />} sx={{ mt: 3, fontWeight: 700 }}>
-                  Salvar método de cobrança
-                </Button>
               </CardContent>
             </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              As cobranças do SaaS são geradas automaticamente pela rotina do sistema com base na assinatura, plano, vencimento e método de pagamento configurado. A criação manual de faturas foi removida para evitar divergências financeiras.
+            </Alert>
+          </Grid>
+          <Grid item xs={12}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Descrição</TableCell>
+                    <TableCell>Valor</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Método</TableCell>
+                    <TableCell>Vencimento</TableCell>
+                    <TableCell align="right">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {faturas.map((fatura) => (
+                    <TableRow key={fatura.id}>
+                      <TableCell>{fatura.descricao}</TableCell>
+                      <TableCell>{formatCurrency(fatura.valor, fatura.moeda)}</TableCell>
+                      <TableCell><Chip size="small" label={fatura.status} color={fatura.status === 'paga' ? 'success' : 'warning'} /></TableCell>
+                      <TableCell><Chip size="small" variant="outlined" label={fatura.metodoPagamentoLabel || metodoPagamentoLabel(fatura.metodoPagamento)} /></TableCell>
+                      <TableCell>{formatDate(fatura.vencimentoEm)}</TableCell>
+                      <TableCell align="right">{fatura.status !== 'paga' ? <Button size="small" variant="outlined" onClick={iniciarCheckout}>Abrir checkout</Button> : <Chip size="small" color="success" label="Confirmada" />}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Pagamentos recentes</Typography>
+            <Stack spacing={1}>
+              {pagamentos.slice(0, 5).map((pagamento) => (
+                <Alert severity="success" key={pagamento.id}>{formatCurrency(pagamento.valor, pagamento.moeda)} via {pagamento.gateway} / {pagamento.metodoPagamentoLabel || metodoPagamentoLabel(pagamento.metodoPagamento)} em {formatDate(pagamento.pagoEm)}</Alert>
+              ))}
+            </Stack>
           </Grid>
         </Grid>
       </TabPanel>
 
-      {/* Aba 4: Página Pública */}
-      <TabPanel value={tab} index={4}>
-        <Card sx={{ boxShadow: 2 }}>
-          <CardContent component="form" onSubmit={salvarPortalEmpresa} sx={{ p: 4 }}>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-              <Avatar sx={{ bgcolor: theme.palette.success.light }}><LanguageIcon /></Avatar>
-              <Box>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>Página Pública</Typography>
-                <Typography variant="body2" color="text.secondary">Configure o link e aparência da sua página</Typography>
-              </Box>
-            </Stack>
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <TextField fullWidth required label="Slug do link" value={portalForm.slug} onChange={(e) => setPortalForm({ ...portalForm, slug: e.target.value })} helperText="Exemplo: minha-empresa" variant="outlined" />
+      <TabPanel value={tab} index={5}>
+        <Card>
+          <CardContent component="form" onSubmit={salvarPortalEmpresa}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Página inicial própria da empresa</Typography>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Este é o link que os clientes desta empresa usarão para entrar, criar conta e ver serviços publicados.
+            </Alert>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={5}>
+                <TextField fullWidth required label="Slug do link" value={portalForm.slug} onChange={(e) => setPortalForm({ ...portalForm, slug: saasService.slugifyEmpresa(e.target.value) })} helperText="Exemplo: minha-empresa" />
+              </Grid>
+              <Grid item xs={12} md={7}>
+                <TextField fullWidth label="Link público" value={empresa?.linkPublico || (portalForm.slug ? saasService.buildEmpresaLink(portalForm.slug) : '')} InputProps={{ readOnly: true }} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField fullWidth label="Link público" value={empresa?.linkPublico || (portalForm.slug ? `/e/${portalForm.slug}` : '')} InputProps={{ readOnly: true }} variant="outlined" />
+                <TextField fullWidth label="Título da página" value={portalForm.titulo} onChange={(e) => setPortalForm({ ...portalForm, titulo: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <TextField fullWidth label="Título da página" value={portalForm.titulo} onChange={(e) => setPortalForm({ ...portalForm, titulo: e.target.value })} variant="outlined" />
+                <TextField fullWidth type="color" label="Cor principal" value={portalForm.corPrimaria} onChange={(e) => setPortalForm({ ...portalForm, corPrimaria: e.target.value })} InputLabelProps={{ shrink: true }} />
               </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField fullWidth type="color" label="Cor principal" value={portalForm.corPrimaria} onChange={(e) => setPortalForm({ ...portalForm, corPrimaria: e.target.value })} InputLabelProps={{ shrink: true }} variant="outlined" />
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Tema do layout" value={portalForm.temaLayout} onChange={(e) => setPortalForm({ ...portalForm, temaLayout: e.target.value })}>
+                  <MenuItem value="classico">Clássico - página simples e direta</MenuItem>
+                  <MenuItem value="moderno">Moderno - cards e gradientes</MenuItem>
+                  <MenuItem value="premium">Premium - visual elegante</MenuItem>
+                  <MenuItem value="compacto">Compacto - foco em acesso rápido</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar logotipo
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('logo', e)} />
+                  </Button>
+                  {portalForm.logo && <Box component="img" src={portalForm.logo} alt="Logo" sx={{ height: 72, objectFit: 'contain', border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1 }} />}
+                  {portalForm.logo && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, logo: '' })}>Remover logo</Button>}
+                </Stack>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="WhatsApp de atendimento" value={portalForm.whatsapp} onChange={(e) => setPortalForm({ ...portalForm, whatsapp: e.target.value })} />
               </Grid>
               <Grid item xs={12}>
-                <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} variant="outlined" />
+                <Stack spacing={1}>
+                  <Button variant="outlined" component="label" fullWidth>
+                    Enviar banner da página pública
+                    <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('bannerUrl', e)} />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">As imagens de logo e banner são salvas em base64; não é necessário informar URL externa.</Typography>
+                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
+                  {portalForm.bannerUrl && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, bannerUrl: '' })}>Remover banner</Button>}
+                </Stack>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Página ativa" value={portalForm.ativo ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, ativo: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar serviços" value={portalForm.mostrarServicos ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarServicos: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar equipe" value={portalForm.mostrarProfissionais ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarProfissionais: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField select fullWidth label="Mostrar contato/WhatsApp" value={portalForm.mostrarContato ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, mostrarContato: e.target.value === 'sim' })}>
+                  <MenuItem value="sim">Sim</MenuItem>
+                  <MenuItem value="nao">Não</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Conteúdo exibido na página pública</Typography>
+                  <Grid container spacing={1}>
+                    {[
+                      ['mostrarBanner', 'Mostrar banner/imagem principal'],
+                      ['mostrarAreaRestrita', 'Mostrar área restrita e links de login'],
+                      ['mostrarRedesSociais', 'Mostrar redes sociais'],
+                    ].map(([field, label]) => (
+                      <Grid item xs={12} md={4} key={field}>
+                        <FormControlLabel control={<Switch checked={portalForm[field] !== false} onChange={(e) => setPortalForm({ ...portalForm, [field]: e.target.checked })} />} label={label} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Paper>
               </Grid>
               <Grid item xs={12}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <Button type="submit" variant="contained" disabled={saving} startIcon={<SaveIcon />} sx={{ fontWeight: 700 }}>Salvar página</Button>
-                  <Button variant="outlined" onClick={copiarLinkEmpresa} startIcon={<ContentCopyIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Copiar link</Button>
-                  <Button variant="outlined" href={empresa?.linkPublico || `/e/${portalForm.slug}`} target="_blank" rel="noreferrer" startIcon={<LaunchIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Abrir página</Button>
+                  <Button type="submit" variant="contained" disabled={saving} startIcon={<LanguageIcon />}>Salvar página inicial</Button>
+                  <Button type="button" variant="outlined" onClick={copiarLinkEmpresa} startIcon={<ContentCopyIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Copiar link</Button>
+                  <Button type="button" variant="outlined" href={empresa?.linkPublico || saasService.buildEmpresaLink(portalForm.slug)} target="_blank" rel="noreferrer" startIcon={<LaunchIcon />} disabled={!empresa?.linkPublico && !portalForm.slug}>Abrir página</Button>
                 </Stack>
               </Grid>
             </Grid>
