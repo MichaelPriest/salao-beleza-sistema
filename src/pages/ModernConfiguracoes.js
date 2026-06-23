@@ -139,6 +139,8 @@ const CONFIG_TAB_INDEX = {
   backup: 5,
   limpeza: 6,
   empresa: 7,
+  painel: 8,
+  chamada: 8,
 };
 
 const EMPRESA_TAB_INDEX = {
@@ -553,6 +555,13 @@ function ModernConfiguracoes() {
             fonte: 'Poppins',
             borderRadius: 12,
           },
+          painelChamada: {
+            mensagem: 'Aguarde sua chamada no painel',
+            corFundo: '#111827',
+            corPrimaria: '#9c27b0',
+            vozAtiva: true,
+            salas: ['Recepção', 'Sala 1', 'Sala 2', 'Lavagem']
+          },
           updatedAt: new Date().toISOString()
         };
         
@@ -820,6 +829,34 @@ function ModernConfiguracoes() {
         [campo]: valor
       }
     });
+  };
+
+  const handlePainelChamadaChange = (campo, valor) => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      painelChamada: {
+        ...(config.painelChamada || {}),
+        [campo]: valor
+      }
+    });
+  };
+
+  const adicionarSalaPainel = () => {
+    const nomeSala = window.prompt('Nome da nova sala/guichê');
+    const sala = String(nomeSala || '').trim();
+    if (!sala) return;
+    const salasAtuais = config.painelChamada?.salas || ['Recepção'];
+    if (salasAtuais.includes(sala)) {
+      mostrarSnackbar('Sala/guichê já cadastrado no painel', 'warning');
+      return;
+    }
+    handlePainelChamadaChange('salas', [...salasAtuais, sala]);
+  };
+
+  const removerSalaPainel = (sala) => {
+    const salasAtuais = config.painelChamada?.salas || [];
+    handlePainelChamadaChange('salas', salasAtuais.filter((item) => item !== sala));
   };
 
   const togglePasswordVisibility = (field) => {
@@ -1123,6 +1160,7 @@ function ModernConfiguracoes() {
             <Tab icon={<BackupIcon />} label="Backup" />
             <Tab icon={<CleanIcon />} label="Limpeza" disabled={!isSuperadmin} />
             <Tab icon={<BusinessIcon />} label="SaaS, cobrança e unidades" />
+            <Tab icon={<NotificationsActiveIcon />} label="Painel de chamada" />
           </Tabs>
 
           {/* Dados do Salão e Empresa */}
@@ -1363,6 +1401,76 @@ function ModernConfiguracoes() {
           {/* Gestão SaaS da empresa */}
           <TabPanel value={tabValue} index={7}>
             <SaasGestao initialTab={empresaInitialTab} embedded />
+          </TabPanel>
+
+          {/* Painel de chamada */}
+          <TabPanel value={tabValue} index={8}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Estas opções alimentam a tela pública do painel de chamada e a tela da recepção. O nome e logo vêm dos dados do salão cadastrados na aba Salão/Empresa.
+                </Alert>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Mensagem exibida no painel"
+                  value={config.painelChamada?.mensagem || ''}
+                  onChange={(e) => handlePainelChamadaChange('mensagem', e.target.value)}
+                  size="small"
+                  helperText="Ex.: Aguarde sua chamada no painel"
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  label="Cor principal"
+                  type="color"
+                  value={config.painelChamada?.corPrimaria || config.tema?.corPrimaria || '#9c27b0'}
+                  onChange={(e) => handlePainelChamadaChange('corPrimaria', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  label="Cor de fundo"
+                  type="color"
+                  value={config.painelChamada?.corFundo || '#111827'}
+                  onChange={(e) => handlePainelChamadaChange('corFundo', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={config.painelChamada?.vozAtiva !== false}
+                      onChange={(e) => handlePainelChamadaChange('vozAtiva', e.target.checked)}
+                    />
+                  }
+                  label="Chamada por voz no painel público"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Salas e guichês</Typography>
+                      <Typography variant="body2" color="textSecondary">Cadastre aqui os locais disponíveis para chamar clientes.</Typography>
+                    </Box>
+                    <Button variant="outlined" onClick={adicionarSalaPainel}>Adicionar sala/guichê</Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {(config.painelChamada?.salas || ['Recepção']).map((sala) => (
+                      <Chip key={sala} label={sala} onDelete={() => removerSalaPainel(sala)} color="primary" variant="outlined" />
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
           </TabPanel>
 
           {/* Horário de Funcionamento */}
