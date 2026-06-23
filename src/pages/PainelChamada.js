@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Avatar, Box, Card, CardContent, Chip, Grid, Typography } from '@mui/material';
+import {
+  AccessTime as AccessTimeIcon,
+  Campaign as CampaignIcon,
+  CheckCircle as CheckCircleIcon,
+  Groups as GroupsIcon,
+  History as HistoryIcon,
+  Spa as SpaIcon,
+} from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
 
 const CHAMADAS_KEY = 'painel.chamadas';
@@ -28,6 +36,7 @@ function PainelChamada() {
   const [chamadas, setChamadas] = useState(carregarChamadas);
   const [atendimentos, setAtendimentos] = useState([]);
   const [config, setConfig] = useState(normalizarConfigPainel());
+  const [agora, setAgora] = useState(new Date());
   const ultimaFaladoRef = useRef('');
 
   const carregarConfiguracaoPainel = () => {
@@ -47,6 +56,11 @@ function PainelChamada() {
       carregarConfiguracaoPainel();
     }, 2000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const relogio = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(relogio);
   }, []);
 
   const ultimaChamada = chamadas.find((item) => ['chamado', 'em_atendimento'].includes(item.status)) || chamadas[0];
@@ -72,6 +86,8 @@ function PainelChamada() {
     .filter((item, index, lista) => lista.findIndex((comparar) => comparar.id === item.id && comparar.origem === item.origem) === index)
     .sort((a, b) => new Date(b.dataHistorico || 0) - new Date(a.dataHistorico || 0))
     .slice(0, 8);
+  const diaSemana = agora.toLocaleDateString('pt-BR', { weekday: 'long' });
+  const dataCompleta = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
   useEffect(() => {
     if (!ultimaChamada || ultimaFaladoRef.current === ultimaChamada.id || ultimaChamada.status !== 'chamado' || !config.vozAtiva) return;
@@ -90,19 +106,22 @@ function PainelChamada() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar src={config.logoUrl} sx={{ width: 72, height: 72, bgcolor: 'white', color: config.corPrimaria, fontWeight: 800 }}>{(config.nomeEmpresa || 'S').charAt(0)}</Avatar>
           <Box>
+            <Chip icon={<SpaIcon />} label="Bem-vindo(a)!" sx={{ mb: 1, bgcolor: 'rgba(255,255,255,0.14)', color: 'white', fontWeight: 800, '& .MuiChip-icon': { color: 'white' } }} />
             <Typography variant="h3" sx={{ fontWeight: 900 }}>{config.nomeEmpresa || 'Salão de Beleza'}</Typography>
             <Typography variant="h6" sx={{ opacity: 0.8 }}>{config.mensagem || 'Acompanhe sua chamada no painel'}</Typography>
           </Box>
         </Box>
         <Box sx={{ textAlign: 'right' }}>
-          <Typography variant="h5">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Typography>
-          <Typography>{new Date().toLocaleDateString('pt-BR')}</Typography>
+          <Chip icon={<AccessTimeIcon />} label={agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} sx={{ mb: 1, bgcolor: 'white', color: config.corPrimaria, fontWeight: 900, fontSize: 18, height: 40, '& .MuiChip-icon': { color: config.corPrimaria } }} />
+          <Typography sx={{ textTransform: 'capitalize', fontWeight: 800 }}>{diaSemana}</Typography>
+          <Typography>{dataCompleta}</Typography>
         </Box>
       </Box>
 
       {ultimaChamada ? (
         <Card sx={{ mb: 4, bgcolor: '#ffffff', color: '#111827', borderRadius: 4, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
           <CardContent sx={{ textAlign: 'center', py: { xs: 4, md: 8 } }}>
+            <CampaignIcon sx={{ fontSize: 64, color: config.corPrimaria, mb: 1 }} />
             <Typography variant="h2" sx={{ fontWeight: 900, color: config.corPrimaria }}>{ultimaChamada.clienteNome}</Typography>
             <Typography variant="h4" sx={{ mt: 1 }}>{ultimaChamada.destino || ultimaChamada.profissionalNome || 'Recepção'}</Typography>
             <Typography variant="h5" sx={{ mt: 1, color: '#555' }}>{ultimaChamada.servicoNome || 'Atendimento'}</Typography>
@@ -115,7 +134,7 @@ function PainelChamada() {
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={8}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Aguardando</Typography>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}><GroupsIcon /> Aguardando</Typography>
           <Grid container spacing={2}>
             {aguardando.slice(0, 8).map((item) => (
               <Grid item xs={12} md={6} key={item.id}>
@@ -125,9 +144,9 @@ function PainelChamada() {
           </Grid>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Em atendimento</Typography>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}><CheckCircleIcon /> Em atendimento</Typography>
           {emAtendimento.slice(0, 5).map((item) => <Card key={item.id} sx={{ mb: 1, bgcolor: '#064e3b', color: 'white' }}><CardContent><Typography>{item.clienteNome}</Typography><Typography variant="caption">{item.destino || item.profissionalNome} • {formatarTempo(item.updatedAt || item.createdAt)}</Typography></CardContent></Card>)}
-          <Typography variant="h5" sx={{ mt: 3, mb: 2, fontWeight: 800 }}>Histórico de atendimentos</Typography>
+          <Typography variant="h5" sx={{ mt: 3, mb: 2, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}><HistoryIcon /> Histórico de atendimentos</Typography>
           {historicoAtendimentos.length > 0 ? historicoAtendimentos.map((item) => (
             <Card key={`${item.origem}-${item.id}`} sx={{ mb: 1, bgcolor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.14)' }}>
               <CardContent sx={{ py: 1.5 }}>
