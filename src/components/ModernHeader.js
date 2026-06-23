@@ -328,6 +328,45 @@ function ModernHeader() {
     return () => { isMounted.current = false; if (notificationInterval.current) clearInterval(notificationInterval.current); };
   }, [usuario, carregarNotificacoes]);
 
+
+  const executarBusca = useCallback(async (termo) => {
+    const texto = termo.trim().toLowerCase();
+    if (texto.length < MIN_SEARCH_CHARS) { setSearchResults([]); return; }
+    setSearchLoading(true);
+    try {
+      const [clientes, servicos, produtos, profissionais] = await Promise.all([
+        firebaseService.getAll('clientes').catch(() => []),
+        firebaseService.getAll('servicos').catch(() => []),
+        firebaseService.getAll('produtos').catch(() => []),
+        firebaseService.getAll('profissionais').catch(() => []),
+      ]);
+      const montar = (lista, tipo, path, campo = 'nome') => (lista || [])
+        .filter((item) => String(item[campo] || item.nome || '').toLowerCase().includes(texto))
+        .slice(0, 5)
+        .map((item) => ({ id: item.id, titulo: item[campo] || item.nome, subtitulo: tipo, path }));
+      setSearchResults([
+        ...montar(clientes, 'Cliente', '/clientes'),
+        ...montar(servicos, 'Serviço', '/servicos'),
+        ...montar(produtos, 'Produto', '/estoque'),
+        ...montar(profissionais, 'Profissional', '/profissionais'),
+      ].slice(0, 12));
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => executarBusca(searchTerm), 350);
+    return () => clearTimeout(searchTimeout.current);
+  }, [searchTerm, executarBusca]);
+
+  const abrirResultadoBusca = (resultado) => {
+    setOpenSearch(false);
+    setSearchTerm('');
+    navigate(resultado.path);
+  };
+
   const renderCaixaStatusChip = (compact = false) => {
     if (isSaasAdmin && !isTenantMode) return null;
     const aberto = Boolean(caixaResumo.caixaAberto);
@@ -437,6 +476,19 @@ function ModernHeader() {
               isMobile={false} />
           </Search>
         )}
+        <Popover open={openSearch} anchorEl={searchAnchorEl} onClose={() => setOpenSearch(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+          <Box sx={{ width: 420, maxWidth: '90vw', p: 1 }}>
+            {searchLoading ? <Box sx={{ p: 2, textAlign: 'center' }}><CircularProgress size={24} /></Box> : searchResults.length > 0 ? (
+              <List dense>
+                {searchResults.map((resultado) => (
+                  <ListItem button key={`${resultado.subtitulo}-${resultado.id}`} onClick={() => abrirResultadoBusca(resultado)}>
+                    <ListItemText primary={resultado.titulo} secondary={resultado.subtitulo} />
+                  </ListItem>
+                ))}
+              </List>
+            ) : <Typography sx={{ p: 2 }} color="textSecondary">Nenhum resultado encontrado</Typography>}
+          </Box>
+        </Popover>
 
         <Box sx={{ flexGrow: 1 }} />
 
