@@ -26,12 +26,17 @@ const normalizarConfigPainel = (cfg = {}) => ({
 
 function PainelChamada() {
   const [chamadas, setChamadas] = useState(carregarChamadas);
+  const [atendimentos, setAtendimentos] = useState([]);
   const [config, setConfig] = useState(normalizarConfigPainel());
   const ultimaFaladoRef = useRef('');
 
   const carregarConfiguracaoPainel = () => {
-    firebaseService.getAll('configuracoes').then((dados) => {
+    Promise.all([
+      firebaseService.getAll('configuracoes').catch(() => []),
+      firebaseService.getAll('atendimentos').catch(() => []),
+    ]).then(([dados, atendimentosData]) => {
       setConfig(normalizarConfigPainel(dados?.[0] || {}));
+      setAtendimentos(atendimentosData || []);
     }).catch(() => null);
   };
 
@@ -47,6 +52,26 @@ function PainelChamada() {
   const ultimaChamada = chamadas.find((item) => ['chamado', 'em_atendimento'].includes(item.status)) || chamadas[0];
   const aguardando = chamadas.filter((item) => item.status === 'aguardando');
   const emAtendimento = chamadas.filter((item) => item.status === 'em_atendimento');
+  const historicoAtendimentos = [
+    ...chamadas
+      .filter((item) => item.status === 'atendido')
+      .map((item) => ({ ...item, origem: 'painel', dataHistorico: item.updatedAt || item.createdAt })),
+    ...atendimentos
+      .filter((item) => ['finalizado', 'concluido', 'concluído', 'em_andamento'].includes(String(item.status || '').toLowerCase()))
+      .map((item) => ({
+        id: item.id,
+        clienteNome: item.clienteNome || item.cliente?.nome || 'Cliente',
+        profissionalNome: item.profissionalNome || item.profissional?.nome || '',
+        servicoNome: item.servicoNome || item.servico?.nome || 'Atendimento',
+        destino: item.profissionalNome || item.profissional?.nome || 'Atendimento',
+        status: item.status,
+        origem: 'atendimento',
+        dataHistorico: item.finalizadoEm || item.updatedAt || item.data || item.createdAt,
+      })),
+  ]
+    .filter((item, index, lista) => lista.findIndex((comparar) => comparar.id === item.id && comparar.origem === item.origem) === index)
+    .sort((a, b) => new Date(b.dataHistorico || 0) - new Date(a.dataHistorico || 0))
+    .slice(0, 8);
 
   useEffect(() => {
     if (!ultimaChamada || ultimaFaladoRef.current === ultimaChamada.id || ultimaChamada.status !== 'chamado' || !config.vozAtiva) return;
@@ -102,6 +127,20 @@ function PainelChamada() {
         <Grid item xs={12} md={4}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>Em atendimento</Typography>
           {emAtendimento.slice(0, 5).map((item) => <Card key={item.id} sx={{ mb: 1, bgcolor: '#064e3b', color: 'white' }}><CardContent><Typography>{item.clienteNome}</Typography><Typography variant="caption">{item.destino || item.profissionalNome} • {formatarTempo(item.updatedAt || item.createdAt)}</Typography></CardContent></Card>)}
+          <Typography variant="h5" sx={{ mt: 3, mb: 2, fontWeight: 800 }}>Histórico de atendimentos</Typography>
+          {historicoAtendimentos.length > 0 ? historicoAtendimentos.map((item) => (
+            <Card key={`${item.origem}-${item.id}`} sx={{ mb: 1, bgcolor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.14)' }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Typography sx={{ fontWeight: 800 }}>{item.clienteNome}</Typography>
+                <Typography variant="body2" sx={{ opacity: 0.85 }}>{item.servicoNome || 'Atendimento'} • {item.destino || item.profissionalNome || 'Recepção'}</Typography>
+                <Typography variant="caption" sx={{ opacity: 0.7 }}>{item.dataHistorico ? new Date(item.dataHistorico).toLocaleString('pt-BR') : 'Sem horário registrado'}</Typography>
+              </CardContent>
+            </Card>
+          )) : (
+            <Card sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: 'white', border: '1px dashed rgba(255,255,255,0.2)' }}>
+              <CardContent><Typography>Nenhum atendimento concluído ainda.</Typography></CardContent>
+            </Card>
+          )}
         </Grid>
       </Grid>
     </Box>
