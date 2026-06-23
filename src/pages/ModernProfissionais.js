@@ -104,7 +104,6 @@ function ModernProfissionais() {
   const [formData, setFormData] = useState({
     nome: '',
     especialidade: '',
-    especialidades: [],
     telefone: '',
     email: '',
     dataContratacao: new Date().toISOString().split('T')[0],
@@ -165,7 +164,6 @@ function ModernProfissionais() {
         setFormData({
           nome: selectedProfessional.nome || '',
           especialidade: selectedProfessional.especialidade || '',
-          especialidades: selectedProfessional.especialidades || (selectedProfessional.especialidade ? [selectedProfessional.especialidade] : []),
           telefone: selectedProfessional.telefone || '',
           email: selectedProfessional.email || '',
           dataContratacao: selectedProfessional.dataContratacao?.split('T')[0] || new Date().toISOString().split('T')[0],
@@ -187,7 +185,6 @@ function ModernProfissionais() {
         setFormData({
           nome: '',
           especialidade: '',
-          especialidades: [],
           telefone: '',
           email: '',
           dataContratacao: new Date().toISOString().split('T')[0],
@@ -451,7 +448,7 @@ function ModernProfissionais() {
     
     try {
       // Validar campos obrigatórios
-      if (!formData.nome || (!formData.especialidades?.length && !formData.especialidade) || !formData.telefone || !formData.email) {
+      if (!formData.nome || !formData.especialidade || !formData.telefone || !formData.email) {
         mostrarSnackbar('Preencha todos os campos obrigatórios', 'error');
         return;
       }
@@ -489,15 +486,8 @@ function ModernProfissionais() {
         });
       }
 
-      const especialidadesSelecionadas = formData.especialidades?.length ? formData.especialidades : [formData.especialidade].filter(Boolean);
-
       const profissionalData = {
         ...formData,
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-        especialidades: especialidadesSelecionadas,
-        especialidade: especialidadesSelecionadas[0] || formData.especialidade,
-=======
->>>>>>> main
         comissao: Number(formData.comissao) || 0,
         precoHora: precoHoraNumerico,
         historicoPrecos,
@@ -667,7 +657,7 @@ function ModernProfissionais() {
                               {professional.nome}
                             </Typography>
                             <Chip
-                              label={(professional.especialidades || [professional.especialidade]).filter(Boolean).join(', ')}
+                              label={professional.especialidade}
                               size="small"
                               sx={{
                                 backgroundColor: '#f3e5f5',
@@ -856,7 +846,7 @@ function ModernProfissionais() {
                     {selectedProfessionalDetail.nome}
                   </Typography>
                   <Typography variant="subtitle1" color="textSecondary">
-                    {(selectedProfessionalDetail.especialidades || [selectedProfessionalDetail.especialidade]).filter(Boolean).join(', ')}
+                    {selectedProfessionalDetail.especialidade}
                   </Typography>
                 </Box>
               </Box>
@@ -1180,21 +1170,11 @@ function ModernProfissionais() {
               </Grid>
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
-                  <InputLabel>Especialidades</InputLabel>
+                  <InputLabel>Especialidade</InputLabel>
                   <Select
-                    multiple
-                    value={formData.especialidades || []}
-                    label="Especialidades"
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      especialidades: e.target.value,
-                      especialidade: e.target.value[0] || ''
-                    })}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {selected.map((spec) => <Chip key={spec} label={spec} size="small" />)}
-                      </Box>
-                    )}
+                    value={formData.especialidade}
+                    label="Especialidade"
+                    onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
                   >
                     {specialties.map(spec => (
                       <MenuItem key={spec} value={spec}>{spec}</MenuItem>

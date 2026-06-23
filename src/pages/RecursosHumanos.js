@@ -36,12 +36,10 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf';
 import { firebaseService } from '../services/firebase';
 import ProfissionaisSectionNav from '../components/ProfissionaisSectionNav';
 
 const RH_EVENTOS_KEY = 'rh.eventos';
-const RH_PONTOS_KEY = 'rh.pontos';
 
 const tiposEvento = [
   { value: 'ferias', label: 'Férias', color: 'info' },
@@ -80,10 +78,6 @@ function RecursosHumanos() {
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
   const [comissoes, setComissoes] = useState([]);
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-  const [servicos, setServicos] = useState([]);
-=======
->>>>>>> main
   const [eventos, setEventos] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(RH_EVENTOS_KEY) || '[]');
@@ -91,17 +85,6 @@ function RecursosHumanos() {
       return [];
     }
   });
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-  const [pontos, setPontos] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(RH_PONTOS_KEY) || '[]');
-    } catch (error) {
-      return [];
-    }
-  });
-  const [pontoProfissionalId, setPontoProfissionalId] = useState('');
-=======
->>>>>>> main
   const [openEventoDialog, setOpenEventoDialog] = useState(false);
   const [eventoForm, setEventoForm] = useState({
     profissionalId: '',
@@ -120,38 +103,19 @@ function RecursosHumanos() {
     localStorage.setItem(RH_EVENTOS_KEY, JSON.stringify(eventos));
   }, [eventos]);
 
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-  useEffect(() => {
-    localStorage.setItem(RH_PONTOS_KEY, JSON.stringify(pontos));
-  }, [pontos]);
-
-  const carregarDados = async () => {
-    try {
-      setLoading(true);
-      const [profissionaisData, disponibilidadesData, atendimentosData, comissoesData, servicosData] = await Promise.all([
-=======
   const carregarDados = async () => {
     try {
       setLoading(true);
       const [profissionaisData, disponibilidadesData, atendimentosData, comissoesData] = await Promise.all([
->>>>>>> main
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('disponibilidades').catch(() => []),
         firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-        firebaseService.getAll('servicos').catch(() => []),
-=======
->>>>>>> main
       ]);
       setProfissionais(profissionaisData || []);
       setDisponibilidades(disponibilidadesData || []);
       setAtendimentos(atendimentosData || []);
       setComissoes(comissoesData || []);
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-      setServicos(servicosData || []);
-=======
->>>>>>> main
     } catch (error) {
       console.error('Erro ao carregar RH:', error);
     } finally {
@@ -173,60 +137,6 @@ function RecursosHumanos() {
     .filter((comissao) => ['pendente', 'a_pagar'].includes(comissao.status || 'pendente'))
     .reduce((total, comissao) => total + (Number(comissao.valor) || Number(comissao.valorComissao) || 0), 0);
 
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-
-  const relatorioProfissionais = useMemo(() => profissionais.map((profissional) => {
-    const atendimentosProfissional = atendimentos.filter((atendimento) => atendimento.profissionalId === profissional.id);
-    const faturamento = atendimentosProfissional.reduce((total, atendimento) => {
-      const servico = servicos.find((item) => item.id === atendimento.servicoId);
-      const valorAtendimento = (atendimento.servicosRealizados || []).reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
-      return total + (valorAtendimento || Number(servico?.preco) || 0);
-    }, 0);
-    const comissoesProfissional = comissoes
-      .filter((comissao) => comissao.profissionalId === profissional.id)
-      .reduce((total, comissao) => total + (Number(comissao.valor) || Number(comissao.valorComissao) || 0), 0);
-    const escalasAtivas = disponibilidadesAtivas.filter((item) => item.profissionalId === profissional.id).length;
-    const eventosAbertos = eventos.filter((evento) => evento.profissionalId === profissional.id && evento.status === 'pendente').length;
-
-    return {
-      id: profissional.id,
-      nome: profissional.nome,
-      status: profissional.status || 'ativo',
-      especialidades: (profissional.especialidades || [profissional.especialidade]).filter(Boolean).join(', '),
-      atendimentos: atendimentosProfissional.length,
-      faturamento,
-      comissoes: comissoesProfissional,
-      escalasAtivas,
-      eventosAbertos,
-    };
-  }), [profissionais, atendimentos, servicos, comissoes, disponibilidadesAtivas, eventos]);
-
-  const exportarRelatorioRh = () => {
-    const cabecalho = ['Nome', 'Status', 'Especialidades', 'Atendimentos', 'Faturamento', 'Comissões', 'Escalas Ativas', 'Pendências'];
-    const linhas = relatorioProfissionais.map((item) => [
-      item.nome,
-      item.status,
-      item.especialidades,
-      item.atendimentos,
-      item.faturamento,
-      item.comissoes,
-      item.escalasAtivas,
-      item.eventosAbertos,
-    ]);
-    const csv = [cabecalho, ...linhas]
-      .map((linha) => linha.map((valor) => `"${String(valor ?? '').replace(/"/g, '""')}"`).join(';'))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `relatorio_rh_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-=======
->>>>>>> main
   const salvarEvento = () => {
     if (!eventoForm.profissionalId || !eventoForm.dataInicio || !eventoForm.dataFim) return;
     const profissional = profissionais.find((item) => item.id === eventoForm.profissionalId);
@@ -249,97 +159,12 @@ function RecursosHumanos() {
     });
   };
 
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-  const sincronizarEventoComDisponibilidade = async (evento, status) => {
-    if (status !== 'aprovado' || evento.ausenciaId || !['ferias', 'folga', 'licenca', 'treinamento'].includes(evento.tipo)) return null;
-
-    const ausencia = await firebaseService.add('ausencias', {
-      profissionalId: evento.profissionalId,
-      tipo: evento.tipo === 'licenca' ? 'licenca' : evento.tipo,
-      dataInicio: evento.dataInicio,
-      dataFim: evento.dataFim,
-      motivo: `${getTipo(evento.tipo).label} aprovada no módulo de RH`,
-      observacoes: evento.observacoes || '',
-      status: 'aprovado',
-      origem: 'rh',
-      rhEventoId: evento.id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    return ausencia?.id;
-  };
-
-  const atualizarStatusEvento = async (id, status) => {
-    const evento = eventos.find((item) => item.id === id);
-    if (!evento) return;
-
-    try {
-      const ausenciaId = await sincronizarEventoComDisponibilidade(evento, status);
-      setEventos(eventos.map((item) => (
-        item.id === id ? { ...item, status, ausenciaId: ausenciaId || item.ausenciaId, updatedAt: new Date().toISOString() } : item
-      )));
-    } catch (error) {
-      console.error('Erro ao sincronizar evento RH:', error);
-      setEventos(eventos.map((item) => (
-        item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
-      )));
-    }
-  };
-
-  const registrarPonto = (tipo) => {
-    if (!pontoProfissionalId) return;
-    const profissional = profissionais.find((item) => item.id === pontoProfissionalId);
-    const hoje = new Date().toISOString().split('T')[0];
-    const agora = new Date().toISOString();
-    const pontoDoDia = pontos.find((ponto) => ponto.profissionalId === pontoProfissionalId && ponto.data === hoje);
-
-    if (!pontoDoDia) {
-      if (tipo !== 'entrada') return;
-      setPontos([{ id: crypto.randomUUID(), profissionalId: pontoProfissionalId, profissionalNome: profissional?.nome || 'Profissional', data: hoje, entrada: agora, intervaloSaida: '', intervaloRetorno: '', saida: '', createdAt: agora }, ...pontos]);
-      return;
-    }
-
-    const campoPorTipo = {
-      entrada: 'entrada',
-      intervaloSaida: 'intervaloSaida',
-      intervaloRetorno: 'intervaloRetorno',
-      saida: 'saida',
-    };
-    const campo = campoPorTipo[tipo];
-    if (!campo || pontoDoDia[campo]) return;
-
-    setPontos(pontos.map((ponto) => (
-      ponto.id === pontoDoDia.id ? { ...ponto, [campo]: agora, updatedAt: agora } : ponto
-    )));
-  };
-
-  const exportarRelatorioPdf = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Relatório Integrado de RH', 14, 18);
-    doc.setFontSize(10);
-    doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 14, 26);
-    let y = 38;
-    relatorioProfissionais.slice(0, 28).forEach((item) => {
-      doc.text(`${item.nome} | ${item.status} | Atend.: ${item.atendimentos} | Fat.: ${formatarMoeda(item.faturamento)} | Com.: ${formatarMoeda(item.comissoes)} | Escalas: ${item.escalasAtivas}`, 14, y);
-      y += 8;
-      if (y > 280) {
-        doc.addPage();
-        y = 18;
-      }
-    });
-    doc.save(`relatorio_rh_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
-=======
   const atualizarStatusEvento = (id, status) => {
     setEventos(eventos.map((evento) => (
       evento.id === id ? { ...evento, status, updatedAt: new Date().toISOString() } : evento
     )));
   };
 
->>>>>>> main
   const getTipo = (tipo) => tiposEvento.find((item) => item.value === tipo) || tiposEvento[0];
   const getStatus = (status) => statusEvento.find((item) => item.value === status) || statusEvento[0];
 
@@ -385,11 +210,6 @@ function RecursosHumanos() {
           <Tab label="Escalas e ponto" icon={<CalendarIcon />} iconPosition="start" />
           <Tab label="Folha e comissões" icon={<PaymentsIcon />} iconPosition="start" />
           <Tab label="Documentos e eventos" icon={<DescriptionIcon />} iconPosition="start" />
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-          <Tab label="Ponto eletrônico" icon={<ScheduleIcon />} iconPosition="start" />
-          <Tab label="Relatórios" icon={<DescriptionIcon />} iconPosition="start" />
-=======
->>>>>>> main
         </Tabs>
       </Paper>
 
@@ -476,82 +296,6 @@ function RecursosHumanos() {
         </TableContainer>
       )}
 
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
-
-      {tab === 4 && (
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Ponto eletrônico</Typography>
-                <TextField select fullWidth label="Profissional" value={pontoProfissionalId} onChange={(e) => setPontoProfissionalId(e.target.value)} sx={{ mb: 2 }}>
-                  {profissionaisAtivos.map((profissional) => <MenuItem key={profissional.id} value={profissional.id}>{profissional.nome}</MenuItem>)}
-                </TextField>
-                <Grid container spacing={1}>
-                  <Grid item xs={6}><Button fullWidth variant="contained" onClick={() => registrarPonto('entrada')}>1ª Entrada</Button></Grid>
-                  <Grid item xs={6}><Button fullWidth variant="outlined" onClick={() => registrarPonto('intervaloSaida')}>2ª Saída intervalo</Button></Grid>
-                  <Grid item xs={6}><Button fullWidth variant="outlined" onClick={() => registrarPonto('intervaloRetorno')}>3ª Retorno</Button></Grid>
-                  <Grid item xs={6}><Button fullWidth variant="contained" onClick={() => registrarPonto('saida')}>4ª Saída</Button></Grid>
-                </Grid>
-                <Alert severity="info" sx={{ mt: 2 }}>O ponto eletrônico agora usa quatro marcações: entrada, saída para intervalo, retorno e saída final.</Alert>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead><TableRow><TableCell>Profissional</TableCell><TableCell>Data</TableCell><TableCell>Entrada</TableCell><TableCell>Saída intervalo</TableCell><TableCell>Retorno</TableCell><TableCell>Saída final</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
-                <TableBody>
-                  {pontos.map((ponto) => (
-                    <TableRow key={ponto.id} hover>
-                      <TableCell>{ponto.profissionalNome}</TableCell>
-                      <TableCell>{ponto.data}</TableCell>
-                      <TableCell>{ponto.entrada ? new Date(ponto.entrada).toLocaleTimeString('pt-BR') : '-'}</TableCell>
-                      <TableCell>{ponto.intervaloSaida ? new Date(ponto.intervaloSaida).toLocaleTimeString('pt-BR') : '-'}</TableCell>
-                      <TableCell>{ponto.intervaloRetorno ? new Date(ponto.intervaloRetorno).toLocaleTimeString('pt-BR') : '-'}</TableCell>
-                      <TableCell>{ponto.saida ? new Date(ponto.saida).toLocaleTimeString('pt-BR') : '-'}</TableCell>
-                      <TableCell><Chip size="small" label={ponto.saida ? 'Fechado' : 'Aberto'} color={ponto.saida ? 'success' : 'warning'} /></TableCell>
-                    </TableRow>
-                  ))}
-                  {pontos.length === 0 && <TableRow><TableCell colSpan={7}><Alert severity="info">Nenhum ponto registrado.</Alert></TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Grid>
-        </Grid>
-      )}
-
-
-      {tab === 5 && (
-        <Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>Relatório integrado de profissionais</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}><Button variant="outlined" onClick={exportarRelatorioRh}>Exportar CSV</Button><Button variant="contained" onClick={exportarRelatorioPdf}>Exportar PDF</Button></Box>
-          </Box>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead><TableRow><TableCell>Profissional</TableCell><TableCell>Status</TableCell><TableCell>Especialidades</TableCell><TableCell>Atendimentos</TableCell><TableCell>Faturamento</TableCell><TableCell>Comissões</TableCell><TableCell>Escalas</TableCell><TableCell>Pendências</TableCell></TableRow></TableHead>
-              <TableBody>
-                {relatorioProfissionais.map((item) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>{item.nome}</TableCell>
-                    <TableCell><Chip size="small" label={item.status} color={item.status === 'inativo' ? 'error' : 'success'} /></TableCell>
-                    <TableCell>{item.especialidades || '-'}</TableCell>
-                    <TableCell>{item.atendimentos}</TableCell>
-                    <TableCell>{formatarMoeda(item.faturamento)}</TableCell>
-                    <TableCell>{formatarMoeda(item.comissoes)}</TableCell>
-                    <TableCell>{item.escalasAtivas}</TableCell>
-                    <TableCell>{item.eventosAbertos}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
-
-=======
->>>>>>> main
       <Dialog open={openEventoDialog} onClose={() => setOpenEventoDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Novo evento RH</DialogTitle>
         <DialogContent>
