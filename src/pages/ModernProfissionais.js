@@ -83,6 +83,38 @@ const diasSemana = [
 
 const COLORS = ['#9c27b0', '#ff4081', '#4caf50', '#ff9800', '#f44336', '#2196f3'];
 
+// Constantes para evitar repetição de valores mágicos
+const INITIAL_FORM_DATA = {
+  nome: '',
+  especialidade: '',
+  especialidades: [],
+  telefone: '',
+  email: '',
+  dataContratacao: new Date().toISOString().split('T')[0],
+  status: 'ativo',
+  comissao: 40,
+  precoHora: '',
+  historicoPrecos: [],
+  foto: null,
+  redes: {
+    instagram: '',
+    facebook: '',
+    whatsapp: '',
+  },
+  horarioTrabalho: '09:00 - 18:00',
+  diasTrabalho: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
+};
+
+const diasSemanaDisponibilidade = {
+  Domingo: 0,
+  Segunda: 1,
+  Terça: 2,
+  Quarta: 3,
+  Quinta: 4,
+  Sexta: 5,
+  Sábado: 6,
+};
+
 function ModernProfissionais() {
   const [loading, setLoading] = useState(true);
   const [profissionais, setProfissionais] = useState([]);
@@ -101,26 +133,7 @@ function ModernProfissionais() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
   // Estado do formulário
-  const [formData, setFormData] = useState({
-    nome: '',
-    especialidade: '',
-    especialidades: [],
-    telefone: '',
-    email: '',
-    dataContratacao: new Date().toISOString().split('T')[0],
-    status: 'ativo',
-    comissao: 40,
-    precoHora: '',
-    historicoPrecos: [],
-    foto: null,
-    redes: {
-      instagram: '',
-      facebook: '',
-      whatsapp: '',
-    },
-    horarioTrabalho: '09:00 - 18:00',
-    diasTrabalho: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
   useEffect(() => {
     carregarDados();
@@ -162,10 +175,15 @@ function ModernProfissionais() {
   useEffect(() => {
     if (openDialog) {
       if (selectedProfessional) {
+        // Extrair dados do profissional selecionado para o formulário
+        const especialidades = selectedProfessional.especialidades?.length 
+          ? selectedProfessional.especialidades 
+          : (selectedProfessional.especialidade ? [selectedProfessional.especialidade] : []);
+        
         setFormData({
           nome: selectedProfessional.nome || '',
-          especialidade: selectedProfessional.especialidade || '',
-          especialidades: selectedProfessional.especialidades || (selectedProfessional.especialidade ? [selectedProfessional.especialidade] : []),
+          especialidade: especialidades[0] || '',
+          especialidades: especialidades,
           telefone: selectedProfessional.telefone || '',
           email: selectedProfessional.email || '',
           dataContratacao: selectedProfessional.dataContratacao?.split('T')[0] || new Date().toISOString().split('T')[0],
@@ -182,28 +200,9 @@ function ModernProfissionais() {
           horarioTrabalho: selectedProfessional.horarioTrabalho || '09:00 - 18:00',
           diasTrabalho: selectedProfessional.diasTrabalho || ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
         });
-        setFotoPreview(selectedProfessional.foto);
+        setFotoPreview(selectedProfessional.foto || null);
       } else {
-        setFormData({
-          nome: '',
-          especialidade: '',
-          especialidades: [],
-          telefone: '',
-          email: '',
-          dataContratacao: new Date().toISOString().split('T')[0],
-          status: 'ativo',
-          comissao: 40,
-          precoHora: '',
-          historicoPrecos: [],
-          foto: null,
-          redes: {
-            instagram: '',
-            facebook: '',
-            whatsapp: '',
-          },
-          horarioTrabalho: '09:00 - 18:00',
-          diasTrabalho: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
-        });
+        setFormData(INITIAL_FORM_DATA);
         setFotoPreview(null);
         setFotoFile(null);
       }
@@ -230,13 +229,13 @@ function ModernProfissionais() {
     // Calcular avaliação média (baseada em notas dos atendimentos)
     const notas = atendimentosProfissional.filter(a => a.avaliacao).map(a => a.avaliacao);
     const avaliacaoMedia = notas.length > 0 
-      ? (notas.reduce((acc, curr) => acc + curr, 0) / notas.length).toFixed(1)
+      ? parseFloat((notas.reduce((acc, curr) => acc + curr, 0) / notas.length).toFixed(1))
       : 5.0;
     
     return {
       servicosRealizados,
       faturamento,
-      avaliacao: parseFloat(avaliacaoMedia)
+      avaliacao: avaliacaoMedia
     };
   };
 
@@ -370,16 +369,6 @@ function ModernProfissionais() {
     setFormData({ ...formData, foto: null });
   };
 
-  const diasSemanaDisponibilidade = {
-    Domingo: 0,
-    Segunda: 1,
-    Terça: 2,
-    Quarta: 3,
-    Quinta: 4,
-    Sexta: 5,
-    Sábado: 6,
-  };
-
   const parseHorarioTrabalho = (horarioTrabalho = '') => {
     const [inicio = '09:00', fim = '18:00'] = horarioTrabalho
       .split('-')
@@ -489,15 +478,14 @@ function ModernProfissionais() {
         });
       }
 
-      const especialidadesSelecionadas = formData.especialidades?.length ? formData.especialidades : [formData.especialidade].filter(Boolean);
+      const especialidadesSelecionadas = formData.especialidades?.length 
+        ? formData.especialidades 
+        : [formData.especialidade].filter(Boolean);
 
       const profissionalData = {
         ...formData,
-<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
         especialidades: especialidadesSelecionadas,
         especialidade: especialidadesSelecionadas[0] || formData.especialidade,
-=======
->>>>>>> main
         comissao: Number(formData.comissao) || 0,
         precoHora: precoHoraNumerico,
         historicoPrecos,
