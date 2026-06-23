@@ -80,7 +80,10 @@ function RecursosHumanos() {
   const [disponibilidades, setDisponibilidades] = useState([]);
   const [atendimentos, setAtendimentos] = useState([]);
   const [comissoes, setComissoes] = useState([]);
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
   const [servicos, setServicos] = useState([]);
+=======
+>>>>>>> main
   const [eventos, setEventos] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(RH_EVENTOS_KEY) || '[]');
@@ -88,6 +91,7 @@ function RecursosHumanos() {
       return [];
     }
   });
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
   const [pontos, setPontos] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(RH_PONTOS_KEY) || '[]');
@@ -96,6 +100,8 @@ function RecursosHumanos() {
     }
   });
   const [pontoProfissionalId, setPontoProfissionalId] = useState('');
+=======
+>>>>>>> main
   const [openEventoDialog, setOpenEventoDialog] = useState(false);
   const [eventoForm, setEventoForm] = useState({
     profissionalId: '',
@@ -114,6 +120,7 @@ function RecursosHumanos() {
     localStorage.setItem(RH_EVENTOS_KEY, JSON.stringify(eventos));
   }, [eventos]);
 
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
   useEffect(() => {
     localStorage.setItem(RH_PONTOS_KEY, JSON.stringify(pontos));
   }, [pontos]);
@@ -122,17 +129,29 @@ function RecursosHumanos() {
     try {
       setLoading(true);
       const [profissionaisData, disponibilidadesData, atendimentosData, comissoesData, servicosData] = await Promise.all([
+=======
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const [profissionaisData, disponibilidadesData, atendimentosData, comissoesData] = await Promise.all([
+>>>>>>> main
         firebaseService.getAll('profissionais').catch(() => []),
         firebaseService.getAll('disponibilidades').catch(() => []),
         firebaseService.getAll('atendimentos').catch(() => []),
         firebaseService.getAll('comissoes').catch(() => []),
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
         firebaseService.getAll('servicos').catch(() => []),
+=======
+>>>>>>> main
       ]);
       setProfissionais(profissionaisData || []);
       setDisponibilidades(disponibilidadesData || []);
       setAtendimentos(atendimentosData || []);
       setComissoes(comissoesData || []);
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
       setServicos(servicosData || []);
+=======
+>>>>>>> main
     } catch (error) {
       console.error('Erro ao carregar RH:', error);
     } finally {
@@ -154,6 +173,7 @@ function RecursosHumanos() {
     .filter((comissao) => ['pendente', 'a_pagar'].includes(comissao.status || 'pendente'))
     .reduce((total, comissao) => total + (Number(comissao.valor) || Number(comissao.valorComissao) || 0), 0);
 
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
 
   const relatorioProfissionais = useMemo(() => profissionais.map((profissional) => {
     const atendimentosProfissional = atendimentos.filter((atendimento) => atendimento.profissionalId === profissional.id);
@@ -205,6 +225,8 @@ function RecursosHumanos() {
     URL.revokeObjectURL(url);
   };
 
+=======
+>>>>>>> main
   const salvarEvento = () => {
     if (!eventoForm.profissionalId || !eventoForm.dataInicio || !eventoForm.dataFim) return;
     const profissional = profissionais.find((item) => item.id === eventoForm.profissionalId);
@@ -227,6 +249,7 @@ function RecursosHumanos() {
     });
   };
 
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
   const sincronizarEventoComDisponibilidade = async (evento, status) => {
     if (status !== 'aprovado' || evento.ausenciaId || !['ferias', 'folga', 'licenca', 'treinamento'].includes(evento.tipo)) return null;
 
@@ -309,6 +332,14 @@ function RecursosHumanos() {
     doc.save(`relatorio_rh_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
+=======
+  const atualizarStatusEvento = (id, status) => {
+    setEventos(eventos.map((evento) => (
+      evento.id === id ? { ...evento, status, updatedAt: new Date().toISOString() } : evento
+    )));
+  };
+
+>>>>>>> main
   const getTipo = (tipo) => tiposEvento.find((item) => item.value === tipo) || tiposEvento[0];
   const getStatus = (status) => statusEvento.find((item) => item.value === status) || statusEvento[0];
 
@@ -354,8 +385,11 @@ function RecursosHumanos() {
           <Tab label="Escalas e ponto" icon={<CalendarIcon />} iconPosition="start" />
           <Tab label="Folha e comissões" icon={<PaymentsIcon />} iconPosition="start" />
           <Tab label="Documentos e eventos" icon={<DescriptionIcon />} iconPosition="start" />
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
           <Tab label="Ponto eletrônico" icon={<ScheduleIcon />} iconPosition="start" />
           <Tab label="Relatórios" icon={<DescriptionIcon />} iconPosition="start" />
+=======
+>>>>>>> main
         </Tabs>
       </Paper>
 
@@ -442,6 +476,7 @@ function RecursosHumanos() {
         </TableContainer>
       )}
 
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
 
       {tab === 4 && (
         <Grid container spacing={2}>
@@ -515,6 +550,8 @@ function RecursosHumanos() {
         </Box>
       )}
 
+=======
+>>>>>>> main
       <Dialog open={openEventoDialog} onClose={() => setOpenEventoDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Novo evento RH</DialogTitle>
         <DialogContent>

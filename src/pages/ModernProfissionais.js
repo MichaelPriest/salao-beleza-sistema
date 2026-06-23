@@ -493,8 +493,11 @@ function ModernProfissionais() {
 
       const profissionalData = {
         ...formData,
+<<<<<<< codex/corrigir-erros-na-pagina-servicos-r6xz68
         especialidades: especialidadesSelecionadas,
         especialidade: especialidadesSelecionadas[0] || formData.especialidade,
+=======
+>>>>>>> main
         comissao: Number(formData.comissao) || 0,
         precoHora: precoHoraNumerico,
         historicoPrecos,
