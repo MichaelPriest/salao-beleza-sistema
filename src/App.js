@@ -232,6 +232,7 @@ import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import FolderDivulgacaoSistema from './pages/FolderDivulgacaoSistema';
+import CentralFuncionalidadesAvancadas from './pages/CentralFuncionalidadesAvancadas';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -619,6 +620,11 @@ function App() {
                 <Route path="/configuracoes" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}><ModernConfiguracoes /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/funcionalidades-avancadas" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><CentralFuncionalidadesAvancadas /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
