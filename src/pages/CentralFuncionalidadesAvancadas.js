@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -173,6 +174,7 @@ const statusColor = {
 };
 
 const CentralFuncionalidadesAvancadas = () => {
+  const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   const [tarefas, setTarefas] = useState([]);
 
@@ -297,9 +299,14 @@ const CentralFuncionalidadesAvancadas = () => {
                       {funcionalidade.kpis.map((kpi) => <Chip key={kpi} label={kpi} size="small" variant="outlined" />)}
                     </Stack>
 
-                    <Button fullWidth variant="contained" startIcon={<AddTaskIcon />} onClick={() => adicionarTarefa(funcionalidade)}>
-                      Criar tarefa de implantação
-                    </Button>
+                    <Stack spacing={1}>
+                      <Button fullWidth variant="contained" startIcon={<AddTaskIcon />} onClick={() => adicionarTarefa(funcionalidade)}>
+                        Criar tarefa de implantação
+                      </Button>
+                      <Button fullWidth variant="outlined" onClick={() => navigate(`/funcionalidades-avancadas/${funcionalidade.id}`)}>
+                        Abrir módulo no sistema
+                      </Button>
+                    </Stack>
                   </CardContent>
                 </Card>
               </Grid>

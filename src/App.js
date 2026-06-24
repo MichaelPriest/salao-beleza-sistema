@@ -233,6 +233,7 @@ import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
 import FolderDivulgacaoSistema from './pages/FolderDivulgacaoSistema';
 import CentralFuncionalidadesAvancadas from './pages/CentralFuncionalidadesAvancadas';
+import ModuloFuncionalidadeAvancada from './pages/ModuloFuncionalidadeAvancada';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -625,6 +626,11 @@ function App() {
                 <Route path="/funcionalidades-avancadas" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}><CentralFuncionalidadesAvancadas /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/funcionalidades-avancadas/:moduloId" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><ModuloFuncionalidadeAvancada /></SistemaLayout>
                   </PrivateRoute>
                 } />
 
