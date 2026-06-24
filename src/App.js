@@ -231,6 +231,7 @@ import Page404 from './pages/404';
 import Page403 from './pages/403';
 import Page500 from './pages/500';
 import Manutencao from './pages/Manutencao';
+import FolderDivulgacaoSistema from './pages/FolderDivulgacaoSistema';
 
 // ============================================
 // OVERRIDE GLOBAL PARA BLOQUEAR ERROS DE PERMISSÃO
@@ -451,6 +452,9 @@ function App() {
                 } />
                 <Route path="/teste" element={
                   <SimpleLayout><TesteAPI /></SimpleLayout>
+                } />
+                <Route path="/folder-divulgacao" element={
+                  <SimpleLayout><FolderDivulgacaoSistema /></SimpleLayout>
                 } />
                 <Route path="/termos-uso" element={
                   <SimpleLayout><TermosUso /></SimpleLayout>
