@@ -87,6 +87,7 @@ import {
   Assignment as AssignmentIcon,
   EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -375,6 +376,7 @@ const RelatorioAgenda = React.forwardRef(({
       </Box>
 
       <Box>
+      <ModuloAvancadoWidget moduloId="agendamento-online" />
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Agenda Detalhada
         </Typography>

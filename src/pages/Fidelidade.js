@@ -81,6 +81,7 @@ import {
   Inventory as InventoryIcon,
   Category as CategoryIcon,
 } from '@mui/icons-material';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
@@ -962,6 +963,7 @@ function Fidelidade() {
       minHeight: '100vh',
       bgcolor: '#f5f5f5'
     }}>
+      <ModuloAvancadoWidget moduloId="pacotes-assinaturas" />
       {/* Cabeçalho Mobile */}
       <Box sx={{ 
         display: 'flex', 

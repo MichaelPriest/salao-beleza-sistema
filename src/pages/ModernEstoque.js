@@ -83,6 +83,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 
 // Lista completa de unidades de medida
 const UNIDADES_MEDIDA = [
@@ -190,6 +191,7 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
 
   return (
     <Box>
+      <ModuloAvancadoWidget moduloId="estoque-inteligente" />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="caption" color="textSecondary">
           Prateleiras disponíveis no {SETORES.find(s => s.id === setor)?.nome}

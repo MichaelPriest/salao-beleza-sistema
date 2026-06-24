@@ -78,6 +78,7 @@ import {
   Lock as LockIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
 import { createAuthUserWithoutSession, firebaseService } from '../services/firebase';
@@ -1106,6 +1107,7 @@ function ModernClientes() {
 
   return (
     <Box>
+      <ModuloAvancadoWidget moduloId="prontuario-fotos" />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>

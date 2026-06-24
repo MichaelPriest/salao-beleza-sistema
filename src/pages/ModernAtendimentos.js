@@ -78,6 +78,7 @@ import {
   Facebook as FacebookIcon,
   QrCode as QrCodeIcon,
 } from '@mui/icons-material';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -1075,6 +1076,7 @@ function ModernAtendimentos() {
 
   return (
     <Box>
+      <ModuloAvancadoWidget moduloId="comanda-caixa" />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>

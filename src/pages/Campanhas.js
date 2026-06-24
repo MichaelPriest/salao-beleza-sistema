@@ -155,6 +155,7 @@ import {
   Notifications as NotificationsIcon, // <- ADICIONADO
   NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
@@ -1465,6 +1466,8 @@ function Campanhas() {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box sx={{ p: 3, maxWidth: '100%', overflowX: 'hidden' }}>
+        <ModuloAvancadoWidget moduloId="whatsapp-automacoes" />
+        <ModuloAvancadoWidget moduloId="crm-campanhas" />
         {/* Cabeçalho */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
           <Box>

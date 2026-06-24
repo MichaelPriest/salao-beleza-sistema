@@ -38,6 +38,7 @@ import {
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
@@ -463,6 +464,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
 
   return (
     <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
+      <ModuloAvancadoWidget moduloId="saas-onboarding" />
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
