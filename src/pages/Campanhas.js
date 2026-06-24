@@ -604,6 +604,15 @@ const gerarTemplateTeste = (configSMTP, configSalao) => {
 
 // ==================== COMPONENTE PRINCIPAL ====================
 function Campanhas() {
+  const [acoesCRM, setAcoesCRM] = useState([]);
+  const [novaAcaoCRM, setNovaAcaoCRM] = useState({ campanha: '', publico: '', oferta: '' });
+
+  const adicionarAcaoCRM = () => {
+    if (!novaAcaoCRM.campanha.trim()) return;
+    setAcoesCRM((atuais) => [{ id: Date.now(), ...novaAcaoCRM, status: 'Planejada' }, ...atuais]);
+    setNovaAcaoCRM({ campanha: '', publico: '', oferta: '' });
+  };
+
   // ==================== ESTADOS ====================
   const [loading, setLoading] = useState(true);
   const [campanhas, setCampanhas] = useState([]);
@@ -1467,13 +1476,14 @@ function Campanhas() {
       <Box sx={{ p: 3, maxWidth: '100%', overflowX: 'hidden' }}>
         <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
           <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>WhatsApp, CRM e campanhas inteligentes integrados</Typography>
-          <Typography color="text.secondary" sx={{ mb: 2 }}>Crie templates, gatilhos, segmentos, cupons e ações de retorno dentro do módulo de campanhas.</Typography>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>Planeje templates, gatilhos, segmentos, cupons e ações de retorno dentro do módulo de campanhas.</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}><TextField label="Campanha/template" fullWidth /></Grid>
-            <Grid item xs={12} md={3}><TextField label="Segmento ou público" fullWidth /></Grid>
-            <Grid item xs={12} md={3}><TextField label="Cupom/oferta" fullWidth /></Grid>
-            <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Criar ação</Button></Grid>
+            <Grid item xs={12} md={3}><TextField label="Campanha/template" value={novaAcaoCRM.campanha} onChange={(e) => setNovaAcaoCRM({ ...novaAcaoCRM, campanha: e.target.value })} fullWidth /></Grid>
+            <Grid item xs={12} md={3}><TextField label="Segmento ou público" value={novaAcaoCRM.publico} onChange={(e) => setNovaAcaoCRM({ ...novaAcaoCRM, publico: e.target.value })} fullWidth /></Grid>
+            <Grid item xs={12} md={3}><TextField label="Cupom/oferta" value={novaAcaoCRM.oferta} onChange={(e) => setNovaAcaoCRM({ ...novaAcaoCRM, oferta: e.target.value })} fullWidth /></Grid>
+            <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={adicionarAcaoCRM}>Criar ação</Button></Grid>
           </Grid>
+          {acoesCRM.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{acoesCRM.map((item) => <Chip key={item.id} label={`${item.campanha} • ${item.publico || 'público'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
         </Paper>
         {/* Cabeçalho */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>

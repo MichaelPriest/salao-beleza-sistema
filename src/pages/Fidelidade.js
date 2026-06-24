@@ -568,6 +568,15 @@ const HistoricoItem = ({ item }) => {
 
 // Componente Principal
 function Fidelidade() {
+  const [pacotesClientes, setPacotesClientes] = useState([]);
+  const [novoPacoteCliente, setNovoPacoteCliente] = useState({ cliente: '', pacote: '', saldo: '' });
+
+  const adicionarPacoteCliente = () => {
+    if (!novoPacoteCliente.cliente.trim()) return;
+    setPacotesClientes((atuais) => [{ id: Date.now(), ...novoPacoteCliente, status: 'Ativo' }, ...atuais]);
+    setNovoPacoteCliente({ cliente: '', pacote: '', saldo: '' });
+  };
+
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -966,11 +975,12 @@ function Fidelidade() {
         <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Pacotes, assinaturas e gift cards integrados</Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>Venda pacotes, planos mensais e vales-presente junto ao programa de fidelidade.</Typography>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Cliente" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Pacote/plano/gift card" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Saldo ou validade" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Adicionar pacote</Button></Grid>
+          <Grid item xs={12} md={3}><TextField label="Cliente" value={novoPacoteCliente.cliente} onChange={(e) => setNovoPacoteCliente({ ...novoPacoteCliente, cliente: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Pacote/plano/gift card" value={novoPacoteCliente.pacote} onChange={(e) => setNovoPacoteCliente({ ...novoPacoteCliente, pacote: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Saldo ou validade" value={novoPacoteCliente.saldo} onChange={(e) => setNovoPacoteCliente({ ...novoPacoteCliente, saldo: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={adicionarPacoteCliente}>Adicionar pacote</Button></Grid>
         </Grid>
+        {pacotesClientes.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{pacotesClientes.map((item) => <Chip key={item.id} label={`${item.cliente} • ${item.pacote || 'pacote'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
       </Paper>
       {/* Cabeçalho Mobile */}
       <Box sx={{ 

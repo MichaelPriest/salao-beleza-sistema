@@ -149,6 +149,15 @@ const getProfissionalData = (profissionalId, profissionais) => {
 };
 
 function ModernAtendimentos() {
+  const [comandasDigitais, setComandasDigitais] = useState([]);
+  const [novaComandaDigital, setNovaComandaDigital] = useState({ cliente: '', itens: '', valor: '' });
+
+  const abrirComandaDigital = () => {
+    if (!novaComandaDigital.cliente.trim()) return;
+    setComandasDigitais((atuais) => [{ id: Date.now(), ...novaComandaDigital, status: 'Aberta' }, ...atuais]);
+    setNovaComandaDigital({ cliente: '', itens: '', valor: '' });
+  };
+
   const navigate = useNavigate();
   const [usuario, setUsuario] = useState(null);
   const [cargo, setCargo] = useState('');
@@ -1077,13 +1086,14 @@ function ModernAtendimentos() {
     <Box>
       <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
         <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Comanda digital e caixa integrados</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Lance serviços, produtos, forma de pagamento e valor total no fluxo de atendimentos.</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Lance serviços, produtos e valor total no fluxo de atendimentos antes de finalizar o caixa.</Typography>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Cliente/comanda" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Serviços e produtos" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Valor total" fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Abrir comanda</Button></Grid>
+          <Grid item xs={12} md={3}><TextField label="Cliente/comanda" value={novaComandaDigital.cliente} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, cliente: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Serviços e produtos" value={novaComandaDigital.itens} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, itens: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Valor total" value={novaComandaDigital.valor} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, valor: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={abrirComandaDigital}>Abrir comanda</Button></Grid>
         </Grid>
+        {comandasDigitais.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{comandasDigitais.map((item) => <Chip key={item.id} label={`${item.cliente} • R$ ${item.valor || '0'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
       </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
