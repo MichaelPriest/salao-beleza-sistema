@@ -13,73 +13,108 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import DeleteIcon from '@mui/icons-material/Delete';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
 const modulos = {
   'agendamento-online': {
     titulo: 'Agendamento online público',
-    descricao: 'Solicitações públicas, lista de espera e sinal de reserva dentro da agenda.',
+    descricao: 'Solicitações públicas, lista de espera, confirmação e sinal de reserva dentro da agenda.',
     entidade: 'solicitação',
-    campoPrincipal: 'Cliente',
-    campoSecundario: 'Serviço/profissional/horário',
     status: ['Pendente', 'Confirmado', 'Lista de espera', 'Cancelado'],
+    fields: [
+      { name: 'cliente', label: 'Cliente', required: true },
+      { name: 'servico', label: 'Serviço desejado' },
+      { name: 'profissional', label: 'Profissional' },
+      { name: 'dataHora', label: 'Data e horário' },
+      { name: 'sinal', label: 'Sinal / valor previsto' },
+    ],
   },
   'whatsapp-automacoes': {
     titulo: 'Automação por WhatsApp',
     descricao: 'Templates e campanhas de confirmação, lembrete, aniversário e reativação.',
     entidade: 'automação',
-    campoPrincipal: 'Campanha/template',
-    campoSecundario: 'Público ou gatilho',
     status: ['Rascunho', 'Ativa', 'Pausada', 'Finalizada'],
+    fields: [
+      { name: 'nome', label: 'Nome da campanha/template', required: true },
+      { name: 'gatilho', label: 'Gatilho' },
+      { name: 'publico', label: 'Público-alvo' },
+      { name: 'mensagem', label: 'Mensagem', multiline: true },
+    ],
   },
   'comanda-caixa': {
     titulo: 'Comanda digital e caixa',
     descricao: 'Comandas com serviços, produtos, descontos, pagamentos e baixa operacional.',
     entidade: 'comanda',
-    campoPrincipal: 'Cliente/comanda',
-    campoSecundario: 'Itens e pagamento',
     status: ['Aberta', 'Em pagamento', 'Fechada', 'Cancelada'],
+    fields: [
+      { name: 'cliente', label: 'Cliente/comanda', required: true },
+      { name: 'servicos', label: 'Serviços' },
+      { name: 'produtos', label: 'Produtos' },
+      { name: 'pagamento', label: 'Forma de pagamento' },
+      { name: 'valor', label: 'Valor total' },
+    ],
   },
   'pacotes-assinaturas': {
     titulo: 'Pacotes, assinaturas e gift cards',
     descricao: 'Venda e controle de pacotes, sessões, planos mensais e vales-presente.',
     entidade: 'pacote',
-    campoPrincipal: 'Cliente',
-    campoSecundario: 'Pacote/plano/gift card',
     status: ['Ativo', 'Consumindo', 'Vencido', 'Resgatado'],
+    fields: [
+      { name: 'cliente', label: 'Cliente', required: true },
+      { name: 'tipo', label: 'Pacote/plano/gift card' },
+      { name: 'saldo', label: 'Saldo de sessões ou valor' },
+      { name: 'validade', label: 'Validade' },
+    ],
   },
   'crm-campanhas': {
     titulo: 'CRM e campanhas inteligentes',
     descricao: 'Segmentos, funil de retorno, cupons e ações para clientes inativos ou VIPs.',
     entidade: 'ação de CRM',
-    campoPrincipal: 'Segmento/cliente',
-    campoSecundario: 'Ação planejada',
     status: ['Planejada', 'Em execução', 'Convertida', 'Sem retorno'],
+    fields: [
+      { name: 'segmento', label: 'Segmento/cliente', required: true },
+      { name: 'acao', label: 'Ação planejada' },
+      { name: 'cupom', label: 'Cupom/oferta' },
+      { name: 'retorno', label: 'Previsão de retorno' },
+    ],
   },
   'prontuario-fotos': {
     titulo: 'Prontuário, fotos e assinatura digital',
     descricao: 'Linha do tempo do cliente, evolução, termos, anamnese e fotos antes/depois.',
     entidade: 'registro',
-    campoPrincipal: 'Cliente',
-    campoSecundario: 'Procedimento/evolução/termo',
     status: ['Pendente assinatura', 'Assinado', 'Em acompanhamento', 'Arquivado'],
+    fields: [
+      { name: 'cliente', label: 'Cliente', required: true },
+      { name: 'procedimento', label: 'Procedimento/evolução' },
+      { name: 'termo', label: 'Termo/anamnese/foto' },
+      { name: 'observacoes', label: 'Observações clínicas', multiline: true },
+    ],
   },
   'estoque-inteligente': {
     titulo: 'Estoque inteligente',
     descricao: 'Alertas de estoque mínimo, consumo por procedimento e sugestão de compra.',
     entidade: 'alerta',
-    campoPrincipal: 'Produto',
-    campoSecundario: 'Motivo/quantidade',
     status: ['Comprar', 'Em cotação', 'Pedido feito', 'Resolvido'],
+    fields: [
+      { name: 'produto', label: 'Produto', required: true },
+      { name: 'motivo', label: 'Motivo do alerta' },
+      { name: 'quantidade', label: 'Quantidade sugerida' },
+      { name: 'fornecedor', label: 'Fornecedor' },
+    ],
   },
   'saas-onboarding': {
     titulo: 'SaaS, trial e onboarding',
     descricao: 'Trials, checklist de implantação, ativação, planos por recurso e métricas SaaS.',
     entidade: 'empresa',
-    campoPrincipal: 'Empresa',
-    campoSecundario: 'Etapa/plano',
     status: ['Trial', 'Implantando', 'Ativa', 'Risco de churn'],
+    fields: [
+      { name: 'empresa', label: 'Empresa', required: true },
+      { name: 'plano', label: 'Plano/trial' },
+      { name: 'etapa', label: 'Etapa atual' },
+      { name: 'responsavel', label: 'Responsável' },
+    ],
   },
 };
 
@@ -95,40 +130,60 @@ const carregar = (moduloId) => {
 
 const salvar = (moduloId, registros) => localStorage.setItem(storageKey(moduloId), JSON.stringify(registros));
 
+const criarFormInicial = (modulo) => ({
+  status: modulo?.status?.[0] || '',
+  ...(modulo?.fields || []).reduce((acc, field) => ({ ...acc, [field.name]: '' }), {}),
+});
+
+const getTituloRegistro = (modulo, registro) => registro[modulo.fields[0]?.name] || 'Registro sem título';
+
+const getDescricaoRegistro = (modulo, registro) => modulo.fields
+  .slice(1, 3)
+  .map((field) => registro[field.name])
+  .filter(Boolean)
+  .join(' • ');
+
 const ModuloAvancadoWidget = ({ moduloId }) => {
   const modulo = modulos[moduloId];
   const [open, setOpen] = useState(false);
   const [registros, setRegistros] = useState(() => carregar(moduloId));
-  const [form, setForm] = useState({ principal: '', secundario: '', status: modulo?.status?.[0] || '' });
+  const [form, setForm] = useState(() => criarFormInicial(modulo));
 
   const resumo = useMemo(() => ({
     total: registros.length,
-    recentes: registros.slice(0, 3),
+    recentes: registros.slice(0, 4),
   }), [registros]);
 
   if (!modulo) return null;
 
   const adicionar = (event) => {
     event.preventDefault();
-    if (!form.principal.trim()) return;
+    const campoObrigatorio = modulo.fields.find((field) => field.required) || modulo.fields[0];
+    if (!String(form[campoObrigatorio.name] || '').trim()) return;
     const proximos = [{ id: `${moduloId}-${Date.now()}`, ...form, criadoEm: new Date().toISOString() }, ...registros];
     setRegistros(proximos);
     salvar(moduloId, proximos);
-    setForm({ principal: '', secundario: '', status: modulo.status[0] });
+    setForm(criarFormInicial(modulo));
+  };
+
+  const remover = (id) => {
+    const proximos = registros.filter((registro) => registro.id !== id);
+    setRegistros(proximos);
+    salvar(moduloId, proximos);
   };
 
   return (
     <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, border: '1px solid rgba(156, 39, 176, 0.16)', bgcolor: '#fff8fb' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
         <Box>
-          <Chip icon={<AutoAwesomeIcon />} label="Funcionalidade avançada incluída" color="secondary" size="small" sx={{ mb: 1, fontWeight: 800 }} />
+          <Chip icon={<AutoAwesomeIcon />} label="Funcionalidade integrada ao módulo" color="secondary" size="small" sx={{ mb: 1, fontWeight: 800 }} />
           <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c' }}>{modulo.titulo}</Typography>
           <Typography color="text.secondary">{modulo.descricao}</Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
           <Chip label={`${resumo.total} registros`} color="primary" variant="outlined" />
           <Button variant="contained" endIcon={open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />} onClick={() => setOpen((value) => !value)}>
-            Usar módulo
+            Usar {modulo.entidade}
           </Button>
         </Stack>
       </Stack>
@@ -136,19 +191,26 @@ const ModuloAvancadoWidget = ({ moduloId }) => {
       <Collapse in={open}>
         <Box component="form" onSubmit={adicionar} sx={{ mt: 2 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <TextField label={modulo.campoPrincipal} value={form.principal} onChange={(event) => setForm((atual) => ({ ...atual, principal: event.target.value }))} fullWidth required />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField label={modulo.campoSecundario} value={form.secundario} onChange={(event) => setForm((atual) => ({ ...atual, secundario: event.target.value }))} fullWidth />
-            </Grid>
+            {modulo.fields.map((field) => (
+              <Grid item xs={12} md={field.multiline ? 12 : 3} key={field.name}>
+                <TextField
+                  label={field.label}
+                  value={form[field.name] || ''}
+                  onChange={(event) => setForm((atual) => ({ ...atual, [field.name]: event.target.value }))}
+                  fullWidth
+                  required={field.required}
+                  multiline={field.multiline}
+                  minRows={field.multiline ? 3 : undefined}
+                />
+              </Grid>
+            ))}
             <Grid item xs={12} md={3}>
               <TextField select label="Status" value={form.status} onChange={(event) => setForm((atual) => ({ ...atual, status: event.target.value }))} fullWidth>
                 {modulo.status.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
               </TextField>
             </Grid>
-            <Grid item xs={12} md={1}>
-              <Button type="submit" variant="contained" fullWidth sx={{ height: '100%' }}><AddIcon /></Button>
+            <Grid item xs={12} md={2}>
+              <Button type="submit" variant="contained" fullWidth sx={{ height: '100%' }} startIcon={<AddIcon />}>Adicionar</Button>
             </Grid>
           </Grid>
         </Box>
@@ -157,10 +219,15 @@ const ModuloAvancadoWidget = ({ moduloId }) => {
             <Typography variant="body2" color="text.secondary">Nenhum(a) {modulo.entidade} cadastrado(a) ainda.</Typography>
           ) : resumo.recentes.map((item) => (
             <Paper key={item.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} justifyContent="space-between">
-                <Typography sx={{ fontWeight: 800 }}>{item.principal}</Typography>
-                <Typography color="text.secondary">{item.secundario}</Typography>
-                <Chip label={item.status} size="small" />
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+                <Box>
+                  <Typography sx={{ fontWeight: 800 }}>{getTituloRegistro(modulo, item)}</Typography>
+                  <Typography variant="body2" color="text.secondary">{getDescricaoRegistro(modulo, item) || 'Sem detalhes adicionais'}</Typography>
+                </Box>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip label={item.status} size="small" />
+                  <Button color="error" size="small" startIcon={<DeleteIcon />} onClick={() => remover(item.id)}>Remover</Button>
+                </Stack>
               </Stack>
             </Paper>
           ))}

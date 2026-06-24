@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -174,7 +173,6 @@ const statusColor = {
 };
 
 const CentralFuncionalidadesAvancadas = () => {
-  const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   const [tarefas, setTarefas] = useState([]);
 
@@ -303,9 +301,7 @@ const CentralFuncionalidadesAvancadas = () => {
                       <Button fullWidth variant="contained" startIcon={<AddTaskIcon />} onClick={() => adicionarTarefa(funcionalidade)}>
                         Criar tarefa de implantação
                       </Button>
-                      <Button fullWidth variant="outlined" onClick={() => navigate(`/funcionalidades-avancadas/${funcionalidade.id}`)}>
-                        Abrir módulo no sistema
-                      </Button>
+                      <Chip label="Disponível na página do módulo correspondente" color="success" variant="outlined" />
                     </Stack>
                   </CardContent>
                 </Card>
