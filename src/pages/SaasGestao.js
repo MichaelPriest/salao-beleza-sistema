@@ -38,7 +38,6 @@ import {
   WorkspacePremium as WorkspacePremiumIcon,
 } from '@mui/icons-material';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { toast } from 'react-hot-toast';
 import { firebaseService, setTenantContext } from '../services/firebase';
 import BillingPaymentForms from '../components/saas/BillingPaymentForms';
@@ -464,7 +463,16 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
 
   return (
     <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
-      <ModuloAvancadoWidget moduloId="saas-onboarding" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Trial, onboarding e ativação SaaS integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Acompanhe empresa, plano/trial, etapa atual e responsável pela implantação dentro da gestão da empresa.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Empresa" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Plano/trial" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Etapa atual" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Registrar onboarding</Button></Grid>
+        </Grid>
+      </Paper>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>

@@ -87,7 +87,6 @@ import {
   Assignment as AssignmentIcon,
   EmojiEvents as TrophyIcon,
 } from '@mui/icons-material';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -376,7 +375,16 @@ const RelatorioAgenda = React.forwardRef(({
       </Box>
 
       <Box>
-      <ModuloAvancadoWidget moduloId="agendamento-online" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Agendamento online público integrado</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Receba solicitações públicas com cliente, serviço, profissional, data/horário e sinal de reserva diretamente na agenda.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Cliente" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Serviço" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Data e horário" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Adicionar à agenda</Button></Grid>
+        </Grid>
+      </Paper>
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#333', fontSize: '0.9rem', borderBottom: '1px solid #ccc', pb: 0.5 }}>
           Agenda Detalhada
         </Typography>

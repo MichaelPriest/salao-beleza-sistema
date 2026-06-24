@@ -81,7 +81,6 @@ import {
   Inventory as InventoryIcon,
   Category as CategoryIcon,
 } from '@mui/icons-material';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFirebase } from '../hooks/useFirebase';
 import { firebaseService } from '../services/firebase';
@@ -963,7 +962,16 @@ function Fidelidade() {
       minHeight: '100vh',
       bgcolor: '#f5f5f5'
     }}>
-      <ModuloAvancadoWidget moduloId="pacotes-assinaturas" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Pacotes, assinaturas e gift cards integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Venda pacotes, planos mensais e vales-presente junto ao programa de fidelidade.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Cliente" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Pacote/plano/gift card" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Saldo ou validade" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Adicionar pacote</Button></Grid>
+        </Grid>
+      </Paper>
       {/* Cabeçalho Mobile */}
       <Box sx={{ 
         display: 'flex', 

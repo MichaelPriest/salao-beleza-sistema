@@ -83,7 +83,6 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 
 // Lista completa de unidades de medida
 const UNIDADES_MEDIDA = [
@@ -191,7 +190,16 @@ const SeletorPrateleira = ({ setor, value, onChange, error, helperText }) => {
 
   return (
     <Box>
-      <ModuloAvancadoWidget moduloId="estoque-inteligente" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Estoque inteligente integrado</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Controle alertas de estoque mínimo, consumo por procedimento, sugestão de compra e fornecedor.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Produto" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Motivo do alerta" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Quantidade sugerida" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Gerar alerta</Button></Grid>
+        </Grid>
+      </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="caption" color="textSecondary">
           Prateleiras disponíveis no {SETORES.find(s => s.id === setor)?.nome}

@@ -78,7 +78,6 @@ import {
   Lock as LockIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { toast } from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
 import { createAuthUserWithoutSession, firebaseService } from '../services/firebase';
@@ -1107,7 +1106,16 @@ function ModernClientes() {
 
   return (
     <Box>
-      <ModuloAvancadoWidget moduloId="prontuario-fotos" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Prontuário, fotos e assinatura digital integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Registre evolução, termo/anamnese, autorização de imagem e observações clínicas no cadastro do cliente.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Cliente" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Procedimento/evolução" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Termo/foto/anamnese" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Registrar prontuário</Button></Grid>
+        </Grid>
+      </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>

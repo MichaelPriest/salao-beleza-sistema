@@ -78,7 +78,6 @@ import {
   Facebook as FacebookIcon,
   QrCode as QrCodeIcon,
 } from '@mui/icons-material';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -1076,7 +1075,16 @@ function ModernAtendimentos() {
 
   return (
     <Box>
-      <ModuloAvancadoWidget moduloId="comanda-caixa" />
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Comanda digital e caixa integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Lance serviços, produtos, forma de pagamento e valor total no fluxo de atendimentos.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Cliente/comanda" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Serviços e produtos" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Valor total" fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Abrir comanda</Button></Grid>
+        </Grid>
+      </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>

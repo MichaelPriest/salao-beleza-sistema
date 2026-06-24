@@ -155,7 +155,6 @@ import {
   Notifications as NotificationsIcon, // <- ADICIONADO
   NotificationsActive as NotificationsActiveIcon,
 } from '@mui/icons-material';
-import ModuloAvancadoWidget from '../components/ModuloAvancadoWidget';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
@@ -1466,8 +1465,16 @@ function Campanhas() {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box sx={{ p: 3, maxWidth: '100%', overflowX: 'hidden' }}>
-        <ModuloAvancadoWidget moduloId="whatsapp-automacoes" />
-        <ModuloAvancadoWidget moduloId="crm-campanhas" />
+        <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>WhatsApp, CRM e campanhas inteligentes integrados</Typography>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>Crie templates, gatilhos, segmentos, cupons e ações de retorno dentro do módulo de campanhas.</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={3}><TextField label="Campanha/template" fullWidth /></Grid>
+            <Grid item xs={12} md={3}><TextField label="Segmento ou público" fullWidth /></Grid>
+            <Grid item xs={12} md={3}><TextField label="Cupom/oferta" fullWidth /></Grid>
+            <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }}>Criar ação</Button></Grid>
+          </Grid>
+        </Paper>
         {/* Cabeçalho */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
           <Box>

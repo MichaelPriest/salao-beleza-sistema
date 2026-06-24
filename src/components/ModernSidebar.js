@@ -173,7 +173,6 @@ import {
   Ballot as BallotIcon,
   SwapHoriz as SwapHorizIcon,
   SupportAgent as SupportAgentIcon,
-  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -640,13 +639,6 @@ const menuGroups = [
         text: 'Configurações',
         icon: <TuneIcon />,
         path: '/configuracoes',
-        permission: 'configurar_sistema',
-        cargos: ['admin', 'gerente']
-      },
-      {
-        text: 'Funcionalidades Avançadas',
-        icon: <AutoAwesomeIcon />,
-        path: '/funcionalidades-avancadas',
         permission: 'configurar_sistema',
         cargos: ['admin', 'gerente']
       },
