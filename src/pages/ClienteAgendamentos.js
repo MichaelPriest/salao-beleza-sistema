@@ -63,8 +63,27 @@ import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { agendaDisponibilidadeService, TIME_SLOTS_PADRAO } from '../services/agendaDisponibilidadeService';
 
+
+const getNomeProfissionalAgendamento = (agendamento = {}, profissional = null) => {
+  const candidato = profissional?.nome
+    || agendamento.profissionalNome
+    || agendamento.nomeProfissional
+    || agendamento.profissional?.nome
+    || agendamento.profissional?.label
+    || agendamento.profissional
+    || agendamento.profissionalId;
+
+  if (!candidato || candidato === 'null' || candidato === 'undefined') return 'Profissional não informado';
+  return String(candidato);
+};
+
+const getFotoProfissionalAgendamento = (agendamento = {}, profissional = null) => profissional?.foto || profissional?.avatar || agendamento.profissionalFoto || agendamento.profissional?.foto || '';
+
 // Componente de card de agendamento para mobile
 const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancelar }) => {
+  const nomeProfissional = getNomeProfissionalAgendamento(agendamento, profissional);
+  const fotoProfissional = getFotoProfissionalAgendamento(agendamento, profissional);
+
   const getStatusColor = (status) => {
     switch(status?.toLowerCase()) {
       case 'confirmado': return '#4caf50';
@@ -172,13 +191,13 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Avatar 
-                src={profissional?.foto}
+                src={fotoProfissional}
                 sx={{ width: 20, height: 20, bgcolor: '#ff9800' }}
               >
-                {!profissional?.foto && (agendamento.profissionalNome?.charAt(0) || '?')}
+                {!fotoProfissional && (nomeProfissional?.charAt(0) || '?')}
               </Avatar>
               <Typography variant="caption">
-                {agendamento.profissionalNome || 'A definir'}
+                {nomeProfissional}
               </Typography>
             </Box>
             {agendamento.valorTotal > 0 && (
@@ -728,8 +747,8 @@ function ClienteAgendamentos() {
             </Typography>
             <AnimatePresence>
               {agendamentosFuturos.map((agendamento) => {
-                const profissional = profissionais.find(p => 
-                  p.id === agendamento.profissionalId
+                const profissional = profissionais.find(p =>
+                  p.id === agendamento.profissionalId || p.uid === agendamento.profissionalId || p.nome === agendamento.profissionalNome
                 );
                 return (
                   <MobileAgendamentoCard
@@ -753,8 +772,8 @@ function ClienteAgendamentos() {
             </Typography>
             <AnimatePresence>
               {historyToShow.map((agendamento) => {
-                const profissional = profissionais.find(p => 
-                  p.id === agendamento.profissionalId
+                const profissional = profissionais.find(p =>
+                  p.id === agendamento.profissionalId || p.uid === agendamento.profissionalId || p.nome === agendamento.profissionalNome
                 );
                 return (
                   <MobileAgendamentoCard
