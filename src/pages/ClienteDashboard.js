@@ -72,6 +72,8 @@ import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { QRCodeCanvas } from 'qrcode.react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getAgendamentoStatusInfo } from '../utils/agendamentoStatus';
+import { formatLocalDate, formatLocalDateTime, getLocalDateInputValue } from '../utils/dateTimeUtils';
 
 function TabPanel({ children, value, index, isMobile }) {
   return (
@@ -759,7 +761,7 @@ function ClienteDashboard() {
     else if (saldoAtual >= 500) nivelAtual = 'prata';
     setNivel(nivelAtual);
 
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = getLocalDateInputValue();
     const proximos = agendamentos
       .filter(a => a.data >= hoje && a.status !== 'cancelado' && a.status !== 'finalizado')
       .sort((a, b) => a.data.localeCompare(b.data));
@@ -799,71 +801,27 @@ function ClienteDashboard() {
       .slice(0, 2);
   };
 
-  const formatarData = (data) => {
-    if (!data) return '-';
-    try {
-      const date = new Date(data);
-      if (isMobile) {
-        return date.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit'
-        });
-      }
-      return date.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch {
-      return data;
-    }
-  };
+  const formatarData = (data) => formatLocalDate(data, isMobile ? {
+    day: '2-digit',
+    month: '2-digit',
+  } : {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 
   const formatarDataHora = (data) => {
-    if (!data) return '-';
-    try {
-      const date = new Date(data);
-      if (isMobile) {
-        return date.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-      }
-      return date.toLocaleString('pt-BR');
-    } catch {
-      return data;
+    if (isMobile) {
+      return formatLocalDateTime(data);
     }
+    return formatLocalDateTime(data);
   };
 
-  const getStatusColor = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return 'success';
-      case 'pendente': return 'warning';
-      case 'cancelado': return 'error';
-      case 'finalizado': return 'info';
-      default: return 'default';
-    }
-  };
+  const getStatusColor = (status) => getAgendamentoStatusInfo(status).color;
 
   const getStatusLabel = (status) => {
-    if (isMobile) {
-      switch(status?.toLowerCase()) {
-        case 'confirmado': return 'Conf.';
-        case 'pendente': return 'Pend.';
-        case 'cancelado': return 'Canc.';
-        case 'finalizado': return 'Real.';
-        default: return status || 'Pend.';
-      }
-    }
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return 'Confirmado';
-      case 'pendente': return 'Pendente';
-      case 'cancelado': return 'Cancelado';
-      case 'finalizado': return 'Realizado';
-      default: return status || 'Pendente';
-    }
+    const info = getAgendamentoStatusInfo(status);
+    return isMobile ? info.curto : info.label;
   };
 
   const getNivelInfo = () => {

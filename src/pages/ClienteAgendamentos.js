@@ -62,6 +62,8 @@ import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { agendaDisponibilidadeService, TIME_SLOTS_PADRAO } from '../services/agendaDisponibilidadeService';
+import { getAgendamentoStatusInfo } from '../utils/agendamentoStatus';
+import { formatLocalDate, getLocalDateInputValue } from '../utils/dateTimeUtils';
 
 
 const getNomeProfissionalAgendamento = (agendamento = {}, profissional = null) => {
@@ -84,37 +86,12 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
   const nomeProfissional = getNomeProfissionalAgendamento(agendamento, profissional);
   const fotoProfissional = getFotoProfissionalAgendamento(agendamento, profissional);
 
-  const getStatusColor = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return '#4caf50';
-      case 'pendente': return '#ff9800';
-      case 'cancelado': return '#f44336';
-      case 'finalizado': return '#2196f3';
-      default: return '#9e9e9e';
-    }
-  };
+  const statusInfo = getAgendamentoStatusInfo(agendamento.status);
 
-  const getStatusBg = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return '#e8f5e9';
-      case 'pendente': return '#fff3e0';
-      case 'cancelado': return '#ffebee';
-      case 'finalizado': return '#e3f2fd';
-      default: return '#f5f5f5';
-    }
-  };
-
-  const formatarData = (data) => {
-    if (!data) return '-';
-    try {
-      return new Date(data).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit'
-      });
-    } catch {
-      return data;
-    }
-  };
+  const formatarData = (data) => formatLocalDate(data, {
+    day: '2-digit',
+    month: '2-digit',
+  });
 
   return (
     <motion.div
@@ -128,7 +105,7 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
         sx={{ 
           mb: 2,
           borderLeft: '4px solid',
-          borderLeftColor: getStatusColor(agendamento.status),
+          borderLeftColor: statusInfo.hex,
           borderRadius: 3,
           boxShadow: '0 10px 26px rgba(156,39,176,0.08)',
           borderColor: 'rgba(156,39,176,0.12)',
@@ -151,10 +128,10 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
             </Box>
             <Chip
               size="small"
-              label={agendamento.status}
+              label={statusInfo.label}
               sx={{
-                bgcolor: getStatusBg(agendamento.status),
-                color: getStatusColor(agendamento.status),
+                bgcolor: statusInfo.bg,
+                color: statusInfo.hex,
                 fontWeight: 600,
                 height: 24
               }}
@@ -488,7 +465,7 @@ function ClienteAgendamentos() {
   const handleNovoAgendamento = () => {
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
-    const dataFormatada = amanha.toISOString().split('T')[0];
+    const dataFormatada = getLocalDateInputValue(amanha);
     
     setSelectedServicos([]);
     setFormData({
@@ -637,15 +614,8 @@ function ClienteAgendamentos() {
     setOpenDetailsDialog(true);
   };
 
-  const getStatusColor = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'confirmado': return 'success';
-      case 'pendente': return 'warning';
-      case 'cancelado': return 'error';
-      case 'finalizado': return 'info';
-      default: return 'default';
-    }
-  };
+  const getStatusColor = (status) => getAgendamentoStatusInfo(status).color;
+  const getStatusLabel = (status) => getAgendamentoStatusInfo(status).label;
 
   const formatarMoeda = (valor) => {
     if (!valor) return 'R$ 0';
@@ -1069,7 +1039,7 @@ function ClienteAgendamentos() {
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Status</Typography>
                   <Chip
-                    label={selectedAgendamento.status}
+                    label={getStatusLabel(selectedAgendamento.status)}
                     color={getStatusColor(selectedAgendamento.status)}
                     size="small"
                     sx={{ height: 20, fontSize: '0.78rem' }}

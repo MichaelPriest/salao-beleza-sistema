@@ -74,17 +74,12 @@ import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { safeSetUsuarioStorage } from '../utils/storageUtils';
+import { getLocalDateTime } from '../utils/dateTimeUtils';
 
 // ============================================
 // FUNÇÕES DE HORÁRIO DE BRASÍLIA
 // ============================================
-const getBrasiliaTime = () => {
-  const now = new Date();
-  const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
-  const hora = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-  const diaSemana = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short' });
-  return { data, hora, diaSemana, completo: `${data} ${hora}` };
-};
+const getBrasiliaTime = () => getLocalDateTime();
 
 // ============================================
 // COMPONENTES ESTILIZADOS

@@ -2,9 +2,60 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Avatar, Box, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
 import { Campaign, Schedule, Spa, VolumeUp } from '@mui/icons-material';
 import { firebaseService } from '../services/firebase';
+import { getLocalDateInputValue } from '../utils/dateTimeUtils';
 
 const getServicoNome = (item = {}) => item.servicoNome || item.servicos?.[0]?.nome || item.servicosNomes || 'Serviço';
-const getClienteNome = (item = {}) => item.clienteNome || item.cliente || item.nomeCliente || 'Cliente';
+const getClienteNome = (item = {}) => item.clienteNomeResolvido || item.clienteNome || item.cliente || item.nomeCliente || 'Cliente';
+const getProfissionalNome = (item = {}) => item.profissionalNomeResolvido || item.profissionalNome || item.nomeProfissional || item.profissional?.nome || 'Profissional';
+
+const normalizarTexto = (valor) => String(valor || '').trim().toLowerCase();
+
+const resolveClientePainel = (agendamento = {}, clientes = []) => {
+  const ids = [
+    agendamento.clienteId,
+    agendamento.clienteUid,
+    agendamento.clienteAuthUid,
+    agendamento.authUid,
+    agendamento.usuarioId,
+    agendamento.userId,
+  ].filter(Boolean).map(String);
+  const email = normalizarTexto(agendamento.clienteEmail || agendamento.email);
+
+  return clientes.find((cliente) => {
+    const clienteIds = [cliente.id, cliente.uid, cliente.authUid, cliente.googleUid, cliente.userId]
+      .filter(Boolean)
+      .map(String);
+    const matchId = ids.some((id) => clienteIds.includes(id));
+    const matchEmail = email && normalizarTexto(cliente.email) === email;
+    return matchId || matchEmail;
+  });
+};
+
+const resolveProfissionalPainel = (agendamento = {}, profissionais = []) => {
+  const ids = [agendamento.profissionalId, agendamento.profissionalUid, agendamento.profissional?.id]
+    .filter(Boolean)
+    .map(String);
+  const nome = normalizarTexto(agendamento.profissionalNome || agendamento.nomeProfissional || agendamento.profissional?.nome);
+
+  return profissionais.find((profissional) => {
+    const profissionalIds = [profissional.id, profissional.uid].filter(Boolean).map(String);
+    const matchId = ids.some((id) => profissionalIds.includes(id));
+    const matchNome = nome && normalizarTexto(profissional.nome) === nome;
+    return matchId || matchNome;
+  });
+};
+
+const enriquecerAgendamentosPainel = (agendamentos = [], clientes = [], profissionais = []) => agendamentos.map((agendamento) => {
+  const cliente = resolveClientePainel(agendamento, clientes);
+  const profissional = resolveProfissionalPainel(agendamento, profissionais);
+  return {
+    ...agendamento,
+    clienteNomeResolvido: cliente?.nome || cliente?.nomeCompleto || agendamento.clienteNome || agendamento.cliente || agendamento.nomeCliente,
+    clienteFotoResolvida: cliente?.foto || cliente?.avatar || agendamento.clienteFoto || '',
+    profissionalNomeResolvido: profissional?.nome || agendamento.profissionalNome || agendamento.nomeProfissional || agendamento.profissional?.nome,
+    profissionalFotoResolvida: profissional?.foto || profissional?.avatar || agendamento.profissionalFoto || '',
+  };
+});
 
 function PainelChamada() {
   const [agendamentos, setAgendamentos] = useState([]);
@@ -23,12 +74,14 @@ function PainelChamada() {
   }, [intervalo]);
 
   const carregar = async () => {
-    const hoje = new Date().toISOString().split('T')[0];
-    const [agendamentosData, configuracoesData] = await Promise.all([
+    const hoje = getLocalDateInputValue();
+    const [agendamentosData, configuracoesData, clientesData, profissionaisData] = await Promise.all([
       firebaseService.query('agendamentos', [{ field: 'data', operator: '==', value: hoje }], 'horario', 'asc').catch(() => []),
       firebaseService.getAll('configuracoes').catch(() => []),
+      firebaseService.getAll('clientes').catch(() => []),
+      firebaseService.getAll('profissionais').catch(() => []),
     ]);
-    setAgendamentos(agendamentosData || []);
+    setAgendamentos(enriquecerAgendamentosPainel(agendamentosData || [], clientesData || [], profissionaisData || []));
     setConfig(configuracoesData?.[0]?.painelChamada || {});
   };
 
@@ -58,7 +111,7 @@ function PainelChamada() {
             <Typography variant="h5" sx={{ mt: 2, opacity: .86, fontWeight: 700 }}>Chamando agora</Typography>
             <Typography variant="h1" sx={{ fontWeight: 900, my: 1, fontSize: { xs: '2.4rem', md: '4.8rem' }, lineHeight: 1 }}>{atual ? getClienteNome(atual) : (config.mensagemVazio || 'Aguardando próximo cliente')}</Typography>
             <Typography variant="h4" sx={{ opacity: .92 }}>{atual ? getServicoNome(atual) : 'Sem chamada ativa'}</Typography>
-            {atual?.profissionalNome && <Chip label={`Profissional: ${atual.profissionalNome}`} sx={{ mt: 3, alignSelf: 'flex-start', bgcolor: 'rgba(255,255,255,.2)', color: 'white', fontSize: 18, py: 2.3 }} />}
+            {atual && <Chip label={`Profissional: ${getProfissionalNome(atual)}`} sx={{ mt: 3, alignSelf: 'flex-start', bgcolor: 'rgba(255,255,255,.2)', color: 'white', fontSize: 18, py: 2.3 }} />}
           </Paper>
         </Grid>
         {config.mostrarProximos !== false && (
@@ -68,12 +121,12 @@ function PainelChamada() {
               {proximos.slice(1).map((item, index) => (
                 <Paper key={item.id || index} sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(255,255,255,.09)', color: 'white', border: '1px solid rgba(255,255,255,.14)' }}>
                   <Stack direction="row" spacing={2} alignItems="center">
-                    <Avatar sx={{ width: 54, height: 54, bgcolor: '#ec407a', fontWeight: 900 }}>{index + 2}</Avatar>
+                    <Avatar src={item.clienteFotoResolvida || undefined} sx={{ width: 54, height: 54, bgcolor: '#ec407a', fontWeight: 900 }}>{item.clienteFotoResolvida ? '' : index + 2}</Avatar>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="h6" noWrap sx={{ fontWeight: 800 }}>{getClienteNome(item)}</Typography>
                       <Typography sx={{ opacity: .75 }}>{item.horario || '--:--'} • {getServicoNome(item)}</Typography>
                     </Box>
-                    <Spa sx={{ opacity: .6 }} />
+                    <Chip label={getProfissionalNome(item)} size="small" icon={<Spa />} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,.12)', maxWidth: 180 }} />
                   </Stack>
                 </Paper>
               ))}

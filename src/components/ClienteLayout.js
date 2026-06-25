@@ -53,6 +53,7 @@ import { firebaseService } from '../services/firebase';
 import Footer from './Footer';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
+import { getLocalDateTime } from '../utils/dateTimeUtils';
 
 // ============================================
 // CONSTANTES
@@ -85,10 +86,7 @@ const PAGE_TITLES = {
   '/cliente/manual': 'Manual de Uso',
 };
 
-const getBrasiliaTime = () => ({
-  data: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }),
-  hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
-});
+const getBrasiliaTime = () => getLocalDateTime();
 
 
 const portalContentSx = {
