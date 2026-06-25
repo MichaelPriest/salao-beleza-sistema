@@ -218,6 +218,9 @@ import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
 import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 import ClienteChamados from './pages/ClienteChamados';
+import ClienteDepoimentos from './pages/ClienteDepoimentos';
+import FolderDivulgacao from './pages/FolderDivulgacao';
+import PainelChamada from './pages/PainelChamada';
 
 // ============================================
 // PAGES - PÚBLICAS E ERROS
@@ -515,6 +518,7 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="depoimentos" element={<ClienteDepoimentos />} />
                   <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
@@ -523,6 +527,9 @@ function App() {
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                   <Route index element={<Navigate to="dashboard" replace />} />
                 </Route>
+
+                <Route path="/folder-divulgacao" element={<SimpleLayout><FolderDivulgacao /></SimpleLayout>} />
+                <Route path="/painel-chamada" element={<PainelChamada />} />
 
                 {/* ============================================ */}
                 {/* SAAS ADMIN - PAINEL PRINCIPAL */}

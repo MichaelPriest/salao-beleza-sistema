@@ -77,7 +77,7 @@ function TabPanel({ children, value, index, isMobile }) {
   return (
     <div hidden={value !== index} style={{ width: '100%' }}>
       {value === index && (
-        <Box sx={{ 
+        <Box sx={{
           p: isMobile ? 1 : 3,
           width: '100%'
         }}>
@@ -97,9 +97,9 @@ const MobileCard = ({ children, onClick, active }) => (
     whileTap={{ scale: 0.98 }}
     style={{ width: '100%' }}
   >
-    <Card 
+    <Card
       onClick={onClick}
-      sx={{ 
+      sx={{
         mb: 1.5,
         cursor: onClick ? 'pointer' : 'default',
         borderLeft: active ? '4px solid #9c27b0' : 'none',
@@ -182,9 +182,9 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       const indicacoesData = await firebaseService.query('indicacoes', [
         { field: 'clienteId', operator: '==', value: clienteId }
       ]);
-      
+
       setIndicacoes(indicacoesData || []);
-      
+
       const statsData = {
         total: indicacoesData?.length || 0,
         pendentes: indicacoesData?.filter(i => i.status === 'pendente').length || 0,
@@ -192,7 +192,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
         pontosGanhos: indicacoesData?.filter(i => i.status === 'confirmada').reduce((acc, i) => acc + (i.pontosGanhos || 0), 0) || 0,
       };
       setStats(statsData);
-      
+
       if (onPontosAtualizados && statsData.pontosGanhos !== stats.pontosGanhos) {
         onPontosAtualizados(statsData.pontosGanhos);
       }
@@ -229,7 +229,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       // 🔥 Criar datas de forma segura
       const agora = new Date();
       const dataAtualISO = agora.toISOString();
-      
+
       const dataExpiracao = new Date();
       dataExpiracao.setDate(agora.getDate() + (config.diasValidadeIndicacao || 30));
       const dataExpiracaoISO = dataExpiracao.toISOString();
@@ -260,7 +260,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
       console.log('Salvando indicação:', indicacaoData);
 
       await firebaseService.add('indicacoes', indicacaoData);
-      
+
       toast.success('Indicação registrada com sucesso!');
       handleCloseDialog();
       carregarIndicacoes();
@@ -319,7 +319,7 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
   }
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: 1280, mx: 'auto', px: { xs: 1, md: 2 } }}>
       {/* Card de Resumo de Indicações */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={4}>
@@ -392,13 +392,13 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
               {indicacoes.map((indicacao) => {
                 const statusInfo = getStatusInfo(indicacao.status);
                 // 🔥 Verificar se a indicação expirou
-                const isExpirada = indicacao.status === 'pendente' && 
-                                   indicacao.dataExpiracao && 
+                const isExpirada = indicacao.status === 'pendente' &&
+                                   indicacao.dataExpiracao &&
                                    new Date(indicacao.dataExpiracao) < new Date();
-                
+
                 const statusAtual = isExpirada ? 'expirada' : indicacao.status;
                 const statusAtualInfo = getStatusInfo(statusAtual);
-                
+
                 return (
                   <TableRow key={indicacao.id} hover>
                     <TableCell>
@@ -427,8 +427,8 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
                     </TableCell>
                     <TableCell align="right">
                       <Typography sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                        {indicacao.status === 'confirmada' 
-                          ? `+${indicacao.pontosGanhos || 0}` 
+                        {indicacao.status === 'confirmada'
+                          ? `+${indicacao.pontosGanhos || 0}`
                           : `+${indicacao.pontosBonus || config.pontosIndicacao}`}
                       </Typography>
                       {indicacao.status === 'pendente' && !isExpirada && (
@@ -445,9 +445,9 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
                         <Tooltip title="Copiar link">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleCopiarLink(indicacao)} 
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopiarLink(indicacao)}
                             sx={{ color: '#9c27b0' }}
                             disabled={isExpirada}
                           >
@@ -455,9 +455,9 @@ const IndicacoesCliente = ({ clienteId, clienteNome, saldoPontos, onPontosAtuali
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="QR Code">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleAbrirQRCode(indicacao)} 
+                          <IconButton
+                            size="small"
+                            onClick={() => handleAbrirQRCode(indicacao)}
                             sx={{ color: '#9c27b0' }}
                             disabled={isExpirada}
                           >
@@ -596,13 +596,13 @@ function ClienteDashboard() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-  
+
   const { cliente, logout, loading: authLoading, firebaseUser } = useAuthCliente();
   const { fidelidadeAtiva } = useFidelidadeAtiva();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
-  
+
   // Dados do cliente
   const [agendamentos, setAgendamentos] = useState([]);
   const [pontuacoes, setPontuacoes] = useState([]);
@@ -612,6 +612,7 @@ function ClienteDashboard() {
   const [historicoAtendimentos, setHistoricoAtendimentos] = useState([]);
   const [recompensasDisponiveis, setRecompensasDisponiveis] = useState([]);
   const [resgatesRecentes, setResgatesRecentes] = useState([]);
+  const [indicacoesResumo, setIndicacoesResumo] = useState({ total: 0, confirmadas: 0 });
   const [profissionais, setProfissionais] = useState([]);
 
   const niveis = {
@@ -653,15 +654,16 @@ function ClienteDashboard() {
         pontuacoesData,
         recompensasData,
         resgatesData,
-        atendimentosData
+        atendimentosData,
+        indicacoesData
       ] = await Promise.allSettled([
         firebaseService.getAll('profissionais'),
-        Promise.all(idsParaBuscar.map(id => 
+        Promise.all(idsParaBuscar.map(id =>
           firebaseService.query('agendamentos', [
             { field: 'clienteId', operator: '==', value: id }
           ], 'data', 'desc')
         )),
-        Promise.all(idsParaBuscar.map(id => 
+        Promise.all(idsParaBuscar.map(id =>
           firebaseService.query('pontuacao', [
             { field: 'clienteId', operator: '==', value: id }
           ], 'data', 'desc')
@@ -669,15 +671,20 @@ function ClienteDashboard() {
         firebaseService.query('recompensas', [
           { field: 'ativo', operator: '==', value: true }
         ]),
-        Promise.all(idsParaBuscar.map(id => 
+        Promise.all(idsParaBuscar.map(id =>
           firebaseService.query('resgates_fidelidade', [
             { field: 'clienteId', operator: '==', value: id }
           ], 'data', 'desc')
         )),
-        Promise.all(idsParaBuscar.map(id => 
+        Promise.all(idsParaBuscar.map(id =>
           firebaseService.query('atendimentos', [
             { field: 'clienteId', operator: '==', value: id }
           ], 'data', 'desc')
+        )),
+        Promise.all(idsParaBuscar.map(id =>
+          firebaseService.query('indicacoes', [
+            { field: 'clienteId', operator: '==', value: id }
+          ], 'dataCriacao', 'desc')
         ))
       ]);
 
@@ -698,7 +705,7 @@ function ClienteDashboard() {
       }
 
       if (recompensasData.status === 'fulfilled') {
-        const recompensasOrdenadas = (recompensasData.value || []).sort((a, b) => 
+        const recompensasOrdenadas = (recompensasData.value || []).sort((a, b) =>
           (a.pontosNecessarios || 0) - (b.pontosNecessarios || 0)
         );
         setRecompensasDisponiveis(recompensasOrdenadas.slice(0, 3));
@@ -714,6 +721,15 @@ function ClienteDashboard() {
         const todosAtendimentos = atendimentosData.value.flat();
         const atendimentosUnicos = Array.from(new Map(todosAtendimentos.map(item => [item.id, item])).values());
         setHistoricoAtendimentos(atendimentosUnicos?.slice(0, 10) || []);
+      }
+
+      if (indicacoesData.status === 'fulfilled') {
+        const todasIndicacoes = indicacoesData.value.flat();
+        const indicacoesUnicas = Array.from(new Map(todasIndicacoes.map(item => [item.id, item])).values());
+        setIndicacoesResumo({
+          total: indicacoesUnicas.length,
+          confirmadas: indicacoesUnicas.filter((item) => item.status === 'confirmada').length,
+        });
       }
 
     } catch (error) {
@@ -732,8 +748,9 @@ function ClienteDashboard() {
     const debitos = pontuacoes
       .filter(p => p.tipo === 'debito')
       .reduce((acc, p) => acc + (p.quantidade || 0), 0);
-    
-    const saldoAtual = creditos - debitos;
+
+    const debitosResgates = resgatesRecentes.reduce((acc, r) => acc + Number(r.pontosGastos || r.pontos || 0), 0);
+    const saldoAtual = Math.max(0, creditos - Math.max(debitos, debitosResgates));
     setSaldo(saldoAtual);
 
     let nivelAtual = 'bronze';
@@ -748,7 +765,7 @@ function ClienteDashboard() {
       .sort((a, b) => a.data.localeCompare(b.data));
     setProximosAgendamentos(proximos.slice(0, 3));
 
-  }, [pontuacoes, agendamentos]);
+  }, [pontuacoes, agendamentos, resgatesRecentes]);
 
   const handleLogout = () => {
     logout();
@@ -889,9 +906,9 @@ function ClienteDashboard() {
     return (
       <Box sx={{ pb: 7 }}>
         {/* Header Mobile */}
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           p: 2,
           bgcolor: 'white',
@@ -932,7 +949,7 @@ function ClienteDashboard() {
                 Olá, {cliente.nome?.split(' ')[0]}! 👋
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                {proximosAgendamentos.length > 0 
+                {proximosAgendamentos.length > 0
                   ? `Você tem ${proximosAgendamentos.length} agendamento(s) agendados`
                   : 'Nenhum agendamento pendente'}
               </Typography>
@@ -1007,8 +1024,8 @@ function ClienteDashboard() {
 
           {/* Tabs Mobile */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs 
-              value={tabValue} 
+            <Tabs
+              value={tabValue}
               onChange={(e, v) => setTabValue(v)}
               variant="scrollable"
               scrollButtons="auto"
@@ -1161,7 +1178,7 @@ function ClienteDashboard() {
           </TabPanel>
 
           <TabPanel value={tabValue} index={3} isMobile>
-            <IndicacoesCliente 
+            <IndicacoesCliente
               clienteId={cliente.id || firebaseUser?.uid}
               clienteNome={cliente.nome}
               saldoPontos={saldo}
@@ -1194,19 +1211,19 @@ function ClienteDashboard() {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         mb: 4,
         flexWrap: 'wrap',
-        gap: 2 
+        gap: 2
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar
             src={cliente.foto}
-            sx={{ 
-              width: 64, 
+            sx={{
+              width: 64,
               height: 64,
               bgcolor: '#9c27b0',
               border: '3px solid white',
@@ -1315,7 +1332,7 @@ function ClienteDashboard() {
                   <Avatar sx={{ bgcolor: '#9c27b0', width: 56, height: 56 }}><PersonAddIcon /></Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-                      {0}
+                      {indicacoesResumo.total}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">Indicações</Typography>
                   </Box>
@@ -1327,7 +1344,7 @@ function ClienteDashboard() {
       </Grid>
 
       {/* Card de Fidelidade */}
-      <Card sx={{ 
+      <Card sx={{
         mb: 4,
         display: fidelidadeAtiva ? 'block' : 'none',
         background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
@@ -1375,7 +1392,7 @@ function ClienteDashboard() {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
+        <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab label="Próximos Agendamentos" />
           <Tab label="Histórico" />
           <Tab sx={{ display: fidelidadeAtiva ? 'flex' : 'none' }} label="Resgates" />
@@ -1548,7 +1565,7 @@ function ClienteDashboard() {
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Minhas Indicações</Typography>
-            <IndicacoesCliente 
+            <IndicacoesCliente
               clienteId={cliente.id || firebaseUser?.uid}
               clienteNome={cliente.nome}
               saldoPontos={saldo}

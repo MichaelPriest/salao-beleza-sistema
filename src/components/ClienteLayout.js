@@ -44,6 +44,7 @@ import {
   Close as CloseIcon,
   HelpCenter as HelpCenterIcon,
   AccessTime as AccessTimeIcon,
+  RateReview as RateReviewIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
@@ -63,6 +64,7 @@ const MENU_ITEMS = [
   { text: 'Recompensas', icon: <GiftIcon />, path: '/cliente/recompensas', recurso: 'fidelidade' },
   { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos', recurso: 'fidelidade' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
+  { text: 'Depoimentos', icon: <RateReviewIcon />, path: '/cliente/depoimentos' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
@@ -76,6 +78,7 @@ const PAGE_TITLES = {
   '/cliente/recompensas': 'Recompensas',
   '/cliente/pontos': 'Meus Pontos',
   '/cliente/historico': 'Histórico',
+  '/cliente/depoimentos': 'Depoimentos',
   '/cliente/perfil': 'Meu Perfil',
   '/cliente/notificacoes': 'Notificações',
   '/cliente/anamnese': 'Anamnese',
@@ -156,13 +159,13 @@ function ClienteLayout() {
   // ESTADOS
   // ==========================================
   const [mobileOpen, setMobileOpen] = useState(false);
-  
+
   // Estados de Notificações
   const [notificacoes, setNotificacoes] = useState([]);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
-  
+
   // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
   const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
@@ -252,12 +255,12 @@ function ClienteLayout() {
         lida: true,
         lidaEm: new Date().toISOString()
       });
-      
+
       setNotificacoes(prev =>
         prev.map(n => n.id === notificacaoId ? { ...n, lida: true } : n)
       );
       setNotificacoesNaoLidas(prev => Math.max(0, prev - 1));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao marcar notificação como lida:', error);
@@ -271,7 +274,7 @@ function ClienteLayout() {
   const marcarTodasComoLidas = useCallback(async () => {
     const naoLidas = notificacoes.filter(n => !n.lida);
     if (naoLidas.length === 0) return;
-    
+
     try {
       for (const notificacao of naoLidas) {
         await firebaseService.update('notificacoes_cliente', notificacao.id, {
@@ -279,7 +282,7 @@ function ClienteLayout() {
           lidaEm: new Date().toISOString()
         });
       }
-      
+
       setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
       setNotificacoesNaoLidas(0);
     } catch (error) {
@@ -343,21 +346,21 @@ function ClienteLayout() {
   // ==========================================
   useEffect(() => {
     if (!cliente?.id) return;
-    
+
     console.log('📌 ClienteLayout - Carregando dados para cliente:', cliente.id);
-    
+
     const carregarDados = async () => {
       await carregarNotificacoes();
       await verificarFormulariosPendentes();
     };
-    
+
     carregarDados();
-    
+
     // Intervalo para atualizar notificações a cada 30 segundos
     const interval = setInterval(() => {
       carregarNotificacoes();
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, [cliente, carregarNotificacoes, verificarFormulariosPendentes]);
 
@@ -392,9 +395,9 @@ function ClienteLayout() {
     if (!notificacao.lida) {
       await marcarNotificacaoComoLida(notificacao.id);
     }
-    
+
     navigate(normalizarLinkNotificacao(notificacao, 'cliente'));
-    
+
     handleNotificacoesClose();
   };
 
@@ -408,12 +411,12 @@ function ClienteLayout() {
       const date = new Date(data);
       const agora = new Date();
       const diff = Math.floor((agora - date) / 1000);
-      
+
       if (diff < 60) return 'agora';
       if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
       if (diff < 86400) return `${Math.floor(diff / 3600)} h atrás`;
       if (diff < 604800) return `${Math.floor(diff / 86400)} d atrás`;
-      
+
       return date.toLocaleDateString('pt-BR');
     } catch {
       return '';
@@ -465,7 +468,7 @@ function ClienteLayout() {
           const isActive = location.pathname === item.path;
           const isAnamnese = item.text === 'Anamnese';
           const badgeCount = isAnamnese ? formulariosPendentes : 0;
-          
+
           return (
             <ListItem
               key={item.text}
@@ -607,9 +610,9 @@ function ClienteLayout() {
           </motion.div>
         </Box>
       </Box>
-      
+
       <Footer />
-      
+
       {/* Popover de Notificações */}
       <Popover
         open={Boolean(notificacoesAnchor)}
@@ -626,7 +629,7 @@ function ClienteLayout() {
           )}
         </Box>
         <Divider />
-        
+
         {loadingNotificacoes ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <CircularProgress size={30} />
