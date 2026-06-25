@@ -90,6 +90,27 @@ const getBrasiliaTime = () => ({
   hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
 });
 
+
+const portalContentSx = {
+  '& .MuiTypography-h3': { fontSize: { xs: '1.45rem', sm: '1.75rem', md: '2rem' }, lineHeight: 1.18, fontWeight: 800 },
+  '& .MuiTypography-h4': { fontSize: { xs: '1.3rem', sm: '1.55rem', md: '1.8rem' }, lineHeight: 1.2, fontWeight: 800 },
+  '& .MuiTypography-h5': { fontSize: { xs: '1.15rem', sm: '1.35rem', md: '1.55rem' }, lineHeight: 1.25, fontWeight: 750 },
+  '& .MuiTypography-h6': { fontSize: { xs: '1rem', sm: '1.08rem', md: '1.15rem' }, lineHeight: 1.3, fontWeight: 700 },
+  '& .MuiTypography-subtitle1': { fontSize: { xs: '0.95rem', sm: '1rem' }, lineHeight: 1.35 },
+  '& .MuiTypography-subtitle2': { fontSize: { xs: '0.86rem', sm: '0.92rem' }, lineHeight: 1.35 },
+  '& .MuiTypography-body1': { fontSize: { xs: '0.9rem', sm: '0.96rem' }, lineHeight: 1.55 },
+  '& .MuiTypography-body2': { fontSize: { xs: '0.82rem', sm: '0.88rem' }, lineHeight: 1.5 },
+  '& .MuiTypography-caption': { fontSize: { xs: '0.72rem', sm: '0.76rem' }, lineHeight: 1.35 },
+  '& .MuiButton-root': { textTransform: 'none', fontSize: { xs: '0.82rem', sm: '0.88rem' }, borderRadius: 2 },
+  '& .MuiChip-root': { maxWidth: '100%' },
+  '& .MuiChip-label': { fontSize: { xs: '0.7rem', sm: '0.74rem' }, overflow: 'hidden', textOverflow: 'ellipsis' },
+  '& .MuiCard-root, & .MuiPaper-root': { boxSizing: 'border-box' },
+  '& .MuiCardContent-root': { p: { xs: 1.5, sm: 2, md: 2.5 } },
+  '& .MuiGrid-container': { width: '100%', marginLeft: 0 },
+  '& .MuiTableContainer-root': { overflowX: 'auto' },
+  '& img': { maxWidth: '100%', height: 'auto' },
+};
+
 const NOTIFICATION_ICONS = {
   agendamento: <EventIcon sx={{ color: '#9c27b0' }} />,
   pontos: <StarIcon sx={{ color: '#ff9800' }} />,
@@ -492,7 +513,7 @@ function ClienteLayout() {
                   item.icon
                 )}
               </ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemText primary={item.text} primaryTypographyProps={{ sx: { fontSize: { xs: '0.9rem', sm: '0.95rem' }, fontWeight: isActive ? 700 : 500 } }} />
               {badgeCount > 0 && (
                 <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 600 }}>
                   {badgeCount}
@@ -592,7 +613,7 @@ function ClienteLayout() {
         </SwipeableDrawer>
 
         {/* Conteúdo Principal */}
-        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.5, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
+        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.25, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative', ...portalContentSx }}>
           {/* Badge Formulários Pendentes */}
           {formulariosPendentes > 0 && (
             <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: { xs: 12, sm: 20 }, left: { xs: 12, sm: 'auto' }, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
@@ -605,7 +626,7 @@ function ClienteLayout() {
             </Box>
           )}
 
-          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
+          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}>
             <Outlet />
           </motion.div>
         </Box>
