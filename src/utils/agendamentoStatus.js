@@ -5,6 +5,7 @@ export const STATUS_AGENDAMENTO = {
   finalizado: { label: 'Finalizado', curto: 'Final.', color: 'info', hex: '#2196f3', bg: '#e3f2fd' },
   concluido: { label: 'Concluído', curto: 'Conc.', color: 'info', hex: '#2196f3', bg: '#e3f2fd' },
   realizado: { label: 'Realizado', curto: 'Real.', color: 'info', hex: '#2196f3', bg: '#e3f2fd' },
+  em_andamento: { label: 'Em andamento', curto: 'Andam.', color: 'secondary', hex: '#9c27b0', bg: '#f3e5f5' },
 };
 
 export const getAgendamentoStatusInfo = (status) => {

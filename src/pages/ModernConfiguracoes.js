@@ -1408,6 +1408,22 @@ function ModernConfiguracoes() {
               <Grid item xs={12} md={6}>
                 <FormControlLabel control={<Switch checked={config.painelChamada?.mostrarProximos !== false} onChange={(e) => handlePainelChamadaChange('mostrarProximos', e.target.checked)} />} label="Mostrar fila de próximos clientes" />
               </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Voz do áudio de chamada</InputLabel>
+                  <Select
+                    label="Voz do áudio de chamada"
+                    value={config.painelChamada?.tipoVoz || 'feminina'}
+                    onChange={(e) => handlePainelChamadaChange('tipoVoz', e.target.value)}
+                  >
+                    <MenuItem value="feminina">Feminina</MenuItem>
+                    <MenuItem value="masculina">Masculina</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel control={<Switch checked={config.painelChamada?.anunciarAutomaticamente !== false} onChange={(e) => handlePainelChamadaChange('anunciarAutomaticamente', e.target.checked)} />} label="Anunciar chamada automaticamente" />
+              </Grid>
             </Grid>
           </TabPanel>
 
