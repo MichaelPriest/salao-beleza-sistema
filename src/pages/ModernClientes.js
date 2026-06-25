@@ -352,6 +352,11 @@ function ModernClientes() {
       alergias: '',
       medicamentos: '',
       restricoes: '',
+      queixaPrincipal: '',
+      tipoPele: '',
+      fototipo: '',
+      classificacaoRisco: 'baixo',
+      cuidadosPosProcedimento: '',
       procedimentosAnteriores: '',
       evolucao: '',
       termosAssinados: '',
@@ -721,6 +726,11 @@ function ModernClientes() {
         alergias: '',
         medicamentos: '',
         restricoes: '',
+        queixaPrincipal: '',
+        tipoPele: '',
+        fototipo: '',
+        classificacaoRisco: 'baixo',
+        cuidadosPosProcedimento: '',
         procedimentosAnteriores: '',
         evolucao: '',
         termosAssinados: '',
@@ -771,6 +781,11 @@ function ModernClientes() {
         alergias: cliente.prontuario?.alergias || '',
         medicamentos: cliente.prontuario?.medicamentos || '',
         restricoes: cliente.prontuario?.restricoes || '',
+        queixaPrincipal: cliente.prontuario?.queixaPrincipal || '',
+        tipoPele: cliente.prontuario?.tipoPele || '',
+        fototipo: cliente.prontuario?.fototipo || '',
+        classificacaoRisco: cliente.prontuario?.classificacaoRisco || 'baixo',
+        cuidadosPosProcedimento: cliente.prontuario?.cuidadosPosProcedimento || '',
         procedimentosAnteriores: cliente.prontuario?.procedimentosAnteriores || '',
         evolucao: cliente.prontuario?.evolucao || '',
         termosAssinados: cliente.prontuario?.termosAssinados || '',
@@ -1615,6 +1630,39 @@ function ModernClientes() {
                   <TextField fullWidth label="Restrições e contraindicações" multiline rows={2} value={formData.prontuario.restricoes} onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, restricoes: e.target.value } })} size="small" />
                 </Grid>
                 <Grid item xs={12} md={6}>
+                  <TextField fullWidth label="Queixa principal / objetivo" multiline rows={2} value={formData.prontuario.queixaPrincipal} onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, queixaPrincipal: e.target.value } })} size="small" placeholder="Ex.: manchas, acne, queda capilar, rejuvenescimento..." />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField fullWidth label="Tipo de pele/cabelo" value={formData.prontuario.tipoPele} onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, tipoPele: e.target.value } })} size="small" placeholder="Ex.: oleosa, sensível, cacheado..." />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Fototipo</InputLabel>
+                    <Select value={formData.prontuario.fototipo} label="Fototipo" onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, fototipo: e.target.value } })}>
+                      <MenuItem value="">Não informado</MenuItem>
+                      <MenuItem value="I">I</MenuItem>
+                      <MenuItem value="II">II</MenuItem>
+                      <MenuItem value="III">III</MenuItem>
+                      <MenuItem value="IV">IV</MenuItem>
+                      <MenuItem value="V">V</MenuItem>
+                      <MenuItem value="VI">VI</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Classificação de risco</InputLabel>
+                    <Select value={formData.prontuario.classificacaoRisco} label="Classificação de risco" onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, classificacaoRisco: e.target.value } })}>
+                      <MenuItem value="baixo">Baixo</MenuItem>
+                      <MenuItem value="medio">Médio</MenuItem>
+                      <MenuItem value="alto">Alto</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField fullWidth label="Cuidados pós-procedimento" value={formData.prontuario.cuidadosPosProcedimento} onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, cuidadosPosProcedimento: e.target.value } })} size="small" />
+                </Grid>
+                <Grid item xs={12} md={6}>
                   <TextField fullWidth label="Procedimentos anteriores" multiline rows={2} value={formData.prontuario.procedimentosAnteriores} onChange={(e) => setFormData({ ...formData, prontuario: { ...formData.prontuario, procedimentosAnteriores: e.target.value } })} size="small" />
                 </Grid>
                 <Grid item xs={12}>
@@ -1683,7 +1731,7 @@ function ModernClientes() {
                     <Typography variant="subtitle2" color="textSecondary" gutterBottom>Endereço</Typography>
                     <Typography variant="body2">{selectedCliente.logradouro || ''} {selectedCliente.numero || ''}{selectedCliente.complemento && ` - ${selectedCliente.complemento}`}<br />{selectedCliente.bairro || ''} - {selectedCliente.cidade || ''}/{selectedCliente.estado || ''}<br />CEP: {selectedCliente.cep || ''}</Typography>
                     {selectedCliente.observacoes && (<><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="textSecondary" gutterBottom>Observações</Typography><Typography variant="body2">{selectedCliente.observacoes}</Typography></>)}
-                    {selectedCliente.prontuario && (<><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="textSecondary" gutterBottom>Prontuário e assinatura digital</Typography><Grid container spacing={1}><Grid item xs={6}><Typography variant="caption" color="textSecondary">Alergias</Typography><Typography variant="body2">{selectedCliente.prontuario.alergias || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Medicamentos</Typography><Typography variant="body2">{selectedCliente.prontuario.medicamentos || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Restrições</Typography><Typography variant="body2">{selectedCliente.prontuario.restricoes || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Termos assinados</Typography><Typography variant="body2">{selectedCliente.prontuario.termosAssinados || '-'}</Typography></Grid><Grid item xs={12}><Typography variant="caption" color="textSecondary">Evolução</Typography><Typography variant="body2">{selectedCliente.prontuario.evolucao || '-'}</Typography></Grid><Grid item xs={12}><Chip size="small" label={selectedCliente.prontuario.autorizacaoImagem ? 'Uso de imagem autorizado' : 'Uso de imagem não autorizado'} color={selectedCliente.prontuario.autorizacaoImagem ? 'success' : 'default'} sx={{ mr: 1 }} /><Chip size="small" label={selectedCliente.prontuario.assinaturaDigital ? 'Assinatura digital coletada' : 'Assinatura pendente'} color={selectedCliente.prontuario.assinaturaDigital ? 'success' : 'warning'} /></Grid></Grid></>)}
+                    {selectedCliente.prontuario && (<><Divider sx={{ my: 2 }} /><Typography variant="subtitle2" color="textSecondary" gutterBottom>Prontuário e assinatura digital</Typography><Grid container spacing={1}><Grid item xs={6}><Typography variant="caption" color="textSecondary">Alergias</Typography><Typography variant="body2">{selectedCliente.prontuario.alergias || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Medicamentos</Typography><Typography variant="body2">{selectedCliente.prontuario.medicamentos || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Restrições</Typography><Typography variant="body2">{selectedCliente.prontuario.restricoes || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Queixa principal</Typography><Typography variant="body2">{selectedCliente.prontuario.queixaPrincipal || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Tipo pele/cabelo</Typography><Typography variant="body2">{selectedCliente.prontuario.tipoPele || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Fototipo</Typography><Typography variant="body2">{selectedCliente.prontuario.fototipo || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Risco</Typography><Typography variant="body2">{selectedCliente.prontuario.classificacaoRisco || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Cuidados pós-procedimento</Typography><Typography variant="body2">{selectedCliente.prontuario.cuidadosPosProcedimento || '-'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="textSecondary">Termos assinados</Typography><Typography variant="body2">{selectedCliente.prontuario.termosAssinados || '-'}</Typography></Grid><Grid item xs={12}><Typography variant="caption" color="textSecondary">Evolução</Typography><Typography variant="body2">{selectedCliente.prontuario.evolucao || '-'}</Typography></Grid><Grid item xs={12}><Chip size="small" label={selectedCliente.prontuario.autorizacaoImagem ? 'Uso de imagem autorizado' : 'Uso de imagem não autorizado'} color={selectedCliente.prontuario.autorizacaoImagem ? 'success' : 'default'} sx={{ mr: 1 }} /><Chip size="small" label={selectedCliente.prontuario.assinaturaDigital ? 'Assinatura digital coletada' : 'Assinatura pendente'} color={selectedCliente.prontuario.assinaturaDigital ? 'success' : 'warning'} /></Grid></Grid></>)}
                   </Card>
                 </Grid>
 

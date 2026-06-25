@@ -501,15 +501,6 @@ function TabPanel({ children, value, index }) {
 }
 
 function ModernEstoque() {
-  const [alertasInteligentes, setAlertasInteligentes] = useState([]);
-  const [novoAlertaInteligente, setNovoAlertaInteligente] = useState({ produto: '', motivo: '', quantidade: '' });
-
-  const gerarAlertaInteligente = () => {
-    if (!novoAlertaInteligente.produto.trim()) return;
-    setAlertasInteligentes((atuais) => [{ id: Date.now(), ...novoAlertaInteligente, status: 'Comprar' }, ...atuais]);
-    setNovoAlertaInteligente({ produto: '', motivo: '', quantidade: '' });
-  };
-
   const [loading, setLoading] = useState(true);
   const [produtos, setProdutos] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -1313,17 +1304,6 @@ function ModernEstoque() {
 
   return (
     <Box>
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
-        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Estoque inteligente integrado</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Controle alertas de estoque mínimo, consumo por procedimento, sugestão de compra e fornecedor.</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Produto" value={novoAlertaInteligente.produto} onChange={(e) => setNovoAlertaInteligente({ ...novoAlertaInteligente, produto: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Motivo do alerta" value={novoAlertaInteligente.motivo} onChange={(e) => setNovoAlertaInteligente({ ...novoAlertaInteligente, motivo: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Quantidade sugerida" value={novoAlertaInteligente.quantidade} onChange={(e) => setNovoAlertaInteligente({ ...novoAlertaInteligente, quantidade: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={gerarAlertaInteligente}>Gerar alerta</Button></Grid>
-        </Grid>
-        {alertasInteligentes.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{alertasInteligentes.map((item) => <Chip key={item.id} label={`${item.produto} • ${item.quantidade || 'qtd.'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
-      </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
           Estoque

@@ -460,15 +460,6 @@ const RelatorioAgenda = React.forwardRef(({
 // ============================================
 
 function ModernAgendamentos() {
-  const [solicitacoesOnline, setSolicitacoesOnline] = useState([]);
-  const [novaSolicitacaoOnline, setNovaSolicitacaoOnline] = useState({ cliente: '', servico: '', dataHora: '' });
-
-  const adicionarSolicitacaoOnline = () => {
-    if (!novaSolicitacaoOnline.cliente.trim()) return;
-    setSolicitacoesOnline((atuais) => [{ id: Date.now(), ...novaSolicitacaoOnline, status: 'Pendente' }, ...atuais]);
-    setNovaSolicitacaoOnline({ cliente: '', servico: '', dataHora: '' });
-  };
-
   const navigate = useNavigate();
   
   // Estados de usuário e permissões
@@ -2526,17 +2517,6 @@ function ModernAgendamentos() {
         </Box>
       </Box>
 
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
-        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Agendamento online público integrado</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Receba solicitações públicas com cliente, serviço e horário para transformar em agendamento da agenda.</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Cliente" value={novaSolicitacaoOnline.cliente} onChange={(e) => setNovaSolicitacaoOnline({ ...novaSolicitacaoOnline, cliente: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Serviço" value={novaSolicitacaoOnline.servico} onChange={(e) => setNovaSolicitacaoOnline({ ...novaSolicitacaoOnline, servico: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Data e horário" value={novaSolicitacaoOnline.dataHora} onChange={(e) => setNovaSolicitacaoOnline({ ...novaSolicitacaoOnline, dataHora: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={adicionarSolicitacaoOnline}>Adicionar à fila</Button></Grid>
-        </Grid>
-        {solicitacoesOnline.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{solicitacoesOnline.map((item) => <Chip key={item.id} label={`${item.cliente} • ${item.servico || 'serviço'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
-      </Paper>
       {/* Atendimentos em Andamento */}
       {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente' || cargo === 'profissional') && atendimentosEmAndamento.length > 0 && (
         <Card sx={{ mb: 4, border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
