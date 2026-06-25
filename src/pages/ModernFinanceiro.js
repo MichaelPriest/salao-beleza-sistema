@@ -32,6 +32,7 @@ import {
   Snackbar,
   InputAdornment,
   Divider,
+  LinearProgress,
   TablePagination,
   Tabs,
   Tab,
@@ -419,6 +420,7 @@ function ModernFinanceiro() {
   // Orçamentos
   const [orcamentos, setOrcamentos] = useState([]);
   const [orcamentoSelecionado, setOrcamentoSelecionado] = useState(null);
+  const [orcamentoForm, setOrcamentoForm] = useState({ ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, metaReceitas: '', metaDespesas: '', observacoes: '' });
 
   // Conciliação
   const [extratoBancario, setExtratoBancario] = useState([]);
@@ -1259,26 +1261,81 @@ function ModernFinanceiro() {
   };
 
   // ==================== ORÇAMENTOS ====================
+  const resetOrcamentoForm = () => {
+    setOrcamentoSelecionado(null);
+    setOrcamentoForm({ ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, metaReceitas: '', metaDespesas: '', observacoes: '' });
+  };
+
+  const editarOrcamento = (orcamento) => {
+    setOrcamentoSelecionado(orcamento);
+    setOrcamentoForm({
+      ano: orcamento.ano || new Date().getFullYear(),
+      mes: orcamento.mes || new Date().getMonth() + 1,
+      metaReceitas: orcamento.metaReceitas || '',
+      metaDespesas: orcamento.metaDespesas || '',
+      observacoes: orcamento.observacoes || '',
+    });
+  };
+
   const handleSalvarOrcamento = async () => {
     try {
-      const novoOrcamento = {
-        id: Date.now().toString(),
-        ano: new Date().getFullYear(),
-        mes: new Date().getMonth() + 1,
-        metaReceitas: 0,
-        metaDespesas: 0,
-        categorias: {},
-        criadoEm: new Date().toISOString(),
+      const metaReceitas = Number(String(orcamentoForm.metaReceitas || 0).replace(',', '.'));
+      const metaDespesas = Number(String(orcamentoForm.metaDespesas || 0).replace(',', '.'));
+      if (!orcamentoForm.ano || !orcamentoForm.mes) {
+        mostrarSnackbar('Informe ano e mês do orçamento.', 'error');
+        return;
+      }
+      if (metaReceitas < 0 || metaDespesas < 0) {
+        mostrarSnackbar('Metas não podem ser negativas.', 'error');
+        return;
+      }
+
+      const dados = {
+        ano: Number(orcamentoForm.ano),
+        mes: Number(orcamentoForm.mes),
+        metaReceitas,
+        metaDespesas,
+        metaLucro: metaReceitas - metaDespesas,
+        observacoes: orcamentoForm.observacoes || '',
         atualizadoEm: new Date().toISOString(),
       };
 
-      await firebaseService.add('orcamentos', novoOrcamento);
+      if (orcamentoSelecionado?.id) {
+        await firebaseService.update('orcamentos', orcamentoSelecionado.id, dados);
+        mostrarSnackbar('✅ Orçamento atualizado com sucesso!');
+      } else {
+        await firebaseService.add('orcamentos', { ...dados, criadoEm: new Date().toISOString(), categorias: {} });
+        mostrarSnackbar('✅ Orçamento criado com sucesso!');
+      }
+
+      resetOrcamentoForm();
       await carregarDados();
-      mostrarSnackbar('✅ Orçamento criado com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
       mostrarSnackbar('Erro ao salvar orçamento', 'error');
     }
+  };
+
+  const excluirOrcamento = async (orcamentoId) => {
+    try {
+      await firebaseService.delete('orcamentos', orcamentoId);
+      if (orcamentoSelecionado?.id === orcamentoId) resetOrcamentoForm();
+      await carregarDados();
+      mostrarSnackbar('Orçamento excluído com sucesso.');
+    } catch (error) {
+      console.error('Erro ao excluir orçamento:', error);
+      mostrarSnackbar('Erro ao excluir orçamento', 'error');
+    }
+  };
+
+  const calcularRealizadoOrcamento = (orcamento) => {
+    const transacoesMes = transacoesCombinadas.filter((transacao) => {
+      const data = safeToDate(transacao.dataPagamento || transacao.data);
+      return data && data.getFullYear() === Number(orcamento.ano) && data.getMonth() + 1 === Number(orcamento.mes) && transacao.status === 'pago';
+    });
+    const receitas = transacoesMes.filter((t) => t.tipo === 'receita').reduce((acc, t) => acc + Number(t.valor || 0), 0);
+    const despesas = transacoesMes.filter((t) => t.tipo === 'despesa').reduce((acc, t) => acc + Number(t.valor || 0), 0);
+    return { receitas, despesas, lucro: receitas - despesas };
   };
 
   // ==================== CAIXA ====================
@@ -2985,14 +3042,41 @@ function ModernFinanceiro() {
       </Dialog>
 
       {/* Dialog de Orçamentos */}
-      <Dialog open={openOrcamentoDialog} onClose={() => setOpenOrcamentoDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openOrcamentoDialog} onClose={() => setOpenOrcamentoDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><AssessmentIcon sx={{ mr: 1 }} /> Orçamentos e Previsões</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Button variant="contained" startIcon={<AddIcon />} fullWidth sx={{ mb: 3 }} onClick={handleSalvarOrcamento}>Criar Novo Orçamento</Button>
-            {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc, idx) => (
-              <Card key={idx} sx={{ mb: 2 }}><CardContent><Typography variant="subtitle1">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {safeToDisplayDate(orc.criadoEm)}</Typography><Button size="small">Editar</Button><Button size="small">Visualizar</Button></CardContent></Card>
-            ))}
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>{orcamentoSelecionado ? 'Editar orçamento' : 'Novo orçamento mensal'}</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={2}><TextField fullWidth type="number" label="Ano" value={orcamentoForm.ano} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, ano: e.target.value })} /></Grid>
+                <Grid item xs={12} md={2}><TextField select fullWidth label="Mês" value={orcamentoForm.mes} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, mes: e.target.value })}>{Array.from({ length: 12 }, (_, i) => <MenuItem key={i + 1} value={i + 1}>{i + 1}</MenuItem>)}</TextField></Grid>
+                <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Meta de receitas" value={orcamentoForm.metaReceitas} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, metaReceitas: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} /></Grid>
+                <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Meta de despesas" value={orcamentoForm.metaDespesas} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, metaDespesas: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} /></Grid>
+                <Grid item xs={12} md={2}><Button fullWidth variant="contained" sx={{ height: '100%' }} onClick={handleSalvarOrcamento}>{orcamentoSelecionado ? 'Atualizar' : 'Criar'}</Button></Grid>
+                <Grid item xs={12}><TextField fullWidth multiline minRows={2} label="Observações" value={orcamentoForm.observacoes} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, observacoes: e.target.value })} /></Grid>
+                {orcamentoSelecionado && <Grid item xs={12}><Button size="small" onClick={resetOrcamentoForm}>Cancelar edição</Button></Grid>}
+              </Grid>
+            </Paper>
+
+            {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc) => {
+              const realizado = calcularRealizadoOrcamento(orc);
+              const percentualReceitas = orc.metaReceitas > 0 ? Math.min(100, (realizado.receitas / orc.metaReceitas) * 100) : 0;
+              const percentualDespesas = orc.metaDespesas > 0 ? Math.min(100, (realizado.despesas / orc.metaDespesas) * 100) : 0;
+              return (
+                <Card key={orc.id} sx={{ mb: 2 }}><CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                    <Box><Typography variant="h6">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {safeToDisplayDate(orc.criadoEm)} {orc.observacoes && `• ${orc.observacoes}`}</Typography></Box>
+                    <Box><Button size="small" onClick={() => editarOrcamento(orc)}>Editar</Button><Button size="small" color="error" onClick={() => excluirOrcamento(orc.id)}>Excluir</Button></Box>
+                  </Box>
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Receitas</Typography><Typography sx={{ fontWeight: 800, color: '#2e7d32' }}>{formatarMoeda(realizado.receitas)} / {formatarMoeda(orc.metaReceitas || 0)}</Typography><LinearProgress variant="determinate" value={percentualReceitas} color="success" /></Grid>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Despesas</Typography><Typography sx={{ fontWeight: 800, color: '#c62828' }}>{formatarMoeda(realizado.despesas)} / {formatarMoeda(orc.metaDespesas || 0)}</Typography><LinearProgress variant="determinate" value={percentualDespesas} color="warning" /></Grid>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Lucro previsto x realizado</Typography><Typography sx={{ fontWeight: 800, color: realizado.lucro >= 0 ? '#2e7d32' : '#c62828' }}>{formatarMoeda(orc.metaLucro || 0)} / {formatarMoeda(realizado.lucro)}</Typography></Grid>
+                  </Grid>
+                </CardContent></Card>
+              );
+            })}
           </Box>
         </DialogContent>
         <DialogActions><Button onClick={() => setOpenOrcamentoDialog(false)}>Fechar</Button></DialogActions>

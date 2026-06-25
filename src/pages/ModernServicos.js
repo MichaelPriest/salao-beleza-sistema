@@ -100,6 +100,12 @@ function ModernServicos() {
   const fileInputRef = useRef(null);
   
   // Estado do formulário
+  const normalizarComissaoServico = (valor, padrao = 50) => {
+    const numero = Number(String(valor ?? '').replace(',', '.'));
+    if (!Number.isFinite(numero)) return padrao;
+    return Math.min(100, Math.max(0, numero));
+  };
+
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
@@ -202,7 +208,7 @@ function ModernServicos() {
           duracao: selectedService.duracao || 60,
           preco: selectedService.preco || '',
           categoria: selectedService.categoria || categoriasDisponiveis[0] || 'Cabelo',
-          comissaoProfissional: selectedService.comissaoProfissional || 50,
+          comissaoProfissional: normalizarComissaoServico(selectedService.comissaoProfissional, 50),
           ativo: selectedService.ativo !== undefined ? selectedService.ativo : true,
           profissionaisIds: selectedService.profissionaisIds || [] // 👈 Carregar profissionais associados
         });
@@ -310,7 +316,7 @@ function ModernServicos() {
         ...formData,
         preco: precoNumerico,
         duracao: parseInt(formData.duracao),
-        comissaoProfissional: parseInt(formData.comissaoProfissional) || 50,
+        comissaoProfissional: normalizarComissaoServico(formData.comissaoProfissional, 50),
         updatedAt: new Date().toISOString()
       };
 
@@ -953,7 +959,7 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
                               </Box>
                             </Box>
 
-                            {service.comissaoProfissional && (
+                            {service.comissaoProfissional !== undefined && service.comissaoProfissional !== null && (
                               <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
                                 Comissão: {service.comissaoProfissional}%
                               </Typography>
@@ -1080,7 +1086,7 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
                             {formatarPreco(service.preco)}
                           </Typography>
                         </TableCell>
-                        <TableCell>{service.comissaoProfissional || 50}%</TableCell>
+                        <TableCell>{service.comissaoProfissional ?? 50}%</TableCell>
                         <TableCell>
                           {profissionaisDoServico.length > 0 ? (
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1263,7 +1269,7 @@ ${valores}`, `${nomeBase}.txt`, 'text/plain;charset=utf-8');
                   type="number"
                   value={formData.comissaoProfissional}
                   onChange={(e) => setFormData({ ...formData, comissaoProfissional: e.target.value })}
-                  InputProps={{ inputProps: { min: 0, max: 100 } }}
+                  InputProps={{ inputProps: { min: 0, max: 100, step: 0.1 } }}
                 />
               </Grid>
 
