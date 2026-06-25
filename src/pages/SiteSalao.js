@@ -454,6 +454,7 @@ function SiteSalao() {
   const sitePublico = config?.sitePublico || {};
   const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
   const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
+  const bannerGaleriaPublica = sitePublico.mostrarBanner !== false ? [bannerUrl, ...(sitePublico.bannerGaleria || []).map((banner) => banner.url || banner)].filter(Boolean) : [];
   const temaLayout = sitePublico.temaLayout || 'moderno';
   const mostrarServicos = sitePublico.mostrarServicos !== false;
   const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
@@ -713,30 +714,23 @@ function SiteSalao() {
                       borderRadius: temaLayout === 'premium' ? 999 : 2,
                     }}
                   >
-                    Área do Cliente
+                    {sitePublico.textoBotaoPrincipal || 'Área do Cliente'}
                   </Button>
                 </>
               )}
             </motion.div>
           </Grid>
-          {bannerUrl && (
+          {bannerGaleriaPublica.length > 0 && (
           <Grid item xs={12} md={6}>
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5 }}
             >
-              <Box
-                component="img"
-                src={bannerUrl}
-                alt="Salão de Beleza"
-                sx={{
-                  width: '100%',
-                  height: 'auto',
-                  borderRadius: layoutStyles.cardRadius,
-                  boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
-                }}
-              />
+              <Box>
+                <Box component="img" src={bannerGaleriaPublica[0] || bannerUrl} alt="Salão de Beleza" sx={{ width: '100%', height: 'auto', borderRadius: layoutStyles.cardRadius, boxShadow: '0 20px 40px rgba(156,39,176,0.2)' }} />
+                {bannerGaleriaPublica.length > 1 && <Grid container spacing={1} sx={{ mt: 1 }}>{bannerGaleriaPublica.slice(1, 5).map((img, index) => (<Grid item xs={3} key={index}><Box component="img" src={img} alt={`Banner ${index + 2}`} sx={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 2, border: `2px solid ${corPrimaria}` }} /></Grid>))}</Grid>}
+              </Box>
             </motion.div>
           </Grid>
           )}
@@ -991,6 +985,25 @@ function SiteSalao() {
             {sitePublico.depoimentoDestaque && <Grid item xs={12}><Alert severity="warning">“{sitePublico.depoimentoDestaque}”</Alert></Grid>}
           </Grid>
         </Container>
+      )}
+
+      {sitePublico.mostrarDepoimentos !== false && (sitePublico.depoimentos || []).filter((dep) => dep.nome || dep.texto).length > 0 && (
+        <Box sx={{ bgcolor: '#fafafa', py: { xs: 4, md: 6 } }}>
+          <Container maxWidth="lg">
+            <Typography variant="h4" align="center" sx={{ fontWeight: 800, mb: 4 }}>O que nossos clientes dizem</Typography>
+            <Grid container spacing={2}>
+              {(sitePublico.depoimentos || []).filter((dep) => dep.nome || dep.texto).map((dep) => (
+                <Grid item xs={12} md={4} key={dep.id || dep.nome}>
+                  <Paper elevation={0} sx={{ p: 3, height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography sx={{ color: '#ff9800', mb: 1 }}>{'★'.repeat(Number(dep.nota || 5))}</Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>“{dep.texto || sitePublico.depoimentoDestaque}”</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: corPrimaria }}>{dep.nome || 'Cliente'}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
       )}
 
       {/* Serviços Section */}
