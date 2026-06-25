@@ -423,6 +423,8 @@ function ModernFinanceiro() {
   // Conciliação
   const [extratoBancario, setExtratoBancario] = useState([]);
   const [conciliacoes, setConciliacoes] = useState([]);
+  const [resultadoConciliacao, setResultadoConciliacao] = useState({ conciliadas: [], pendentes: [] });
+  const [processandoConciliacao, setProcessandoConciliacao] = useState(false);
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -1134,34 +1136,122 @@ function ModernFinanceiro() {
   };
 
   // ==================== CONCILIAÇÃO ====================
-  const handleConciliarExtrato = async (extrato) => {
+  const normalizarValorExtrato = (valor = '') => {
+    const texto = String(valor).replace(/R\$/gi, '').trim();
+    if (!texto) return 0;
+    if (texto.includes(',') && texto.includes('.')) return Number(texto.replace(/\./g, '').replace(',', '.')) || 0;
+    if (texto.includes(',')) return Number(texto.replace(',', '.')) || 0;
+    return Number(texto) || 0;
+  };
+
+  const parseExtratoCSV = (conteudo) => {
+    const linhas = conteudo.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+    if (!linhas.length) return [];
+    const separador = linhas[0].includes(';') ? ';' : ',';
+    const cabecalho = linhas[0].split(separador).map((item) => item.trim().toLowerCase());
+    const indiceData = cabecalho.findIndex((item) => ['data', 'date', 'lançamento', 'lancamento'].some((key) => item.includes(key)));
+    const indiceDescricao = cabecalho.findIndex((item) => ['descrição', 'descricao', 'histórico', 'historico', 'memo'].some((key) => item.includes(key)));
+    const indiceValor = cabecalho.findIndex((item) => ['valor', 'amount', 'crédito', 'credito', 'débito', 'debito'].some((key) => item.includes(key)));
+
+    return linhas.slice(1).map((linha, index) => {
+      const colunas = linha.split(separador).map((item) => item.replace(/^"|"$/g, '').trim());
+      const dataRaw = colunas[indiceData >= 0 ? indiceData : 0];
+      const valorRaw = colunas[indiceValor >= 0 ? indiceValor : colunas.length - 1];
+      const descricaoRaw = colunas[indiceDescricao >= 0 ? indiceDescricao : 1] || 'Lançamento bancário';
+      const partesData = String(dataRaw || '').split(/[/-]/);
+      const dataNormalizada = partesData.length === 3 && partesData[2]?.length === 4
+        ? `${partesData[2]}-${partesData[1].padStart(2, '0')}-${partesData[0].padStart(2, '0')}`
+        : safeToDateString(dataRaw) || formatarDataBrasilia(new Date());
+      return {
+        id: `extrato_${Date.now()}_${index}`,
+        data: dataNormalizada,
+        descricao: descricaoRaw,
+        valor: Math.abs(normalizarValorExtrato(valorRaw)),
+        valorOriginal: normalizarValorExtrato(valorRaw),
+        conciliado: false,
+      };
+    }).filter((item) => item.valor > 0);
+  };
+
+  const localizarTransacaoConciliavel = (item, usadas = new Set()) => transacoesCombinadas.find((transacao) => {
+    if (usadas.has(transacao.id)) return false;
+    if (transacao.conciliado || transacao.statusConciliacao === 'conciliado') return false;
+    const mesmoValor = Math.abs(Number(transacao.valor || 0) - Number(item.valor || 0)) < 0.01;
+    const mesmaData = formatarDataBrasilia(new Date(transacao.dataPagamento || transacao.data)) === formatarDataBrasilia(new Date(item.data));
+    const vencimentoProximo = transacao.dataVencimento && formatarDataBrasilia(new Date(transacao.dataVencimento)) === formatarDataBrasilia(new Date(item.data));
+    return mesmoValor && (mesmaData || vencimentoProximo);
+  });
+
+  const resolverDestinoTransacao = (transacao) => {
+    if (transacao?.origem === 'compra') return { colecao: 'compras', id: transacao.origemId };
+    if (transacao?.origem === 'contas_receber') return { colecao: 'contas_receber', id: transacao.origemId };
+    if (transacao?.origem === 'contas_pagar') return { colecao: 'contas_pagar', id: transacao.origemId };
+    if (transacao?.origem === 'comissao') return { colecao: 'comissoes', id: transacao.origemId };
+    return { colecao: 'transacoes', id: transacao?.origem === 'manual' ? transacao.id : transacao?.origemId || transacao?.id };
+  };
+
+  const processarArquivoConciliacao = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
     try {
-      const novasConciliacoes = [];
-      let conciliadas = 0;
+      setProcessandoConciliacao(true);
+      const conteudo = await file.text();
+      const extrato = parseExtratoCSV(conteudo);
+      setExtratoBancario(extrato);
+      await handleConciliarExtrato(extrato, file.name);
+    } catch (error) {
+      console.error('Erro ao processar extrato:', error);
+      mostrarSnackbar('Erro ao processar extrato bancário. Use CSV com colunas data, descrição e valor.', 'error');
+    } finally {
+      setProcessandoConciliacao(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleConciliarExtrato = async (extrato, arquivoNome = 'extrato.csv') => {
+    try {
+      const usadas = new Set();
+      const conciliadas = [];
+      const pendentes = [];
 
       for (const item of extrato) {
-        const transacaoCorrespondente = transacoesCombinadas.find(t =>
-          Math.abs(t.valor - item.valor) < 0.01 &&
-          formatarDataBrasilia(new Date(t.data)) === formatarDataBrasilia(new Date(item.data))
-        );
-
-        if (transacaoCorrespondente) {
-          novasConciliacoes.push({
-            extratoId: item.id,
-            transacaoId: transacaoCorrespondente.id,
-            transacaoDescricao: transacaoCorrespondente.descricao,
-            valor: item.valor,
-            data: item.data,
-            status: 'conciliado',
-            dataConciliacao: new Date().toISOString(),
-          });
-          conciliadas++;
+        const transacaoCorrespondente = localizarTransacaoConciliavel(item, usadas);
+        if (!transacaoCorrespondente) {
+          pendentes.push(item);
+          continue;
         }
+
+        usadas.add(transacaoCorrespondente.id);
+        const destino = resolverDestinoTransacao(transacaoCorrespondente);
+        const conciliacao = {
+          arquivoNome,
+          extratoId: item.id,
+          extratoDescricao: item.descricao,
+          transacaoId: transacaoCorrespondente.id,
+          transacaoOrigem: transacaoCorrespondente.origem || 'manual',
+          transacaoDescricao: transacaoCorrespondente.descricao,
+          valor: item.valor,
+          data: item.data,
+          status: 'conciliado',
+          dataConciliacao: new Date().toISOString(),
+        };
+        await firebaseService.add('conciliacoes', conciliacao);
+        if (destino.id) {
+          await firebaseService.update(destino.colecao, destino.id, {
+            conciliado: true,
+            statusConciliacao: 'conciliado',
+            conciliadoEm: conciliacao.dataConciliacao,
+            status: transacaoCorrespondente.status === 'pendente' ? 'pago' : transacaoCorrespondente.status,
+            dataPagamento: transacaoCorrespondente.dataPagamento || conciliacao.dataConciliacao,
+            updatedAt: new Date().toISOString(),
+          }).catch(() => null);
+        }
+        conciliadas.push({ ...conciliacao, transacao: transacaoCorrespondente });
       }
 
-      await firebaseService.add('conciliacoes', novasConciliacoes);
+      setResultadoConciliacao({ conciliadas, pendentes });
       await carregarDados();
-      mostrarSnackbar(`✅ Conciliação realizada! ${conciliadas} transações conciliadas.`);
+      mostrarSnackbar(`✅ Conciliação concluída: ${conciliadas.length} conciliada(s), ${pendentes.length} pendente(s).`);
     } catch (error) {
       console.error('Erro ao conciliar:', error);
       mostrarSnackbar('Erro ao conciliar', 'error');
@@ -2859,17 +2949,35 @@ function ModernFinanceiro() {
       </Dialog>
 
       {/* Dialog de Conciliação Bancária */}
-      <Dialog open={openConciliacaoDialog} onClose={() => setOpenConciliacaoDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openConciliacaoDialog} onClose={() => setOpenConciliacaoDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ bgcolor: '#00bcd4', color: 'white' }}><CompareArrowsIcon sx={{ mr: 1 }} /> Conciliação Bancária</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>Faça upload do extrato bancário (CSV/OFX) para conciliar automaticamente.</Alert>
-            <Button variant="outlined" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 3, py: 2 }} onClick={() => { mostrarSnackbar('Funcionalidade em desenvolvimento'); }}>
-              Upload do Extrato Bancário
+            <Alert severity="info" sx={{ mb: 2 }}>Envie um CSV do banco com colunas como Data, Descrição/Histórico e Valor. O sistema cruza automaticamente data e valor com as transações financeiras.</Alert>
+            <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 3, py: 2 }} disabled={processandoConciliacao}>
+              {processandoConciliacao ? 'Processando extrato...' : 'Upload do Extrato Bancário (CSV)'}
+              <input type="file" hidden accept=".csv,text/csv" onChange={processarArquivoConciliacao} />
             </Button>
-            {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom>Últimas Conciliações</Typography>}
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Lançamentos importados</Typography><Typography variant="h5" sx={{ fontWeight: 800 }}>{extratoBancario.length}</Typography></Paper></Grid>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#e8f5e9' }}><Typography variant="caption" color="textSecondary">Conciliados agora</Typography><Typography variant="h5" sx={{ fontWeight: 800, color: '#2e7d32' }}>{resultadoConciliacao.conciliadas.length}</Typography></Paper></Grid>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#fff8e1' }}><Typography variant="caption" color="textSecondary">Pendentes de análise</Typography><Typography variant="h5" sx={{ fontWeight: 800, color: '#f57c00' }}>{resultadoConciliacao.pendentes.length}</Typography></Paper></Grid>
+            </Grid>
+
+            {resultadoConciliacao.conciliadas.length > 0 && <Typography variant="subtitle2" gutterBottom>Transações conciliadas</Typography>}
+            {resultadoConciliacao.conciliadas.slice(0, 8).map((conc) => (
+              <Alert key={`${conc.extratoId}_${conc.transacaoId}`} severity="success" sx={{ mb: 1 }}>{safeToDisplayDate(conc.data)} • {conc.transacaoDescricao} • {formatarMoeda(conc.valor)}</Alert>
+            ))}
+
+            {resultadoConciliacao.pendentes.length > 0 && <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Lançamentos pendentes</Typography>}
+            {resultadoConciliacao.pendentes.slice(0, 8).map((item) => (
+              <Alert key={item.id} severity="warning" sx={{ mb: 1 }}>{safeToDisplayDate(item.data)} • {item.descricao} • {formatarMoeda(item.valor)}</Alert>
+            ))}
+
+            {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Últimas conciliações salvas</Typography>}
             {conciliacoes.slice(0, 5).map((conc, idx) => (
-              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação realizada em {safeToDisplayDate(conc.dataConciliacao)}</Alert>
+              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação em {safeToDisplayDate(conc.dataConciliacao)} • {conc.transacaoDescricao || conc.transacaoId} • {formatarMoeda(conc.valor || 0)}</Alert>
             ))}
           </Box>
         </DialogContent>
