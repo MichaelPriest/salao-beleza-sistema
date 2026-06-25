@@ -73,6 +73,7 @@ import { notificacoesService } from '../services/notificacoesService';
 import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 // ============================================
 // FUNÇÕES DE HORÁRIO DE BRASÍLIA
@@ -389,7 +390,7 @@ function ModernHeader() {
     const user = usuariosService.getUsuarioAtual() || usuario || {};
     const usuarioAtualizado = { ...user, unidadeId: unidadeSelecionada?.id || null, unidadeNome: unidadeSelecionada?.nome || null, unidade: unidadeSelecionada };
     setTenantContext({ empresaId: tenant.empresaId || user.empresaId || user.empresa?.id, empresa: tenant.empresa || user.empresa, unidadeId: unidadeSelecionada?.id || null, unidade: unidadeSelecionada });
-    localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+    safeSetUsuarioStorage(usuarioAtualizado);
     setUsuario(usuarioAtualizado);
     usuarioRef.current = usuarioAtualizado;
     setUnidadeAtualId(unidadeId);

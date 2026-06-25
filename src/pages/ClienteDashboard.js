@@ -706,7 +706,7 @@ function ClienteDashboard() {
 
       if (recompensasData.status === 'fulfilled') {
         const recompensasOrdenadas = (recompensasData.value || []).sort((a, b) =>
-          (a.pontosNecessarios || 0) - (b.pontosNecessarios || 0)
+          ((a.pontosNecessarios ?? a.pontos ?? 0) - (b.pontosNecessarios ?? b.pontos ?? 0))
         );
         setRecompensasDisponiveis(recompensasOrdenadas.slice(0, 3));
       }
@@ -714,7 +714,7 @@ function ClienteDashboard() {
       if (resgatesData.status === 'fulfilled') {
         const todosResgates = resgatesData.value.flat();
         const resgatesUnicos = Array.from(new Map(todosResgates.map(item => [item.id, item])).values());
-        setResgatesRecentes(resgatesUnicos.slice(0, 5));
+        setResgatesRecentes(resgatesUnicos);
       }
 
       if (atendimentosData.status === 'fulfilled') {
@@ -1458,7 +1458,7 @@ function ClienteDashboard() {
                       </Box>
                       <Typography variant="caption" color="textSecondary" display="block">{recompensa.descricao}</Typography>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                        <Chip size="small" label={`${recompensa.pontosNecessarios || 0} pontos`} sx={{ bgcolor: saldo >= (recompensa.pontosNecessarios || 0) ? '#e8f5e8' : '#fff3e0', color: saldo >= (recompensa.pontosNecessarios || 0) ? '#4caf50' : '#ff9800' }} />
+                        <Chip size="small" label={`${recompensa.pontosNecessarios ?? recompensa.pontos ?? 0} pontos`} sx={{ bgcolor: saldo >= (recompensa.pontosNecessarios ?? recompensa.pontos ?? 0) ? '#e8f5e8' : '#fff3e0', color: saldo >= (recompensa.pontosNecessarios ?? recompensa.pontos ?? 0) ? '#4caf50' : '#ff9800' }} />
                         <Button size="small" sx={{ color: '#9c27b0' }} onClick={() => navigate('/cliente/recompensas')}>Ver</Button>
                       </Box>
                     </Card>
