@@ -1,6 +1,7 @@
 // src/services/usuariosService.js
 import { firebaseService } from './firebase';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, db } from './firebase';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 class UsuariosService {
   constructor() {
@@ -49,7 +50,7 @@ class UsuariosService {
                   
                   // Forçar que o usuário permaneça no localStorage
                   window.addEventListener('beforeunload', () => {
-                    localStorage.setItem('usuario', JSON.stringify(usuarioParsed));
+                    safeSetUsuarioStorage(usuarioParsed);
                   });
                 }
                 
@@ -67,7 +68,7 @@ class UsuariosService {
           if (userSnap.exists()) {
             this.usuario = { id: user.uid, ...userSnap.data() };
             console.log('✅ usuariosService - Usuário encontrado:', this.usuario);
-            localStorage.setItem('usuario', JSON.stringify(this.usuario));
+            safeSetUsuarioStorage(this.usuario);
           } else {
             console.log('⚠️ usuariosService - Usuário não encontrado no Firestore, tentando buscar por email...');
             
@@ -89,7 +90,7 @@ class UsuariosService {
               });
               
               this.usuario = { id: user.uid, ...usuarioData };
-              localStorage.setItem('usuario', JSON.stringify(this.usuario));
+              safeSetUsuarioStorage(this.usuario);
             } else {
               console.log('❌ usuariosService - Usuário não encontrado no sistema');
               
@@ -115,7 +116,7 @@ class UsuariosService {
                 
                 console.log('✅ usuariosService - Criando usuário básico:', novoUsuario);
                 this.usuario = novoUsuario;
-                localStorage.setItem('usuario', JSON.stringify(novoUsuario));
+                safeSetUsuarioStorage(novoUsuario);
               }
             }
           }
@@ -161,7 +162,7 @@ class UsuariosService {
           });
           
           this.usuario = { id: user.uid, ...usuarioData };
-          localStorage.setItem('usuario', JSON.stringify(this.usuario));
+          safeSetUsuarioStorage(this.usuario);
           
           return this.usuario;
         } else {
@@ -180,7 +181,7 @@ class UsuariosService {
           await setDoc(doc(db, 'usuarios', user.uid), novoUsuario);
           
           this.usuario = { id: user.uid, ...novoUsuario };
-          localStorage.setItem('usuario', JSON.stringify(this.usuario));
+          safeSetUsuarioStorage(this.usuario);
           
           return this.usuario;
         }
@@ -198,7 +199,7 @@ class UsuariosService {
       }
 
       this.usuario = { id: user.uid, ...usuarioData };
-      localStorage.setItem('usuario', JSON.stringify(this.usuario));
+      safeSetUsuarioStorage(this.usuario);
       
       return this.usuario;
     } catch (error) {

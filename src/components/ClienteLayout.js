@@ -44,6 +44,7 @@ import {
   Close as CloseIcon,
   HelpCenter as HelpCenterIcon,
   AccessTime as AccessTimeIcon,
+  RateReview as RateReviewIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
@@ -52,6 +53,7 @@ import { firebaseService } from '../services/firebase';
 import Footer from './Footer';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
+import { getLocalDateTime } from '../utils/dateTimeUtils';
 
 // ============================================
 // CONSTANTES
@@ -63,6 +65,7 @@ const MENU_ITEMS = [
   { text: 'Recompensas', icon: <GiftIcon />, path: '/cliente/recompensas', recurso: 'fidelidade' },
   { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos', recurso: 'fidelidade' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
+  { text: 'Depoimentos', icon: <RateReviewIcon />, path: '/cliente/depoimentos' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
@@ -76,16 +79,35 @@ const PAGE_TITLES = {
   '/cliente/recompensas': 'Recompensas',
   '/cliente/pontos': 'Meus Pontos',
   '/cliente/historico': 'Histórico',
+  '/cliente/depoimentos': 'Depoimentos',
   '/cliente/perfil': 'Meu Perfil',
   '/cliente/notificacoes': 'Notificações',
   '/cliente/anamnese': 'Anamnese',
   '/cliente/manual': 'Manual de Uso',
 };
 
-const getBrasiliaTime = () => ({
-  data: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }),
-  hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }),
-});
+const getBrasiliaTime = () => getLocalDateTime();
+
+
+const portalContentSx = {
+  '& .MuiTypography-h3': { fontSize: { xs: '1.45rem', sm: '1.75rem', md: '2rem' }, lineHeight: 1.18, fontWeight: 800 },
+  '& .MuiTypography-h4': { fontSize: { xs: '1.3rem', sm: '1.55rem', md: '1.8rem' }, lineHeight: 1.2, fontWeight: 800 },
+  '& .MuiTypography-h5': { fontSize: { xs: '1.15rem', sm: '1.35rem', md: '1.55rem' }, lineHeight: 1.25, fontWeight: 750 },
+  '& .MuiTypography-h6': { fontSize: { xs: '1rem', sm: '1.08rem', md: '1.15rem' }, lineHeight: 1.3, fontWeight: 700 },
+  '& .MuiTypography-subtitle1': { fontSize: { xs: '0.95rem', sm: '1rem' }, lineHeight: 1.35 },
+  '& .MuiTypography-subtitle2': { fontSize: { xs: '0.86rem', sm: '0.92rem' }, lineHeight: 1.35 },
+  '& .MuiTypography-body1': { fontSize: { xs: '0.9rem', sm: '0.96rem' }, lineHeight: 1.55 },
+  '& .MuiTypography-body2': { fontSize: { xs: '0.82rem', sm: '0.88rem' }, lineHeight: 1.5 },
+  '& .MuiTypography-caption': { fontSize: { xs: '0.72rem', sm: '0.76rem' }, lineHeight: 1.35 },
+  '& .MuiButton-root': { textTransform: 'none', fontSize: { xs: '0.82rem', sm: '0.88rem' }, borderRadius: 2 },
+  '& .MuiChip-root': { maxWidth: '100%' },
+  '& .MuiChip-label': { fontSize: { xs: '0.7rem', sm: '0.74rem' }, overflow: 'hidden', textOverflow: 'ellipsis' },
+  '& .MuiCard-root, & .MuiPaper-root': { boxSizing: 'border-box' },
+  '& .MuiCardContent-root': { p: { xs: 1.5, sm: 2, md: 2.5 } },
+  '& .MuiGrid-container': { width: '100%', marginLeft: 0 },
+  '& .MuiTableContainer-root': { overflowX: 'auto' },
+  '& img': { maxWidth: '100%', height: 'auto' },
+};
 
 const NOTIFICATION_ICONS = {
   agendamento: <EventIcon sx={{ color: '#9c27b0' }} />,
@@ -156,16 +178,27 @@ function ClienteLayout() {
   // ESTADOS
   // ==========================================
   const [mobileOpen, setMobileOpen] = useState(false);
-  
+
   // Estados de Notificações
   const [notificacoes, setNotificacoes] = useState([]);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
-  
+
   // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
   const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
+  const [configSistema, setConfigSistema] = useState(null);
+
+
+  const carregarConfigSistema = useCallback(async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      setConfigSistema(configs?.[0] || null);
+    } catch (error) {
+      console.warn('ClienteLayout - Erro ao carregar configuração do sistema:', error);
+    }
+  }, []);
 
   // ==========================================
   // FUNÇÃO PARA CARREGAR NOTIFICAÇÕES
@@ -252,12 +285,12 @@ function ClienteLayout() {
         lida: true,
         lidaEm: new Date().toISOString()
       });
-      
+
       setNotificacoes(prev =>
         prev.map(n => n.id === notificacaoId ? { ...n, lida: true } : n)
       );
       setNotificacoesNaoLidas(prev => Math.max(0, prev - 1));
-      
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao marcar notificação como lida:', error);
@@ -271,7 +304,7 @@ function ClienteLayout() {
   const marcarTodasComoLidas = useCallback(async () => {
     const naoLidas = notificacoes.filter(n => !n.lida);
     if (naoLidas.length === 0) return;
-    
+
     try {
       for (const notificacao of naoLidas) {
         await firebaseService.update('notificacoes_cliente', notificacao.id, {
@@ -279,7 +312,7 @@ function ClienteLayout() {
           lidaEm: new Date().toISOString()
         });
       }
-      
+
       setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
       setNotificacoesNaoLidas(0);
     } catch (error) {
@@ -343,23 +376,24 @@ function ClienteLayout() {
   // ==========================================
   useEffect(() => {
     if (!cliente?.id) return;
-    
+
     console.log('📌 ClienteLayout - Carregando dados para cliente:', cliente.id);
-    
+
     const carregarDados = async () => {
+      await carregarConfigSistema();
       await carregarNotificacoes();
       await verificarFormulariosPendentes();
     };
-    
+
     carregarDados();
-    
+
     // Intervalo para atualizar notificações a cada 30 segundos
     const interval = setInterval(() => {
       carregarNotificacoes();
     }, 30000);
-    
+
     return () => clearInterval(interval);
-  }, [cliente, carregarNotificacoes, verificarFormulariosPendentes]);
+  }, [cliente, carregarConfigSistema, carregarNotificacoes, verificarFormulariosPendentes]);
 
   // ==========================================
   // HANDLERS
@@ -392,9 +426,9 @@ function ClienteLayout() {
     if (!notificacao.lida) {
       await marcarNotificacaoComoLida(notificacao.id);
     }
-    
+
     navigate(normalizarLinkNotificacao(notificacao, 'cliente'));
-    
+
     handleNotificacoesClose();
   };
 
@@ -408,12 +442,12 @@ function ClienteLayout() {
       const date = new Date(data);
       const agora = new Date();
       const diff = Math.floor((agora - date) / 1000);
-      
+
       if (diff < 60) return 'agora';
       if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
       if (diff < 86400) return `${Math.floor(diff / 3600)} h atrás`;
       if (diff < 604800) return `${Math.floor(diff / 86400)} d atrás`;
-      
+
       return date.toLocaleDateString('pt-BR');
     } catch {
       return '';
@@ -429,6 +463,10 @@ function ClienteLayout() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const salaoConfig = configSistema?.salao || {};
+  const logoEstabelecimento = salaoConfig.logo || cliente?.empresa?.sitePublico?.logo || cliente?.empresaLogo || null;
+  const nomeEstabelecimento = salaoConfig.nomeFantasia || salaoConfig.nome || cliente?.empresaNome || 'Portal do Cliente';
 
   const currentTitle = PAGE_TITLES[location.pathname] || (location.pathname.includes('/anamnese') ? 'Anamnese' : 'Área do Cliente');
 
@@ -465,7 +503,7 @@ function ClienteLayout() {
           const isActive = location.pathname === item.path;
           const isAnamnese = item.text === 'Anamnese';
           const badgeCount = isAnamnese ? formulariosPendentes : 0;
-          
+
           return (
             <ListItem
               key={item.text}
@@ -489,7 +527,7 @@ function ClienteLayout() {
                   item.icon
                 )}
               </ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemText primary={item.text} primaryTypographyProps={{ sx: { fontSize: { xs: '0.9rem', sm: '0.95rem' }, fontWeight: isActive ? 700 : 500 } }} />
               {badgeCount > 0 && (
                 <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 600 }}>
                   {badgeCount}
@@ -537,12 +575,12 @@ function ClienteLayout() {
             )}
 
             <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }}>
-              <Avatar sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, mr: 1.5, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
-                <SpaIcon />
+              <Avatar src={logoEstabelecimento || undefined} sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, mr: 1.5, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
+                {!logoEstabelecimento && <SpaIcon />}
               </Avatar>
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', display: { xs: 'none', sm: 'block' } }}>
-                  Área do Cliente
+                  {nomeEstabelecimento}
                 </Typography>
                 <Typography variant="h6" noWrap sx={{ color: '#2c2c2c', fontWeight: 800, fontSize: { xs: '1rem', sm: '1.2rem', md: '1.35rem' } }}>
                   {currentTitle}
@@ -589,7 +627,7 @@ function ClienteLayout() {
         </SwipeableDrawer>
 
         {/* Conteúdo Principal */}
-        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.5, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative' }}>
+        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.25, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative', ...portalContentSx }}>
           {/* Badge Formulários Pendentes */}
           {formulariosPendentes > 0 && (
             <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: { xs: 12, sm: 20 }, left: { xs: 12, sm: 'auto' }, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
@@ -602,14 +640,14 @@ function ClienteLayout() {
             </Box>
           )}
 
-          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
+          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}>
             <Outlet />
           </motion.div>
         </Box>
       </Box>
-      
+
       <Footer />
-      
+
       {/* Popover de Notificações */}
       <Popover
         open={Boolean(notificacoesAnchor)}
@@ -626,7 +664,7 @@ function ClienteLayout() {
           )}
         </Box>
         <Divider />
-        
+
         {loadingNotificacoes ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <CircularProgress size={30} />

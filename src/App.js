@@ -218,6 +218,9 @@ import ClienteAnamneseLista from './pages/ClienteAnamneseLista';
 import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 import ClienteChamados from './pages/ClienteChamados';
+import ClienteDepoimentos from './pages/ClienteDepoimentos';
+import FolderDivulgacao from './pages/FolderDivulgacao';
+import PainelChamada from './pages/PainelChamada';
 
 // ============================================
 // PAGES - PÚBLICAS E ERROS
@@ -227,6 +230,7 @@ import TermosUso from './pages/TermosUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import ManualSistema from './pages/ManualSistema';
 import AdminChamados from './pages/AdminChamados';
+import AdminDepoimentos from './pages/AdminDepoimentos';
 import Page404 from './pages/404';
 import Page403 from './pages/403';
 import Page500 from './pages/500';
@@ -519,6 +523,7 @@ function App() {
                   <Route path="historico" element={<ClienteHistorico />} />
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
+                  <Route path="depoimentos" element={<ClienteDepoimentos />} />
                   <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />
@@ -527,6 +532,9 @@ function App() {
                   <Route path="agendamento/:agendamentoId/anamnese" element={<ClienteAnamnese />} />
                   <Route index element={<Navigate to="dashboard" replace />} />
                 </Route>
+
+                <Route path="/folder-divulgacao" element={<SimpleLayout><FolderDivulgacao /></SimpleLayout>} />
+                <Route path="/painel-chamada" element={<PainelChamada />} />
 
                 {/* ============================================ */}
                 {/* SAAS ADMIN - PAINEL PRINCIPAL */}
@@ -796,6 +804,11 @@ function App() {
                 <Route path="/chamados" element={
                   <PrivateRoute>
                     <SistemaLayout theme={currentTheme}><AdminChamados /></SistemaLayout>
+                  </PrivateRoute>
+                } />
+                <Route path="/depoimentos" element={
+                  <PrivateRoute>
+                    <SistemaLayout theme={currentTheme}><AdminDepoimentos /></SistemaLayout>
                   </PrivateRoute>
                 } />
                 <Route path="/manual" element={

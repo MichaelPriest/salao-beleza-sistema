@@ -230,6 +230,7 @@ function SiteSalao() {
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
+  const [bannerAtual, setBannerAtual] = useState(0);
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
@@ -427,6 +428,34 @@ function SiteSalao() {
     return lastUpdate.toLocaleString('pt-BR');
   };
 
+  const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
+  const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
+  const sitePublico = config?.sitePublico || {};
+  const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
+  const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
+  const bannerGaleriaPublica = sitePublico.mostrarBanner !== false
+    ? [bannerUrl, ...(sitePublico.bannerGaleria || []).map((banner) => banner.url || banner)].filter(Boolean)
+    : [];
+  const temaLayout = sitePublico.temaLayout || 'moderno';
+  const mostrarServicos = sitePublico.mostrarServicos !== false;
+  const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
+  const mostrarContato = sitePublico.mostrarContato !== false;
+  const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
+  const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
+  const diferenciaisPublicos = String(sitePublico.diferenciais || '').split(',').map((item) => item.trim()).filter(Boolean);
+  useEffect(() => {
+    if (bannerGaleriaPublica.length <= 1) {
+      setBannerAtual(0);
+      return undefined;
+    }
+    const interval = setInterval(() => {
+      setBannerAtual((atual) => (atual + 1) % bannerGaleriaPublica.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [bannerGaleriaPublica.length]);
+
+  const bannerAtivo = bannerGaleriaPublica[bannerAtual] || bannerGaleriaPublica[0] || bannerUrl;
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -449,17 +478,6 @@ function SiteSalao() {
     );
   }
 
-  const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
-  const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
-  const sitePublico = config?.sitePublico || {};
-  const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
-  const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
-  const temaLayout = sitePublico.temaLayout || 'moderno';
-  const mostrarServicos = sitePublico.mostrarServicos !== false;
-  const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
-  const mostrarContato = sitePublico.mostrarContato !== false;
-  const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
-  const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
   const menuItems = BASE_MENU_ITEMS.filter((item) => {
     if (item.id === 'servicos') return mostrarServicos;
     if (item.id === 'profissionais') return mostrarProfissionais;
@@ -692,7 +710,7 @@ function SiteSalao() {
                 {layoutStyles.title.includes('Beleza') ? <>Realce sua <span style={{ color: corPrimaria }}>Beleza</span></> : layoutStyles.title}
               </Typography>
               <Typography variant="h5" color="textSecondary" sx={{ mb: 3, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                {sitePublico.subtitulo || 'O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.'}
+                {sitePublico.chamadaPrincipal || sitePublico.subtitulo || 'O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.'}
               </Typography>
               {mostrarAreaRestrita && (
                 <>
@@ -712,30 +730,78 @@ function SiteSalao() {
                       borderRadius: temaLayout === 'premium' ? 999 : 2,
                     }}
                   >
-                    Área do Cliente
+                    {sitePublico.textoBotaoPrincipal || 'Área do Cliente'}
                   </Button>
                 </>
               )}
             </motion.div>
           </Grid>
-          {bannerUrl && (
+          {bannerGaleriaPublica.length > 0 && (
           <Grid item xs={12} md={6}>
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5 }}
             >
-              <Box
-                component="img"
-                src={bannerUrl}
-                alt="Salão de Beleza"
-                sx={{
-                  width: '100%',
-                  height: 'auto',
-                  borderRadius: layoutStyles.cardRadius,
-                  boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
-                }}
-              />
+              <Box sx={{ position: 'relative' }}>
+                <Box
+                  component="img"
+                  src={bannerAtivo}
+                  alt="Salão de Beleza"
+                  sx={{
+                    width: '100%',
+                    height: { xs: 260, md: 420 },
+                    objectFit: 'contain',
+                    bgcolor: 'rgba(255,255,255,0.92)',
+                    borderRadius: layoutStyles.cardRadius,
+                    boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
+                    transition: 'all 0.4s ease'
+                  }}
+                />
+                {bannerGaleriaPublica.length > 1 && (
+                  <>
+                    <Box sx={{ position: 'absolute', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      {bannerGaleriaPublica.map((_, index) => (
+                        <Box
+                          key={index}
+                          onClick={() => setBannerAtual(index)}
+                          sx={{
+                            width: bannerAtual === index ? 28 : 10,
+                            height: 10,
+                            borderRadius: 999,
+                            bgcolor: bannerAtual === index ? corPrimaria : 'rgba(255,255,255,0.85)',
+                            cursor: 'pointer',
+                            border: '1px solid rgba(0,0,0,0.12)',
+                            transition: 'all 0.25s ease'
+                          }}
+                        />
+                      ))}
+                    </Box>
+                    <Grid container spacing={1} sx={{ mt: 1 }}>
+                      {bannerGaleriaPublica.slice(0, 4).map((img, index) => (
+                        <Grid item xs={3} key={index}>
+                          <Box
+                            component="img"
+                            src={img}
+                            alt={`Banner ${index + 1}`}
+                            onClick={() => setBannerAtual(index)}
+                            sx={{
+                              width: '100%',
+                              height: 80,
+                              objectFit: 'contain',
+                              bgcolor: 'rgba(255,255,255,0.9)',
+                              borderRadius: 2,
+                              cursor: 'pointer',
+                              opacity: bannerAtual === index ? 1 : 0.65,
+                              border: `2px solid ${bannerAtual === index ? corPrimaria : 'transparent'}`
+                            }}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </>
+                )}
+              </Box>
             </motion.div>
           </Grid>
           )}
@@ -973,6 +1039,42 @@ function SiteSalao() {
           </motion.div>
         </Container>
       </Box>
+      )}
+
+      {(diferenciaisPublicos.length > 0 || sitePublico.horarioAtendimento || sitePublico.enderecoPublico || sitePublico.depoimentoDestaque) && (
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Grid container spacing={2}>
+            {diferenciaisPublicos.map((item, index) => (
+              <Grid item xs={12} md={4} key={index}>
+                <Paper elevation={0} sx={{ p: 2.5, height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: corPrimaria }}>{item}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+            {sitePublico.horarioAtendimento && <Grid item xs={12} md={4}><Alert severity="info">Horário: {sitePublico.horarioAtendimento}</Alert></Grid>}
+            {sitePublico.enderecoPublico && <Grid item xs={12} md={4}><Alert severity="success">Endereço: {sitePublico.enderecoPublico}</Alert></Grid>}
+            {sitePublico.depoimentoDestaque && <Grid item xs={12}><Alert severity="warning">“{sitePublico.depoimentoDestaque}”</Alert></Grid>}
+          </Grid>
+        </Container>
+      )}
+
+      {sitePublico.mostrarDepoimentos !== false && (sitePublico.depoimentos || []).filter((dep) => dep.nome || dep.texto).length > 0 && (
+        <Box sx={{ bgcolor: '#fafafa', py: { xs: 4, md: 6 } }}>
+          <Container maxWidth="lg">
+            <Typography variant="h4" align="center" sx={{ fontWeight: 800, mb: 4 }}>O que nossos clientes dizem</Typography>
+            <Grid container spacing={2}>
+              {(sitePublico.depoimentos || []).filter((dep) => dep.nome || dep.texto).map((dep) => (
+                <Grid item xs={12} md={4} key={dep.id || dep.nome}>
+                  <Paper elevation={0} sx={{ p: 3, height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography sx={{ color: '#ff9800', mb: 1 }}>{'★'.repeat(Number(dep.nota || 5))}</Typography>
+                    <Typography variant="body1" sx={{ mb: 2 }}>“{dep.texto || sitePublico.depoimentoDestaque}”</Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: corPrimaria }}>{dep.nome || 'Cliente'}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
       )}
 
       {/* Serviços Section */}

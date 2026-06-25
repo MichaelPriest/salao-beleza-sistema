@@ -64,6 +64,7 @@ import { firebaseService, clearTenantContext, getTenantContext, setTenantContext
 import { usuariosService } from '../services/usuariosService';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { PLANOS_PADRAO, STATUS_ASSINATURA } from '../services/saasService';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -207,7 +208,7 @@ function SuperAdminSelecionarEmpresa() {
           tenantAssumidoPorSuperadmin: false,
         };
 
-    localStorage.setItem('usuario', JSON.stringify(atualizado));
+    safeSetUsuarioStorage(atualizado);
     window.dispatchEvent(new Event('usuarioAtualizado'));
     return atualizado;
   };

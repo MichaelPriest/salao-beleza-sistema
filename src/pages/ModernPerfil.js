@@ -45,6 +45,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { firebaseService } from '../services/firebase';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 function ModernPerfil() {
   const navigate = useNavigate();
@@ -203,7 +204,7 @@ function ModernPerfil() {
       setUsuario(usuarioAtualizado);
       
       // Atualizar o usuário no localStorage
-      localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+      safeSetUsuarioStorage(usuarioAtualizado);
       
       // Registrar log da ação
       await firebaseService.add('logs', {

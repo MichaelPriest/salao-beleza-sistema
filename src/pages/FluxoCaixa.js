@@ -117,6 +117,7 @@ import { ptBR } from 'date-fns/locale';
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { firebaseService } from '../services/firebase';
 import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
+import { caixaService, formatarMoedaCaixa, METODOS_CAIXA } from '../services/caixaService';
 import { auditoriaService } from '../services/auditoriaService';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -450,6 +451,10 @@ function FluxoCaixa() {
   const [openDetalheDialog, setOpenDetalheDialog] = useState(false);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
   const [openRelatorioDialog, setOpenRelatorioDialog] = useState(false);
+  const [openCaixaDialog, setOpenCaixaDialog] = useState(false);
+  const [openMovimentoCaixaDialog, setOpenMovimentoCaixaDialog] = useState(false);
+  const [caixaOperacao, setCaixaOperacao] = useState({ valorAbertura: 0, valorConferido: 0, observacao: '' });
+  const [movimentoCaixa, setMovimentoCaixa] = useState({ tipo: 'reforco', valor: '', formaPagamento: 'dinheiro', descricao: '', observacao: '' });
   const [transacaoSelecionada, setTransacaoSelecionada] = useState(null);
   const [bottomNavValue, setBottomNavValue] = useState(0);
   
@@ -622,14 +627,21 @@ function FluxoCaixa() {
       )];
       setCategorias(categoriasUnicas);
       
-      // Processar caixa
-      if (caixaData && caixaData.length > 0) {
-        const caixaAtual = caixaData
-          .filter(c => c && c.dataAbertura)
-          .sort((a, b) => new Date(b.dataAbertura) - new Date(a.dataAbertura))[0];
-        setCaixa(caixaAtual);
+      // Processar caixa com totais profissionais (sessão, movimentos e formas de pagamento)
+      const resumoCaixa = await caixaService.carregarResumoAtual();
+      if (resumoCaixa.caixaAberto) {
+        setCaixa({
+          ...resumoCaixa.caixaAberto,
+          saldoAtual: resumoCaixa.totais?.saldoAtual || 0,
+          saldoInicial: resumoCaixa.totais?.valorAbertura || 0,
+          movimentacoes: resumoCaixa.movimentos || [],
+          totais: resumoCaixa.totais,
+        });
       } else {
-        setCaixa({ saldoAtual: 0, status: 'fechado', movimentacoes: [] });
+        const ultimoCaixa = (caixaData || [])
+          .filter(c => c && (c.dataAbertura || c.abertoEm || c.createdAt))
+          .sort((a, b) => new Date(b.dataAbertura || b.abertoEm || b.createdAt || 0) - new Date(a.dataAbertura || a.abertoEm || a.createdAt || 0))[0];
+        setCaixa(ultimoCaixa || { saldoAtual: 0, status: 'fechado', movimentacoes: [], totais: null });
       }
 
       // Registrar acesso na auditoria
@@ -869,93 +881,105 @@ function FluxoCaixa() {
     }
   };
 
-  // Função para abrir/fechar caixa
+  const abrirDialogCaixa = () => {
+    setCaixaOperacao({
+      valorAbertura: caixa?.status === 'aberto' ? (caixa.saldoInicial || caixa.valorAbertura || 0) : 0,
+      valorConferido: caixa?.status === 'aberto' ? (caixa.saldoAtual || 0) : 0,
+      observacao: '',
+    });
+    setOpenCaixaDialog(true);
+  };
+
+  const abrirDialogMovimentoCaixa = (tipo = 'reforco') => {
+    setMovimentoCaixa({
+      tipo,
+      valor: '',
+      formaPagamento: 'dinheiro',
+      descricao: tipo === 'sangria' ? 'Sangria de caixa' : tipo === 'retirada' ? 'Retirada do caixa' : 'Reforço de caixa',
+      observacao: '',
+    });
+    setOpenMovimentoCaixaDialog(true);
+  };
+
+  // Função para abrir/fechar caixa com conferência profissional
   const handleAbrirFecharCaixa = async () => {
     try {
-      if (!caixa || caixa.status === 'fechado') {
-        let usuarioId = 'sistema';
-        try {
-          const usuarioStr = localStorage.getItem('usuario');
-          if (usuarioStr) {
-            const usuario = JSON.parse(usuarioStr);
-            usuarioId = usuario?.id || 'sistema';
-          }
-        } catch (e) {
-          console.warn('Erro ao parsear usuário do localStorage:', e);
-        }
-
-        const hoje = formatarDataBrasilia(new Date());
-        const transacoesHoje = transacoes.filter(t => 
-          t.data === hoje && t.status === 'pago'
-        );
-        
-        const saldoInicial = transacoesHoje.reduce((acc, t) => {
-          if (t.tipo === 'receita') return acc + t.valor;
-          if (t.tipo === 'despesa') return acc - t.valor;
-          return acc;
-        }, 0);
-
-        const novoCaixa = {
-          dataAbertura: new Date().toISOString(),
-          saldoInicial: saldoInicial,
-          saldoAtual: saldoInicial,
-          movimentacoes: transacoesHoje.map(t => ({
-            id: Date.now() + Math.random(),
-            tipo: t.tipo,
-            valor: t.valor,
-            descricao: t.descricao,
-            data: t.data,
-            transacaoId: t.id,
-          })),
-          status: 'aberto',
-          responsavelId: String(usuarioId),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        
-        const novoId = await firebaseService.add('caixa', novoCaixa);
-        setCaixa({ ...novoCaixa, id: novoId });
+      if (!caixa || caixa.status !== 'aberto') {
+        const id = await caixaService.abrirCaixa({
+          valorAbertura: caixaOperacao.valorAbertura,
+          observacao: caixaOperacao.observacao,
+        });
 
         await auditoriaService.registrar('abrir_caixa', {
           entidade: 'caixa',
-          entidadeId: novoId,
-          detalhes: 'Caixa aberto',
-          dados: { saldoInicial }
+          entidadeId: id,
+          detalhes: 'Caixa aberto pelo fluxo de caixa',
+          dados: { valorAbertura: Number(caixaOperacao.valorAbertura || 0) }
         });
-        
+
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
-        const dadosAtualizacao = {
-          status: 'fechado',
-          dataFechamento: new Date().toISOString(),
-          saldoFinal: caixa.saldoAtual || 0,
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await firebaseService.update('caixa', caixa.id, dadosAtualizacao);
-        
-        setCaixa({ 
-          ...caixa, 
-          ...dadosAtualizacao
+        const caixaFechado = await caixaService.fecharCaixa(caixa.id, {
+          valorConferido: caixaOperacao.valorConferido,
+          observacao: caixaOperacao.observacao,
         });
 
         await auditoriaService.registrar('fechar_caixa', {
           entidade: 'caixa',
           entidadeId: caixa.id,
-          detalhes: 'Caixa fechado',
-          dados: { saldoFinal: caixa.saldoAtual }
+          detalhes: 'Caixa fechado com conferência',
+          dados: {
+            saldoEsperado: caixa.totais?.saldoAtual ?? caixa.saldoAtual,
+            valorConferido: Number(caixaOperacao.valorConferido || 0),
+            diferenca: caixaFechado?.diferenca,
+          }
         });
-        
-        mostrarSnackbar('✅ Caixa fechado com sucesso!');
+
+        mostrarSnackbar('✅ Caixa fechado com conferência registrada!');
       }
+
+      setOpenCaixaDialog(false);
+      await carregarDados();
     } catch (error) {
       console.error('Erro ao abrir/fechar caixa:', error);
-      mostrarSnackbar('Erro ao operar caixa', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
+      mostrarSnackbar(error.message || 'Erro ao operar caixa', 'error');
+      await auditoriaService.registrarErro(error, {
         acao: 'operar_caixa',
         status: caixa?.status
       });
+    }
+  };
+
+  const handleRegistrarMovimentoCaixa = async () => {
+    try {
+      if (!caixa?.id || caixa.status !== 'aberto') {
+        mostrarSnackbar('Abra o caixa antes de registrar reforços, sangrias ou retiradas.', 'warning');
+        return;
+      }
+
+      await caixaService.registrarMovimento({
+        caixaId: caixa.id,
+        tipo: movimentoCaixa.tipo,
+        valor: movimentoCaixa.valor,
+        formaPagamento: movimentoCaixa.formaPagamento,
+        descricao: movimentoCaixa.descricao,
+        observacao: movimentoCaixa.observacao,
+        origem: 'fluxo_caixa',
+      });
+
+      await auditoriaService.registrar('registrar_movimento_caixa', {
+        entidade: 'caixa',
+        entidadeId: caixa.id,
+        detalhes: `${caixaService.tipoLabel(movimentoCaixa.tipo)} registrado no caixa`,
+        dados: movimentoCaixa,
+      });
+
+      setOpenMovimentoCaixaDialog(false);
+      await carregarDados();
+      mostrarSnackbar('✅ Movimento de caixa registrado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao registrar movimento de caixa:', error);
+      mostrarSnackbar(error.message || 'Erro ao registrar movimento de caixa', 'error');
     }
   };
 
@@ -1504,23 +1528,53 @@ function FluxoCaixa() {
           </Zoom>
         </Box>
 
-        {/* Status do Caixa */}
-        {caixa?.status === 'aberto' && (
-          <Zoom in={true}>
-            <Alert 
-              severity="success" 
-              sx={{ mb: 3 }}
-              action={
-                <Button color="inherit" size="small" onClick={handleAbrirFecharCaixa}>
-                  Fechar Caixa
-                </Button>
-              }
-            >
-              <strong>Caixa Aberto</strong> - Saldo atual: R$ {caixa.saldoAtual?.toFixed(2)} | 
-              Abertura: {formatarDataExibicao(caixa.dataAbertura)} {caixa.dataAbertura?.split('T')[1]?.substring(0,5)}
-            </Alert>
-          </Zoom>
-        )}
+        {/* Painel profissional do Caixa */}
+        <Paper elevation={0} sx={{ p: 2.5, mb: 3, borderRadius: 3, border: '1px solid', borderColor: caixa?.status === 'aberto' ? 'success.light' : 'warning.light', bgcolor: caixa?.status === 'aberto' ? '#f1f8e9' : '#fff8e1' }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar sx={{ bgcolor: caixa?.status === 'aberto' ? '#4caf50' : '#ff9800' }}><AccountBalanceIcon /></Avatar>
+                <Box>
+                  <Typography variant="overline" color="textSecondary">Controle de caixa</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{caixa?.status === 'aberto' ? 'Caixa aberto' : 'Caixa fechado'}</Typography>
+                  <Typography variant="caption" color="textSecondary">{caixa?.status === 'aberto' ? `Aberto em ${formatarDataExibicao(caixa.abertoEm || caixa.dataAbertura)} às ${(caixa.abertoEm || caixa.dataAbertura || '').split('T')[1]?.substring(0, 5) || '--:--'}` : 'Abra o caixa para registrar recebimentos, reforços e sangrias.'}</Typography>
+                </Box>
+              </Box>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Typography variant="caption" color="textSecondary">Abertura</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{formatarMoedaCaixa(caixa?.saldoInicial ?? caixa?.valorAbertura ?? 0)}</Typography>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Typography variant="caption" color="textSecondary">Entradas</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#2e7d32' }}>{formatarMoedaCaixa(caixa?.totais?.entradas || 0)}</Typography>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Typography variant="caption" color="textSecondary">Saídas</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#c62828' }}>{formatarMoedaCaixa(caixa?.totais?.saidas || 0)}</Typography>
+            </Grid>
+            <Grid item xs={6} md={2}>
+              <Typography variant="caption" color="textSecondary">Saldo esperado</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#4a148c' }}>{formatarMoedaCaixa(caixa?.saldoAtual || 0)}</Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <Divider sx={{ my: 1 }} />
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {Object.entries(caixa?.totais?.porForma || {}).slice(0, 6).map(([forma, valor]) => (
+                    <Chip key={forma} size="small" label={`${METODOS_CAIXA[forma] || forma}: ${formatarMoedaCaixa(valor)}`} variant="outlined" />
+                  ))}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {caixa?.status === 'aberto' && <Button size="small" variant="outlined" color="success" startIcon={<AddIcon />} onClick={() => abrirDialogMovimentoCaixa('reforco')}>Reforço</Button>}
+                  {caixa?.status === 'aberto' && <Button size="small" variant="outlined" color="warning" startIcon={<SavingsIcon />} onClick={() => abrirDialogMovimentoCaixa('sangria')}>Sangria</Button>}
+                  {caixa?.status === 'aberto' && <Button size="small" variant="outlined" color="error" startIcon={<TrendingDownIcon />} onClick={() => abrirDialogMovimentoCaixa('retirada')}>Retirada</Button>}
+                  <Button size="small" variant="contained" color={caixa?.status === 'aberto' ? 'error' : 'success'} onClick={abrirDialogCaixa}>{caixa?.status === 'aberto' ? 'Conferir e fechar' : 'Abrir caixa'}</Button>
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
 
         {/* Filtro de Período Mobile */}
         <Paper
@@ -2397,6 +2451,95 @@ function FluxoCaixa() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenPrintDialog(false)}>Cancelar</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog de abertura/fechamento profissional do Caixa */}
+        <Dialog open={openCaixaDialog} onClose={() => setOpenCaixaDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: caixa?.status === 'aberto' ? '#f44336' : '#4caf50', color: 'white' }}>
+            {caixa?.status === 'aberto' ? 'Conferência e fechamento do caixa' : 'Abertura de caixa'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              {caixa?.status === 'aberto' ? (
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Alert severity="info">Confira o saldo físico/digital antes de fechar. O sistema calculará a diferença entre o saldo esperado e o valor conferido.</Alert>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth label="Saldo esperado" value={formatarMoedaCaixa(caixa?.saldoAtual || 0)} InputProps={{ readOnly: true }} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth type="number" label="Valor conferido" value={caixaOperacao.valorConferido} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorConferido: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Alert severity={Number(caixaOperacao.valorConferido || 0) === Number(caixa?.saldoAtual || 0) ? 'success' : 'warning'}>
+                      Diferença: {formatarMoedaCaixa(Number(caixaOperacao.valorConferido || 0) - Number(caixa?.saldoAtual || 0))}
+                    </Alert>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField fullWidth multiline rows={3} label="Observação de fechamento" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: conferido com comprovantes PIX/cartão e dinheiro físico." />
+                  </Grid>
+                </Grid>
+              ) : (
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Alert severity="success">Informe o fundo inicial do caixa para começar o turno com rastreabilidade.</Alert>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField fullWidth type="number" label="Valor de abertura" value={caixaOperacao.valorAbertura} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorAbertura: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField fullWidth multiline rows={3} label="Observação de abertura" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: fundo inicial em dinheiro entregue ao operador." />
+                  </Grid>
+                </Grid>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenCaixaDialog(false)}>Cancelar</Button>
+            <Button variant="contained" color={caixa?.status === 'aberto' ? 'error' : 'success'} onClick={handleAbrirFecharCaixa}>{caixa?.status === 'aberto' ? 'Fechar caixa' : 'Abrir caixa'}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog de reforço/sangria/retirada */}
+        <Dialog open={openMovimentoCaixaDialog} onClose={() => setOpenMovimentoCaixaDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>Registrar movimento de caixa</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Tipo</InputLabel>
+                  <Select value={movimentoCaixa.tipo} label="Tipo" onChange={(e) => setMovimentoCaixa({ ...movimentoCaixa, tipo: e.target.value })}>
+                    <MenuItem value="reforco">Reforço</MenuItem>
+                    <MenuItem value="sangria">Sangria</MenuItem>
+                    <MenuItem value="retirada">Retirada</MenuItem>
+                    <MenuItem value="despesa">Despesa avulsa</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth type="number" label="Valor" value={movimentoCaixa.valor} onChange={(e) => setMovimentoCaixa({ ...movimentoCaixa, valor: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Forma</InputLabel>
+                  <Select value={movimentoCaixa.formaPagamento} label="Forma" onChange={(e) => setMovimentoCaixa({ ...movimentoCaixa, formaPagamento: e.target.value })}>
+                    {Object.entries(METODOS_CAIXA).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Descrição" value={movimentoCaixa.descricao} onChange={(e) => setMovimentoCaixa({ ...movimentoCaixa, descricao: e.target.value })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline rows={3} label="Observação" value={movimentoCaixa.observacao} onChange={(e) => setMovimentoCaixa({ ...movimentoCaixa, observacao: e.target.value })} placeholder="Justifique sangrias, retiradas ou reforços para auditoria." />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenMovimentoCaixaDialog(false)}>Cancelar</Button>
+            <Button variant="contained" onClick={handleRegistrarMovimentoCaixa}>Registrar movimento</Button>
           </DialogActions>
         </Dialog>
 

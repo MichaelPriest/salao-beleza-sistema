@@ -32,6 +32,7 @@ import {
   Snackbar,
   InputAdornment,
   Divider,
+  LinearProgress,
   TablePagination,
   Tabs,
   Tab,
@@ -128,7 +129,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
 import { auditoriaService } from '../services/auditoriaService';
-import { caixaService } from '../services/caixaService';
+import { caixaService, METODOS_CAIXA } from '../services/caixaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -375,6 +376,7 @@ function ModernFinanceiro() {
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [anexos, setAnexos] = useState([]);
+  const [caixaOperacao, setCaixaOperacao] = useState({ valorAbertura: 0, valorConferido: 0, observacao: '' });
 
   // Filtros
   const [filtro, setFiltro] = useState('');
@@ -418,10 +420,13 @@ function ModernFinanceiro() {
   // Orçamentos
   const [orcamentos, setOrcamentos] = useState([]);
   const [orcamentoSelecionado, setOrcamentoSelecionado] = useState(null);
+  const [orcamentoForm, setOrcamentoForm] = useState({ ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, metaReceitas: '', metaDespesas: '', observacoes: '' });
 
   // Conciliação
   const [extratoBancario, setExtratoBancario] = useState([]);
   const [conciliacoes, setConciliacoes] = useState([]);
+  const [resultadoConciliacao, setResultadoConciliacao] = useState({ conciliadas: [], pendentes: [] });
+  const [processandoConciliacao, setProcessandoConciliacao] = useState(false);
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -1133,34 +1138,122 @@ function ModernFinanceiro() {
   };
 
   // ==================== CONCILIAÇÃO ====================
-  const handleConciliarExtrato = async (extrato) => {
+  const normalizarValorExtrato = (valor = '') => {
+    const texto = String(valor).replace(/R\$/gi, '').trim();
+    if (!texto) return 0;
+    if (texto.includes(',') && texto.includes('.')) return Number(texto.replace(/\./g, '').replace(',', '.')) || 0;
+    if (texto.includes(',')) return Number(texto.replace(',', '.')) || 0;
+    return Number(texto) || 0;
+  };
+
+  const parseExtratoCSV = (conteudo) => {
+    const linhas = conteudo.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+    if (!linhas.length) return [];
+    const separador = linhas[0].includes(';') ? ';' : ',';
+    const cabecalho = linhas[0].split(separador).map((item) => item.trim().toLowerCase());
+    const indiceData = cabecalho.findIndex((item) => ['data', 'date', 'lançamento', 'lancamento'].some((key) => item.includes(key)));
+    const indiceDescricao = cabecalho.findIndex((item) => ['descrição', 'descricao', 'histórico', 'historico', 'memo'].some((key) => item.includes(key)));
+    const indiceValor = cabecalho.findIndex((item) => ['valor', 'amount', 'crédito', 'credito', 'débito', 'debito'].some((key) => item.includes(key)));
+
+    return linhas.slice(1).map((linha, index) => {
+      const colunas = linha.split(separador).map((item) => item.replace(/^"|"$/g, '').trim());
+      const dataRaw = colunas[indiceData >= 0 ? indiceData : 0];
+      const valorRaw = colunas[indiceValor >= 0 ? indiceValor : colunas.length - 1];
+      const descricaoRaw = colunas[indiceDescricao >= 0 ? indiceDescricao : 1] || 'Lançamento bancário';
+      const partesData = String(dataRaw || '').split(/[/-]/);
+      const dataNormalizada = partesData.length === 3 && partesData[2]?.length === 4
+        ? `${partesData[2]}-${partesData[1].padStart(2, '0')}-${partesData[0].padStart(2, '0')}`
+        : safeToDateString(dataRaw) || formatarDataBrasilia(new Date());
+      return {
+        id: `extrato_${Date.now()}_${index}`,
+        data: dataNormalizada,
+        descricao: descricaoRaw,
+        valor: Math.abs(normalizarValorExtrato(valorRaw)),
+        valorOriginal: normalizarValorExtrato(valorRaw),
+        conciliado: false,
+      };
+    }).filter((item) => item.valor > 0);
+  };
+
+  const localizarTransacaoConciliavel = (item, usadas = new Set()) => transacoesCombinadas.find((transacao) => {
+    if (usadas.has(transacao.id)) return false;
+    if (transacao.conciliado || transacao.statusConciliacao === 'conciliado') return false;
+    const mesmoValor = Math.abs(Number(transacao.valor || 0) - Number(item.valor || 0)) < 0.01;
+    const mesmaData = formatarDataBrasilia(new Date(transacao.dataPagamento || transacao.data)) === formatarDataBrasilia(new Date(item.data));
+    const vencimentoProximo = transacao.dataVencimento && formatarDataBrasilia(new Date(transacao.dataVencimento)) === formatarDataBrasilia(new Date(item.data));
+    return mesmoValor && (mesmaData || vencimentoProximo);
+  });
+
+  const resolverDestinoTransacao = (transacao) => {
+    if (transacao?.origem === 'compra') return { colecao: 'compras', id: transacao.origemId };
+    if (transacao?.origem === 'contas_receber') return { colecao: 'contas_receber', id: transacao.origemId };
+    if (transacao?.origem === 'contas_pagar') return { colecao: 'contas_pagar', id: transacao.origemId };
+    if (transacao?.origem === 'comissao') return { colecao: 'comissoes', id: transacao.origemId };
+    return { colecao: 'transacoes', id: transacao?.origem === 'manual' ? transacao.id : transacao?.origemId || transacao?.id };
+  };
+
+  const processarArquivoConciliacao = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
     try {
-      const novasConciliacoes = [];
-      let conciliadas = 0;
+      setProcessandoConciliacao(true);
+      const conteudo = await file.text();
+      const extrato = parseExtratoCSV(conteudo);
+      setExtratoBancario(extrato);
+      await handleConciliarExtrato(extrato, file.name);
+    } catch (error) {
+      console.error('Erro ao processar extrato:', error);
+      mostrarSnackbar('Erro ao processar extrato bancário. Use CSV com colunas data, descrição e valor.', 'error');
+    } finally {
+      setProcessandoConciliacao(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleConciliarExtrato = async (extrato, arquivoNome = 'extrato.csv') => {
+    try {
+      const usadas = new Set();
+      const conciliadas = [];
+      const pendentes = [];
 
       for (const item of extrato) {
-        const transacaoCorrespondente = transacoesCombinadas.find(t =>
-          Math.abs(t.valor - item.valor) < 0.01 &&
-          formatarDataBrasilia(new Date(t.data)) === formatarDataBrasilia(new Date(item.data))
-        );
-
-        if (transacaoCorrespondente) {
-          novasConciliacoes.push({
-            extratoId: item.id,
-            transacaoId: transacaoCorrespondente.id,
-            transacaoDescricao: transacaoCorrespondente.descricao,
-            valor: item.valor,
-            data: item.data,
-            status: 'conciliado',
-            dataConciliacao: new Date().toISOString(),
-          });
-          conciliadas++;
+        const transacaoCorrespondente = localizarTransacaoConciliavel(item, usadas);
+        if (!transacaoCorrespondente) {
+          pendentes.push(item);
+          continue;
         }
+
+        usadas.add(transacaoCorrespondente.id);
+        const destino = resolverDestinoTransacao(transacaoCorrespondente);
+        const conciliacao = {
+          arquivoNome,
+          extratoId: item.id,
+          extratoDescricao: item.descricao,
+          transacaoId: transacaoCorrespondente.id,
+          transacaoOrigem: transacaoCorrespondente.origem || 'manual',
+          transacaoDescricao: transacaoCorrespondente.descricao,
+          valor: item.valor,
+          data: item.data,
+          status: 'conciliado',
+          dataConciliacao: new Date().toISOString(),
+        };
+        await firebaseService.add('conciliacoes', conciliacao);
+        if (destino.id) {
+          await firebaseService.update(destino.colecao, destino.id, {
+            conciliado: true,
+            statusConciliacao: 'conciliado',
+            conciliadoEm: conciliacao.dataConciliacao,
+            status: transacaoCorrespondente.status === 'pendente' ? 'pago' : transacaoCorrespondente.status,
+            dataPagamento: transacaoCorrespondente.dataPagamento || conciliacao.dataConciliacao,
+            updatedAt: new Date().toISOString(),
+          }).catch(() => null);
+        }
+        conciliadas.push({ ...conciliacao, transacao: transacaoCorrespondente });
       }
 
-      await firebaseService.add('conciliacoes', novasConciliacoes);
+      setResultadoConciliacao({ conciliadas, pendentes });
       await carregarDados();
-      mostrarSnackbar(`✅ Conciliação realizada! ${conciliadas} transações conciliadas.`);
+      mostrarSnackbar(`✅ Conciliação concluída: ${conciliadas.length} conciliada(s), ${pendentes.length} pendente(s).`);
     } catch (error) {
       console.error('Erro ao conciliar:', error);
       mostrarSnackbar('Erro ao conciliar', 'error');
@@ -1168,51 +1261,98 @@ function ModernFinanceiro() {
   };
 
   // ==================== ORÇAMENTOS ====================
+  const resetOrcamentoForm = () => {
+    setOrcamentoSelecionado(null);
+    setOrcamentoForm({ ano: new Date().getFullYear(), mes: new Date().getMonth() + 1, metaReceitas: '', metaDespesas: '', observacoes: '' });
+  };
+
+  const editarOrcamento = (orcamento) => {
+    setOrcamentoSelecionado(orcamento);
+    setOrcamentoForm({
+      ano: orcamento.ano || new Date().getFullYear(),
+      mes: orcamento.mes || new Date().getMonth() + 1,
+      metaReceitas: orcamento.metaReceitas || '',
+      metaDespesas: orcamento.metaDespesas || '',
+      observacoes: orcamento.observacoes || '',
+    });
+  };
+
   const handleSalvarOrcamento = async () => {
     try {
-      const novoOrcamento = {
-        id: Date.now().toString(),
-        ano: new Date().getFullYear(),
-        mes: new Date().getMonth() + 1,
-        metaReceitas: 0,
-        metaDespesas: 0,
-        categorias: {},
-        criadoEm: new Date().toISOString(),
+      const metaReceitas = Number(String(orcamentoForm.metaReceitas || 0).replace(',', '.'));
+      const metaDespesas = Number(String(orcamentoForm.metaDespesas || 0).replace(',', '.'));
+      if (!orcamentoForm.ano || !orcamentoForm.mes) {
+        mostrarSnackbar('Informe ano e mês do orçamento.', 'error');
+        return;
+      }
+      if (metaReceitas < 0 || metaDespesas < 0) {
+        mostrarSnackbar('Metas não podem ser negativas.', 'error');
+        return;
+      }
+
+      const dados = {
+        ano: Number(orcamentoForm.ano),
+        mes: Number(orcamentoForm.mes),
+        metaReceitas,
+        metaDespesas,
+        metaLucro: metaReceitas - metaDespesas,
+        observacoes: orcamentoForm.observacoes || '',
         atualizadoEm: new Date().toISOString(),
       };
 
-      await firebaseService.add('orcamentos', novoOrcamento);
+      if (orcamentoSelecionado?.id) {
+        await firebaseService.update('orcamentos', orcamentoSelecionado.id, dados);
+        mostrarSnackbar('✅ Orçamento atualizado com sucesso!');
+      } else {
+        await firebaseService.add('orcamentos', { ...dados, criadoEm: new Date().toISOString(), categorias: {} });
+        mostrarSnackbar('✅ Orçamento criado com sucesso!');
+      }
+
+      resetOrcamentoForm();
       await carregarDados();
-      mostrarSnackbar('✅ Orçamento criado com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
       mostrarSnackbar('Erro ao salvar orçamento', 'error');
     }
   };
 
+  const excluirOrcamento = async (orcamentoId) => {
+    try {
+      await firebaseService.delete('orcamentos', orcamentoId);
+      if (orcamentoSelecionado?.id === orcamentoId) resetOrcamentoForm();
+      await carregarDados();
+      mostrarSnackbar('Orçamento excluído com sucesso.');
+    } catch (error) {
+      console.error('Erro ao excluir orçamento:', error);
+      mostrarSnackbar('Erro ao excluir orçamento', 'error');
+    }
+  };
+
+  const calcularRealizadoOrcamento = (orcamento) => {
+    const transacoesMes = transacoesCombinadas.filter((transacao) => {
+      const data = safeToDate(transacao.dataPagamento || transacao.data);
+      return data && data.getFullYear() === Number(orcamento.ano) && data.getMonth() + 1 === Number(orcamento.mes) && transacao.status === 'pago';
+    });
+    const receitas = transacoesMes.filter((t) => t.tipo === 'receita').reduce((acc, t) => acc + Number(t.valor || 0), 0);
+    const despesas = transacoesMes.filter((t) => t.tipo === 'despesa').reduce((acc, t) => acc + Number(t.valor || 0), 0);
+    return { receitas, despesas, lucro: receitas - despesas };
+  };
+
   // ==================== CAIXA ====================
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
-        const novoCaixa = await caixaService.abrirCaixa({
-          valorAbertura: 0,
-          observacao: 'Abertura pelo dashboard financeiro',
-        });
-        setCaixa({
-          ...novoCaixa,
-          saldoAtual: Number(novoCaixa.valorAbertura || 0),
-          saldoInicial: Number(novoCaixa.valorAbertura || 0),
-          dataAbertura: novoCaixa.abertoEm || novoCaixa.createdAt,
-          movimentacoes: [],
+        await caixaService.abrirCaixa({
+          valorAbertura: caixaOperacao.valorAbertura,
+          observacao: caixaOperacao.observacao || 'Abertura pelo dashboard financeiro',
         });
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
-        const caixaFechado = await caixaService.fecharCaixa(caixa.id, {
-          valorConferido: caixa.saldoAtual || caixa.totais?.saldoAtual || 0,
-          observacao: 'Fechamento pelo dashboard financeiro',
+        await caixaService.fecharCaixa(caixa.id, {
+          valorConferido: caixaOperacao.valorConferido,
+          observacao: caixaOperacao.observacao || 'Fechamento pelo dashboard financeiro',
         });
-        setCaixa({ ...caixa, ...caixaFechado, status: 'fechado' });
-        mostrarSnackbar('✅ Caixa fechado com sucesso!');
+        mostrarSnackbar('✅ Caixa fechado com conferência registrada!');
       }
       handleCloseCaixaDialog();
       await carregarDados();
@@ -1443,8 +1583,104 @@ function ModernFinanceiro() {
     setTransacaoEditando(null);
   };
 
-  const handleOpenCaixaDialog = () => setOpenCaixaDialog(true);
+  const handleOpenCaixaDialog = () => {
+    setCaixaOperacao({
+      valorAbertura: caixa?.status === 'aberto' ? (caixa.saldoInicial || caixa.valorAbertura || 0) : 0,
+      valorConferido: caixa?.status === 'aberto' ? (caixa.saldoAtual || caixa.totais?.saldoAtual || 0) : 0,
+      observacao: '',
+    });
+    setOpenCaixaDialog(true);
+  };
   const handleCloseCaixaDialog = () => setOpenCaixaDialog(false);
+
+  const handleOpenAnexos = (transacao) => {
+    setTransacaoSelecionada(transacao);
+    setAnexos(transacao?.anexos || []);
+    setOpenAnexoDialog(true);
+  };
+
+  const fileToAnexo = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      id: `${Date.now()}_${file.name}`,
+      nome: file.name,
+      type: file.type,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      url: reader.result,
+      uploadedAt: new Date().toISOString(),
+    });
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const resolverDestinoAnexo = (transacao) => {
+    if (transacao?.origem === 'compra') return { colecao: 'compras', id: transacao.origemId };
+    if (transacao?.origem === 'contas_receber') return { colecao: 'contas_receber', id: transacao.origemId };
+    if (transacao?.origem === 'contas_pagar') return { colecao: 'contas_pagar', id: transacao.origemId };
+    return { colecao: 'transacoes', id: transacao?.origem === 'manual' ? transacao.id : transacao?.origemId || transacao?.id };
+  };
+
+  const handleUploadAnexoTransacao = async (transacao, file) => {
+    if (!file || !transacao) return;
+    try {
+      const anexo = await fileToAnexo(file);
+      const anexosAtualizados = [...(transacao.anexos || []), anexo];
+      const destino = resolverDestinoAnexo(transacao);
+      if (!destino.id) throw new Error('Transação sem identificador para salvar anexo.');
+      await firebaseService.update(destino.colecao, destino.id, { anexos: anexosAtualizados, updatedAt: new Date().toISOString() });
+      setAnexos(anexosAtualizados);
+      setTransacaoSelecionada({ ...transacao, anexos: anexosAtualizados });
+      await carregarDados();
+      mostrarSnackbar('✅ Anexo salvo com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar anexo:', error);
+      mostrarSnackbar(error.message || 'Erro ao salvar anexo', 'error');
+    }
+  };
+
+
+
+
+  const abrirAnexo = (anexo) => {
+    const url = anexo?.url || anexo?.link || anexo?.downloadURL || anexo?.path;
+    if (!url) {
+      mostrarSnackbar('Anexo sem conteúdo para abrir.', 'warning');
+      return;
+    }
+
+    try {
+      if (String(url).startsWith('data:')) {
+        const [meta, base64] = String(url).split(',');
+        const mime = meta.match(/data:(.*?);base64/)?.[1] || anexo.type || 'application/octet-stream';
+        const bytes = atob(base64 || '');
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i += 1) buffer[i] = bytes.charCodeAt(i);
+        const blob = new Blob([buffer], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const janela = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        if (!janela) {
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = anexo.nome || anexo.name || 'anexo';
+          link.click();
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        return;
+      }
+
+      const janela = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!janela) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+      }
+    } catch (error) {
+      console.error('Erro ao abrir anexo:', error);
+      mostrarSnackbar('Não foi possível abrir o anexo.', 'error');
+    }
+  };
 
   const handleOpenDetalhes = (transacao) => {
     setTransacaoSelecionada(transacao);
@@ -2350,7 +2586,7 @@ function ModernFinanceiro() {
                           <TableCell>
                             {transacao.anexos?.length > 0 && (
                               <Tooltip title={`${transacao.anexos.length} anexo(s)`}>
-                                <IconButton size="small" onClick={() => setOpenAnexoDialog(true)}>
+                                <IconButton size="small" onClick={() => handleOpenAnexos(transacao)}>
                                   <AttachFileIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
@@ -2360,7 +2596,7 @@ function ModernFinanceiro() {
                               input.type = 'file';
                               input.onchange = (e) => {
                                 const file = e.target.files[0];
-                                mostrarSnackbar('Anexo enviado com sucesso!');
+                                handleUploadAnexoTransacao(transacao, file);
                               };
                               input.click();
                             }}>
@@ -2586,38 +2822,62 @@ function ModernFinanceiro() {
 
       {/* Dialog de Caixa */}
       <Dialog open={openCaixaDialog} onClose={handleCloseCaixaDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          {caixa?.status === 'aberto' ? '🔒 Fechar Caixa' : '🔓 Abrir Caixa'}
+        <DialogTitle sx={{ bgcolor: caixa?.status === 'aberto' ? '#f44336' : '#4caf50', color: 'white' }}>
+          {caixa?.status === 'aberto' ? '🔒 Conferir e fechar caixa' : '🔓 Abrir caixa agora'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {caixa?.status === 'aberto' ? (
-              <Box>
-                <Alert severity="info" sx={{ mb: 2 }}>Resumo do Caixa</Alert>
-                <List>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#4caf50' }}><MoneyIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Saldo Atual" secondary={formatarMoeda(caixa.saldoAtual)} />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><ReceiptIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Movimentações" secondary={`${caixa.movimentacoes?.length || 0} transações`} />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><CalendarIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Aberto em" secondary={safeToDisplayDate(caixa.dataAbertura) + ' ' + (caixa.dataAbertura ? new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5) : '')} />
-                  </ListItem>
-                </List>
-              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Alert severity="info">Confira dinheiro, PIX, cartões e demais formas antes de encerrar o turno.</Alert>
+                </Grid>
+                <Grid item xs={12} sm={6}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Saldo esperado</Typography><Typography variant="h6" sx={{ fontWeight: 800 }}>{formatarMoeda(caixa.saldoAtual || caixa.totais?.saldoAtual || 0)}</Typography></Paper></Grid>
+                <Grid item xs={12} sm={6}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Movimentações</Typography><Typography variant="h6" sx={{ fontWeight: 800 }}>{caixa.movimentacoes?.length || 0}</Typography></Paper></Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth type="number" label="Valor conferido no caixa" value={caixaOperacao.valorConferido} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorConferido: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                </Grid>
+                <Grid item xs={12}>
+                  <Alert severity={Number(caixaOperacao.valorConferido || 0) === Number(caixa.saldoAtual || caixa.totais?.saldoAtual || 0) ? 'success' : 'warning'}>
+                    Diferença apurada: {formatarMoeda(Number(caixaOperacao.valorConferido || 0) - Number(caixa.saldoAtual || caixa.totais?.saldoAtual || 0))}
+                  </Alert>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth multiline rows={3} label="Observação de fechamento" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: dinheiro conferido, cartões batidos e PIX conciliado." />
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {Object.entries(caixa.totais?.porForma || {}).map(([forma, valor]) => <Chip key={forma} label={`${METODOS_CAIXA[forma] || forma}: ${formatarMoeda(valor)}`} variant="outlined" />)}
+                  </Box>
+                </Grid>
+              </Grid>
             ) : (
-              <Typography variant="body1">Deseja abrir o caixa para iniciar as operações do dia?</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Alert severity="success" icon={<AccountBalanceIcon />}>
+                    Abra o caixa para integrar recebimentos, contas pagas, movimentações e relatórios do financeiro em tempo real.
+                  </Alert>
+                </Grid>
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f1f8e9' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Deseja abrir o caixa agora?</Typography>
+                    <Typography variant="body2" color="textSecondary">Informe o fundo inicial e uma observação para iniciar o controle profissional do turno.</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth type="number" label="Valor de abertura" value={caixaOperacao.valorAbertura} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorAbertura: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth multiline rows={3} label="Observação de abertura" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: fundo inicial entregue ao operador responsável." />
+                </Grid>
+              </Grid>
             )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleCloseCaixaDialog}>Cancelar</Button>
           <Button onClick={handleAbrirFecharCaixa} variant="contained" color={caixa?.status === 'aberto' ? 'error' : 'success'}>
-            {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
+            {caixa?.status === 'aberto' ? 'Fechar com conferência' : 'Abrir caixa'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2628,16 +2888,23 @@ function ModernFinanceiro() {
         <DialogContent>
           {transacaoSelecionada && (
             <Box sx={{ mt: 2 }}>
-              <List>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9c27b0' }}><ReceiptIcon /></Avatar></ListItemAvatar><ListItemText primary="Descrição" secondary={transacaoSelecionada.descricao} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' }}>{transacaoSelecionada.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}</Avatar></ListItemAvatar><ListItemText primary="Valor" secondary={formatarMoeda(transacaoSelecionada.valor)} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={safeToDisplayDate(transacaoSelecionada.data)} /></ListItem>
-                {transacaoSelecionada.dataVencimento && <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={safeToDisplayDate(transacaoSelecionada.dataVencimento)} /></ListItem>}
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem>
-                {transacaoSelecionada.observacoes && <ListItem><ListItemText primary="Observações" secondary={transacaoSelecionada.observacoes} /></ListItem>}
-              </List>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: transacaoSelecionada.tipo === 'receita' ? '#f1f8e9' : '#ffebee' }}>
+                    <Typography variant="overline" color="textSecondary">{transacaoSelecionada.origem || 'manual'}</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>{transacaoSelecionada.descricao}</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 900, color: transacaoSelecionada.tipo === 'receita' ? '#2e7d32' : '#c62828' }}>{formatarMoeda(transacaoSelecionada.valor)}</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={safeToDisplayDate(transacaoSelecionada.data)} /></ListItem></Grid>
+                {transacaoSelecionada.dataVencimento && <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={safeToDisplayDate(transacaoSelecionada.dataVencimento)} /></ListItem></Grid>}
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.anexos?.length ? '#4caf50' : '#9e9e9e' }}><AttachFileIcon /></Avatar></ListItemAvatar><ListItemText primary="Anexos" secondary={transacaoSelecionada.anexos?.length ? `${transacaoSelecionada.anexos.length} anexo(s) incluído(s)` : 'Nenhum anexo incluído'} /></ListItem></Grid>
+                {transacaoSelecionada.observacoes && <Grid item xs={12}><Alert severity="info"><strong>Observações:</strong> {transacaoSelecionada.observacoes}</Alert></Grid>}
+                {transacaoSelecionada.anexos?.length > 0 && <Grid item xs={12}><Button startIcon={<AttachFileIcon />} variant="outlined" onClick={() => handleOpenAnexos(transacaoSelecionada)}>Visualizar anexos</Button></Grid>}
+              </Grid>
             </Box>
           )}
         </DialogContent>
@@ -2649,6 +2916,34 @@ function ModernFinanceiro() {
             </Button>
           )}
         </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Anexos */}
+      <Dialog open={openAnexoDialog} onClose={() => setOpenAnexoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#607d8b', color: 'white' }}><AttachFileIcon sx={{ mr: 1 }} /> Anexos da transação</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 2 }}>Enviar novo anexo<input type="file" hidden onChange={(e) => handleUploadAnexoTransacao(transacaoSelecionada, e.target.files?.[0])} /></Button>
+            <Alert severity={anexos.length ? 'success' : 'info'} sx={{ mb: 2 }}>
+              {anexos.length ? `${anexos.length} anexo(s) incluído(s) nesta movimentação.` : 'Nenhum anexo incluído nesta movimentação.'}
+            </Alert>
+            {anexos.length > 0 && (
+              <List>
+                {anexos.map((anexo, index) => {
+                  const nome = anexo.nome || anexo.name || anexo.filename || `Anexo ${index + 1}`;
+                  const url = anexo.url || anexo.link || anexo.downloadURL || anexo.path || '';
+                  return (
+                    <ListItem key={`${nome}-${index}`} secondaryAction={url ? <Button size="small" startIcon={<VisibilityIcon />} onClick={() => abrirAnexo(anexo)}>Abrir</Button> : null}>
+                      <ListItemAvatar><Avatar sx={{ bgcolor: '#607d8b' }}><AttachFileIcon /></Avatar></ListItemAvatar>
+                      <ListItemText primary={nome} secondary={anexo.tipo || anexo.type || anexo.tamanho || anexo.size || 'Arquivo anexado'} />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenAnexoDialog(false)}>Fechar</Button></DialogActions>
       </Dialog>
 
       {/* Dialog de Relatórios */}
@@ -2753,17 +3048,35 @@ function ModernFinanceiro() {
       </Dialog>
 
       {/* Dialog de Conciliação Bancária */}
-      <Dialog open={openConciliacaoDialog} onClose={() => setOpenConciliacaoDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openConciliacaoDialog} onClose={() => setOpenConciliacaoDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ bgcolor: '#00bcd4', color: 'white' }}><CompareArrowsIcon sx={{ mr: 1 }} /> Conciliação Bancária</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>Faça upload do extrato bancário (CSV/OFX) para conciliar automaticamente.</Alert>
-            <Button variant="outlined" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 3, py: 2 }} onClick={() => { mostrarSnackbar('Funcionalidade em desenvolvimento'); }}>
-              Upload do Extrato Bancário
+            <Alert severity="info" sx={{ mb: 2 }}>Envie um CSV do banco com colunas como Data, Descrição/Histórico e Valor. O sistema cruza automaticamente data e valor com as transações financeiras.</Alert>
+            <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 3, py: 2 }} disabled={processandoConciliacao}>
+              {processandoConciliacao ? 'Processando extrato...' : 'Upload do Extrato Bancário (CSV)'}
+              <input type="file" hidden accept=".csv,text/csv" onChange={processarArquivoConciliacao} />
             </Button>
-            {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom>Últimas Conciliações</Typography>}
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Lançamentos importados</Typography><Typography variant="h5" sx={{ fontWeight: 800 }}>{extratoBancario.length}</Typography></Paper></Grid>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#e8f5e9' }}><Typography variant="caption" color="textSecondary">Conciliados agora</Typography><Typography variant="h5" sx={{ fontWeight: 800, color: '#2e7d32' }}>{resultadoConciliacao.conciliadas.length}</Typography></Paper></Grid>
+              <Grid item xs={12} md={4}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#fff8e1' }}><Typography variant="caption" color="textSecondary">Pendentes de análise</Typography><Typography variant="h5" sx={{ fontWeight: 800, color: '#f57c00' }}>{resultadoConciliacao.pendentes.length}</Typography></Paper></Grid>
+            </Grid>
+
+            {resultadoConciliacao.conciliadas.length > 0 && <Typography variant="subtitle2" gutterBottom>Transações conciliadas</Typography>}
+            {resultadoConciliacao.conciliadas.slice(0, 8).map((conc) => (
+              <Alert key={`${conc.extratoId}_${conc.transacaoId}`} severity="success" sx={{ mb: 1 }}>{safeToDisplayDate(conc.data)} • {conc.transacaoDescricao} • {formatarMoeda(conc.valor)}</Alert>
+            ))}
+
+            {resultadoConciliacao.pendentes.length > 0 && <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Lançamentos pendentes</Typography>}
+            {resultadoConciliacao.pendentes.slice(0, 8).map((item) => (
+              <Alert key={item.id} severity="warning" sx={{ mb: 1 }}>{safeToDisplayDate(item.data)} • {item.descricao} • {formatarMoeda(item.valor)}</Alert>
+            ))}
+
+            {conciliacoes.length > 0 && <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Últimas conciliações salvas</Typography>}
             {conciliacoes.slice(0, 5).map((conc, idx) => (
-              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação realizada em {safeToDisplayDate(conc.dataConciliacao)}</Alert>
+              <Alert key={idx} severity="success" sx={{ mb: 1 }}>Conciliação em {safeToDisplayDate(conc.dataConciliacao)} • {conc.transacaoDescricao || conc.transacaoId} • {formatarMoeda(conc.valor || 0)}</Alert>
             ))}
           </Box>
         </DialogContent>
@@ -2771,14 +3084,41 @@ function ModernFinanceiro() {
       </Dialog>
 
       {/* Dialog de Orçamentos */}
-      <Dialog open={openOrcamentoDialog} onClose={() => setOpenOrcamentoDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openOrcamentoDialog} onClose={() => setOpenOrcamentoDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><AssessmentIcon sx={{ mr: 1 }} /> Orçamentos e Previsões</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Button variant="contained" startIcon={<AddIcon />} fullWidth sx={{ mb: 3 }} onClick={handleSalvarOrcamento}>Criar Novo Orçamento</Button>
-            {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc, idx) => (
-              <Card key={idx} sx={{ mb: 2 }}><CardContent><Typography variant="subtitle1">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {safeToDisplayDate(orc.criadoEm)}</Typography><Button size="small">Editar</Button><Button size="small">Visualizar</Button></CardContent></Card>
-            ))}
+            <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>{orcamentoSelecionado ? 'Editar orçamento' : 'Novo orçamento mensal'}</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={2}><TextField fullWidth type="number" label="Ano" value={orcamentoForm.ano} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, ano: e.target.value })} /></Grid>
+                <Grid item xs={12} md={2}><TextField select fullWidth label="Mês" value={orcamentoForm.mes} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, mes: e.target.value })}>{Array.from({ length: 12 }, (_, i) => <MenuItem key={i + 1} value={i + 1}>{i + 1}</MenuItem>)}</TextField></Grid>
+                <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Meta de receitas" value={orcamentoForm.metaReceitas} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, metaReceitas: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} /></Grid>
+                <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Meta de despesas" value={orcamentoForm.metaDespesas} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, metaDespesas: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} /></Grid>
+                <Grid item xs={12} md={2}><Button fullWidth variant="contained" sx={{ height: '100%' }} onClick={handleSalvarOrcamento}>{orcamentoSelecionado ? 'Atualizar' : 'Criar'}</Button></Grid>
+                <Grid item xs={12}><TextField fullWidth multiline minRows={2} label="Observações" value={orcamentoForm.observacoes} onChange={(e) => setOrcamentoForm({ ...orcamentoForm, observacoes: e.target.value })} /></Grid>
+                {orcamentoSelecionado && <Grid item xs={12}><Button size="small" onClick={resetOrcamentoForm}>Cancelar edição</Button></Grid>}
+              </Grid>
+            </Paper>
+
+            {orcamentos.length === 0 ? <Alert severity="info">Nenhum orçamento criado.</Alert> : orcamentos.map((orc) => {
+              const realizado = calcularRealizadoOrcamento(orc);
+              const percentualReceitas = orc.metaReceitas > 0 ? Math.min(100, (realizado.receitas / orc.metaReceitas) * 100) : 0;
+              const percentualDespesas = orc.metaDespesas > 0 ? Math.min(100, (realizado.despesas / orc.metaDespesas) * 100) : 0;
+              return (
+                <Card key={orc.id} sx={{ mb: 2 }}><CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                    <Box><Typography variant="h6">Orçamento {orc.mes}/{orc.ano}</Typography><Typography variant="body2" color="textSecondary">Criado em: {safeToDisplayDate(orc.criadoEm)} {orc.observacoes && `• ${orc.observacoes}`}</Typography></Box>
+                    <Box><Button size="small" onClick={() => editarOrcamento(orc)}>Editar</Button><Button size="small" color="error" onClick={() => excluirOrcamento(orc.id)}>Excluir</Button></Box>
+                  </Box>
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Receitas</Typography><Typography sx={{ fontWeight: 800, color: '#2e7d32' }}>{formatarMoeda(realizado.receitas)} / {formatarMoeda(orc.metaReceitas || 0)}</Typography><LinearProgress variant="determinate" value={percentualReceitas} color="success" /></Grid>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Despesas</Typography><Typography sx={{ fontWeight: 800, color: '#c62828' }}>{formatarMoeda(realizado.despesas)} / {formatarMoeda(orc.metaDespesas || 0)}</Typography><LinearProgress variant="determinate" value={percentualDespesas} color="warning" /></Grid>
+                    <Grid item xs={12} md={4}><Typography variant="caption" color="textSecondary">Lucro previsto x realizado</Typography><Typography sx={{ fontWeight: 800, color: realizado.lucro >= 0 ? '#2e7d32' : '#c62828' }}>{formatarMoeda(orc.metaLucro || 0)} / {formatarMoeda(realizado.lucro)}</Typography></Grid>
+                  </Grid>
+                </CardContent></Card>
+              );
+            })}
           </Box>
         </DialogContent>
         <DialogActions><Button onClick={() => setOpenOrcamentoDialog(false)}>Fechar</Button></DialogActions>
