@@ -190,6 +190,17 @@ function ClienteLayout() {
   // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
   const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
+  const [configSistema, setConfigSistema] = useState(null);
+
+
+  const carregarConfigSistema = useCallback(async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      setConfigSistema(configs?.[0] || null);
+    } catch (error) {
+      console.warn('ClienteLayout - Erro ao carregar configuração do sistema:', error);
+    }
+  }, []);
 
   // ==========================================
   // FUNÇÃO PARA CARREGAR NOTIFICAÇÕES
@@ -371,6 +382,7 @@ function ClienteLayout() {
     console.log('📌 ClienteLayout - Carregando dados para cliente:', cliente.id);
 
     const carregarDados = async () => {
+      await carregarConfigSistema();
       await carregarNotificacoes();
       await verificarFormulariosPendentes();
     };
@@ -383,7 +395,7 @@ function ClienteLayout() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [cliente, carregarNotificacoes, verificarFormulariosPendentes]);
+  }, [cliente, carregarConfigSistema, carregarNotificacoes, verificarFormulariosPendentes]);
 
   // ==========================================
   // HANDLERS
@@ -453,6 +465,10 @@ function ClienteLayout() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const salaoConfig = configSistema?.salao || {};
+  const logoEstabelecimento = salaoConfig.logo || cliente?.empresa?.sitePublico?.logo || cliente?.empresaLogo || null;
+  const nomeEstabelecimento = salaoConfig.nomeFantasia || salaoConfig.nome || cliente?.empresaNome || 'Portal do Cliente';
 
   const currentTitle = PAGE_TITLES[location.pathname] || (location.pathname.includes('/anamnese') ? 'Anamnese' : 'Área do Cliente');
 
@@ -561,12 +577,12 @@ function ClienteLayout() {
             )}
 
             <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }}>
-              <Avatar sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, mr: 1.5, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
-                <SpaIcon />
+              <Avatar src={logoEstabelecimento || undefined} sx={{ width: { xs: 36, sm: 42 }, height: { xs: 36, sm: 42 }, mr: 1.5, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}>
+                {!logoEstabelecimento && <SpaIcon />}
               </Avatar>
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', display: { xs: 'none', sm: 'block' } }}>
-                  Área do Cliente
+                  {nomeEstabelecimento}
                 </Typography>
                 <Typography variant="h6" noWrap sx={{ color: '#2c2c2c', fontWeight: 800, fontSize: { xs: '1rem', sm: '1.2rem', md: '1.35rem' } }}>
                   {currentTitle}

@@ -11,6 +11,7 @@ import {
   Tooltip,
   Chip,
   Stack,
+  Avatar,
 } from '@mui/material';
 import {
   Copyright as CopyrightIcon,
@@ -19,6 +20,7 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   LocationOn as LocationIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -109,6 +111,11 @@ function Footer() {
   };
 
   const salao = config?.salao || {};
+  const sistema = config?.sistema || {};
+  const nomeSistema = sistema.nome || 'BeautyPro';
+  const versaoSistema = sistema.versao || 'v2.0';
+  const logoEstabelecimento = salao.logo || config?.sitePublico?.logo || '';
+  const nomeEstabelecimento = salao.nomeFantasia || salao.nome || nomeSistema;
 
   // Estilos base do footer
   const footerStyles = {
@@ -142,27 +149,25 @@ function Footer() {
           spacing={2}
         >
           {/* Logo e Nome */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 600,
-                color: '#9c27b0',
-                letterSpacing: 1,
-              }}
-            >
-              {salao.nome || 'BeautyPro'}
-            </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.6 }}>
-              v2.0
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+            <Avatar src={logoEstabelecimento || undefined} sx={{ width: 36, height: 36, bgcolor: '#9c27b0' }}>
+              {!logoEstabelecimento && <BusinessIcon fontSize="small" />}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 700, color: '#fff' }}>
+                {nomeEstabelecimento}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.65 }}>
+                {nomeSistema} • {versaoSistema}
+              </Typography>
+            </Box>
           </Box>
 
           {/* Copyright */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textAlign: 'center' }}>
             <CopyrightIcon sx={{ fontSize: 14, opacity: 0.6 }} />
-            <Typography variant="caption" sx={{ opacity: 0.6 }}>
-              {anoAtual} {salao.nome || 'BeautyPro'}. Todos os direitos reservados.
+            <Typography variant="caption" sx={{ opacity: 0.65 }}>
+              {anoAtual} {nomeEstabelecimento}. Sistema de gestão para salão de beleza.
             </Typography>
           </Box>
 
@@ -216,9 +221,13 @@ function Footer() {
         {/* Informações adicionais para o SiteSalao */}
         {isFullWidthMode && (
           <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ opacity: 0.5 }}>
-              Desenvolvido com ❤️ para seu negócio
-            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center" justifyContent="center">
+              <Typography variant="caption" sx={{ opacity: 0.65 }}>
+                {nomeSistema} {versaoSistema} • Portal administrativo e portal do cliente
+              </Typography>
+              {salao.contato?.email && <Chip size="small" icon={<EmailIcon />} label={salao.contato.email} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)' }} />}
+              {salao.contato?.whatsapp && <Chip size="small" icon={<WhatsAppIcon />} label={salao.contato.whatsapp} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)' }} />}
+            </Stack>
           </Box>
         )}
       </Container>

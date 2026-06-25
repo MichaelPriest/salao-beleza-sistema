@@ -220,6 +220,7 @@ function ModernHeader() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
+  const [configSistema, setConfigSistema] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unidades, setUnidades] = useState([]);
   const [unidadeAtualId, setUnidadeAtualId] = useState('');
@@ -242,7 +243,20 @@ function ModernHeader() {
   const MIN_SEARCH_CHARS = 2;
 
   const isSaasAdmin = usuario ? isSaasPlatformAdmin(usuario) : false;
+  const salaoConfig = configSistema?.salao || {};
+  const logoEstabelecimento = salaoConfig.logo || usuario?.empresa?.sitePublico?.logo || usuario?.empresa?.logo || null;
+  const nomeEstabelecimento = salaoConfig.nomeFantasia || salaoConfig.nome || usuario?.empresaNome || usuario?.empresa?.nome || 'Sistema';
   const isTenantMode = !!getTenantContext().empresaId;
+
+
+  const carregarConfigSistema = useCallback(async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      setConfigSistema(configs?.[0] || null);
+    } catch (error) {
+      console.warn('Header - Erro ao carregar configuração do sistema:', error);
+    }
+  }, []);
 
   const carregarUsuario = () => {
     try {
@@ -286,6 +300,7 @@ function ModernHeader() {
 
   useEffect(() => {
     carregarUsuario();
+    carregarConfigSistema();
     carregarUnidades();
     const handleUsuarioAtualizado = () => { carregarUsuario(); carregarUnidades(); };
     window.addEventListener('usuarioAtualizado', handleUsuarioAtualizado);
@@ -421,9 +436,15 @@ function ModernHeader() {
           sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }}>
           <Toolbar sx={{ minHeight: 56, px: 1 }}>
             <IconButton edge="start" color="inherit" onClick={() => setMobileMenuOpen(true)} sx={{ mr: 1 }}><MenuIcon /></IconButton>
-            <Typography variant="subtitle1" noWrap component="div" sx={{ fontWeight: 600, color: '#667eea', flex: 1 }}>
-              {isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'}`}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+              <Avatar src={logoEstabelecimento || undefined} sx={{ width: 34, height: 34, bgcolor: '#667eea' }}>
+                {!logoEstabelecimento && <BusinessIcon fontSize="small" />}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" noWrap sx={{ fontWeight: 800, color: '#667eea' }}>{nomeEstabelecimento}</Typography>
+                <Typography variant="caption" noWrap sx={{ display: 'block', color: 'text.secondary' }}>{isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'}`}</Typography>
+              </Box>
+            </Box>
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
               {!isSaasAdmin && <IconButton color="inherit"><SearchIcon /></IconButton>}
               {renderCaixaStatusChip(true)}
@@ -447,16 +468,15 @@ function ModernHeader() {
       sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }}>
       <Toolbar>
         {/* ✅ CORRIGIDO: Box no lugar de Stack */}
-        <Typography variant="h6" noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' } }}>
-          {isSaasAdmin && !isTenantMode ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AdminIcon sx={{ color: '#667eea' }} />
-              <span>Painel SaaS</span>
-            </Box>
-          ) : (
-            <>Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋</>
-          )}
-        </Typography>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.5, minWidth: 220 }}>
+          <Avatar src={logoEstabelecimento || undefined} sx={{ width: 42, height: 42, bgcolor: '#667eea' }}>
+            {!logoEstabelecimento && (isSaasAdmin && !isTenantMode ? <AdminIcon /> : <BusinessIcon />)}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800, color: '#2c2c2c' }}>{nomeEstabelecimento}</Typography>
+            <Typography variant="caption" noWrap color="text.secondary">{isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'} 👋`}</Typography>
+          </Box>
+        </Box>
 
         {!(isSaasAdmin && !isTenantMode) && (
           <Search isMobile={false}>
