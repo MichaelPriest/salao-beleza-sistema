@@ -751,7 +751,8 @@ function SiteSalao() {
                   sx={{
                     width: '100%',
                     height: { xs: 260, md: 420 },
-                    objectFit: 'cover',
+                    objectFit: 'contain',
+                    bgcolor: 'rgba(255,255,255,0.92)',
                     borderRadius: layoutStyles.cardRadius,
                     boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
                     transition: 'all 0.4s ease'
@@ -787,7 +788,8 @@ function SiteSalao() {
                             sx={{
                               width: '100%',
                               height: 80,
-                              objectFit: 'cover',
+                              objectFit: 'contain',
+                              bgcolor: 'rgba(255,255,255,0.9)',
                               borderRadius: 2,
                               cursor: 'pointer',
                               opacity: bannerAtual === index ? 1 : 0.65,

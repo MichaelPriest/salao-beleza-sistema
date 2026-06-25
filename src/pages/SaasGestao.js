@@ -805,7 +805,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                     <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('bannerUrl', e)} />
                   </Button>
                   <Typography variant="caption" color="text.secondary">As imagens de logo e banner são salvas em base64; não é necessário informar URL externa.</Typography>
-                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
+                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'contain', bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
                   {portalForm.bannerUrl && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, bannerUrl: '' })}>Remover banner</Button>}
                 </Stack>
               </Grid>
@@ -816,7 +816,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                       <Box><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Banners adicionais</Typography><Typography variant="caption" color="text.secondary">Inclua várias imagens para destacar promoções, equipe, ambiente ou campanhas.</Typography></Box>
                       <Button variant="outlined" component="label" size="small">Adicionar imagens<input type="file" accept="image/*" multiple hidden onChange={handlePortalBannerGaleriaChange} /></Button>
                     </Box>
-                    <Grid container spacing={1}>{(portalForm.bannerGaleria || []).map((banner) => (<Grid item xs={6} md={3} key={banner.id}><Box component="img" src={banner.url} alt={banner.nome} sx={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} /><Button color="error" size="small" onClick={() => removerBannerGaleria(banner.id)}>Remover</Button></Grid>))}</Grid>
+                    <Grid container spacing={1}>{(portalForm.bannerGaleria || []).map((banner) => (<Grid item xs={6} md={3} key={banner.id}><Box component="img" src={banner.url} alt={banner.nome} sx={{ width: '100%', height: 110, objectFit: 'contain', bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} /><Button color="error" size="small" onClick={() => removerBannerGaleria(banner.id)}>Remover</Button></Grid>))}</Grid>
                     {(portalForm.bannerGaleria || []).length === 0 && <Typography variant="caption" color="text.secondary">Nenhum banner adicional cadastrado.</Typography>}
                   </Stack>
                 </Paper>
