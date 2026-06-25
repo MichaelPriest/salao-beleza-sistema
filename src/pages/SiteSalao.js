@@ -230,6 +230,7 @@ function SiteSalao() {
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
+  const [bannerAtual, setBannerAtual] = useState(0);
   const [config, setConfig] = useState(null);
   const [servicos, setServicos] = useState([]);
   const [profissionais, setProfissionais] = useState([]);
@@ -427,6 +428,34 @@ function SiteSalao() {
     return lastUpdate.toLocaleString('pt-BR');
   };
 
+  const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
+  const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
+  const sitePublico = config?.sitePublico || {};
+  const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
+  const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
+  const bannerGaleriaPublica = sitePublico.mostrarBanner !== false
+    ? [bannerUrl, ...(sitePublico.bannerGaleria || []).map((banner) => banner.url || banner)].filter(Boolean)
+    : [];
+  const temaLayout = sitePublico.temaLayout || 'moderno';
+  const mostrarServicos = sitePublico.mostrarServicos !== false;
+  const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
+  const mostrarContato = sitePublico.mostrarContato !== false;
+  const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
+  const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
+  const diferenciaisPublicos = String(sitePublico.diferenciais || '').split(',').map((item) => item.trim()).filter(Boolean);
+  useEffect(() => {
+    if (bannerGaleriaPublica.length <= 1) {
+      setBannerAtual(0);
+      return undefined;
+    }
+    const interval = setInterval(() => {
+      setBannerAtual((atual) => (atual + 1) % bannerGaleriaPublica.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [bannerGaleriaPublica.length]);
+
+  const bannerAtivo = bannerGaleriaPublica[bannerAtual] || bannerGaleriaPublica[0] || bannerUrl;
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -449,19 +478,6 @@ function SiteSalao() {
     );
   }
 
-  const salaoNome = sanitizarString(config?.salao?.nome, 'Beauty Pro');
-  const salaoLogo = config?.salao?.logo ? String(config.salao.logo) : null;
-  const sitePublico = config?.sitePublico || {};
-  const corPrimaria = sitePublico.corPrimaria || '#9c27b0';
-  const bannerUrl = sitePublico.mostrarBanner !== false ? (sitePublico.bannerUrl || config?.salao?.bannerUrl) : null;
-  const bannerGaleriaPublica = sitePublico.mostrarBanner !== false ? [bannerUrl, ...(sitePublico.bannerGaleria || []).map((banner) => banner.url || banner)].filter(Boolean) : [];
-  const temaLayout = sitePublico.temaLayout || 'moderno';
-  const mostrarServicos = sitePublico.mostrarServicos !== false;
-  const mostrarProfissionais = sitePublico.mostrarProfissionais !== false;
-  const mostrarContato = sitePublico.mostrarContato !== false;
-  const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
-  const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
-  const diferenciaisPublicos = String(sitePublico.diferenciais || '').split(',').map((item) => item.trim()).filter(Boolean);
   const menuItems = BASE_MENU_ITEMS.filter((item) => {
     if (item.id === 'servicos') return mostrarServicos;
     if (item.id === 'profissionais') return mostrarProfissionais;
@@ -727,9 +743,62 @@ function SiteSalao() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5 }}
             >
-              <Box>
-                <Box component="img" src={bannerGaleriaPublica[0] || bannerUrl} alt="Salão de Beleza" sx={{ width: '100%', height: 'auto', borderRadius: layoutStyles.cardRadius, boxShadow: '0 20px 40px rgba(156,39,176,0.2)' }} />
-                {bannerGaleriaPublica.length > 1 && <Grid container spacing={1} sx={{ mt: 1 }}>{bannerGaleriaPublica.slice(1, 5).map((img, index) => (<Grid item xs={3} key={index}><Box component="img" src={img} alt={`Banner ${index + 2}`} sx={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 2, border: `2px solid ${corPrimaria}` }} /></Grid>))}</Grid>}
+              <Box sx={{ position: 'relative' }}>
+                <Box
+                  component="img"
+                  src={bannerAtivo}
+                  alt="Salão de Beleza"
+                  sx={{
+                    width: '100%',
+                    height: { xs: 260, md: 420 },
+                    objectFit: 'cover',
+                    borderRadius: layoutStyles.cardRadius,
+                    boxShadow: '0 20px 40px rgba(156,39,176,0.2)',
+                    transition: 'all 0.4s ease'
+                  }}
+                />
+                {bannerGaleriaPublica.length > 1 && (
+                  <>
+                    <Box sx={{ position: 'absolute', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      {bannerGaleriaPublica.map((_, index) => (
+                        <Box
+                          key={index}
+                          onClick={() => setBannerAtual(index)}
+                          sx={{
+                            width: bannerAtual === index ? 28 : 10,
+                            height: 10,
+                            borderRadius: 999,
+                            bgcolor: bannerAtual === index ? corPrimaria : 'rgba(255,255,255,0.85)',
+                            cursor: 'pointer',
+                            border: '1px solid rgba(0,0,0,0.12)',
+                            transition: 'all 0.25s ease'
+                          }}
+                        />
+                      ))}
+                    </Box>
+                    <Grid container spacing={1} sx={{ mt: 1 }}>
+                      {bannerGaleriaPublica.slice(0, 4).map((img, index) => (
+                        <Grid item xs={3} key={index}>
+                          <Box
+                            component="img"
+                            src={img}
+                            alt={`Banner ${index + 1}`}
+                            onClick={() => setBannerAtual(index)}
+                            sx={{
+                              width: '100%',
+                              height: 80,
+                              objectFit: 'cover',
+                              borderRadius: 2,
+                              cursor: 'pointer',
+                              opacity: bannerAtual === index ? 1 : 0.65,
+                              border: `2px solid ${bannerAtual === index ? corPrimaria : 'transparent'}`
+                            }}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </>
+                )}
               </Box>
             </motion.div>
           </Grid>
