@@ -115,6 +115,11 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     mostrarAreaRestrita: true,
     mostrarRedesSociais: true,
     mostrarBanner: true,
+    chamadaPrincipal: 'Beleza, tecnologia e cuidado em um só lugar.',
+    diferenciais: 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+    depoimentoDestaque: '',
+    horarioAtendimento: '',
+    enderecoPublico: '',
   });
 
   const planoAtual = useMemo(() => {
@@ -326,6 +331,11 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
           mostrarAreaRestrita: portalForm.mostrarAreaRestrita,
           mostrarRedesSociais: portalForm.mostrarRedesSociais,
           mostrarBanner: portalForm.mostrarBanner,
+          chamadaPrincipal: portalForm.chamadaPrincipal,
+          diferenciais: portalForm.diferenciais,
+          depoimentoDestaque: portalForm.depoimentoDestaque,
+          horarioAtendimento: portalForm.horarioAtendimento,
+          enderecoPublico: portalForm.enderecoPublico,
         }
       });
       setEmpresa(atualizada);
@@ -345,6 +355,11 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         mostrarAreaRestrita: atualizada.sitePublico?.mostrarAreaRestrita !== false,
         mostrarRedesSociais: atualizada.sitePublico?.mostrarRedesSociais !== false,
         mostrarBanner: atualizada.sitePublico?.mostrarBanner !== false,
+        chamadaPrincipal: atualizada.sitePublico?.chamadaPrincipal || 'Beleza, tecnologia e cuidado em um só lugar.',
+        diferenciais: atualizada.sitePublico?.diferenciais || 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+        depoimentoDestaque: atualizada.sitePublico?.depoimentoDestaque || '',
+        horarioAtendimento: atualizada.sitePublico?.horarioAtendimento || '',
+        enderecoPublico: atualizada.sitePublico?.enderecoPublico || '',
       });
       toast.success('Página inicial da empresa atualizada.');
     } catch (error) {
@@ -754,6 +769,21 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
               </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth multiline minRows={2} label="Chamada principal" value={portalForm.chamadaPrincipal} onChange={(e) => setPortalForm({ ...portalForm, chamadaPrincipal: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth multiline minRows={2} label="Diferenciais/benefícios" value={portalForm.diferenciais} onChange={(e) => setPortalForm({ ...portalForm, diferenciais: e.target.value })} helperText="Separe por vírgulas para aparecer em cards no site." />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Horário de atendimento" value={portalForm.horarioAtendimento} onChange={(e) => setPortalForm({ ...portalForm, horarioAtendimento: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Endereço público" value={portalForm.enderecoPublico} onChange={(e) => setPortalForm({ ...portalForm, enderecoPublico: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Depoimento em destaque" value={portalForm.depoimentoDestaque} onChange={(e) => setPortalForm({ ...portalForm, depoimentoDestaque: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Página ativa" value={portalForm.ativo ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, ativo: e.target.value === 'sim' })}>

@@ -460,6 +460,7 @@ function SiteSalao() {
   const mostrarContato = sitePublico.mostrarContato !== false;
   const mostrarAreaRestrita = sitePublico.mostrarAreaRestrita !== false;
   const mostrarRedesSociais = sitePublico.mostrarRedesSociais !== false;
+  const diferenciaisPublicos = String(sitePublico.diferenciais || '').split(',').map((item) => item.trim()).filter(Boolean);
   const menuItems = BASE_MENU_ITEMS.filter((item) => {
     if (item.id === 'servicos') return mostrarServicos;
     if (item.id === 'profissionais') return mostrarProfissionais;
@@ -692,7 +693,7 @@ function SiteSalao() {
                 {layoutStyles.title.includes('Beleza') ? <>Realce sua <span style={{ color: corPrimaria }}>Beleza</span></> : layoutStyles.title}
               </Typography>
               <Typography variant="h5" color="textSecondary" sx={{ mb: 3, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                {sitePublico.subtitulo || 'O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.'}
+                {sitePublico.chamadaPrincipal || sitePublico.subtitulo || 'O melhor salão para cuidar de você com profissionais qualificados e atendimento personalizado.'}
               </Typography>
               {mostrarAreaRestrita && (
                 <>
@@ -973,6 +974,23 @@ function SiteSalao() {
           </motion.div>
         </Container>
       </Box>
+      )}
+
+      {(diferenciaisPublicos.length > 0 || sitePublico.horarioAtendimento || sitePublico.enderecoPublico || sitePublico.depoimentoDestaque) && (
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Grid container spacing={2}>
+            {diferenciaisPublicos.map((item, index) => (
+              <Grid item xs={12} md={4} key={index}>
+                <Paper elevation={0} sx={{ p: 2.5, height: '100%', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: corPrimaria }}>{item}</Typography>
+                </Paper>
+              </Grid>
+            ))}
+            {sitePublico.horarioAtendimento && <Grid item xs={12} md={4}><Alert severity="info">Horário: {sitePublico.horarioAtendimento}</Alert></Grid>}
+            {sitePublico.enderecoPublico && <Grid item xs={12} md={4}><Alert severity="success">Endereço: {sitePublico.enderecoPublico}</Alert></Grid>}
+            {sitePublico.depoimentoDestaque && <Grid item xs={12}><Alert severity="warning">“{sitePublico.depoimentoDestaque}”</Alert></Grid>}
+          </Grid>
+        </Container>
       )}
 
       {/* Serviços Section */}

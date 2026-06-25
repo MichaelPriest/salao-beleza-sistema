@@ -1452,6 +1452,46 @@ function ModernFinanceiro() {
     setOpenAnexoDialog(true);
   };
 
+  const fileToAnexo = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      id: `${Date.now()}_${file.name}`,
+      nome: file.name,
+      type: file.type,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      url: reader.result,
+      uploadedAt: new Date().toISOString(),
+    });
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const resolverDestinoAnexo = (transacao) => {
+    if (transacao?.origem === 'compra') return { colecao: 'compras', id: transacao.origemId };
+    if (transacao?.origem === 'contas_receber') return { colecao: 'contas_receber', id: transacao.origemId };
+    if (transacao?.origem === 'contas_pagar') return { colecao: 'contas_pagar', id: transacao.origemId };
+    return { colecao: 'transacoes', id: transacao?.origem === 'manual' ? transacao.id : transacao?.origemId || transacao?.id };
+  };
+
+  const handleUploadAnexoTransacao = async (transacao, file) => {
+    if (!file || !transacao) return;
+    try {
+      const anexo = await fileToAnexo(file);
+      const anexosAtualizados = [...(transacao.anexos || []), anexo];
+      const destino = resolverDestinoAnexo(transacao);
+      if (!destino.id) throw new Error('Transação sem identificador para salvar anexo.');
+      await firebaseService.update(destino.colecao, destino.id, { anexos: anexosAtualizados, updatedAt: new Date().toISOString() });
+      setAnexos(anexosAtualizados);
+      setTransacaoSelecionada({ ...transacao, anexos: anexosAtualizados });
+      await carregarDados();
+      mostrarSnackbar('✅ Anexo salvo com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar anexo:', error);
+      mostrarSnackbar(error.message || 'Erro ao salvar anexo', 'error');
+    }
+  };
+
+
 
   const handleOpenDetalhes = (transacao) => {
     setTransacaoSelecionada(transacao);
@@ -2367,7 +2407,7 @@ function ModernFinanceiro() {
                               input.type = 'file';
                               input.onchange = (e) => {
                                 const file = e.target.files[0];
-                                mostrarSnackbar('Anexo enviado com sucesso!');
+                                handleUploadAnexoTransacao(transacao, file);
                               };
                               input.click();
                             }}>
@@ -2694,6 +2734,7 @@ function ModernFinanceiro() {
         <DialogTitle sx={{ bgcolor: '#607d8b', color: 'white' }}><AttachFileIcon sx={{ mr: 1 }} /> Anexos da transação</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
+            <Button variant="outlined" component="label" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 2 }}>Enviar novo anexo<input type="file" hidden onChange={(e) => handleUploadAnexoTransacao(transacaoSelecionada, e.target.files?.[0])} /></Button>
             <Alert severity={anexos.length ? 'success' : 'info'} sx={{ mb: 2 }}>
               {anexos.length ? `${anexos.length} anexo(s) incluído(s) nesta movimentação.` : 'Nenhum anexo incluído nesta movimentação.'}
             </Alert>
