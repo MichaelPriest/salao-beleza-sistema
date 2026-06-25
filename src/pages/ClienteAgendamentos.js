@@ -126,23 +126,25 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
       <Card 
         variant="outlined" 
         sx={{ 
-          mb: 1.5,
+          mb: 2,
           borderLeft: '4px solid',
           borderLeftColor: getStatusColor(agendamento.status),
-          borderRadius: 1.5,
+          borderRadius: 3,
+          boxShadow: '0 10px 26px rgba(156,39,176,0.08)',
+          borderColor: 'rgba(156,39,176,0.12)',
         }}
       >
-        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.25 }, '&:last-child': { pb: { xs: 2, sm: 2.25 } } }}>
           {/* Cabeçalho com data e status */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <CalendarIcon sx={{ color: '#9c27b0', fontSize: 16 }} />
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              <CalendarIcon sx={{ color: '#9c27b0', fontSize: 18 }} />
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 {formatarData(agendamento.data)}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
-                <TimeIcon sx={{ color: '#ff4081', fontSize: 14 }} />
-                <Typography variant="caption" color="textSecondary">
+                <TimeIcon sx={{ color: '#ff4081', fontSize: 17 }} />
+                <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
                   {agendamento.horario}
                 </Typography>
               </Box>
@@ -154,14 +156,13 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
                 bgcolor: getStatusBg(agendamento.status),
                 color: getStatusColor(agendamento.status),
                 fontWeight: 600,
-                height: 20,
-                fontSize: '0.6rem'
+                height: 24
               }}
             />
           </Box>
 
           {/* Serviço */}
-          <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75, color: '#2c2c2c' }}>
             {agendamento.quantidadeServicos > 1 
               ? `${agendamento.quantidadeServicos} serviços` 
               : agendamento.servicosNomes || agendamento.servicoNome}
@@ -175,14 +176,14 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
                 label={servico.nome}
                 size="small"
                 variant="outlined"
-                sx={{ fontSize: '0.6rem', height: 18 }}
+                sx={{ height: 24 }}
               />
             ))}
             {agendamento.servicos?.length > 1 && (
               <Chip
                 label={`+${agendamento.servicos.length - 1}`}
                 size="small"
-                sx={{ fontSize: '0.6rem', height: 18 }}
+                sx={{ height: 24 }}
               />
             )}
           </Box>
@@ -192,16 +193,16 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Avatar 
                 src={fotoProfissional}
-                sx={{ width: 20, height: 20, bgcolor: '#ff9800' }}
+                sx={{ width: 28, height: 28, bgcolor: '#ff9800', fontSize: '0.85rem' }}
               >
                 {!fotoProfissional && (nomeProfissional?.charAt(0) || '?')}
               </Avatar>
-              <Typography variant="caption">
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {nomeProfissional}
               </Typography>
             </Box>
             {agendamento.valorTotal > 0 && (
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0', fontSize: '0.8rem' }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#9c27b0', fontSize: { xs: '0.9rem', sm: '0.95rem' } }}>
                 R$ {agendamento.valorTotal.toFixed(2)}
               </Typography>
             )}
@@ -213,7 +214,7 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
               size="small"
               variant="text"
               onClick={() => onDetalhes(agendamento)}
-              sx={{ color: '#9c27b0', fontSize: '0.7rem', minWidth: 'auto', p: '4px 8px' }}
+              sx={{ color: '#9c27b0', fontWeight: 700, minWidth: 'auto', px: 1.25 }}
             >
               Detalhes
             </Button>
@@ -223,7 +224,7 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
                 variant="text"
                 color="error"
                 onClick={() => onCancelar(agendamento)}
-                sx={{ fontSize: '0.7rem', minWidth: 'auto', p: '4px 8px' }}
+                sx={{ fontWeight: 700, minWidth: 'auto', px: 1.25 }}
               >
                 Cancelar
               </Button>
@@ -232,7 +233,7 @@ const MobileAgendamentoCard = ({ agendamento, profissional, onDetalhes, onCancel
 
           {/* Observações (se houver) */}
           {agendamento.observacoes && (
-            <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.6rem' }}>
+            <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.78rem' }}>
               Obs: {agendamento.observacoes}
             </Typography>
           )}
@@ -681,38 +682,31 @@ function ClienteAgendamentos() {
   }
 
   return (
-    <Box sx={{ pb: 7 }}>
+    <Box sx={{ pb: 7, maxWidth: 1120, mx: 'auto', px: { xs: 0, sm: 1 } }}>
       {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        p: 2,
-        bgcolor: 'white',
-        borderBottom: '1px solid #f0f0f0',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-      }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#9c27b0' }}>
-          Meus Agendamentos
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton size="small" onClick={() => setOpenFilterDrawer(true)}>
-            <Badge badgeContent={filterStatus !== 'todos' ? 1 : 0} color="secondary">
-              <FilterIcon fontSize="small" />
-            </Badge>
-          </IconButton>
-          <IconButton size="small" onClick={carregarDados}>
-            <RefreshIcon fontSize="small" />
-          </IconButton>
+      <Paper sx={{ p: { xs: 2, sm: 2.5 }, mb: 2, borderRadius: 3, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800 }}>Meus Agendamentos</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>Acompanhe próximos horários, histórico e detalhes dos serviços.</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton size="small" onClick={() => setOpenFilterDrawer(true)} sx={{ bgcolor: 'rgba(255,255,255,0.16)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.26)' } }}>
+              <Badge badgeContent={filterStatus !== 'todos' ? 1 : 0} color="secondary">
+                <FilterIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+            <IconButton size="small" onClick={carregarDados} sx={{ bgcolor: 'rgba(255,255,255,0.16)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.26)' } }}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
-      </Box>
+      </Paper>
 
       {/* Cards de Resumo */}
-      <Grid container spacing={1} sx={{ p: 2, pb: 1 }}>
+      <Grid container spacing={1.5} sx={{ mb: 2 }}>
         <Grid item xs={4}>
-          <Card sx={{ textAlign: 'center', py: 1 }}>
+          <Card sx={{ textAlign: 'center', py: 1.5, borderRadius: 3, boxShadow: '0 8px 20px rgba(0,0,0,0.06)' }}>
             <Typography variant="body2" sx={{ fontWeight: 700, color: '#9c27b0' }}>
               {agendamentosFuturos.length}
             </Typography>
@@ -720,7 +714,7 @@ function ClienteAgendamentos() {
           </Card>
         </Grid>
         <Grid item xs={4}>
-          <Card sx={{ textAlign: 'center', py: 1 }}>
+          <Card sx={{ textAlign: 'center', py: 1.5, borderRadius: 3, boxShadow: '0 8px 20px rgba(0,0,0,0.06)' }}>
             <Typography variant="body2" sx={{ fontWeight: 700, color: '#ff9800' }}>
               {agendamentos.filter(a => a.status === 'pendente').length}
             </Typography>
@@ -728,7 +722,7 @@ function ClienteAgendamentos() {
           </Card>
         </Grid>
         <Grid item xs={4}>
-          <Card sx={{ textAlign: 'center', py: 1 }}>
+          <Card sx={{ textAlign: 'center', py: 1.5, borderRadius: 3, boxShadow: '0 8px 20px rgba(0,0,0,0.06)' }}>
             <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>
               {agendamentos.filter(a => a.status === 'confirmado').length}
             </Typography>
@@ -738,7 +732,7 @@ function ClienteAgendamentos() {
       </Grid>
 
       {/* Lista de Agendamentos */}
-      <Box sx={{ px: 2 }}>
+      <Box>
         {/* Próximos Agendamentos */}
         {agendamentosFuturos.length > 0 && (
           <>
@@ -1060,7 +1054,7 @@ function ClienteAgendamentos() {
                   <Typography variant="caption" color="textSecondary">Serviços</Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
                     {selectedAgendamento.servicos?.map((s, i) => (
-                      <Chip key={i} label={s.nome} size="small" sx={{ fontSize: '0.6rem' }} />
+                      <Chip key={i} label={s.nome} size="small" sx={{ fontSize: '0.78rem' }} />
                     ))}
                   </Box>
                 </Grid>
@@ -1078,7 +1072,7 @@ function ClienteAgendamentos() {
                     label={selectedAgendamento.status}
                     color={getStatusColor(selectedAgendamento.status)}
                     size="small"
-                    sx={{ height: 20, fontSize: '0.6rem' }}
+                    sx={{ height: 20, fontSize: '0.78rem' }}
                   />
                 </Grid>
               </Grid>
