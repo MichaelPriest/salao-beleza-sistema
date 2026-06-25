@@ -472,17 +472,6 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
 
   return (
     <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
-        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Trial, onboarding e ativação SaaS integrados</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Acompanhe empresa, plano/trial, etapa atual e responsável pela implantação dentro da gestão da empresa.</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Empresa" value={novoOnboarding.empresa} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, empresa: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Plano/trial" value={novoOnboarding.plano} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, plano: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Etapa atual" value={novoOnboarding.etapa} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, etapa: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={registrarOnboarding}>Registrar onboarding</Button></Grid>
-        </Grid>
-        {onboardings.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{onboardings.map((item) => <Chip key={item.id} label={`${item.empresa} • ${item.plano || 'plano'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
-      </Paper>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
@@ -498,6 +487,17 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         </Stack>
       </Stack>
 
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Trial, onboarding e ativação SaaS integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Acompanhe empresa, plano/trial, etapa atual e responsável pela implantação dentro da gestão da empresa.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Empresa" value={novoOnboarding.empresa} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, empresa: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Plano/trial" value={novoOnboarding.plano} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, plano: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Etapa atual" value={novoOnboarding.etapa} onChange={(e) => setNovoOnboarding({ ...novoOnboarding, etapa: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={registrarOnboarding}>Registrar onboarding</Button></Grid>
+        </Grid>
+        {onboardings.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{onboardings.map((item) => <Chip key={item.id} label={`${item.empresa} • ${item.plano || 'plano'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
+      </Paper>
       {!empresa && (
         <Alert severity="info" sx={{ mb: 3 }}>
           Cadastre a sua empresa para ativar o acesso. O sistema vai criar a unidade principal e iniciar um trial automaticamente.

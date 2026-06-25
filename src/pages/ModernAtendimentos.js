@@ -1084,17 +1084,6 @@ function ModernAtendimentos() {
 
   return (
     <Box>
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
-        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Comanda digital e caixa integrados</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Lance serviços, produtos e valor total no fluxo de atendimentos antes de finalizar o caixa.</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}><TextField label="Cliente/comanda" value={novaComandaDigital.cliente} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, cliente: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Serviços e produtos" value={novaComandaDigital.itens} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, itens: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><TextField label="Valor total" value={novaComandaDigital.valor} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, valor: e.target.value })} fullWidth /></Grid>
-          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={abrirComandaDigital}>Abrir comanda</Button></Grid>
-        </Grid>
-        {comandasDigitais.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{comandasDigitais.map((item) => <Chip key={item.id} label={`${item.cliente} • R$ ${item.valor || '0'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
-      </Paper>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700, color: '#9c27b0' }}>
@@ -1120,6 +1109,17 @@ function ModernAtendimentos() {
         </Button>
       </Box>
 
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 4, bgcolor: '#fff8fb', border: '1px solid rgba(156, 39, 176, 0.16)' }}>
+        <Typography variant="h6" sx={{ fontWeight: 900, color: '#4a148c', mb: 1 }}>Comanda digital e caixa integrados</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>Lance serviços, produtos e valor total no fluxo de atendimentos antes de finalizar o caixa.</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={3}><TextField label="Cliente/comanda" value={novaComandaDigital.cliente} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, cliente: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Serviços e produtos" value={novaComandaDigital.itens} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, itens: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><TextField label="Valor total" value={novaComandaDigital.valor} onChange={(e) => setNovaComandaDigital({ ...novaComandaDigital, valor: e.target.value })} fullWidth /></Grid>
+          <Grid item xs={12} md={3}><Button variant="contained" fullWidth sx={{ height: '100%' }} onClick={abrirComandaDigital}>Abrir comanda</Button></Grid>
+        </Grid>
+        {comandasDigitais.length > 0 && <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>{comandasDigitais.map((item) => <Chip key={item.id} label={`${item.cliente} • R$ ${item.valor || '0'} • ${item.status}`} color="secondary" variant="outlined" />)}</Box>}
+      </Paper>
       {/* Cards de Estatísticas - Adaptados por cargo */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 4 : 2.4}>
