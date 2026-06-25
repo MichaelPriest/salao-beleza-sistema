@@ -35,17 +35,16 @@ import {
   Spa as SpaIcon,
   ArrowBack as ArrowBackIcon,
   Google as GoogleIcon,
-  Person as PersonIcon,
   Phone as PhoneIcon,
   Cake as CakeIcon,
-  Wc as WcIcon,
   LocationOn as LocationIcon,
   Badge as BadgeIcon,
+  FormatQuote as FormatQuoteIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
-import { firebaseService } from '../services/firebase';
 import { saasService } from '../services/saasService';
 import { formatarCPF, removerMascaraCPF, validarCPF } from '../utils/cpfUtils';
 
@@ -71,6 +70,7 @@ function ClienteLogin() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [empresaPublica, setEmpresaPublica] = useState(null);
+  const [depoimentoAtual, setDepoimentoAtual] = useState(0);
   
   const [openCadastroComplementar, setOpenCadastroComplementar] = useState(false);
   const [googleUserData, setGoogleUserData] = useState(null);
@@ -318,6 +318,30 @@ function ClienteLogin() {
     navigate('/');
   };
 
+  const sitePublicoCliente = empresaPublica?.sitePublico || {};
+  const depoimentosConfigurados = Array.isArray(sitePublicoCliente.depoimentos)
+    ? sitePublicoCliente.depoimentos.filter((depoimento) => depoimento?.nome || depoimento?.texto)
+    : [];
+  const depoimentoDestaque = sitePublicoCliente.depoimentoDestaque
+    ? [{ nome: 'Cliente satisfeito', texto: sitePublicoCliente.depoimentoDestaque }]
+    : [];
+  const depoimentosLogin = depoimentosConfigurados.length > 0 ? depoimentosConfigurados : depoimentoDestaque;
+
+  useEffect(() => {
+    if (depoimentosLogin.length <= 1) {
+      setDepoimentoAtual(0);
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setDepoimentoAtual((atual) => (atual + 1) % depoimentosLogin.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [depoimentosLogin.length]);
+
+  const depoimentoAtivo = depoimentosLogin[depoimentoAtual] || depoimentosLogin[0];
+
   const empresaSlug = empresaPublica?.slug || window.sessionStorage.getItem('empresa_publica_slug') || '';
   const tenantQuery = empresaSlug ? `?empresa=${encodeURIComponent(empresaSlug)}` : '';
   const empresaLogo = getEmpresaLogo(empresaPublica);
@@ -338,211 +362,294 @@ function ClienteLogin() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ width: '100%', maxWidth: 450 }}
+          style={{ width: '100%', maxWidth: depoimentoAtivo ? 980 : 450 }}
         >
-          <Card sx={{ borderRadius: 4, overflow: 'hidden' }}>
-            <Box
-              sx={{
-                p: 3,
-                background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
-                color: 'white',
-                textAlign: 'center',
-                position: 'relative',
-              }}
-            >
-              <IconButton
-                onClick={handleVoltar}
-                sx={{
-                  position: 'absolute',
-                  left: 16,
-                  top: 16,
-                  color: 'white',
-                }}
-              >
-                <ArrowBackIcon />
-              </IconButton>
-              
-              {empresaLogo ? (
-                <Avatar
-                  src={empresaLogo}
-                  alt={empresaPublica?.nome || 'Logo da empresa'}
+          <Grid container spacing={3} alignItems="stretch">
+            <Grid item xs={12} md={depoimentoAtivo ? 6 : 12}>
+              <Card sx={{ borderRadius: 4, overflow: 'hidden', height: '100%' }}>
+                <Box
                   sx={{
-                    width: 76,
-                    height: 76,
-                    mx: 'auto',
-                    mb: 1.5,
-                    bgcolor: 'white',
-                    border: '3px solid rgba(255,255,255,0.75)',
-                    '& img': { objectFit: 'contain', p: 0.75 },
+                    p: 3,
+                    background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)',
+                    color: 'white',
+                    textAlign: 'center',
+                    position: 'relative',
                   }}
-                />
-              ) : (
-                <SpaIcon sx={{ fontSize: 48, mb: 1 }} />
-              )}
-              <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                {empresaPublica?.nome || 'BeautyPro'}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Área do Cliente
-              </Typography>
-            </Box>
+                >
+                  <IconButton
+                    onClick={handleVoltar}
+                    sx={{
+                      position: 'absolute',
+                      left: 16,
+                      top: 16,
+                      color: 'white',
+                    }}
+                  >
+                    <ArrowBackIcon />
+                  </IconButton>
 
-            <CardContent sx={{ p: 4 }}>
-              <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
-                Login
-              </Typography>
-
-              {empresaPublica ? (
-                <Alert severity="info" sx={{ mb: 3 }}>
-                  Acessando área do cliente de <strong>{empresaPublica.nome}</strong>.
-                </Alert>
-              ) : (
-                <Alert severity="warning" sx={{ mb: 3 }}>
-                  Use o link da empresa ou salão para entrar. Assim sua conta fica vinculada ao tenant correto.
-                </Alert>
-              )}
-
-              {success && (
-                <Alert severity="success" sx={{ mb: 3 }}>
-                  {success}
-                </Alert>
-              )}
-
-              {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  {error}
-                </Alert>
-              )}
-
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                startIcon={<GoogleIcon />}
-                sx={{
-                  mb: 2,
-                  py: 1.5,
-                  borderColor: '#ddd',
-                  color: '#333',
-                  '&:hover': {
-                    borderColor: '#9c27b0',
-                    backgroundColor: 'rgba(156,39,176,0.04)',
-                  },
-                }}
-              >
-                Continuar com Google
-              </Button>
-
-              <Box sx={{ position: 'relative', my: 3 }}>
-                <Divider>
-                  <Typography variant="body2" color="textSecondary" sx={{ px: 1 }}>
-                    ou
+                  {empresaLogo ? (
+                    <Avatar
+                      src={empresaLogo}
+                      alt={empresaPublica?.nome || 'Logo da empresa'}
+                      sx={{
+                        width: 76,
+                        height: 76,
+                        mx: 'auto',
+                        mb: 1.5,
+                        bgcolor: 'white',
+                        border: '3px solid rgba(255,255,255,0.75)',
+                        '& img': { objectFit: 'contain', p: 0.75 },
+                      }}
+                    />
+                  ) : (
+                    <SpaIcon sx={{ fontSize: 48, mb: 1 }} />
+                  )}
+                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                    {empresaPublica?.nome || 'BeautyPro'}
                   </Typography>
-                </Divider>
-              </Box>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    Área do Cliente
+                  </Typography>
+                </Box>
 
-              <form onSubmit={handleSubmit}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  margin="normal"
-                  required
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <EmailIcon color="action" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                <CardContent sx={{ p: 4 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}>
+                    Login
+                  </Typography>
 
-                <TextField
-                  fullWidth
-                  label="Senha"
-                  name="senha"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.senha}
-                  onChange={handleChange}
-                  margin="normal"
-                  required
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <LockIcon color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowPassword(!showPassword)}
-                          edge="end"
-                        >
-                          {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                  {empresaPublica ? (
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      Acessando área do cliente de <strong>{empresaPublica.nome}</strong>.
+                    </Alert>
+                  ) : (
+                    <Alert severity="warning" sx={{ mb: 3 }}>
+                      Use o link da empresa ou salão para entrar. Assim sua conta fica vinculada ao tenant correto.
+                    </Alert>
+                  )}
 
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  size="large"
-                  disabled={loading}
+                  {success && (
+                    <Alert severity="success" sx={{ mb: 3 }}>
+                      {success}
+                    </Alert>
+                  )}
+
+                  {error && (
+                    <Alert severity="error" sx={{ mb: 3 }}>
+                      {error}
+                    </Alert>
+                  )}
+
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                    startIcon={<GoogleIcon />}
+                    sx={{
+                      mb: 2,
+                      py: 1.5,
+                      borderColor: '#ddd',
+                      color: '#333',
+                      '&:hover': {
+                        borderColor: '#9c27b0',
+                        backgroundColor: 'rgba(156,39,176,0.04)',
+                      },
+                    }}
+                  >
+                    Continuar com Google
+                  </Button>
+
+                  <Box sx={{ position: 'relative', my: 3 }}>
+                    <Divider>
+                      <Typography variant="body2" color="textSecondary" sx={{ px: 1 }}>
+                        ou
+                      </Typography>
+                    </Divider>
+                  </Box>
+
+                  <form onSubmit={handleSubmit}>
+                    <TextField
+                      fullWidth
+                      label="Email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      margin="normal"
+                      required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <EmailIcon color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <TextField
+                      fullWidth
+                      label="Senha"
+                      name="senha"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.senha}
+                      onChange={handleChange}
+                      margin="normal"
+                      required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <LockIcon color="action" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowPassword(!showPassword)}
+                              edge="end"
+                            >
+                              {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <Button
+                      type="submit"
+                      fullWidth
+                      variant="contained"
+                      size="large"
+                      disabled={loading}
+                      sx={{
+                        mt: 3,
+                        mb: 2,
+                        py: 1.5,
+                        background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
+                        fontSize: '1.1rem',
+                      }}
+                    >
+                      {loading ? <CircularProgress size={24} /> : 'Entrar com Email'}
+                    </Button>
+                  </form>
+
+                  <Box sx={{ mt: 3, textAlign: 'center' }}>
+                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                      Não tem uma conta?
+                    </Typography>
+                    <Button
+                      component={RouterLink}
+                      to={`/cliente/cadastro${tenantQuery}`}
+                      variant="outlined"
+                      fullWidth
+                      sx={{
+                        mt: 1,
+                        borderColor: '#9c27b0',
+                        color: '#9c27b0',
+                        '&:hover': {
+                          borderColor: '#ff4081',
+                          backgroundColor: 'rgba(156,39,176,0.04)',
+                        },
+                      }}
+                    >
+                      Criar nova conta
+                    </Button>
+                  </Box>
+
+                  <Box sx={{ mt: 3, textAlign: 'center' }}>
+                    <Link
+                      component={RouterLink}
+                      to={`/cliente/recuperar-senha${tenantQuery}`}
+                      variant="body2"
+                      sx={{ color: '#9c27b0', cursor: 'pointer' }}
+                    >
+                      Esqueci minha senha
+                    </Link>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {depoimentoAtivo && (
+              <Grid item xs={12} md={6}>
+                <Paper
+                  elevation={0}
                   sx={{
-                    mt: 3,
-                    mb: 2,
-                    py: 1.5,
-                    background: 'linear-gradient(45deg, #9c27b0 30%, #ff4081 90%)',
-                    fontSize: '1.1rem',
+                    height: '100%',
+                    minHeight: isMobile ? 260 : 520,
+                    borderRadius: 4,
+                    p: { xs: 3, md: 4 },
+                    color: 'white',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    background: 'linear-gradient(145deg, rgba(76,0,130,0.95), rgba(255,64,129,0.88))',
+                    border: '1px solid rgba(255,255,255,0.28)',
+                    boxShadow: '0 24px 70px rgba(74, 0, 103, 0.32)',
+                    overflow: 'hidden',
+                    position: 'relative',
                   }}
                 >
-                  {loading ? <CircularProgress size={24} /> : 'Entrar com Email'}
-                </Button>
-              </form>
+                  <FormatQuoteIcon sx={{ position: 'absolute', right: 24, top: 18, fontSize: 82, opacity: 0.16 }} />
+                  <Box>
+                    <Typography variant="overline" sx={{ letterSpacing: 2, opacity: 0.82 }}>
+                      Depoimentos
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, mb: 2 }}>
+                      Clientes que confiam em {empresaPublica?.nome || 'nosso salão'}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 3 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <StarIcon key={star} sx={{ color: '#ffd54f' }} />
+                      ))}
+                    </Box>
+                    <Typography variant="h6" sx={{ lineHeight: 1.65, fontWeight: 500 }}>
+                      “{depoimentoAtivo.texto || 'Atendimento incrível e experiência completa do início ao fim.'}”
+                    </Typography>
+                  </Box>
 
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Typography variant="body2" color="textSecondary" gutterBottom>
-                  Não tem uma conta?
-                </Typography>
-                <Button
-                  component={RouterLink}
-                  to={`/cliente/cadastro${tenantQuery}`}
-                  variant="outlined"
-                  fullWidth
-                  sx={{
-                    mt: 1,
-                    borderColor: '#9c27b0',
-                    color: '#9c27b0',
-                    '&:hover': {
-                      borderColor: '#ff4081',
-                      backgroundColor: 'rgba(156,39,176,0.04)',
-                    },
-                  }}
-                >
-                  Criar nova conta
-                </Button>
-              </Box>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 4 }}>
+                      <Avatar
+                        src={depoimentoAtivo.foto || depoimentoAtivo.avatar || ''}
+                        sx={{ width: 58, height: 58, bgcolor: 'rgba(255,255,255,0.22)', fontWeight: 800 }}
+                      >
+                        {(depoimentoAtivo.nome || 'C').charAt(0).toUpperCase()}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                          {depoimentoAtivo.nome || 'Cliente'}
+                        </Typography>
+                        <Typography variant="body2" sx={{ opacity: 0.78 }}>
+                          Depoimento publicado na área do cliente
+                        </Typography>
+                      </Box>
+                    </Box>
 
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Link
-                  component={RouterLink}
-                  to={`/cliente/recuperar-senha${tenantQuery}`}
-                  variant="body2"
-                  sx={{ color: '#9c27b0', cursor: 'pointer' }}
-                >
-                  Esqueci minha senha
-                </Link>
-              </Box>
-            </CardContent>
-          </Card>
+                    {depoimentosLogin.length > 1 && (
+                      <Box sx={{ display: 'flex', gap: 1, mt: 3 }}>
+                        {depoimentosLogin.map((_, index) => (
+                          <Box
+                            key={index}
+                            onClick={() => setDepoimentoAtual(index)}
+                            sx={{
+                              width: depoimentoAtual === index ? 30 : 10,
+                              height: 10,
+                              borderRadius: 999,
+                              bgcolor: depoimentoAtual === index ? 'white' : 'rgba(255,255,255,0.45)',
+                              cursor: 'pointer',
+                              transition: 'all 0.25s ease',
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
+            )}
+          </Grid>
         </motion.div>
       </Box>
 
