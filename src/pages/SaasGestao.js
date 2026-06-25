@@ -64,7 +64,9 @@ const formatCurrency = (value, currency = 'BRL') =>
 
 const formatDate = (value) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 };
 
 const getStatusColor = (status) => {
@@ -95,6 +97,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   const [assinatura, setAssinatura] = useState(null);
   const [faturas, setFaturas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
+  const [depoimentosRecebidos, setDepoimentosRecebidos] = useState([]);
   const [checkout, setCheckout] = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
@@ -150,12 +153,13 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         return;
       }
 
-      const [empresaData, unidadesData, assinaturaData, faturasData, pagamentosData] = await Promise.all([
+      const [empresaData, unidadesData, assinaturaData, faturasData, pagamentosData, avaliacoesData] = await Promise.all([
         firebaseService.getById('empresas', contexto.empresaId),
         saasService.listarUnidades(contexto.empresaId),
         saasService.buscarAssinaturaAtual(contexto.empresaId),
         firebaseService.query('faturas_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
         firebaseService.query('pagamentos_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
+        firebaseService.query('avaliacoes', [{ field: 'tipo', operator: '==', value: 'depoimento_atendimento' }], 'createdAt', 'desc').catch(() => []),
       ]);
 
       setEmpresa(empresaData);
@@ -163,6 +167,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
       setAssinatura(assinaturaData);
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
+      setDepoimentosRecebidos((avaliacoesData || []).filter((item) => item.origem === 'portal_cliente' || item.tipo === 'depoimento_atendimento'));
       const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
       const metodosDisponiveis = metodosAtivosNoGateway(configGlobal.provider, configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento);
       setPaymentConfig({
@@ -209,6 +214,15 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         mostrarAreaRestrita: empresaData?.sitePublico?.mostrarAreaRestrita !== false,
         mostrarRedesSociais: empresaData?.sitePublico?.mostrarRedesSociais !== false,
         mostrarBanner: empresaData?.sitePublico?.mostrarBanner !== false,
+        chamadaPrincipal: empresaData?.sitePublico?.chamadaPrincipal || 'Beleza, tecnologia e cuidado em um só lugar.',
+        diferenciais: empresaData?.sitePublico?.diferenciais || 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+        depoimentoDestaque: empresaData?.sitePublico?.depoimentoDestaque || '',
+        horarioAtendimento: empresaData?.sitePublico?.horarioAtendimento || '',
+        enderecoPublico: empresaData?.sitePublico?.enderecoPublico || '',
+        bannerGaleria: empresaData?.sitePublico?.bannerGaleria || [],
+        depoimentos: empresaData?.sitePublico?.depoimentos || [],
+        mostrarDepoimentos: empresaData?.sitePublico?.mostrarDepoimentos !== false,
+        textoBotaoPrincipal: empresaData?.sitePublico?.textoBotaoPrincipal || 'Agendar agora',
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -337,6 +351,40 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
 
   const removerDepoimento = (id) => {
     setPortalForm((current) => ({ ...current, depoimentos: (current.depoimentos || []).filter((item) => item.id !== id) }));
+  };
+
+
+  const aprovarDepoimentoRecebido = async (depoimento) => {
+    const depoimentoPublicado = {
+      id: depoimento.id || Date.now().toString(),
+      nome: depoimento.clienteNome || 'Cliente',
+      texto: depoimento.texto || '',
+      nota: depoimento.nota || 5,
+      servicoNome: depoimento.servicoNome || '',
+      atendimentoId: depoimento.atendimentoId || null,
+    };
+
+    setPortalForm((current) => ({
+      ...current,
+      depoimentos: [
+        ...(current.depoimentos || []).filter((item) => item.id !== depoimentoPublicado.id),
+        depoimentoPublicado,
+      ],
+    }));
+
+    try {
+      if (depoimento.id) {
+        await firebaseService.update('avaliacoes', depoimento.id, {
+          status: 'aprovado',
+          aprovadoEm: new Date().toISOString(),
+        });
+      }
+      setDepoimentosRecebidos((current) => current.map((item) => item.id === depoimento.id ? { ...item, status: 'aprovado' } : item));
+      toast.success('Depoimento aprovado e adicionado à prévia. Clique em Salvar página inicial para publicar.');
+    } catch (error) {
+      console.error('Erro ao aprovar depoimento:', error);
+      toast.error('Não foi possível aprovar o depoimento.');
+    }
   };
 
   const salvarPortalEmpresa = async (event) => {
@@ -874,6 +922,29 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                   </Stack>
                   <Stack spacing={2}>{(portalForm.depoimentos || []).map((dep) => (<Paper key={dep.id} variant="outlined" sx={{ p: 2 }}><Grid container spacing={1}><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Nome" value={dep.nome} onChange={(e) => atualizarDepoimento(dep.id, 'nome', e.target.value)} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" type="number" label="Nota" value={dep.nota} onChange={(e) => atualizarDepoimento(dep.id, 'nota', e.target.value)} inputProps={{ min: 1, max: 5 }} /></Grid><Grid item xs={12} md={5}><TextField fullWidth size="small" label="Depoimento" value={dep.texto} onChange={(e) => atualizarDepoimento(dep.id, 'texto', e.target.value)} /></Grid><Grid item xs={12} md={2}><Button color="error" onClick={() => removerDepoimento(dep.id)}>Remover</Button></Grid></Grid></Paper>))}</Stack>
                   {(portalForm.depoimentos || []).length === 0 && <Typography variant="caption" color="text.secondary">Nenhum depoimento cadastrado.</Typography>}
+
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Depoimentos recebidos pelo portal do cliente</Typography>
+                  <Typography variant="caption" color="text.secondary">Aqui aparecem os depoimentos enviados na página Depoimentos do app do cliente. Aprove para adicionar à página pública e depois clique em Salvar página inicial.</Typography>
+                  <Stack spacing={1.5} sx={{ mt: 2 }}>
+                    {(depoimentosRecebidos || []).length === 0 && <Alert severity="info">Nenhum depoimento recebido pelo portal do cliente ainda.</Alert>}
+                    {(depoimentosRecebidos || []).slice(0, 6).map((dep) => (
+                      <Paper key={dep.id} variant="outlined" sx={{ p: 2, bgcolor: dep.status === 'aprovado' ? '#f1f8e9' : 'white' }}>
+                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
+                          <Box>
+                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{dep.clienteNome || 'Cliente'}</Typography>
+                              <Chip size="small" label={`${dep.nota || 5} ★`} color="warning" />
+                              <Chip size="small" label={dep.status === 'aprovado' ? 'Aprovado' : 'Pendente'} color={dep.status === 'aprovado' ? 'success' : 'default'} />
+                            </Stack>
+                            <Typography variant="body2" sx={{ mt: 0.5 }}>“{dep.texto || 'Sem texto'}”</Typography>
+                            <Typography variant="caption" color="text.secondary">{dep.servicoNome || 'Atendimento'} • {formatDate(dep.createdAt || dep.dataAtendimento)}</Typography>
+                          </Box>
+                          <Button variant="contained" size="small" disabled={dep.status === 'aprovado'} onClick={() => aprovarDepoimentoRecebido(dep)}>Aprovar para o site</Button>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
                 </Paper>
               </Grid>
 

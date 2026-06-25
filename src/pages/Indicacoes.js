@@ -77,6 +77,20 @@ const statusIndicacao = [
   { value: 'expirada', label: 'Expirada', color: '#9e9e9e', icon: <InfoIcon /> },
 ];
 
+
+const formatarDataSegura = (value, pattern = 'dd/MM/yyyy') => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return format(date, pattern);
+};
+
+const dataValidaOuNula = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const periodos = [
   { value: 'todos', label: 'Todos' },
   { value: 'hoje', label: 'Hoje' },
@@ -408,7 +422,7 @@ function Indicacoes() {
 
     let matchesPeriodo = true;
     if (filtroPeriodo !== 'todos' && indicacao.dataCriacao) {
-      const dataCriacao = new Date(indicacao.dataCriacao);
+      const dataCriacao = dataValidaOuNula(indicacao.dataCriacao) || new Date(0);
       const hoje = new Date();
 
       if (filtroPeriodo === 'hoje') {
@@ -448,7 +462,8 @@ function Indicacoes() {
     if (!indicacao.dataExpiracao) return false;
     
     const hoje = new Date();
-    const dataExpiracao = new Date(indicacao.dataExpiracao);
+    const dataExpiracao = dataValidaOuNula(indicacao.dataExpiracao);
+    if (!dataExpiracao) return false;
     return hoje > dataExpiracao;
   };
 
@@ -458,7 +473,7 @@ function Indicacoes() {
       const expiradas = indicacoes.filter(i => 
         i.status === 'pendente' && 
         i.dataExpiracao && 
-        new Date(i.dataExpiracao) < new Date()
+        (dataValidaOuNula(i.dataExpiracao)?.getTime() || Infinity) < new Date().getTime()
       );
 
       for (const indicacao of expiradas) {
@@ -938,7 +953,7 @@ function Indicacoes() {
                               </Box>
                             </TableCell>
                             <TableCell>
-                              {format(new Date(indicacao.dataCriacao), 'dd/MM/yyyy')}
+                              {formatarDataSegura(indicacao.dataCriacao, 'dd/MM/yyyy')}
                             </TableCell>
                             <TableCell>
                               <Chip
@@ -1227,7 +1242,7 @@ function Indicacoes() {
                       Data da Indicação
                     </Typography>
                     <Typography variant="body1">
-                      {format(new Date(indicacaoSelecionada.dataCriacao), 'dd/MM/yyyy HH:mm')}
+                      {formatarDataSegura(indicacaoSelecionada.dataCriacao, 'dd/MM/yyyy HH:mm')}
                     </Typography>
                   </Grid>
 
@@ -1237,7 +1252,7 @@ function Indicacoes() {
                     </Typography>
                     <Typography variant="body1">
                       {indicacaoSelecionada.dataExpiracao 
-                        ? format(new Date(indicacaoSelecionada.dataExpiracao), 'dd/MM/yyyy')
+                        ? formatarDataSegura(indicacaoSelecionada.dataExpiracao, 'dd/MM/yyyy')
                         : 'Não definida'}
                     </Typography>
                   </Grid>
@@ -1250,7 +1265,7 @@ function Indicacoes() {
                         </Typography>
                         <Typography variant="body1">
                           {indicacaoSelecionada.dataConfirmacao
-                            ? format(new Date(indicacaoSelecionada.dataConfirmacao), 'dd/MM/yyyy HH:mm')
+                            ? formatarDataSegura(indicacaoSelecionada.dataConfirmacao, 'dd/MM/yyyy HH:mm')
                             : '-'}
                         </Typography>
                       </Grid>
