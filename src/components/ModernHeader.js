@@ -30,6 +30,11 @@ import {
   SwipeableDrawer,
   TextField,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -56,6 +61,7 @@ import {
   PointOfSale as PointOfSaleIcon,
   AdminPanelSettings as AdminIcon,
   Business as BusinessIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion } from 'framer-motion';
@@ -218,6 +224,7 @@ function ModernHeader() {
   const [unidadeAtualId, setUnidadeAtualId] = useState('');
   const [loadingUnidades, setLoadingUnidades] = useState(false);
   const [caixaResumo, setCaixaResumo] = useState({ caixaAberto: null, totais: null, loading: true });
+  const [promptCaixa, setPromptCaixa] = useState({ open: false, valorAbertura: 0, observacao: '', concluir: null });
   
   const isMounted = useRef(true);
   const notificationInterval = useRef(null);
@@ -305,6 +312,26 @@ function ModernHeader() {
     const interval = setInterval(carregarStatusCaixa, 30000);
     return () => clearInterval(interval);
   }, [usuario, carregarStatusCaixa]);
+
+  useEffect(() => {
+    const handleSolicitarAberturaCaixa = (event) => {
+      event.detail?.marcarComoTratado?.();
+      setPromptCaixa({ open: true, valorAbertura: 0, observacao: '', concluir: event.detail?.concluir });
+    };
+    window.addEventListener('caixaSolicitarAbertura', handleSolicitarAberturaCaixa);
+    return () => window.removeEventListener('caixaSolicitarAbertura', handleSolicitarAberturaCaixa);
+  }, []);
+
+  const fecharPromptCaixa = async (abrir = false) => {
+    const concluir = promptCaixa.concluir;
+    const payload = { abrir, valorAbertura: promptCaixa.valorAbertura, observacao: promptCaixa.observacao || 'Abertura solicitada pelo sistema' };
+    setPromptCaixa({ open: false, valorAbertura: 0, observacao: '', concluir: null });
+    if (concluir) await concluir(payload);
+    if (abrir) {
+      toast.success('Caixa aberto com sucesso');
+      carregarStatusCaixa();
+    }
+  };
 
   const carregarNotificacoes = useCallback(async (force = false) => {
     const user = usuariosService.getUsuarioAtual();
@@ -414,6 +441,7 @@ function ModernHeader() {
   // RENDERIZAÇÃO DESKTOP
   // ============================================
   return (
+    <>
     <AppBar position="static" color="inherit" elevation={0}
       sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }}>
       <Toolbar>
@@ -512,6 +540,21 @@ function ModernHeader() {
         </Menu>
       </Toolbar>
     </AppBar>
+    <Dialog open={promptCaixa.open} onClose={() => fecharPromptCaixa(false)} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}><AccountBalanceIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Abrir caixa agora?</DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>Não há caixa aberto. Para finalizar recebimentos e integrar o financeiro, abra o caixa antes de continuar.</Alert>
+          <TextField fullWidth type="number" label="Valor de abertura" value={promptCaixa.valorAbertura} onChange={(e) => setPromptCaixa({ ...promptCaixa, valorAbertura: e.target.value })} sx={{ mb: 2 }} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+          <TextField fullWidth multiline rows={3} label="Observação" value={promptCaixa.observacao} onChange={(e) => setPromptCaixa({ ...promptCaixa, observacao: e.target.value })} placeholder="Ex.: fundo inicial entregue ao operador." />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => fecharPromptCaixa(false)}>Agora não</Button>
+        <Button variant="contained" color="success" onClick={() => fecharPromptCaixa(true)}>Abrir caixa</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }
 

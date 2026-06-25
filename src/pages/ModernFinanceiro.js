@@ -128,7 +128,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService } from '../services/firebase';
 import { contasPagarParaTransacoes, contasReceberParaTransacoes } from '../services/financeiroContasIntegration';
 import { auditoriaService } from '../services/auditoriaService';
-import { caixaService } from '../services/caixaService';
+import { caixaService, METODOS_CAIXA } from '../services/caixaService';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -375,6 +375,7 @@ function ModernFinanceiro() {
   const [profissionais, setProfissionais] = useState([]);
   const [servicos, setServicos] = useState([]);
   const [anexos, setAnexos] = useState([]);
+  const [caixaOperacao, setCaixaOperacao] = useState({ valorAbertura: 0, valorConferido: 0, observacao: '' });
 
   // Filtros
   const [filtro, setFiltro] = useState('');
@@ -1194,25 +1195,17 @@ function ModernFinanceiro() {
   const handleAbrirFecharCaixa = async () => {
     try {
       if (!caixa || caixa.status === 'fechado') {
-        const novoCaixa = await caixaService.abrirCaixa({
-          valorAbertura: 0,
-          observacao: 'Abertura pelo dashboard financeiro',
-        });
-        setCaixa({
-          ...novoCaixa,
-          saldoAtual: Number(novoCaixa.valorAbertura || 0),
-          saldoInicial: Number(novoCaixa.valorAbertura || 0),
-          dataAbertura: novoCaixa.abertoEm || novoCaixa.createdAt,
-          movimentacoes: [],
+        await caixaService.abrirCaixa({
+          valorAbertura: caixaOperacao.valorAbertura,
+          observacao: caixaOperacao.observacao || 'Abertura pelo dashboard financeiro',
         });
         mostrarSnackbar('✅ Caixa aberto com sucesso!');
       } else {
-        const caixaFechado = await caixaService.fecharCaixa(caixa.id, {
-          valorConferido: caixa.saldoAtual || caixa.totais?.saldoAtual || 0,
-          observacao: 'Fechamento pelo dashboard financeiro',
+        await caixaService.fecharCaixa(caixa.id, {
+          valorConferido: caixaOperacao.valorConferido,
+          observacao: caixaOperacao.observacao || 'Fechamento pelo dashboard financeiro',
         });
-        setCaixa({ ...caixa, ...caixaFechado, status: 'fechado' });
-        mostrarSnackbar('✅ Caixa fechado com sucesso!');
+        mostrarSnackbar('✅ Caixa fechado com conferência registrada!');
       }
       handleCloseCaixaDialog();
       await carregarDados();
@@ -1443,8 +1436,22 @@ function ModernFinanceiro() {
     setTransacaoEditando(null);
   };
 
-  const handleOpenCaixaDialog = () => setOpenCaixaDialog(true);
+  const handleOpenCaixaDialog = () => {
+    setCaixaOperacao({
+      valorAbertura: caixa?.status === 'aberto' ? (caixa.saldoInicial || caixa.valorAbertura || 0) : 0,
+      valorConferido: caixa?.status === 'aberto' ? (caixa.saldoAtual || caixa.totais?.saldoAtual || 0) : 0,
+      observacao: '',
+    });
+    setOpenCaixaDialog(true);
+  };
   const handleCloseCaixaDialog = () => setOpenCaixaDialog(false);
+
+  const handleOpenAnexos = (transacao) => {
+    setTransacaoSelecionada(transacao);
+    setAnexos(transacao?.anexos || []);
+    setOpenAnexoDialog(true);
+  };
+
 
   const handleOpenDetalhes = (transacao) => {
     setTransacaoSelecionada(transacao);
@@ -2350,7 +2357,7 @@ function ModernFinanceiro() {
                           <TableCell>
                             {transacao.anexos?.length > 0 && (
                               <Tooltip title={`${transacao.anexos.length} anexo(s)`}>
-                                <IconButton size="small" onClick={() => setOpenAnexoDialog(true)}>
+                                <IconButton size="small" onClick={() => handleOpenAnexos(transacao)}>
                                   <AttachFileIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
@@ -2586,38 +2593,62 @@ function ModernFinanceiro() {
 
       {/* Dialog de Caixa */}
       <Dialog open={openCaixaDialog} onClose={handleCloseCaixaDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
-          {caixa?.status === 'aberto' ? '🔒 Fechar Caixa' : '🔓 Abrir Caixa'}
+        <DialogTitle sx={{ bgcolor: caixa?.status === 'aberto' ? '#f44336' : '#4caf50', color: 'white' }}>
+          {caixa?.status === 'aberto' ? '🔒 Conferir e fechar caixa' : '🔓 Abrir caixa agora'}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {caixa?.status === 'aberto' ? (
-              <Box>
-                <Alert severity="info" sx={{ mb: 2 }}>Resumo do Caixa</Alert>
-                <List>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#4caf50' }}><MoneyIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Saldo Atual" secondary={formatarMoeda(caixa.saldoAtual)} />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><ReceiptIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Movimentações" secondary={`${caixa.movimentacoes?.length || 0} transações`} />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><CalendarIcon /></Avatar></ListItemAvatar>
-                    <ListItemText primary="Aberto em" secondary={safeToDisplayDate(caixa.dataAbertura) + ' ' + (caixa.dataAbertura ? new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5) : '')} />
-                  </ListItem>
-                </List>
-              </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Alert severity="info">Confira dinheiro, PIX, cartões e demais formas antes de encerrar o turno.</Alert>
+                </Grid>
+                <Grid item xs={12} sm={6}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Saldo esperado</Typography><Typography variant="h6" sx={{ fontWeight: 800 }}>{formatarMoeda(caixa.saldoAtual || caixa.totais?.saldoAtual || 0)}</Typography></Paper></Grid>
+                <Grid item xs={12} sm={6}><Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}><Typography variant="caption" color="textSecondary">Movimentações</Typography><Typography variant="h6" sx={{ fontWeight: 800 }}>{caixa.movimentacoes?.length || 0}</Typography></Paper></Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth type="number" label="Valor conferido no caixa" value={caixaOperacao.valorConferido} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorConferido: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                </Grid>
+                <Grid item xs={12}>
+                  <Alert severity={Number(caixaOperacao.valorConferido || 0) === Number(caixa.saldoAtual || caixa.totais?.saldoAtual || 0) ? 'success' : 'warning'}>
+                    Diferença apurada: {formatarMoeda(Number(caixaOperacao.valorConferido || 0) - Number(caixa.saldoAtual || caixa.totais?.saldoAtual || 0))}
+                  </Alert>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth multiline rows={3} label="Observação de fechamento" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: dinheiro conferido, cartões batidos e PIX conciliado." />
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {Object.entries(caixa.totais?.porForma || {}).map(([forma, valor]) => <Chip key={forma} label={`${METODOS_CAIXA[forma] || forma}: ${formatarMoeda(valor)}`} variant="outlined" />)}
+                  </Box>
+                </Grid>
+              </Grid>
             ) : (
-              <Typography variant="body1">Deseja abrir o caixa para iniciar as operações do dia?</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Alert severity="success" icon={<AccountBalanceIcon />}>
+                    Abra o caixa para integrar recebimentos, contas pagas, movimentações e relatórios do financeiro em tempo real.
+                  </Alert>
+                </Grid>
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#f1f8e9' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Deseja abrir o caixa agora?</Typography>
+                    <Typography variant="body2" color="textSecondary">Informe o fundo inicial e uma observação para iniciar o controle profissional do turno.</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth type="number" label="Valor de abertura" value={caixaOperacao.valorAbertura} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, valorAbertura: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth multiline rows={3} label="Observação de abertura" value={caixaOperacao.observacao} onChange={(e) => setCaixaOperacao({ ...caixaOperacao, observacao: e.target.value })} placeholder="Ex.: fundo inicial entregue ao operador responsável." />
+                </Grid>
+              </Grid>
             )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={handleCloseCaixaDialog}>Cancelar</Button>
           <Button onClick={handleAbrirFecharCaixa} variant="contained" color={caixa?.status === 'aberto' ? 'error' : 'success'}>
-            {caixa?.status === 'aberto' ? 'Fechar Caixa' : 'Abrir Caixa'}
+            {caixa?.status === 'aberto' ? 'Fechar com conferência' : 'Abrir caixa'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2628,16 +2659,23 @@ function ModernFinanceiro() {
         <DialogContent>
           {transacaoSelecionada && (
             <Box sx={{ mt: 2 }}>
-              <List>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9c27b0' }}><ReceiptIcon /></Avatar></ListItemAvatar><ListItemText primary="Descrição" secondary={transacaoSelecionada.descricao} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.tipo === 'receita' ? '#4caf50' : '#f44336' }}>{transacaoSelecionada.tipo === 'receita' ? <TrendingUpIcon /> : <TrendingDownIcon />}</Avatar></ListItemAvatar><ListItemText primary="Valor" secondary={formatarMoeda(transacaoSelecionada.valor)} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={safeToDisplayDate(transacaoSelecionada.data)} /></ListItem>
-                {transacaoSelecionada.dataVencimento && <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={safeToDisplayDate(transacaoSelecionada.dataVencimento)} /></ListItem>}
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem>
-                <ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem>
-                {transacaoSelecionada.observacoes && <ListItem><ListItemText primary="Observações" secondary={transacaoSelecionada.observacoes} /></ListItem>}
-              </List>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: transacaoSelecionada.tipo === 'receita' ? '#f1f8e9' : '#ffebee' }}>
+                    <Typography variant="overline" color="textSecondary">{transacaoSelecionada.origem || 'manual'}</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>{transacaoSelecionada.descricao}</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 900, color: transacaoSelecionada.tipo === 'receita' ? '#2e7d32' : '#c62828' }}>{formatarMoeda(transacaoSelecionada.valor)}</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#ff9800' }}><CalendarIcon /></Avatar></ListItemAvatar><ListItemText primary="Data" secondary={safeToDisplayDate(transacaoSelecionada.data)} /></ListItem></Grid>
+                {transacaoSelecionada.dataVencimento && <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#f44336' }}><WarningIcon /></Avatar></ListItemAvatar><ListItemText primary="Vencimento" secondary={safeToDisplayDate(transacaoSelecionada.dataVencimento)} /></ListItem></Grid>}
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#2196f3' }}><PaymentIcon /></Avatar></ListItemAvatar><ListItemText primary="Forma de Pagamento" secondary={formasPagamento.find(fp => fp.value === transacaoSelecionada.formaPagamento)?.label || transacaoSelecionada.formaPagamento} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: '#9e9e9e' }}><BarChartIcon /></Avatar></ListItemAvatar><ListItemText primary="Categoria" secondary={transacaoSelecionada.categoria || 'Sem categoria'} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: statusColors[transacaoSelecionada.status]?.color || '#9e9e9e' }}>{statusColors[transacaoSelecionada.status]?.icon}</Avatar></ListItemAvatar><ListItemText primary="Status" secondary={statusColors[transacaoSelecionada.status]?.label || transacaoSelecionada.status} /></ListItem></Grid>
+                <Grid item xs={12} sm={6}><ListItem><ListItemAvatar><Avatar sx={{ bgcolor: transacaoSelecionada.anexos?.length ? '#4caf50' : '#9e9e9e' }}><AttachFileIcon /></Avatar></ListItemAvatar><ListItemText primary="Anexos" secondary={transacaoSelecionada.anexos?.length ? `${transacaoSelecionada.anexos.length} anexo(s) incluído(s)` : 'Nenhum anexo incluído'} /></ListItem></Grid>
+                {transacaoSelecionada.observacoes && <Grid item xs={12}><Alert severity="info"><strong>Observações:</strong> {transacaoSelecionada.observacoes}</Alert></Grid>}
+                {transacaoSelecionada.anexos?.length > 0 && <Grid item xs={12}><Button startIcon={<AttachFileIcon />} variant="outlined" onClick={() => handleOpenAnexos(transacaoSelecionada)}>Visualizar anexos</Button></Grid>}
+              </Grid>
             </Box>
           )}
         </DialogContent>
@@ -2649,6 +2687,33 @@ function ModernFinanceiro() {
             </Button>
           )}
         </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Anexos */}
+      <Dialog open={openAnexoDialog} onClose={() => setOpenAnexoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#607d8b', color: 'white' }}><AttachFileIcon sx={{ mr: 1 }} /> Anexos da transação</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity={anexos.length ? 'success' : 'info'} sx={{ mb: 2 }}>
+              {anexos.length ? `${anexos.length} anexo(s) incluído(s) nesta movimentação.` : 'Nenhum anexo incluído nesta movimentação.'}
+            </Alert>
+            {anexos.length > 0 && (
+              <List>
+                {anexos.map((anexo, index) => {
+                  const nome = anexo.nome || anexo.name || anexo.filename || `Anexo ${index + 1}`;
+                  const url = anexo.url || anexo.link || anexo.downloadURL || anexo.path || '';
+                  return (
+                    <ListItem key={`${nome}-${index}`} secondaryAction={url ? <Button size="small" startIcon={<VisibilityIcon />} href={url} target="_blank" rel="noopener noreferrer">Abrir</Button> : null}>
+                      <ListItemAvatar><Avatar sx={{ bgcolor: '#607d8b' }}><AttachFileIcon /></Avatar></ListItemAvatar>
+                      <ListItemText primary={nome} secondary={anexo.tipo || anexo.type || anexo.tamanho || anexo.size || 'Arquivo anexado'} />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions><Button onClick={() => setOpenAnexoDialog(false)}>Fechar</Button></DialogActions>
       </Dialog>
 
       {/* Dialog de Relatórios */}

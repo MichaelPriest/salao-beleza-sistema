@@ -292,8 +292,35 @@ export const caixaService = {
     if (typeof window === 'undefined') return null;
     const caixaAberto = await caixaService.obterCaixaAberto();
     if (caixaAberto) return caixaAberto;
-    if (!window.confirm('Não há caixa aberto. Deseja abrir o caixa agora?')) return null;
-    return caixaService.abrirCaixa({ valorAbertura: 0, observacao: 'Abertura solicitada no login' });
+
+    return new Promise((resolve) => {
+      let tratadoPelaInterface = false;
+      const concluir = async ({ abrir = false, valorAbertura = 0, observacao = 'Abertura solicitada na interface do sistema' } = {}) => {
+        if (!abrir) {
+          resolve(null);
+          return;
+        }
+        try {
+          const caixa = await caixaService.abrirCaixa({ valorAbertura, observacao });
+          resolve(caixa);
+        } catch (error) {
+          resolve(null);
+        }
+      };
+
+      window.dispatchEvent(new CustomEvent('caixaSolicitarAbertura', {
+        detail: {
+          mensagem: 'Não há caixa aberto. Deseja abrir o caixa agora?',
+          concluir,
+          marcarComoTratado: () => { tratadoPelaInterface = true; },
+        },
+      }));
+
+      setTimeout(() => {
+        if (tratadoPelaInterface) return;
+        resolve(null);
+      }, 300);
+    });
   },
 
   perguntarFechamentoAoSair: async () => {
