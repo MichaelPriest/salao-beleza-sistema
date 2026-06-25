@@ -46,7 +46,6 @@ const TENANT_SCOPED_COLLECTIONS = new Set([
   'contas_receber',
   'cupons',
   'disponibilidades',
-  'depoimentos_atendimentos',
   'entradas',
   'formularios_anamnese',
   'fornecedores',

@@ -31,10 +31,12 @@ function ClienteDepoimentos() {
       const idsCliente = getClienteIds(cliente, firebaseUser);
       const [atendimentosData, depoimentosData] = await Promise.all([
         Promise.all(idsCliente.map((id) => firebaseService.query('atendimentos', [{ field: 'clienteId', operator: '==', value: id }], 'data', 'desc').catch(() => []))),
-        Promise.all(idsCliente.map((id) => firebaseService.query('depoimentos_atendimentos', [{ field: 'clienteId', operator: '==', value: id }], 'createdAt', 'desc').catch(() => []))),
+        Promise.all(idsCliente.map((id) => firebaseService.query('avaliacoes', [{ field: 'clienteId', operator: '==', value: id }], 'createdAt', 'desc').catch(() => []))),
       ]);
       const atendimentosUnicos = Array.from(new Map(atendimentosData.flat().map((a) => [a.id, a])).values());
-      const depoimentosUnicos = Array.from(new Map(depoimentosData.flat().map((d) => [d.id, d])).values());
+      const depoimentosUnicos = Array.from(new Map(depoimentosData.flat()
+        .filter((d) => !d.tipo || d.tipo === 'depoimento_atendimento')
+        .map((d) => [d.id, d])).values());
       setAtendimentos(atendimentosUnicos);
       setDepoimentos(depoimentosUnicos);
       setFormularios(Object.fromEntries(atendimentosUnicos.map((a) => {
@@ -71,10 +73,11 @@ function ClienteDepoimentos() {
         autorizadoPublicar: Boolean(form.autorizadoPublicar),
         status: 'pendente',
         origem: 'portal_cliente',
+        tipo: 'depoimento_atendimento',
         updatedAt: new Date().toISOString(),
       };
-      if (existente?.id) await firebaseService.update('depoimentos_atendimentos', existente.id, payload);
-      else await firebaseService.add('depoimentos_atendimentos', { ...payload, createdAt: new Date().toISOString() });
+      if (existente?.id) await firebaseService.update('avaliacoes', existente.id, payload);
+      else await firebaseService.add('avaliacoes', { ...payload, createdAt: new Date().toISOString() });
       toast.success('Depoimento enviado para aprovação!');
       await carregarDados();
     } catch (error) {
