@@ -1640,6 +1640,48 @@ function ModernFinanceiro() {
 
 
 
+
+  const abrirAnexo = (anexo) => {
+    const url = anexo?.url || anexo?.link || anexo?.downloadURL || anexo?.path;
+    if (!url) {
+      mostrarSnackbar('Anexo sem conteúdo para abrir.', 'warning');
+      return;
+    }
+
+    try {
+      if (String(url).startsWith('data:')) {
+        const [meta, base64] = String(url).split(',');
+        const mime = meta.match(/data:(.*?);base64/)?.[1] || anexo.type || 'application/octet-stream';
+        const bytes = atob(base64 || '');
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i += 1) buffer[i] = bytes.charCodeAt(i);
+        const blob = new Blob([buffer], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const janela = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        if (!janela) {
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = anexo.nome || anexo.name || 'anexo';
+          link.click();
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        return;
+      }
+
+      const janela = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!janela) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+      }
+    } catch (error) {
+      console.error('Erro ao abrir anexo:', error);
+      mostrarSnackbar('Não foi possível abrir o anexo.', 'error');
+    }
+  };
+
   const handleOpenDetalhes = (transacao) => {
     setTransacaoSelecionada(transacao);
     setOpenDetalhesDialog(true);
@@ -2891,7 +2933,7 @@ function ModernFinanceiro() {
                   const nome = anexo.nome || anexo.name || anexo.filename || `Anexo ${index + 1}`;
                   const url = anexo.url || anexo.link || anexo.downloadURL || anexo.path || '';
                   return (
-                    <ListItem key={`${nome}-${index}`} secondaryAction={url ? <Button size="small" startIcon={<VisibilityIcon />} href={url} target="_blank" rel="noopener noreferrer">Abrir</Button> : null}>
+                    <ListItem key={`${nome}-${index}`} secondaryAction={url ? <Button size="small" startIcon={<VisibilityIcon />} onClick={() => abrirAnexo(anexo)}>Abrir</Button> : null}>
                       <ListItemAvatar><Avatar sx={{ bgcolor: '#607d8b' }}><AttachFileIcon /></Avatar></ListItemAvatar>
                       <ListItemText primary={nome} secondary={anexo.tipo || anexo.type || anexo.tamanho || anexo.size || 'Arquivo anexado'} />
                     </ListItem>
