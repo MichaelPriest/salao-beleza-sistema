@@ -139,6 +139,7 @@ const CONFIG_TAB_INDEX = {
   backup: 5,
   limpeza: 6,
   empresa: 7,
+  painelChamada: 8,
 };
 
 const EMPRESA_TAB_INDEX = {
@@ -810,6 +811,17 @@ function ModernConfiguracoes() {
     }
   };
 
+
+  const handlePainelChamadaChange = (campo, valor) => {
+    setConfig({
+      ...config,
+      painelChamada: {
+        ...(config.painelChamada || {}),
+        [campo]: valor,
+      },
+    });
+  };
+
   const handleTemaChange = (campo, valor) => {
     if (!config || !config.tema) return;
     
@@ -1123,6 +1135,7 @@ function ModernConfiguracoes() {
             <Tab icon={<BackupIcon />} label="Backup" />
             <Tab icon={<CleanIcon />} label="Limpeza" disabled={!isSuperadmin} />
             <Tab icon={<BusinessIcon />} label="SaaS, cobrança e unidades" />
+            <Tab icon={<EventIcon />} label="Painel de Chamada" />
           </Tabs>
 
           {/* Dados do Salão e Empresa */}
@@ -1366,6 +1379,38 @@ function ModernConfiguracoes() {
           </TabPanel>
 
           {/* Horário de Funcionamento */}
+
+          <TabPanel value={tabValue} index={8}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Configure o comportamento da página pública /painel-chamada usada em TVs ou monitores de recepção.
+                </Alert>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Título do painel" value={config.painelChamada?.titulo || 'Painel de Chamada'} onChange={(e) => handlePainelChamadaChange('titulo', e.target.value)} size="small" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Mensagem de apoio" value={config.painelChamada?.subtitulo || 'Acompanhe os próximos atendimentos em tempo real.'} onChange={(e) => handlePainelChamadaChange('subtitulo', e.target.value)} size="small" />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="number" label="Atualizar a cada (segundos)" value={config.painelChamada?.intervaloAtualizacao || 30} onChange={(e) => handlePainelChamadaChange('intervaloAtualizacao', Number(e.target.value || 30))} size="small" inputProps={{ min: 5 }} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="number" label="Qtd. próximos chamados" value={config.painelChamada?.quantidadeProximos || 8} onChange={(e) => handlePainelChamadaChange('quantidadeProximos', Number(e.target.value || 8))} size="small" inputProps={{ min: 1, max: 20 }} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth type="color" label="Cor principal" value={config.painelChamada?.corPrimaria || '#7b1fa2'} onChange={(e) => handlePainelChamadaChange('corPrimaria', e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Mensagem quando não houver chamada" value={config.painelChamada?.mensagemVazio || 'Aguardando próximo cliente'} onChange={(e) => handlePainelChamadaChange('mensagemVazio', e.target.value)} size="small" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel control={<Switch checked={config.painelChamada?.mostrarProximos !== false} onChange={(e) => handlePainelChamadaChange('mostrarProximos', e.target.checked)} />} label="Mostrar fila de próximos clientes" />
+              </Grid>
+            </Grid>
+          </TabPanel>
+
           <TabPanel value={tabValue} index={1}>
             <Grid container spacing={3}>
               {diasSemana.map(dia => (

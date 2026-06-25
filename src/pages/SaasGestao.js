@@ -923,28 +923,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                   <Stack spacing={2}>{(portalForm.depoimentos || []).map((dep) => (<Paper key={dep.id} variant="outlined" sx={{ p: 2 }}><Grid container spacing={1}><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Nome" value={dep.nome} onChange={(e) => atualizarDepoimento(dep.id, 'nome', e.target.value)} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" type="number" label="Nota" value={dep.nota} onChange={(e) => atualizarDepoimento(dep.id, 'nota', e.target.value)} inputProps={{ min: 1, max: 5 }} /></Grid><Grid item xs={12} md={5}><TextField fullWidth size="small" label="Depoimento" value={dep.texto} onChange={(e) => atualizarDepoimento(dep.id, 'texto', e.target.value)} /></Grid><Grid item xs={12} md={2}><Button color="error" onClick={() => removerDepoimento(dep.id)}>Remover</Button></Grid></Grid></Paper>))}</Stack>
                   {(portalForm.depoimentos || []).length === 0 && <Typography variant="caption" color="text.secondary">Nenhum depoimento cadastrado.</Typography>}
 
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Depoimentos recebidos pelo portal do cliente</Typography>
-                  <Typography variant="caption" color="text.secondary">Aqui aparecem os depoimentos enviados na página Depoimentos do app do cliente. Aprove para adicionar à página pública e depois clique em Salvar página inicial.</Typography>
-                  <Stack spacing={1.5} sx={{ mt: 2 }}>
-                    {(depoimentosRecebidos || []).length === 0 && <Alert severity="info">Nenhum depoimento recebido pelo portal do cliente ainda.</Alert>}
-                    {(depoimentosRecebidos || []).slice(0, 6).map((dep) => (
-                      <Paper key={dep.id} variant="outlined" sx={{ p: 2, bgcolor: dep.status === 'aprovado' ? '#f1f8e9' : 'white' }}>
-                        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
-                          <Box>
-                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{dep.clienteNome || 'Cliente'}</Typography>
-                              <Chip size="small" label={`${dep.nota || 5} ★`} color="warning" />
-                              <Chip size="small" label={dep.status === 'aprovado' ? 'Aprovado' : 'Pendente'} color={dep.status === 'aprovado' ? 'success' : 'default'} />
-                            </Stack>
-                            <Typography variant="body2" sx={{ mt: 0.5 }}>“{dep.texto || 'Sem texto'}”</Typography>
-                            <Typography variant="caption" color="text.secondary">{dep.servicoNome || 'Atendimento'} • {formatDate(dep.createdAt || dep.dataAtendimento)}</Typography>
-                          </Box>
-                          <Button variant="contained" size="small" disabled={dep.status === 'aprovado'} onClick={() => aprovarDepoimentoRecebido(dep)}>Aprovar para o site</Button>
-                        </Stack>
-                      </Paper>
-                    ))}
-                  </Stack>
+                  <Alert severity="info" sx={{ mt: 2 }}>Depoimentos enviados pelo portal agora são aprovados em Marketing e Promoções &gt; Depoimentos.</Alert>
                 </Paper>
               </Grid>
 

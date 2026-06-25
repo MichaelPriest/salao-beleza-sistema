@@ -219,6 +219,13 @@ const menuGroups = [
         cargos: ['admin', 'gerente', 'atendente', 'profissional', 'cliente']
       },
       {
+        text: 'Painel de Chamada',
+        icon: <CampaignIcon />,
+        path: '/painel-chamada',
+        permission: 'gerenciar_agendamentos',
+        cargos: ['admin', 'gerente', 'atendente']
+      },
+      {
         text: 'Atendimentos',
         icon: <AssignmentTurnedInIcon />,
         path: '/atendimentos',
@@ -420,6 +427,13 @@ const menuGroups = [
         text: 'Campanhas',
         icon: <CampaignIcon />,
         path: '/campanhas',
+        permission: 'gerenciar_cupons',
+        cargos: ['admin', 'gerente']
+      },
+      {
+        text: 'Depoimentos',
+        icon: <StarsIcon />,
+        path: '/depoimentos',
         permission: 'gerenciar_cupons',
         cargos: ['admin', 'gerente']
       },
