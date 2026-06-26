@@ -57,6 +57,7 @@ const TENANT_SCOPED_COLLECTIONS = new Set([
   'movimentacoes_estoque',
   'notificacoes',
   'notificacoes_cliente',
+  'push_envios',
   'push_subscriptions',
   'orcamentos',
   'pagamentos',

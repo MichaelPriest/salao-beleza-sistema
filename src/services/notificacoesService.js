@@ -244,12 +244,10 @@ export const notificacoesService = {
       const result = await firebaseService.add('notificacoes', novaNotificacao);
       console.log('✅ Notificação criada com ID:', result.id);
 
-      browserPushService.notificarSePermitido({
-        titulo: novaNotificacao.titulo,
-        mensagem: novaNotificacao.mensagem,
-        link: novaNotificacao.link || '/notificacoes',
-        dados: { ...novaNotificacao, id: result.id },
-      });
+      await browserPushService.notificarNotificacaoCriada(
+        { ...novaNotificacao, id: result.id },
+        { tipoUsuario: 'admin', colecaoOrigem: 'notificacoes', defaultLink: '/notificacoes' }
+      );
 
       // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));

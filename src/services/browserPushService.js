@@ -4,6 +4,7 @@ import { firebaseService, getTenantContext } from './firebase';
 const VAPID_PUBLIC_KEY = process.env.REACT_APP_VAPID_PUBLIC_KEY || '';
 const SERVICE_WORKER_URL = '/service-worker.js';
 const LOCAL_STORAGE_KEY = 'push.subscription.local';
+const PUSH_OUTBOX_COLLECTION = 'push_envios';
 
 const normalizeBase64 = (base64String) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -22,6 +23,82 @@ const safeParse = (value, fallback = null) => {
     return fallback;
   }
 };
+
+const asArray = (value) => Array.isArray(value) ? value : [value];
+
+const uniqueIds = (values) => Array.from(new Set(asArray(values).flatMap((item) => {
+  if (!item) return [];
+  if (typeof item === 'object') {
+    return [
+      item.id,
+      item.uid,
+      item.authUid,
+      item.googleUid,
+      item.usuarioId,
+      item.clienteId,
+      item.email,
+    ];
+  }
+  return [item];
+}).filter(Boolean).map(String)));
+
+const getLocalUsuario = (tipoUsuario = 'admin') => {
+  if (typeof localStorage === 'undefined') return {};
+  if (tipoUsuario === 'cliente') {
+    return safeParse(localStorage.getItem('cliente'), null)
+      || safeParse(localStorage.getItem('clienteLogado'), null)
+      || safeParse(localStorage.getItem('firebaseUser'), null)
+      || {};
+  }
+  return safeParse(localStorage.getItem('usuario'), {}) || {};
+};
+
+const getTargetIds = (notificacao = {}, tipoUsuario = 'admin') => uniqueIds([
+  notificacao.usuarioId,
+  notificacao.userId,
+  notificacao.uid,
+  notificacao.destinatarioId,
+  notificacao.paraUsuarioId,
+  notificacao.adminId,
+  notificacao.profissionalId,
+  notificacao.clienteId,
+  notificacao.clienteUid,
+  notificacao.paraClienteId,
+  notificacao.email,
+  notificacao.clienteEmail,
+  notificacao.destinatarios,
+  notificacao.destinatarioIds,
+  notificacao.destinatariosIds,
+  notificacao.usuarios,
+  notificacao.usuarioIds,
+  notificacao.clienteIds,
+  tipoUsuario === 'cliente' ? notificacao.cliente : null,
+]);
+
+const isBroadcast = (notificacao = {}) =>
+  notificacao.todos === true || notificacao.broadcast === true || notificacao.tipoDestinatario === 'todos';
+
+const notificationMatchesLocalUser = (notificacao = {}, tipoUsuario = 'admin') => {
+  if (isBroadcast(notificacao)) return true;
+  const localIds = new Set(uniqueIds(getLocalUsuario(tipoUsuario)));
+  if (localIds.size === 0) return false;
+  return getTargetIds(notificacao, tipoUsuario).some((id) => localIds.has(id));
+};
+
+const buildPushPayload = (notificacao = {}, defaultLink = '/') => ({
+  title: notificacao.titulo || notificacao.title || 'Nova notificação',
+  body: notificacao.mensagem || notificacao.body || notificacao.descricao || '',
+  icon: notificacao.iconeUrl || notificacao.icon || notificacao.icone || '/logo192.png',
+  badge: notificacao.badge || '/logo192.png',
+  url: notificacao.link || notificacao.url || defaultLink,
+  tag: notificacao.id || `${notificacao.tipo || 'notificacao'}-${notificacao.createdAt || notificacao.data || Date.now()}`,
+  data: {
+    id: notificacao.id,
+    tipo: notificacao.tipo,
+    link: notificacao.link || notificacao.url || defaultLink,
+    createdAt: notificacao.createdAt || notificacao.data,
+  },
+});
 
 const buildUsuarioPayload = (usuario = {}, tipoUsuario = 'admin') => {
   const tenant = getTenantContext();
@@ -190,6 +267,88 @@ export const browserPushService = {
       console.warn('Não foi possível exibir notificação local:', error);
       return false;
     }
+  },
+
+  async registrarEnvioPush(notificacao = {}, { tipoUsuario = 'admin', colecaoOrigem = 'notificacoes', defaultLink = '/' } = {}) {
+    const agora = new Date().toISOString();
+    const tenant = getTenantContext();
+    const destinatarioIds = getTargetIds(notificacao, tipoUsuario);
+    const payload = buildPushPayload(notificacao, defaultLink);
+
+    try {
+      const camposBusca = tipoUsuario === 'cliente'
+        ? ['clienteId', 'usuarioId', 'uid', 'email']
+        : ['usuarioId', 'uid', 'email'];
+      const consultas = isBroadcast(notificacao) || destinatarioIds.length === 0
+        ? [
+          firebaseService.query('push_subscriptions', [
+            { field: 'tipoUsuario', operator: '==', value: tipoUsuario },
+            { field: 'ativo', operator: '==', value: true },
+          ]).catch(() => []),
+        ]
+        : destinatarioIds.flatMap((id) => camposBusca.map((field) =>
+          firebaseService.query('push_subscriptions', [
+            { field, operator: '==', value: id },
+            { field: 'ativo', operator: '==', value: true },
+          ]).catch(() => [])
+        ));
+      const encontrados = consultas.length > 0 ? (await Promise.all(consultas)).flat() : [];
+      const inscricoes = Array.from(new Map(encontrados.filter(Boolean).map((item) => [item.endpoint || item.id, item])).values());
+
+      await firebaseService.add(PUSH_OUTBOX_COLLECTION, {
+        notificacaoId: notificacao.id || null,
+        colecaoOrigem,
+        tipoUsuario,
+        destinatarioIds,
+        empresaId: notificacao.empresaId || tenant.empresaId || null,
+        unidadeId: notificacao.unidadeId || tenant.unidadeId || null,
+        broadcast: isBroadcast(notificacao),
+        payload,
+        inscricoes: inscricoes.map((item) => ({
+          id: item.id,
+          endpoint: item.endpoint,
+          usuarioId: item.usuarioId,
+          clienteId: item.clienteId,
+          tipoUsuario: item.tipoUsuario,
+        })),
+        totalInscricoes: inscricoes.length,
+        status: inscricoes.length > 0 ? 'pendente' : 'sem_inscricao',
+        tentativas: 0,
+        requerBackend: true,
+        createdAt: agora,
+        updatedAt: agora,
+      });
+      return { ok: true, totalInscricoes: inscricoes.length };
+    } catch (error) {
+      console.warn('Não foi possível registrar envio push remoto:', error);
+      return { ok: false, erro: error?.message };
+    }
+  },
+
+  async notificarNotificacaoCriada(notificacao = {}, options = {}) {
+    const {
+      tipoUsuario = 'admin',
+      colecaoOrigem = 'notificacoes',
+      defaultLink = tipoUsuario === 'cliente' ? '/cliente/notificacoes' : '/notificacoes',
+    } = options;
+    const payload = buildPushPayload(notificacao, defaultLink);
+
+    await Promise.all([
+      notificationMatchesLocalUser(notificacao, tipoUsuario)
+        ? this.notificarSePermitido({
+          titulo: payload.title,
+          mensagem: payload.body,
+          icon: payload.icon,
+          badge: payload.badge,
+          link: payload.url,
+          dados: payload.data,
+          tag: payload.tag,
+        })
+        : Promise.resolve(false),
+      this.registrarEnvioPush(notificacao, { tipoUsuario, colecaoOrigem, defaultLink }),
+    ]);
+
+    return true;
   },
 };
 

@@ -207,12 +207,10 @@ class NotificacoesPushService {
       const result = await firebaseService.add('notificacoes_cliente', novaNotificacao);
       console.log('✅ Notificação criada para cliente:', dados.clienteId);
 
-      browserPushService.notificarSePermitido({
-        titulo: novaNotificacao.titulo,
-        mensagem: novaNotificacao.mensagem,
-        link: novaNotificacao.link || '/cliente/notificacoes',
-        dados: { ...novaNotificacao, id: result.id },
-      });
+      await browserPushService.notificarNotificacaoCriada(
+        { ...novaNotificacao, id: result.id },
+        { tipoUsuario: 'cliente', colecaoOrigem: 'notificacoes_cliente', defaultLink: '/cliente/notificacoes' }
+      );
       
       // Incrementar contagem para este cliente (simulação)
       // Na prática, isso seria feito via polling ou WebSocket
