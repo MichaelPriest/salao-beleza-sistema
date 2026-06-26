@@ -5,6 +5,7 @@ import { firebaseService } from '../services/firebase';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, doc, getDoc, setDoc, db, setTenantContextFromUser, clearTenantContext } from '../services/firebase';
 import { auditoriaService } from '../services/auditoriaService'; // 🔥 NOVO
 import { caixaService } from '../services/caixaService';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 const AuthContext = createContext({});
 
@@ -151,7 +152,7 @@ export const AuthProvider = ({ children }) => {
             };
 
             setUser(usuarioCompleto);
-            localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+            safeSetUsuarioStorage(usuarioCompleto);
             setTenantContextFromUser(usuarioCompleto);
 
           } else {
@@ -184,7 +185,7 @@ export const AuthProvider = ({ children }) => {
               };
 
               setUser(usuarioCompleto);
-              localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+              safeSetUsuarioStorage(usuarioCompleto);
               setTenantContextFromUser(usuarioCompleto);
             } else {
               console.log('❌ AuthContext - Usuário não encontrado no sistema');
@@ -283,7 +284,7 @@ export const AuthProvider = ({ children }) => {
           };
 
           setUser(usuarioCompleto);
-          localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+          safeSetUsuarioStorage(usuarioCompleto);
           setTenantContextFromUser(usuarioCompleto);
 
           // 🔥 REGISTRAR LOGIN NA AUDITORIA
@@ -318,7 +319,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       setUser(usuarioCompleto);
-      localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
+      safeSetUsuarioStorage(usuarioCompleto);
       setTenantContextFromUser(usuarioCompleto);
 
       // 🔥 REGISTRAR LOGIN NA AUDITORIA

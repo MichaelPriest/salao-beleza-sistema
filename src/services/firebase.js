@@ -257,16 +257,16 @@ const buildSessionFromUrl = () => {
   // CORREÇÃO: Pega o último hash da URL (onde os parâmetros do Supabase estão)
   const fullHash = window.location.hash;
   const lastHashIndex = fullHash.lastIndexOf('#');
-  
+
   // Se tem dois hashes, pega a parte após o último
   // Ex: "#/cliente/recuperar-senha#access_token=xxx" -> "access_token=xxx"
   const paramsString = lastHashIndex > 0 && lastHashIndex !== fullHash.indexOf('#')
     ? fullHash.substring(lastHashIndex + 1)
     : fullHash.substring(1);
-  
+
   const hashParams = new URLSearchParams(paramsString);
   const searchParams = new URLSearchParams(window.location.search);
-  
+
   // Suporta tanto 'code' (PKCE) quanto 'access_token' (implícito)
   const code = hashParams.get('code') || searchParams.get('code');
   const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
@@ -298,14 +298,14 @@ const buildSessionFromUrl = () => {
 
 const clearAuthParamsFromUrl = () => {
   if (typeof window === 'undefined') return;
-  
+
   // Limpa apenas os parâmetros de autenticação do hash
   const currentHash = window.location.hash;
   const hashWithoutParams = currentHash.split('?')[0].split('#')[0];
-  
+
   // Remove os parâmetros de autenticação
   const cleanHash = hashWithoutParams.replace(/[?&](access_token|refresh_token|token_type|expires_in|type)=[^&]*/g, '');
-  
+
   if (cleanHash !== currentHash.split('?')[0]) {
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}${cleanHash}`);
   }
@@ -317,7 +317,7 @@ const supabaseFetch = async (path, options = {}) => {
   const request = async (authorizationToken) => {
     const fullUrl = `${SUPABASE_URL}${path}`;
     console.log('🌐 Supabase Fetch:', fullUrl);
-    
+
     const response = await fetch(fullUrl, {
       ...options,
       headers: {
@@ -331,11 +331,11 @@ const supabaseFetch = async (path, options = {}) => {
 
     const text = await response.text();
     const data = text ? JSON.parse(text) : null;
-    
+
     if (!response.ok) {
       console.error('❌ Supabase error:', response.status, data);
     }
-    
+
     return { response, data };
   };
 
@@ -710,15 +710,15 @@ const operatorMap = {
 const buildQueryString = (collectionName, conditions = [], orderByField = null, { jsonData = true } = {}) => {
   const params = new URLSearchParams();
   params.append('select', '*');
-  
+
   console.log('🔨 buildQueryString - conditions:', JSON.stringify(conditions));
-  
+
   conditions
     .filter(({ field, value }) => field && value !== undefined && value !== null)
     .forEach(({ field, operator = '==', value }) => {
       const supabaseOperator = operatorMap[operator] || operator;
       const filterField = jsonData ? `data->>${field}` : field;
-      
+
       if (supabaseOperator === 'in' && Array.isArray(value)) {
         params.append(filterField, `in.(${value.map(encodeFilterValue).join(',')})`);
       } else if (supabaseOperator === 'cs') {
@@ -731,10 +731,10 @@ const buildQueryString = (collectionName, conditions = [], orderByField = null, 
   if (orderByField) {
     params.append('order', jsonData ? `data->>${orderByField}` : orderByField);
   }
-  
+
   const queryString = params.toString();
   console.log('🔨 buildQueryString - output:', queryString);
-  
+
   return queryString;
 };
 
@@ -905,7 +905,7 @@ export const getCurrentAuthUser = async () => {
 
 export const consumeSupabaseAuthRedirect = async () => {
   const sessionFromUrl = buildSessionFromUrl();
-  
+
   // Se tem 'code', precisamos trocar por token via PKCE
   if (sessionFromUrl?.code) {
     console.log('🔄 Trocando código PKCE por token...');
@@ -917,7 +917,7 @@ export const consumeSupabaseAuthRedirect = async () => {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           code: sessionFromUrl.code
         })
       });
@@ -931,18 +931,18 @@ export const consumeSupabaseAuthRedirect = async () => {
       }
 
       console.log('✅ Token obtido com sucesso via PKCE');
-      
+
       // Salvar a sessão com os tokens
       setStoredSession(tokenData);
-      
+
       // Buscar dados do usuário
       const user = await getCurrentAuthUser();
       const hydratedSession = { ...tokenData, user };
       setStoredSession(hydratedSession);
-      
+
       // Limpar parâmetros da URL
       clearAuthParamsFromUrl();
-      
+
       return hydratedSession;
     } catch (error) {
       console.error('❌ Erro ao trocar code por token:', error);
@@ -989,19 +989,19 @@ export const onAuthStateChanged = (_auth, callback) => {
 export const sendPasswordResetEmail = async (_auth, email, actionCodeSettings = {}) => {
   // Forçar o uso de hash no redirect URL
   const baseRedirectUrl = actionCodeSettings.url || getRedirectUrl(DEFAULT_RESET_REDIRECT_PATH);
-  
+
   // Converter a URL normal para URL com hash
-  // Ex: https://dominio.com/cliente/recuperar-senha 
+  // Ex: https://dominio.com/cliente/recuperar-senha
   //  -> https://dominio.com/#/cliente/recuperar-senha
   let hashUrl = baseRedirectUrl.replace(/\/(cliente\/[^?]+)/, '/#$1');
-  
+
   // Garantir que não há parâmetros duplicados
   if (!hashUrl.includes('?')) {
     hashUrl = hashUrl.replace(/#$/, '');
   }
-  
+
   console.log('📧 Enviando recuperação com redirect:', hashUrl);
-  
+
   await authRequest(appendRedirectTo('recover', hashUrl), { email });
 };
 
@@ -1125,7 +1125,7 @@ export const firebaseService = {
           documentData = toDocument(rowsByGoogle?.[0]) || null;
         }
       }
-      
+
       if (canReadDocumentByIdWithoutTenant(collectionName, id)) return documentData;
       return isDocumentVisibleInTenant(collectionName, documentData) ? documentData : null;
     } catch (error) {
@@ -1273,14 +1273,14 @@ export const firebaseService = {
   query: async (collectionName, conditions = [], orderByField = null) => {
     try {
       console.log('🔍 firebaseService.query - Entrada:', { collectionName, conditions, orderByField });
-      
+
       const scopedConditions = mergeTenantConditions(collectionName, conditions);
       console.log('🔍 Condições com tenant:', JSON.stringify(scopedConditions));
-      
+
       const queryString = buildQueryString(collectionName, scopedConditions, orderByField);
       const url = `/rest/v1/${collectionName}?${queryString}`;
       console.log('🔍 URL:', url);
-      
+
       let result;
       try {
         result = await supabaseFetch(url);
@@ -1290,7 +1290,7 @@ export const firebaseService = {
         result = await supabaseFetch(`/rest/v1/${collectionName}?${directQueryString}`);
       }
       const documents = toDocuments(result);
-      
+
       console.log('✅ firebaseService.query - Resultado:', documents.length, 'documentos');
       return documents;
     } catch (error) {

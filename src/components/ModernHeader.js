@@ -30,6 +30,11 @@ import {
   SwipeableDrawer,
   TextField,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -56,6 +61,7 @@ import {
   PointOfSale as PointOfSaleIcon,
   AdminPanelSettings as AdminIcon,
   Business as BusinessIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { motion } from 'framer-motion';
@@ -67,17 +73,13 @@ import { notificacoesService } from '../services/notificacoesService';
 import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
+import { getLocalDateTime } from '../utils/dateTimeUtils';
 
 // ============================================
 // FUNÇÕES DE HORÁRIO DE BRASÍLIA
 // ============================================
-const getBrasiliaTime = () => {
-  const now = new Date();
-  const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
-  const hora = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-  const diaSemana = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short' });
-  return { data, hora, diaSemana, completo: `${data} ${hora}` };
-};
+const getBrasiliaTime = () => getLocalDateTime();
 
 // ============================================
 // COMPONENTES ESTILIZADOS
@@ -213,11 +215,13 @@ function ModernHeader() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
+  const [configSistema, setConfigSistema] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unidades, setUnidades] = useState([]);
   const [unidadeAtualId, setUnidadeAtualId] = useState('');
   const [loadingUnidades, setLoadingUnidades] = useState(false);
   const [caixaResumo, setCaixaResumo] = useState({ caixaAberto: null, totais: null, loading: true });
+  const [promptCaixa, setPromptCaixa] = useState({ open: false, valorAbertura: 0, observacao: '', concluir: null });
   
   const isMounted = useRef(true);
   const notificationInterval = useRef(null);
@@ -234,7 +238,20 @@ function ModernHeader() {
   const MIN_SEARCH_CHARS = 2;
 
   const isSaasAdmin = usuario ? isSaasPlatformAdmin(usuario) : false;
+  const salaoConfig = configSistema?.salao || {};
+  const logoEstabelecimento = salaoConfig.logo || usuario?.empresa?.sitePublico?.logo || usuario?.empresa?.logo || null;
+  const nomeEstabelecimento = salaoConfig.nomeFantasia || salaoConfig.nome || usuario?.empresaNome || usuario?.empresa?.nome || 'Sistema';
   const isTenantMode = !!getTenantContext().empresaId;
+
+
+  const carregarConfigSistema = useCallback(async () => {
+    try {
+      const configs = await firebaseService.getAll('configuracoes').catch(() => []);
+      setConfigSistema(configs?.[0] || null);
+    } catch (error) {
+      console.warn('Header - Erro ao carregar configuração do sistema:', error);
+    }
+  }, []);
 
   const carregarUsuario = () => {
     try {
@@ -278,6 +295,7 @@ function ModernHeader() {
 
   useEffect(() => {
     carregarUsuario();
+    carregarConfigSistema();
     carregarUnidades();
     const handleUsuarioAtualizado = () => { carregarUsuario(); carregarUnidades(); };
     window.addEventListener('usuarioAtualizado', handleUsuarioAtualizado);
@@ -305,6 +323,26 @@ function ModernHeader() {
     const interval = setInterval(carregarStatusCaixa, 30000);
     return () => clearInterval(interval);
   }, [usuario, carregarStatusCaixa]);
+
+  useEffect(() => {
+    const handleSolicitarAberturaCaixa = (event) => {
+      event.detail?.marcarComoTratado?.();
+      setPromptCaixa({ open: true, valorAbertura: 0, observacao: '', concluir: event.detail?.concluir });
+    };
+    window.addEventListener('caixaSolicitarAbertura', handleSolicitarAberturaCaixa);
+    return () => window.removeEventListener('caixaSolicitarAbertura', handleSolicitarAberturaCaixa);
+  }, []);
+
+  const fecharPromptCaixa = async (abrir = false) => {
+    const concluir = promptCaixa.concluir;
+    const payload = { abrir, valorAbertura: promptCaixa.valorAbertura, observacao: promptCaixa.observacao || 'Abertura solicitada pelo sistema' };
+    setPromptCaixa({ open: false, valorAbertura: 0, observacao: '', concluir: null });
+    if (concluir) await concluir(payload);
+    if (abrir) {
+      toast.success('Caixa aberto com sucesso');
+      carregarStatusCaixa();
+    }
+  };
 
   const carregarNotificacoes = useCallback(async (force = false) => {
     const user = usuariosService.getUsuarioAtual();
@@ -362,7 +400,7 @@ function ModernHeader() {
     const user = usuariosService.getUsuarioAtual() || usuario || {};
     const usuarioAtualizado = { ...user, unidadeId: unidadeSelecionada?.id || null, unidadeNome: unidadeSelecionada?.nome || null, unidade: unidadeSelecionada };
     setTenantContext({ empresaId: tenant.empresaId || user.empresaId || user.empresa?.id, empresa: tenant.empresa || user.empresa, unidadeId: unidadeSelecionada?.id || null, unidade: unidadeSelecionada });
-    localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+    safeSetUsuarioStorage(usuarioAtualizado);
     setUsuario(usuarioAtualizado);
     usuarioRef.current = usuarioAtualizado;
     setUnidadeAtualId(unidadeId);
@@ -393,9 +431,15 @@ function ModernHeader() {
           sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }}>
           <Toolbar sx={{ minHeight: 56, px: 1 }}>
             <IconButton edge="start" color="inherit" onClick={() => setMobileMenuOpen(true)} sx={{ mr: 1 }}><MenuIcon /></IconButton>
-            <Typography variant="subtitle1" noWrap component="div" sx={{ fontWeight: 600, color: '#667eea', flex: 1 }}>
-              {isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'}`}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+              <Avatar src={logoEstabelecimento || undefined} sx={{ width: 34, height: 34, bgcolor: '#667eea' }}>
+                {!logoEstabelecimento && <BusinessIcon fontSize="small" />}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" noWrap sx={{ fontWeight: 800, color: '#667eea' }}>{nomeEstabelecimento}</Typography>
+                <Typography variant="caption" noWrap sx={{ display: 'block', color: 'text.secondary' }}>{isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'}`}</Typography>
+              </Box>
+            </Box>
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
               {!isSaasAdmin && <IconButton color="inherit"><SearchIcon /></IconButton>}
               {renderCaixaStatusChip(true)}
@@ -414,20 +458,20 @@ function ModernHeader() {
   // RENDERIZAÇÃO DESKTOP
   // ============================================
   return (
+    <>
     <AppBar position="static" color="inherit" elevation={0}
       sx={{ borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(20px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }}>
       <Toolbar>
         {/* ✅ CORRIGIDO: Box no lugar de Stack */}
-        <Typography variant="h6" noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' } }}>
-          {isSaasAdmin && !isTenantMode ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AdminIcon sx={{ color: '#667eea' }} />
-              <span>Painel SaaS</span>
-            </Box>
-          ) : (
-            <>Olá, {usuario?.nome?.split(' ')[0] || 'Usuário'} 👋</>
-          )}
-        </Typography>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.5, minWidth: 220 }}>
+          <Avatar src={logoEstabelecimento || undefined} sx={{ width: 42, height: 42, bgcolor: '#667eea' }}>
+            {!logoEstabelecimento && (isSaasAdmin && !isTenantMode ? <AdminIcon /> : <BusinessIcon />)}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800, color: '#2c2c2c' }}>{nomeEstabelecimento}</Typography>
+            <Typography variant="caption" noWrap color="text.secondary">{isSaasAdmin && !isTenantMode ? 'Painel SaaS' : `Olá, ${usuario?.nome?.split(' ')[0] || 'Usuário'} 👋`}</Typography>
+          </Box>
+        </Box>
 
         {!(isSaasAdmin && !isTenantMode) && (
           <Search isMobile={false}>
@@ -512,6 +556,21 @@ function ModernHeader() {
         </Menu>
       </Toolbar>
     </AppBar>
+    <Dialog open={promptCaixa.open} onClose={() => fecharPromptCaixa(false)} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ bgcolor: '#4caf50', color: 'white' }}><AccountBalanceIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Abrir caixa agora?</DialogTitle>
+      <DialogContent>
+        <Box sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>Não há caixa aberto. Para finalizar recebimentos e integrar o financeiro, abra o caixa antes de continuar.</Alert>
+          <TextField fullWidth type="number" label="Valor de abertura" value={promptCaixa.valorAbertura} onChange={(e) => setPromptCaixa({ ...promptCaixa, valorAbertura: e.target.value })} sx={{ mb: 2 }} InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }} />
+          <TextField fullWidth multiline rows={3} label="Observação" value={promptCaixa.observacao} onChange={(e) => setPromptCaixa({ ...promptCaixa, observacao: e.target.value })} placeholder="Ex.: fundo inicial entregue ao operador." />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => fecharPromptCaixa(false)}>Agora não</Button>
+        <Button variant="contained" color="success" onClick={() => fecharPromptCaixa(true)}>Abrir caixa</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }
 

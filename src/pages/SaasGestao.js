@@ -64,7 +64,9 @@ const formatCurrency = (value, currency = 'BRL') =>
 
 const formatDate = (value) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 };
 
 const getStatusColor = (status) => {
@@ -95,6 +97,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
   const [assinatura, setAssinatura] = useState(null);
   const [faturas, setFaturas] = useState([]);
   const [pagamentos, setPagamentos] = useState([]);
+  const [depoimentosRecebidos, setDepoimentosRecebidos] = useState([]);
   const [checkout, setCheckout] = useState(null);
   const [paymentConfig, setPaymentConfig] = useState(CONFIG_COBRANCA_PADRAO);
   const [empresaForm, setEmpresaForm] = useState({ nome: '', documento: '', razaoSocial: '', email: '', telefone: '', planoId: 'individual', responsavelFinanceiro: '', emailFinanceiro: '', telefoneFinanceiro: '', documentoCobranca: '', enderecoCobranca: '', diaVencimento: 5, observacoesCobranca: '' });
@@ -115,6 +118,15 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     mostrarAreaRestrita: true,
     mostrarRedesSociais: true,
     mostrarBanner: true,
+    chamadaPrincipal: 'Beleza, tecnologia e cuidado em um só lugar.',
+    diferenciais: 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+    depoimentoDestaque: '',
+    horarioAtendimento: '',
+    enderecoPublico: '',
+    bannerGaleria: [],
+    depoimentos: [],
+    mostrarDepoimentos: true,
+    textoBotaoPrincipal: 'Agendar agora',
   });
 
   const planoAtual = useMemo(() => {
@@ -141,12 +153,13 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         return;
       }
 
-      const [empresaData, unidadesData, assinaturaData, faturasData, pagamentosData] = await Promise.all([
+      const [empresaData, unidadesData, assinaturaData, faturasData, pagamentosData, avaliacoesData] = await Promise.all([
         firebaseService.getById('empresas', contexto.empresaId),
         saasService.listarUnidades(contexto.empresaId),
         saasService.buscarAssinaturaAtual(contexto.empresaId),
         firebaseService.query('faturas_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
         firebaseService.query('pagamentos_saas', [{ field: 'empresaId', operator: '==', value: contexto.empresaId }]).catch(() => []),
+        firebaseService.query('avaliacoes', [{ field: 'tipo', operator: '==', value: 'depoimento_atendimento' }], 'createdAt', 'desc').catch(() => []),
       ]);
 
       setEmpresa(empresaData);
@@ -154,6 +167,7 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
       setAssinatura(assinaturaData);
       setFaturas(faturasData);
       setPagamentos(pagamentosData);
+      setDepoimentosRecebidos((avaliacoesData || []).filter((item) => item.origem === 'portal_cliente' || item.tipo === 'depoimento_atendimento'));
       const configGlobal = await saasService.buscarConfigCobranca().catch(() => CONFIG_COBRANCA_PADRAO);
       const metodosDisponiveis = metodosAtivosNoGateway(configGlobal.provider, configGlobal.metodosPagamento || CONFIG_COBRANCA_PADRAO.metodosPagamento);
       setPaymentConfig({
@@ -200,6 +214,15 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         mostrarAreaRestrita: empresaData?.sitePublico?.mostrarAreaRestrita !== false,
         mostrarRedesSociais: empresaData?.sitePublico?.mostrarRedesSociais !== false,
         mostrarBanner: empresaData?.sitePublico?.mostrarBanner !== false,
+        chamadaPrincipal: empresaData?.sitePublico?.chamadaPrincipal || 'Beleza, tecnologia e cuidado em um só lugar.',
+        diferenciais: empresaData?.sitePublico?.diferenciais || 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+        depoimentoDestaque: empresaData?.sitePublico?.depoimentoDestaque || '',
+        horarioAtendimento: empresaData?.sitePublico?.horarioAtendimento || '',
+        enderecoPublico: empresaData?.sitePublico?.enderecoPublico || '',
+        bannerGaleria: empresaData?.sitePublico?.bannerGaleria || [],
+        depoimentos: empresaData?.sitePublico?.depoimentos || [],
+        mostrarDepoimentos: empresaData?.sitePublico?.mostrarDepoimentos !== false,
+        textoBotaoPrincipal: empresaData?.sitePublico?.textoBotaoPrincipal || 'Agendar agora',
       });
     } catch (error) {
       console.error('Erro ao carregar SaaS:', error);
@@ -300,6 +323,70 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
     }
   };
 
+  const handlePortalBannerGaleriaChange = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    try {
+      const imagens = await Promise.all(files.filter((file) => file.type.startsWith('image/')).map(async (file) => ({ id: `${Date.now()}_${file.name}`, nome: file.name, url: await fileToBase64(file) })));
+      setPortalForm((current) => ({ ...current, bannerGaleria: [...(current.bannerGaleria || []), ...imagens] }));
+    } catch (error) {
+      console.error('Erro ao carregar banners:', error);
+      toast.error('Erro ao carregar banners adicionais.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const removerBannerGaleria = (bannerId) => {
+    setPortalForm((current) => ({ ...current, bannerGaleria: (current.bannerGaleria || []).filter((banner) => banner.id !== bannerId) }));
+  };
+
+  const adicionarDepoimento = () => {
+    setPortalForm((current) => ({ ...current, depoimentos: [...(current.depoimentos || []), { id: Date.now().toString(), nome: '', texto: '', nota: 5 }] }));
+  };
+
+  const atualizarDepoimento = (id, field, value) => {
+    setPortalForm((current) => ({ ...current, depoimentos: (current.depoimentos || []).map((item) => item.id === id ? { ...item, [field]: value } : item) }));
+  };
+
+  const removerDepoimento = (id) => {
+    setPortalForm((current) => ({ ...current, depoimentos: (current.depoimentos || []).filter((item) => item.id !== id) }));
+  };
+
+
+  const aprovarDepoimentoRecebido = async (depoimento) => {
+    const depoimentoPublicado = {
+      id: depoimento.id || Date.now().toString(),
+      nome: depoimento.clienteNome || 'Cliente',
+      texto: depoimento.texto || '',
+      nota: depoimento.nota || 5,
+      servicoNome: depoimento.servicoNome || '',
+      atendimentoId: depoimento.atendimentoId || null,
+    };
+
+    setPortalForm((current) => ({
+      ...current,
+      depoimentos: [
+        ...(current.depoimentos || []).filter((item) => item.id !== depoimentoPublicado.id),
+        depoimentoPublicado,
+      ],
+    }));
+
+    try {
+      if (depoimento.id) {
+        await firebaseService.update('avaliacoes', depoimento.id, {
+          status: 'aprovado',
+          aprovadoEm: new Date().toISOString(),
+        });
+      }
+      setDepoimentosRecebidos((current) => current.map((item) => item.id === depoimento.id ? { ...item, status: 'aprovado' } : item));
+      toast.success('Depoimento aprovado e adicionado à prévia. Clique em Salvar página inicial para publicar.');
+    } catch (error) {
+      console.error('Erro ao aprovar depoimento:', error);
+      toast.error('Não foi possível aprovar o depoimento.');
+    }
+  };
+
   const salvarPortalEmpresa = async (event) => {
     event.preventDefault();
     if (!empresa?.id) {
@@ -326,6 +413,15 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
           mostrarAreaRestrita: portalForm.mostrarAreaRestrita,
           mostrarRedesSociais: portalForm.mostrarRedesSociais,
           mostrarBanner: portalForm.mostrarBanner,
+          chamadaPrincipal: portalForm.chamadaPrincipal,
+          diferenciais: portalForm.diferenciais,
+          depoimentoDestaque: portalForm.depoimentoDestaque,
+          horarioAtendimento: portalForm.horarioAtendimento,
+          enderecoPublico: portalForm.enderecoPublico,
+          bannerGaleria: portalForm.bannerGaleria || [],
+          depoimentos: portalForm.depoimentos || [],
+          mostrarDepoimentos: portalForm.mostrarDepoimentos !== false,
+          textoBotaoPrincipal: portalForm.textoBotaoPrincipal || 'Agendar agora',
         }
       });
       setEmpresa(atualizada);
@@ -345,6 +441,15 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
         mostrarAreaRestrita: atualizada.sitePublico?.mostrarAreaRestrita !== false,
         mostrarRedesSociais: atualizada.sitePublico?.mostrarRedesSociais !== false,
         mostrarBanner: atualizada.sitePublico?.mostrarBanner !== false,
+        chamadaPrincipal: atualizada.sitePublico?.chamadaPrincipal || 'Beleza, tecnologia e cuidado em um só lugar.',
+        diferenciais: atualizada.sitePublico?.diferenciais || 'Agenda online, equipe especializada, lembretes automáticos e atendimento personalizado.',
+        depoimentoDestaque: atualizada.sitePublico?.depoimentoDestaque || '',
+        horarioAtendimento: atualizada.sitePublico?.horarioAtendimento || '',
+        enderecoPublico: atualizada.sitePublico?.enderecoPublico || '',
+        bannerGaleria: atualizada.sitePublico?.bannerGaleria || [],
+        depoimentos: atualizada.sitePublico?.depoimentos || [],
+        mostrarDepoimentos: atualizada.sitePublico?.mostrarDepoimentos !== false,
+        textoBotaoPrincipal: atualizada.sitePublico?.textoBotaoPrincipal || 'Agendar agora',
       });
       toast.success('Página inicial da empresa atualizada.');
     } catch (error) {
@@ -748,12 +853,42 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                     <input type="file" accept="image/*" hidden onChange={(e) => handlePortalImageChange('bannerUrl', e)} />
                   </Button>
                   <Typography variant="caption" color="text.secondary">As imagens de logo e banner são salvas em base64; não é necessário informar URL externa.</Typography>
-                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
+                  {portalForm.bannerUrl && <Box component="img" src={portalForm.bannerUrl} alt="Banner" sx={{ width: '100%', maxHeight: 220, objectFit: 'contain', bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />}
                   {portalForm.bannerUrl && <Button color="error" size="small" onClick={() => setPortalForm({ ...portalForm, bannerUrl: '' })}>Remover banner</Button>}
                 </Stack>
               </Grid>
               <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+                      <Box><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Banners adicionais</Typography><Typography variant="caption" color="text.secondary">Inclua várias imagens para destacar promoções, equipe, ambiente ou campanhas.</Typography></Box>
+                      <Button variant="outlined" component="label" size="small">Adicionar imagens<input type="file" accept="image/*" multiple hidden onChange={handlePortalBannerGaleriaChange} /></Button>
+                    </Box>
+                    <Grid container spacing={1}>{(portalForm.bannerGaleria || []).map((banner) => (<Grid item xs={6} md={3} key={banner.id}><Box component="img" src={banner.url} alt={banner.nome} sx={{ width: '100%', height: 110, objectFit: 'contain', bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }} /><Button color="error" size="small" onClick={() => removerBannerGaleria(banner.id)}>Remover</Button></Grid>))}</Grid>
+                    {(portalForm.bannerGaleria || []).length === 0 && <Typography variant="caption" color="text.secondary">Nenhum banner adicional cadastrado.</Typography>}
+                  </Stack>
+                </Paper>
+              </Grid>
+              <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Subtítulo" value={portalForm.subtitulo} onChange={(e) => setPortalForm({ ...portalForm, subtitulo: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth multiline minRows={2} label="Chamada principal" value={portalForm.chamadaPrincipal} onChange={(e) => setPortalForm({ ...portalForm, chamadaPrincipal: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth multiline minRows={2} label="Diferenciais/benefícios" value={portalForm.diferenciais} onChange={(e) => setPortalForm({ ...portalForm, diferenciais: e.target.value })} helperText="Separe por vírgulas para aparecer em cards no site." />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Horário de atendimento" value={portalForm.horarioAtendimento} onChange={(e) => setPortalForm({ ...portalForm, horarioAtendimento: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Endereço público" value={portalForm.enderecoPublico} onChange={(e) => setPortalForm({ ...portalForm, enderecoPublico: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Depoimento em destaque" value={portalForm.depoimentoDestaque} onChange={(e) => setPortalForm({ ...portalForm, depoimentoDestaque: e.target.value })} />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Texto do botão principal" value={portalForm.textoBotaoPrincipal} onChange={(e) => setPortalForm({ ...portalForm, textoBotaoPrincipal: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField select fullWidth label="Página ativa" value={portalForm.ativo ? 'sim' : 'nao'} onChange={(e) => setPortalForm({ ...portalForm, ativo: e.target.value === 'sim' })}>
@@ -779,6 +914,31 @@ function SaasGestao({ initialTab = 0, embedded = false }) {
                   <MenuItem value="nao">Não</MenuItem>
                 </TextField>
               </Grid>
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
+                    <Box><Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Depoimentos do app do cliente</Typography><Typography variant="caption" color="text.secondary">Cadastre depoimentos e visualize antes de liberar na página pública.</Typography></Box>
+                    <Button variant="outlined" size="small" onClick={adicionarDepoimento}>Adicionar depoimento</Button>
+                  </Stack>
+                  <Stack spacing={2}>{(portalForm.depoimentos || []).map((dep) => (<Paper key={dep.id} variant="outlined" sx={{ p: 2 }}><Grid container spacing={1}><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Nome" value={dep.nome} onChange={(e) => atualizarDepoimento(dep.id, 'nome', e.target.value)} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" type="number" label="Nota" value={dep.nota} onChange={(e) => atualizarDepoimento(dep.id, 'nota', e.target.value)} inputProps={{ min: 1, max: 5 }} /></Grid><Grid item xs={12} md={5}><TextField fullWidth size="small" label="Depoimento" value={dep.texto} onChange={(e) => atualizarDepoimento(dep.id, 'texto', e.target.value)} /></Grid><Grid item xs={12} md={2}><Button color="error" onClick={() => removerDepoimento(dep.id)}>Remover</Button></Grid></Grid></Paper>))}</Stack>
+                  {(portalForm.depoimentos || []).length === 0 && <Typography variant="caption" color="text.secondary">Nenhum depoimento cadastrado.</Typography>}
+
+                  <Alert severity="info" sx={{ mt: 2 }}>Depoimentos enviados pelo portal agora são aprovados em Marketing e Promoções &gt; Depoimentos.</Alert>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: '#fafafa' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>Pré-visualização antes de publicar</Typography>
+                  <Box sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'white' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: portalForm.corPrimaria }}>{portalForm.titulo || empresa?.nome || 'Sua empresa'}</Typography>
+                    <Typography color="text.secondary">{portalForm.chamadaPrincipal || portalForm.subtitulo}</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>{String(portalForm.diferenciais || '').split(',').filter(Boolean).slice(0, 4).map((item) => <Chip key={item} label={item.trim()} size="small" />)}</Box>
+                    {(portalForm.depoimentos || []).filter((dep) => dep.nome || dep.texto).slice(0, 2).map((dep) => <Alert key={dep.id} severity="success" sx={{ mt: 1 }}>“{dep.texto || 'Depoimento do cliente'}” — {dep.nome || 'Cliente'}</Alert>)}
+                  </Box>
+                </Paper>
+              </Grid>
+
               <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Conteúdo exibido na página pública</Typography>

@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { consumeSupabaseAuthRedirect, supabaseConfig } from '../services/firebase';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 const SUPABASE_URL = supabaseConfig.url;
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || 'sb_publishable_9mLVarTs_RJIO26978SX5Q_uMtcfYzW';
@@ -261,7 +262,7 @@ function ModernLogin() {
             }
             
             // Salvar usuário no localStorage
-            localStorage.setItem('usuario', JSON.stringify(criarResultado.data));
+            safeSetUsuarioStorage(criarResultado.data);
             toast.success(`Bem-vindo, ${criarResultado.data.nome || criarResultado.data.email}!`);
             
             navigate('/dashboard', { replace: true });
@@ -269,7 +270,7 @@ function ModernLogin() {
           }
           
           // Usuário encontrado
-          localStorage.setItem('usuario', JSON.stringify(resultado.data));
+          safeSetUsuarioStorage(resultado.data);
           toast.success(`Bem-vindo, ${resultado.data.nome || resultado.data.email}!`);
           
           navigate('/dashboard', { replace: true });

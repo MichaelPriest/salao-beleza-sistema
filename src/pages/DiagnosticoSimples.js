@@ -11,6 +11,7 @@ import {
   CardContent,
 } from '@mui/material';
 import api from '../services/api';
+import { safeSetUsuarioStorage } from '../utils/storageUtils';
 
 function DiagnosticoSimples() {
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ function DiagnosticoSimples() {
         email: "teste@email.com",
         cargo: "admin"
       };
-      localStorage.setItem('usuario', JSON.stringify(mockUser));
+      safeSetUsuarioStorage(mockUser);
       setResultado({
         status: '✅ Login Mock OK',
         usuario: mockUser

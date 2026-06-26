@@ -11,6 +11,7 @@ import {
   Tooltip,
   Chip,
   Stack,
+  Avatar,
 } from '@mui/material';
 import {
   Copyright as CopyrightIcon,
@@ -19,6 +20,7 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   LocationOn as LocationIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { firebaseService } from '../services/firebase';
@@ -36,16 +38,19 @@ function Footer() {
     
     window.addEventListener('scroll', handleScroll);
     
-    // Verificar se estamos no SiteSalao (sem sidebar)
+    // Verificar se o footer deve ocupar largura total ou compensar sidebar administrativa.
     const checkIfSiteSalao = () => {
-      // Verifica se existe sidebar na página
+      const pathname = window.location.pathname || '';
       const sidebar = document.querySelector('.MuiDrawer-paper');
-      const isAdminPage = window.location.pathname.includes('/admin') || 
-                         window.location.pathname.includes('/dashboard') ||
-                         window.location.pathname.includes('/login') && !window.location.pathname.includes('/cliente');
-      
-      // Se não tem sidebar OU é página de admin com sidebar, ajusta
-      if (!sidebar || !isAdminPage) {
+      const isClientePortal = pathname.startsWith('/cliente');
+      const isMobileViewport = window.innerWidth < 900;
+      const isAdminPage = !isClientePortal && (
+        pathname.includes('/admin')
+        || pathname.includes('/dashboard')
+        || (pathname.includes('/login') && !pathname.includes('/cliente'))
+      );
+
+      if (!sidebar || !isAdminPage || isClientePortal || isMobileViewport) {
         setIsFullWidthMode(true);
         setSidebarOpen(false);
         setSidebarWidth(0);
@@ -71,6 +76,8 @@ function Footer() {
     // Verificar estado inicial
     setTimeout(checkIfSiteSalao, 100);
     
+    window.addEventListener('resize', checkIfSiteSalao);
+
     // Observar mudanças no DOM
     const observer = new MutationObserver(() => {
       checkIfSiteSalao();
@@ -85,6 +92,7 @@ function Footer() {
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('sidebarToggle', handleSidebarToggle);
+      window.removeEventListener('resize', checkIfSiteSalao);
       observer.disconnect();
     };
   }, []);
@@ -109,6 +117,11 @@ function Footer() {
   };
 
   const salao = config?.salao || {};
+  const sistema = config?.sistema || {};
+  const nomeSistema = sistema.nome || 'BeautyPro';
+  const versaoSistema = sistema.versao || 'v2.0';
+  const logoEstabelecimento = salao.logo || config?.sitePublico?.logo || '';
+  const nomeEstabelecimento = salao.nomeFantasia || salao.nome || nomeSistema;
 
   // Estilos base do footer
   const footerStyles = {
@@ -134,40 +147,38 @@ function Footer() {
       component="footer"
       sx={footerStyles}
     >
-      <Container maxWidth={isFullWidthMode ? "lg" : false} sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth={isFullWidthMode ? "lg" : false} sx={{ py: { xs: 2, sm: 3 }, px: { xs: 1.5, sm: 3 }, overflow: 'hidden' }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           justifyContent="space-between"
-          alignItems="center"
-          spacing={2}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          spacing={{ xs: 1.5, sm: 2 }}
         >
           {/* Logo e Nome */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 600,
-                color: '#9c27b0',
-                letterSpacing: 1,
-              }}
-            >
-              {salao.nome || 'BeautyPro'}
-            </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.6 }}>
-              v2.0
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' }, gap: 1.25, minWidth: 0, maxWidth: '100%' }}>
+            <Avatar src={logoEstabelecimento || undefined} sx={{ width: 36, height: 36, bgcolor: '#9c27b0' }}>
+              {!logoEstabelecimento && <BusinessIcon fontSize="small" />}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff', textAlign: { xs: 'center', sm: 'left' }, overflowWrap: 'anywhere' }}>
+                {nomeEstabelecimento}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.65, display: 'block', textAlign: { xs: 'center', sm: 'left' }, overflowWrap: 'anywhere' }}>
+                {nomeSistema} • {versaoSistema}
+              </Typography>
+            </Box>
           </Box>
 
           {/* Copyright */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, textAlign: 'center', flexWrap: 'wrap', px: { xs: 1, sm: 0 } }}>
             <CopyrightIcon sx={{ fontSize: 14, opacity: 0.6 }} />
-            <Typography variant="caption" sx={{ opacity: 0.6 }}>
-              {anoAtual} {salao.nome || 'BeautyPro'}. Todos os direitos reservados.
+            <Typography variant="caption" sx={{ opacity: 0.65 }}>
+              {anoAtual} {nomeEstabelecimento}. Sistema de gestão para salão de beleza.
             </Typography>
           </Box>
 
           {/* Links Rápidos */}
-          <Stack direction="row" spacing={2}>
+          <Stack direction="row" spacing={{ xs: 1.25, sm: 2 }} sx={{ flexWrap: 'wrap', rowGap: 0.5, justifyContent: 'center' }}>
             <Link
               href="#"
               onClick={(e) => {
@@ -216,9 +227,13 @@ function Footer() {
         {/* Informações adicionais para o SiteSalao */}
         {isFullWidthMode && (
           <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ opacity: 0.5 }}>
-              Desenvolvido com ❤️ para seu negócio
-            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="center" justifyContent="center" sx={{ flexWrap: 'wrap', px: { xs: 1, sm: 0 } }}>
+              <Typography variant="caption" sx={{ opacity: 0.65 }}>
+                {nomeSistema} {versaoSistema} • Portal administrativo e portal do cliente
+              </Typography>
+              {salao.contato?.email && <Chip size="small" icon={<EmailIcon />} label={salao.contato.email} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} />}
+              {salao.contato?.whatsapp && <Chip size="small" icon={<WhatsAppIcon />} label={salao.contato.whatsapp} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} />}
+            </Stack>
           </Box>
         )}
       </Container>
