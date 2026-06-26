@@ -91,18 +91,26 @@ self.addEventListener('message', (event) => {
 });
 
 // Push notifications
+const parsePushData = (event) => {
+  try {
+    return event.data ? event.data.json() : {};
+  } catch (error) {
+    return { title: 'Nova notificação', body: event.data?.text?.() || '' };
+  }
+};
+
 self.addEventListener('push', (event) => {
-  const data = event.data.json();
+  const data = parsePushData(event);
   
   const options = {
-    body: data.body,
-    icon: '/logo192.png',
-    badge: '/badge-72x72.png',
+    body: data.body || data.mensagem || '',
+    icon: data.icon || data.icone || '/logo192.png',
+    badge: data.badge || '/logo192.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
       primaryKey: data.id,
-      url: data.url || '/'
+      url: data.url || data.link || '/'
     },
     actions: [
       {
@@ -117,16 +125,28 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title || data.titulo || 'Nova notificação', options)
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  if (event.action === 'open') {
-    event.waitUntil(
-      clients.openWindow(event.notification.data.url)
-    );
+  if (event.action === 'close') {
+    return;
   }
+
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const appClient = clientList.find((client) => client.url.includes(self.location.origin) && 'focus' in client);
+      if (appClient) {
+        appClient.focus();
+        return appClient.navigate(targetUrl);
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+      return null;
+    })
+  );
 });

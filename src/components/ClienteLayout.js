@@ -50,6 +50,7 @@ import {
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
+import { browserPushService } from '../services/browserPushService';
 import { firebaseService } from '../services/firebase';
 import Footer from './Footer';
 import { useFidelidadeAtiva } from '../hooks/useFidelidadeAtiva';
@@ -187,6 +188,8 @@ function ClienteLayout() {
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
+  const [pushStatus, setPushStatus] = useState(browserPushService.getPermission());
+  const [ativandoPush, setAtivandoPush] = useState(false);
 
   // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
@@ -423,6 +426,26 @@ function ClienteLayout() {
 
   const handleNotificacoesClose = () => {
     setNotificacoesAnchor(null);
+  };
+
+  const ativarPushCliente = async () => {
+    try {
+      setAtivandoPush(true);
+      const result = await browserPushService.ativar(cliente, 'cliente');
+      setPushStatus(browserPushService.getPermission());
+      if (result.ok) {
+        await browserPushService.exibirLocal({
+          titulo: 'Notificações ativadas',
+          mensagem: 'Você receberá avisos de agendamentos, pontos, promoções e lembretes neste dispositivo.',
+          link: '/cliente/notificacoes',
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao ativar push no portal do cliente:', error);
+      setPushStatus(browserPushService.getPermission());
+    } finally {
+      setAtivandoPush(false);
+    }
   };
 
   const handleNotificacaoClick = async (notificacao) => {
@@ -666,6 +689,20 @@ function ClienteLayout() {
             <Button size="small" onClick={marcarTodasComoLidas}>Marcar todas como lidas</Button>
           )}
         </Box>
+        {browserPushService.isSupported() && pushStatus !== 'granted' && (
+          <Box sx={{ px: 2, pb: 1.5 }}>
+            <Button
+              fullWidth
+              size="small"
+              variant="contained"
+              onClick={ativarPushCliente}
+              disabled={ativandoPush || pushStatus === 'denied'}
+              sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)' }}
+            >
+              {pushStatus === 'denied' ? 'Push bloqueado no navegador' : ativandoPush ? 'Ativando...' : 'Ativar notificação push'}
+            </Button>
+          </Box>
+        )}
         <Divider />
 
         {loadingNotificacoes ? (
