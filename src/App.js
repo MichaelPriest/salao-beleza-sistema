@@ -219,6 +219,7 @@ import ClienteAnamneseVisualizar from './pages/ClienteAnamneseVisualizar';
 import ClienteCadastroComplementar from './pages/ClienteCadastroComplementar';
 import ClienteChamados from './pages/ClienteChamados';
 import ClienteDepoimentos from './pages/ClienteDepoimentos';
+import ClientePromocoes from './pages/ClientePromocoes';
 import FolderDivulgacao from './pages/FolderDivulgacao';
 import PainelChamada from './pages/PainelChamada';
 
@@ -520,6 +521,7 @@ function App() {
                   <Route path="perfil" element={<ClientePerfil />} />
                   <Route path="notificacoes" element={<ClienteNotificacoes />} />
                   <Route path="depoimentos" element={<ClienteDepoimentos />} />
+                  <Route path="promocoes" element={<ClientePromocoes />} />
                   <Route path="chamados" element={<ClienteChamados />} />
                   <Route path="manual" element={<ManualSistema audience="cliente" />} />
                   <Route path="anamnese" element={<ClienteAnamneseLista />} />

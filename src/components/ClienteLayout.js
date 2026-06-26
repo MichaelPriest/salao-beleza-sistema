@@ -45,6 +45,7 @@ import {
   HelpCenter as HelpCenterIcon,
   AccessTime as AccessTimeIcon,
   RateReview as RateReviewIcon,
+  LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
@@ -66,6 +67,7 @@ const MENU_ITEMS = [
   { text: 'Meus Pontos', icon: <StarIcon />, path: '/cliente/pontos', recurso: 'fidelidade' },
   { text: 'Histórico', icon: <HistoryIcon />, path: '/cliente/historico' },
   { text: 'Depoimentos', icon: <RateReviewIcon />, path: '/cliente/depoimentos' },
+  { text: 'Promoções', icon: <LocalOfferIcon />, path: '/cliente/promocoes' },
   { text: 'Perfil', icon: <PersonIcon />, path: '/cliente/perfil' },
   { text: 'Notificações', icon: <NotificationsIcon />, path: '/cliente/notificacoes' },
   { text: 'Anamnese', icon: <AssignmentIcon />, path: '/cliente/anamnese' },
@@ -80,6 +82,7 @@ const PAGE_TITLES = {
   '/cliente/pontos': 'Meus Pontos',
   '/cliente/historico': 'Histórico',
   '/cliente/depoimentos': 'Depoimentos',
+  '/cliente/promocoes': 'Promoções',
   '/cliente/perfil': 'Meu Perfil',
   '/cliente/notificacoes': 'Notificações',
   '/cliente/anamnese': 'Anamnese',
