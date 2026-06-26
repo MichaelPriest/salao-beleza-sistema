@@ -38,16 +38,19 @@ function Footer() {
     
     window.addEventListener('scroll', handleScroll);
     
-    // Verificar se estamos no SiteSalao (sem sidebar)
+    // Verificar se o footer deve ocupar largura total ou compensar sidebar administrativa.
     const checkIfSiteSalao = () => {
-      // Verifica se existe sidebar na página
+      const pathname = window.location.pathname || '';
       const sidebar = document.querySelector('.MuiDrawer-paper');
-      const isAdminPage = window.location.pathname.includes('/admin') || 
-                         window.location.pathname.includes('/dashboard') ||
-                         window.location.pathname.includes('/login') && !window.location.pathname.includes('/cliente');
-      
-      // Se não tem sidebar OU é página de admin com sidebar, ajusta
-      if (!sidebar || !isAdminPage) {
+      const isClientePortal = pathname.startsWith('/cliente');
+      const isMobileViewport = window.innerWidth < 900;
+      const isAdminPage = !isClientePortal && (
+        pathname.includes('/admin')
+        || pathname.includes('/dashboard')
+        || (pathname.includes('/login') && !pathname.includes('/cliente'))
+      );
+
+      if (!sidebar || !isAdminPage || isClientePortal || isMobileViewport) {
         setIsFullWidthMode(true);
         setSidebarOpen(false);
         setSidebarWidth(0);
@@ -73,6 +76,8 @@ function Footer() {
     // Verificar estado inicial
     setTimeout(checkIfSiteSalao, 100);
     
+    window.addEventListener('resize', checkIfSiteSalao);
+
     // Observar mudanças no DOM
     const observer = new MutationObserver(() => {
       checkIfSiteSalao();
@@ -87,6 +92,7 @@ function Footer() {
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('sidebarToggle', handleSidebarToggle);
+      window.removeEventListener('resize', checkIfSiteSalao);
       observer.disconnect();
     };
   }, []);

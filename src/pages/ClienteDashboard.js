@@ -36,6 +36,7 @@ import {
   TextField,
   InputAdornment,
   alpha,
+  Stack,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -62,6 +63,7 @@ import {
   ContentCopy as CopyIcon,
   QrCode as QrCodeIcon,
   Close as CloseIcon,
+  LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -74,6 +76,15 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getAgendamentoStatusInfo } from '../utils/agendamentoStatus';
 import { formatLocalDate, formatLocalDateTime, getLocalDateInputValue } from '../utils/dateTimeUtils';
+
+
+const isPromocaoDisponivelCliente = (campanha = {}) => {
+  const hoje = getLocalDateInputValue();
+  const inicioOk = !campanha.dataInicio || campanha.dataInicio <= hoje;
+  const fimOk = !campanha.dataFim || campanha.dataFim >= hoje;
+  const status = String(campanha.status || '').toLowerCase();
+  return inicioOk && fimOk && !['rascunho', 'cancelada', 'cancelado', 'erro', 'inativa'].includes(status);
+};
 
 function TabPanel({ children, value, index, isMobile }) {
   return (
@@ -616,6 +627,7 @@ function ClienteDashboard() {
   const [resgatesRecentes, setResgatesRecentes] = useState([]);
   const [indicacoesResumo, setIndicacoesResumo] = useState({ total: 0, confirmadas: 0 });
   const [profissionais, setProfissionais] = useState([]);
+  const [promocoesAtivas, setPromocoesAtivas] = useState([]);
 
   const niveis = {
     bronze: { cor: '#cd7f32', nome: 'Bronze', minimo: 0, proximo: 500, bg: '#fff3e0' },
@@ -657,7 +669,8 @@ function ClienteDashboard() {
         recompensasData,
         resgatesData,
         atendimentosData,
-        indicacoesData
+        indicacoesData,
+        campanhasData
       ] = await Promise.allSettled([
         firebaseService.getAll('profissionais'),
         Promise.all(idsParaBuscar.map(id =>
@@ -687,7 +700,8 @@ function ClienteDashboard() {
           firebaseService.query('indicacoes', [
             { field: 'clienteId', operator: '==', value: id }
           ], 'dataCriacao', 'desc')
-        ))
+        )),
+        firebaseService.getAll('campanhas')
       ]);
 
       if (profissionaisData.status === 'fulfilled') {
@@ -732,6 +746,13 @@ function ClienteDashboard() {
           total: indicacoesUnicas.length,
           confirmadas: indicacoesUnicas.filter((item) => item.status === 'confirmada').length,
         });
+      }
+
+      if (campanhasData.status === 'fulfilled') {
+        const ativas = (campanhasData.value || [])
+          .filter(isPromocaoDisponivelCliente)
+          .sort((a, b) => String(a.dataFim || '9999-12-31').localeCompare(String(b.dataFim || '9999-12-31')));
+        setPromocoesAtivas(ativas.slice(0, 3));
       }
 
     } catch (error) {
@@ -916,7 +937,7 @@ function ClienteDashboard() {
 
           {/* Cards de Estatísticas */}
           <Grid container spacing={1} sx={{ mb: 2 }}>
-            <Grid item xs={4}>
+            <Grid item xs={3}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
                 <CalendarIcon sx={{ color: '#9c27b0', fontSize: 24 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -925,7 +946,7 @@ function ClienteDashboard() {
                 <Typography variant="caption">Agend.</Typography>
               </Card>
             </Grid>
-            <Grid item xs={4} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
+            <Grid item xs={3} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
                 <StarIcon sx={{ color: '#ff9800', fontSize: 24 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -934,7 +955,7 @@ function ClienteDashboard() {
                 <Typography variant="caption">Pontos</Typography>
               </Card>
             </Grid>
-            <Grid item xs={4} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
+            <Grid item xs={3} sx={{ display: fidelidadeAtiva ? 'block' : 'none' }}>
               <Card sx={{ textAlign: 'center', py: 1 }}>
                 <GiftIcon sx={{ color: '#4caf50', fontSize: 24 }} />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -943,7 +964,30 @@ function ClienteDashboard() {
                 <Typography variant="caption">Recomp.</Typography>
               </Card>
             </Grid>
+            <Grid item xs={3}>
+              <Card sx={{ textAlign: 'center', py: 1 }} onClick={() => navigate('/cliente/promocoes')}>
+                <LocalOfferIcon sx={{ color: '#ec407a', fontSize: 24 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {promocoesAtivas.length}
+                </Typography>
+                <Typography variant="caption">Promo.</Typography>
+              </Card>
+            </Grid>
           </Grid>
+
+          {promocoesAtivas.length > 0 && (
+            <Card sx={{ mb: 2, borderRadius: 3, background: 'linear-gradient(135deg,#fff3e0,#fce4ec)' }}>
+              <CardContent sx={{ p: 2 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#7b1fa2' }}>{promocoesAtivas[0].nome || 'Promoção especial'}</Typography>
+                    <Typography variant="caption" color="text.secondary">{promocoesAtivas.length} oferta(s) ativa(s) para você</Typography>
+                  </Box>
+                  <Button size="small" onClick={() => navigate('/cliente/promocoes')} sx={{ color: '#7b1fa2', fontWeight: 800 }}>Ver</Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Card de Fidelidade */}
           <Card sx={{ mb: 2, bgcolor: nivelInfo.bg, display: fidelidadeAtiva ? 'block' : 'none' }}>
@@ -1293,6 +1337,24 @@ function ClienteDashboard() {
                       {indicacoesResumo.total}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">Indicações</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+            <Card sx={{ bgcolor: '#fce4ec', height: '100%', cursor: 'pointer' }} onClick={() => navigate('/cliente/promocoes')}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Avatar sx={{ bgcolor: '#ec407a', width: 56, height: 56 }}><LocalOfferIcon /></Avatar>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#ec407a' }}>
+                      {promocoesAtivas.length}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">Promoções ativas</Typography>
                   </Box>
                 </Box>
               </CardContent>

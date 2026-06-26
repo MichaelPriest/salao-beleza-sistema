@@ -1,5 +1,6 @@
 // src/services/notificacoesService.js
 import { firebaseService } from './firebase';
+import { browserPushService } from './browserPushService';
 
 const parseUsuarioLocal = () => {
   try {
@@ -242,6 +243,11 @@ export const notificacoesService = {
 
       const result = await firebaseService.add('notificacoes', novaNotificacao);
       console.log('✅ Notificação criada com ID:', result.id);
+
+      await browserPushService.notificarNotificacaoCriada(
+        { ...novaNotificacao, id: result.id },
+        { tipoUsuario: 'admin', colecaoOrigem: 'notificacoes', defaultLink: '/notificacoes' }
+      );
 
       // Disparar eventos para atualizar header
       window.dispatchEvent(new CustomEvent('novaNotificacao'));

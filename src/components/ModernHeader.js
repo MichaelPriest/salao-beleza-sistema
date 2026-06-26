@@ -70,6 +70,7 @@ import { toast } from 'react-hot-toast';
 import { firebaseService, getTenantContext, setTenantContext } from '../services/firebase';
 import { usuariosService } from '../services/usuariosService';
 import { notificacoesService } from '../services/notificacoesService';
+import { browserPushService } from '../services/browserPushService';
 import { caixaService, formatarMoedaCaixa } from '../services/caixaService';
 import { normalizarLinkNotificacao } from '../utils/notificationUtils';
 import { isSaasPlatformAdmin } from '../utils/saasAccess';
@@ -213,6 +214,8 @@ function ModernHeader() {
   const [notificationsAnchor, setNotificationsAnchor] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pushStatus, setPushStatus] = useState(browserPushService.getPermission());
+  const [ativandoPush, setAtivandoPush] = useState(false);
   const [usuario, setUsuario] = useState(null);
   const [fotoUrl, setFotoUrl] = useState(null);
   const [configSistema, setConfigSistema] = useState(null);
@@ -393,6 +396,30 @@ function ModernHeader() {
   const handlePerfil = () => { navigate('/perfil'); handleClose(); };
   const handleConfiguracoes = () => { navigate('/configuracoes'); handleClose(); };
 
+  const ativarPushAdmin = async () => {
+    try {
+      setAtivandoPush(true);
+      const result = await browserPushService.ativar(usuario || usuariosService.getUsuarioAtual(), 'admin');
+      setPushStatus(browserPushService.getPermission());
+      if (result.ok) {
+        toast.success('Notificação push ativada neste dispositivo');
+        await browserPushService.exibirLocal({
+          titulo: 'Push ativado',
+          mensagem: 'Você receberá alertas importantes do sistema neste navegador.',
+          link: '/notificacoes',
+        });
+      } else {
+        toast.error(result.mensagem || 'Não foi possível ativar o push');
+      }
+    } catch (error) {
+      console.error('Erro ao ativar push no admin:', error);
+      toast.error('Erro ao ativar push');
+      setPushStatus(browserPushService.getPermission());
+    } finally {
+      setAtivandoPush(false);
+    }
+  };
+
   const handleTrocarUnidade = (event) => {
     const unidadeId = event.target.value;
     const tenant = getTenantContext();
@@ -519,6 +546,20 @@ function ModernHeader() {
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>Notificações {unreadCount > 0 && `(${unreadCount})`}</Typography>
           </Box>
+          {browserPushService.isSupported() && pushStatus !== 'granted' && (
+            <Box sx={{ px: 2, pb: 1.5 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant="contained"
+                onClick={ativarPushAdmin}
+                disabled={ativandoPush || pushStatus === 'denied'}
+                sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              >
+                {pushStatus === 'denied' ? 'Push bloqueado no navegador' : ativandoPush ? 'Ativando...' : 'Ativar push neste dispositivo'}
+              </Button>
+            </Box>
+          )}
           <Divider />
           {notifications.length === 0 ? (
             <Box sx={{ p: 3, textAlign: 'center' }}><NotificationsIcon sx={{ fontSize: 40, color: '#ccc' }} /><Typography variant="body2" color="textSecondary">Nenhuma notificação</Typography></Box>
