@@ -225,6 +225,14 @@ function PromocaoVisualizar() {
 
       {/* Card da Promoção */}
       <Card sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: 3 }}>
+        {(campanha.capaImagem || campanha.imagemCapa) && (
+          <Box
+            component="img"
+            src={campanha.capaImagem || campanha.imagemCapa}
+            alt={campanha.nome || 'Capa da promoção'}
+            sx={{ width: '100%', maxHeight: { xs: 220, sm: 320 }, objectFit: 'cover', display: 'block' }}
+          />
+        )}
         {/* Header colorido */}
         <Box
           sx={{

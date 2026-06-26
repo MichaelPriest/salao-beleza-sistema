@@ -121,6 +121,7 @@ import {
   Unarchive as UnarchiveIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
+  CloudUpload as CloudUploadIcon,
   Assessment as AssessmentIcon,
   Timeline as TimelineIcon,
   Share as ShareIcon,
@@ -603,6 +604,13 @@ const gerarTemplateTeste = (configSMTP, configSalao) => {
 };
 
 // ==================== COMPONENTE PRINCIPAL ====================
+const arquivoParaDataUrl = (arquivo) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(arquivo);
+});
+
 function Campanhas() {
   // ==================== ESTADOS ====================
   const [loading, setLoading] = useState(true);
@@ -649,6 +657,8 @@ function Campanhas() {
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
+    capaImagem: '',
+    capaImagemNome: '',
     tipo: 'geral',
     status: 'rascunho',
     dataInicio: new Date().toISOString().split('T')[0],
@@ -1128,6 +1138,8 @@ function Campanhas() {
       setFormData({
         nome: campanha.nome || '',
         descricao: campanha.descricao || '',
+        capaImagem: campanha.capaImagem || campanha.imagemCapa || '',
+        capaImagemNome: campanha.capaImagemNome || '',
         tipo: campanha.tipo || 'geral',
         status: campanha.status || 'rascunho',
         dataInicio: campanha.dataInicio || new Date().toISOString().split('T')[0],
@@ -1176,6 +1188,8 @@ function Campanhas() {
       setFormData({
         nome: '',
         descricao: '',
+        capaImagem: '',
+        capaImagemNome: '',
         tipo: 'geral',
         status: 'rascunho',
         dataInicio: new Date().toISOString().split('T')[0],
@@ -1279,6 +1293,34 @@ function Campanhas() {
       beneficios: prev.beneficios.filter(b => b !== beneficio)
     }));
   };
+
+  const handleCapaImagemUpload = async (event) => {
+    const arquivo = event.target.files?.[0];
+    if (!arquivo) return;
+
+    if (!arquivo.type.startsWith('image/')) {
+      mostrarSnackbar('Selecione um arquivo de imagem válido', 'error');
+      return;
+    }
+
+    if (arquivo.size > 3 * 1024 * 1024) {
+      mostrarSnackbar('A imagem deve ter no máximo 3MB', 'warning');
+      return;
+    }
+
+    const dataUrl = await arquivoParaDataUrl(arquivo);
+    setFormData((prev) => ({
+      ...prev,
+      capaImagem: dataUrl,
+      capaImagemNome: arquivo.name,
+    }));
+  };
+
+  const removerCapaImagem = () => setFormData((prev) => ({
+    ...prev,
+    capaImagem: '',
+    capaImagemNome: '',
+  }));
 
   const handleSalvar = async () => {
     try {
@@ -2328,6 +2370,27 @@ function Campanhas() {
                     size="small"
                     placeholder="Descreva o objetivo e detalhes da campanha"
                   />
+                </Grid>
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: '#fafafa' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Imagem de capa da promoção</Typography>
+                        <Typography variant="caption" color="text.secondary">Essa imagem aparece na página pública, no portal do cliente e nos cards de promoções.</Typography>
+                        <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+                          <Button component="label" size="small" variant="outlined" startIcon={<CloudUploadIcon />}>
+                            Enviar imagem
+                            <input hidden accept="image/*" type="file" onChange={handleCapaImagemUpload} />
+                          </Button>
+                          {formData.capaImagem && <Button size="small" color="error" onClick={removerCapaImagem}>Remover capa</Button>}
+                          {formData.capaImagemNome && <Chip size="small" label={formData.capaImagemNome} />}
+                        </Stack>
+                      </Box>
+                      {formData.capaImagem && (
+                        <Box component="img" src={formData.capaImagem} alt="Capa da promoção" sx={{ width: { xs: '100%', md: 220 }, height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid #eee' }} />
+                      )}
+                    </Stack>
+                  </Paper>
                 </Grid>
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" gutterBottom>Benefícios da Campanha</Typography>

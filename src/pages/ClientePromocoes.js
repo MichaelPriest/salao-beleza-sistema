@@ -106,7 +106,10 @@ function ClientePromocoes() {
         <Grid container spacing={2.5}>
           {promocoesAtivas.map((campanha) => (
             <Grid item xs={12} md={6} key={campanha.id}>
-              <Card sx={{ height: '100%', borderRadius: 4, border: '1px solid rgba(236,64,122,.16)', boxShadow: '0 12px 32px rgba(123,31,162,.08)' }}>
+              <Card sx={{ height: '100%', borderRadius: 4, border: '1px solid rgba(236,64,122,.16)', boxShadow: '0 12px 32px rgba(123,31,162,.08)', overflow: 'hidden' }}>
+                {(campanha.capaImagem || campanha.imagemCapa) && (
+                  <Box component="img" src={campanha.capaImagem || campanha.imagemCapa} alt={campanha.nome || 'Capa da promoção'} sx={{ width: '100%', height: { xs: 160, sm: 190 }, objectFit: 'cover', display: 'block' }} />
+                )}
                 <CardContent sx={{ p: { xs: 2.25, sm: 3 } }}>
                   <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 2 }}>
                     <Avatar sx={{ bgcolor: '#fff3e0', color: '#ff6f00', width: 52, height: 52 }}><LocalOfferIcon /></Avatar>
