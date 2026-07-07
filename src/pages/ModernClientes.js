@@ -102,7 +102,7 @@ import {
 } from '../utils/plugins';
 import { ImprimirCliente } from '../components/ImprimirCliente';
 import * as XLSX from 'xlsx';
-import Papa from 'papaparse';
+import * as Papa from 'papaparse';
 
 function TabPanel({ children, value, index }) {
   return (
