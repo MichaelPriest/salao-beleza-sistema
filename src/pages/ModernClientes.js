@@ -1,5 +1,5 @@
 // src/pages/ModernClientes.js
-// VERSÃO COMPLETA CORRIGIDA - SEM papaparse
+// VERSÃO COMPLETA CORRIGIDA - SEM PAPAPARSE E COM SINTAXE CORRETA
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -149,7 +149,7 @@ function TabPanel({ children, value, index }) {
   );
 }
 
-// Componente de Filtros Avançados (mesmo do código original)
+// Componente de Filtros Avançados
 function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, onClearFilters }) {
   const [localFilters, setLocalFilters] = useState(filters);
 
@@ -338,13 +338,12 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
 // COMPONENTE DE IMPORTAÇÃO DE CLIENTES
 // ============================================
 function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
-  const [step, setStep] = useState(1); // 1: seleção, 2: preview/mapeamento, 3: confirmar
+  const [step, setStep] = useState(1);
   const [formato, setFormato] = useState('excel');
   const [arquivo, setArquivo] = useState(null);
   const [dadosImportados, setDadosImportados] = useState([]);
   const [colunas, setColunas] = useState([]);
   const [mapeamento, setMapeamento] = useState({});
-  const [linhasIgnoradas, setLinhasIgnoradas] = useState([]);
   const [importando, setImportando] = useState(false);
   const [progresso, setProgresso] = useState(0);
 
@@ -410,7 +409,6 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
         try {
           const csvData = e.target.result;
           const resultado = parseCSVSimples(csvData);
-          // Filtra linhas totalmente vazias
           const dadosFiltrados = resultado.dados.filter(row => 
             Object.values(row).some(v => v && v.trim() !== '')
           );
@@ -454,14 +452,12 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
     const obrigatorios = camposDisponiveis.filter(c => c.obrigatorio).map(c => c.key);
     const colunasMapeadas = Object.values(mapeamento).filter(v => v);
 
-    // Verifica se os campos obrigatórios estão mapeados
     obrigatorios.forEach(campo => {
       if (!colunasMapeadas.includes(campo)) {
         erros.push(`Campo obrigatório "${campo}" não mapeado`);
       }
     });
 
-    // Verifica se há dados suficientes
     if (dadosImportados.length === 0) {
       erros.push('Nenhum dado para importar');
     }
@@ -504,14 +500,12 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
           }
         });
 
-        // Validação básica
         if (!cliente.nome || !cliente.email || !cliente.telefone) {
           falhas++;
           falhasDetalhes.push(`Linha ${i+1}: campos obrigatórios faltando`);
           continue;
         }
 
-        // Converte status se presente
         if (cliente.status) {
           const statusValido = ['VIP', 'Regular', 'Novo'];
           if (!statusValido.includes(cliente.status)) {
@@ -521,22 +515,25 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
           cliente.status = 'Regular';
         }
 
-        // Converte pontos
         if (cliente.totalPontos) {
           cliente.totalPontos = parseFloat(cliente.totalPontos) || 0;
         } else {
           cliente.totalPontos = 0;
         }
 
-        // Nível fidelidade
-        cliente.nivelFidelidade = calcularNivelFidelidade(cliente.totalPontos);
+        // Nível fidelidade (função local)
+        const calcularNivel = (pontos) => {
+          if (pontos >= 5000) return 'platina';
+          if (pontos >= 2000) return 'ouro';
+          if (pontos >= 500) return 'prata';
+          return 'bronze';
+        };
+        cliente.nivelFidelidade = calcularNivel(cliente.totalPontos);
 
-        // Data de cadastro
         cliente.dataCadastro = new Date().toISOString().split('T')[0];
         cliente.createdAt = new Date().toISOString();
         cliente.updatedAt = new Date().toISOString();
 
-        // Prontuário vazio
         cliente.prontuario = {
           alergias: '',
           medicamentos: '',
@@ -556,7 +553,6 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
           dataAssinatura: '',
         };
 
-        // Preferências
         cliente.preferencias = {
           profissionalPreferido: '',
           servicosPreferidos: [],
@@ -574,13 +570,15 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
         setProgresso(Math.round(((i+1) / total) * 100));
       }
 
-      // Registra auditoria
-      await registrarAuditoria(
-        'importar_clientes',
-        'lista',
-        `Importação de clientes via ${formato.toUpperCase()}`,
-        { total, sucessos, falhas, formato }
-      );
+      // Auditoria simplificada
+      try {
+        await auditoriaService.registrar('importar_clientes', {
+          entidade: 'clientes',
+          entidadeId: 'lista',
+          detalhes: `Importação de clientes via ${formato.toUpperCase()}`,
+          dados: { total, sucessos, falhas, formato }
+        });
+      } catch (e) {}
 
       toast.success(`Importação concluída! ${sucessos} clientes importados, ${falhas} falhas.`);
       if (falhasDetalhes.length > 0) {
@@ -601,35 +599,6 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
     } finally {
       setImportando(false);
       setProgresso(0);
-    }
-  };
-
-  // Função auxiliar para calcular nível (copiada do código principal)
-  const calcularNivelFidelidade = (pontos) => {
-    if (pontos >= 5000) return 'platina';
-    if (pontos >= 2000) return 'ouro';
-    if (pontos >= 500) return 'prata';
-    return 'bronze';
-  };
-
-  // Função auxiliar para auditoria (simplificada para este contexto)
-  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
-    try {
-      const usuarioStr = localStorage.getItem('usuario');
-      const usuario = usuarioStr ? JSON.parse(usuarioStr) : null;
-      await auditoriaService.registrar(acao, {
-        entidade: 'clientes',
-        entidadeId,
-        detalhes,
-        dados: {
-          ...dados,
-          usuarioId: usuario?.id || 'sistema',
-          usuarioNome: usuario?.nome || 'Sistema',
-          timestamp: new Date().toISOString()
-        }
-      });
-    } catch (error) {
-      console.error('Erro ao registrar auditoria:', error);
     }
   };
 
@@ -857,7 +826,6 @@ function ModernClientes() {
   const [sortDirection, setSortDirection] = useState('asc');
   const [showPortalPassword, setShowPortalPassword] = useState(false);
   
-  // Estado para filtros
   const [filtrosAnchorEl, setFiltrosAnchorEl] = useState(null);
   const [filtros, setFiltros] = useState({
     status: [],
@@ -871,7 +839,6 @@ function ModernClientes() {
   });
   const [filtrosAtivos, setFiltrosAtivos] = useState(false);
   
-  // Estados para Anamnese
   const [respostasAnamnese, setRespostasAnamnese] = useState([]);
   const [formularios, setFormularios] = useState([]);
   const [openAnamneseDialog, setOpenAnamneseDialog] = useState(false);
@@ -927,7 +894,6 @@ function ModernClientes() {
     confirmarSenhaPortal: '',
   });
 
-  // Carregar usuário atual
   useEffect(() => {
     try {
       const usuarioStr = localStorage.getItem('usuario');
@@ -939,7 +905,6 @@ function ModernClientes() {
     }
   }, []);
 
-  // Contar filtros ativos
   useEffect(() => {
     const ativos = 
       filtros.status.length > 0 ||
@@ -961,7 +926,6 @@ function ModernClientes() {
       const limparDados = (obj) => {
         if (!obj) return {};
         if (typeof obj !== 'object') return obj;
-        
         const limpo = {};
         Object.keys(obj).forEach(key => {
           const valor = obj[key];
@@ -1082,7 +1046,6 @@ function ModernClientes() {
     }, 100);
   };
 
-  // Função para exportar para Excel
   const handleExportExcel = () => {
     try {
       const dadosExport = filteredClientes.map(cliente => ({
@@ -1111,7 +1074,6 @@ function ModernClientes() {
     }
   };
 
-  // Função de ordenação
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -1121,7 +1083,6 @@ function ModernClientes() {
     }
   };
 
-  // Função de filtro por data
   const filtrarPorData = (cliente, dataInicio, dataFim) => {
     if (!dataInicio && !dataFim) return true;
     const dataCadastro = cliente.dataCadastro;
@@ -1139,10 +1100,8 @@ function ModernClientes() {
     return true;
   };
 
-  // Filtrar clientes com todos os filtros
   const filteredClientes = clientes
     .filter(cliente => {
-      // Filtro de busca
       const matchesSearch = 
         cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1151,23 +1110,15 @@ function ModernClientes() {
       
       if (!matchesSearch) return false;
       
-      // Filtro por status
       if (filtros.status.length > 0 && !filtros.status.includes(cliente.status)) return false;
-      
-      // Filtro por nível fidelidade
       if (filtros.nivelFidelidade.length > 0 && !filtros.nivelFidelidade.includes(cliente.nivelFidelidade)) return false;
       
-      // Filtro por pontuação
       const pontos = cliente.totalPontos || 0;
       if (pontos < filtros.pontosMin || pontos > filtros.pontosMax) return false;
       
-      // Filtro por data
       if (!filtrarPorData(cliente, filtros.dataInicio, filtros.dataFim)) return false;
       
-      // Filtro por cidade
       if (filtros.cidade && !cliente.cidade?.toLowerCase().includes(filtros.cidade.toLowerCase())) return false;
-      
-      // Filtro por bairro
       if (filtros.bairro && !cliente.bairro?.toLowerCase().includes(filtros.bairro.toLowerCase())) return false;
       
       return true;
@@ -1193,7 +1144,6 @@ function ModernClientes() {
       }
     });
 
-  // Carregar clientes
   useEffect(() => {
     carregarClientes();
   }, []);
@@ -1709,7 +1659,6 @@ function ModernClientes() {
     toast.info('Filtros removidos');
   };
 
-  // Callback para quando a importação for bem-sucedida
   const handleImportSuccess = () => {
     carregarClientes();
   };
@@ -1779,7 +1728,6 @@ function ModernClientes() {
         </Box>
       </Box>
 
-      {/* Cards de Estatísticas */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -1823,7 +1771,6 @@ function ModernClientes() {
         </Grid>
       </Grid>
 
-      {/* Barra de Pesquisa e Filtros */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
@@ -1865,7 +1812,6 @@ function ModernClientes() {
             </Box>
           </Stack>
           
-          {/* Chips de filtros ativos */}
           {filtrosAtivos && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
               {filtros.status.map(s => (
@@ -1898,7 +1844,6 @@ function ModernClientes() {
         </CardContent>
       </Card>
 
-      {/* Componente de Filtros Avançados */}
       <FiltrosAvancados
         open={Boolean(filtrosAnchorEl)}
         anchorEl={filtrosAnchorEl}
@@ -1908,7 +1853,6 @@ function ModernClientes() {
         onClearFilters={handleClearFilters}
       />
 
-      {/* Tabela de Clientes */}
       <Card>
         <TableContainer>
           <Table>
@@ -2031,14 +1975,12 @@ function ModernClientes() {
         />
       </Card>
 
-      {/* Dialog de Importação de Clientes */}
       <ImportarClientesDialog
         open={openImportDialog}
         onClose={() => setOpenImportDialog(false)}
         onImportSuccess={handleImportSuccess}
       />
 
-      {/* Dialog de Cadastro/Edição (mesmo código original) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedCliente ? 'Editar Cliente' : 'Novo Cliente'}
@@ -2295,7 +2237,6 @@ function ModernClientes() {
         </form>
       </Dialog>
 
-      {/* Dialog de Visualização (mesmo código original) */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>Detalhes do Cliente</DialogTitle>
         <DialogContent>
@@ -2370,19 +2311,16 @@ function ModernClientes() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Indicação */}
       <Dialog open={openIndicacaoDialog} onClose={() => setOpenIndicacaoDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}><PersonAddIcon sx={{ mr: 1, verticalAlign: 'middle' }} /> Registrar Indicação</DialogTitle>
         <DialogContent><Box sx={{ mt: 2 }}><Alert severity="info" sx={{ mb: 3 }}>Ao indicar um novo cliente, você ganhará pontos de fidelidade quando ele realizar o primeiro atendimento.</Alert><Grid container spacing={2}><Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Cliente que está indicando:</Typography><Paper variant="outlined" sx={{ p: 2, bgcolor: '#faf5ff' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Avatar src={selectedCliente?.foto} sx={{ bgcolor: '#9c27b0' }}>{selectedCliente?.nome?.charAt(0)}</Avatar><Box><Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedCliente?.nome}</Typography><Typography variant="caption" color="textSecondary">{selectedCliente?.telefone}</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}><StarIcon sx={{ color: '#ff9800', fontSize: 14 }} /><Typography variant="caption" sx={{ fontWeight: 600, color: '#ff9800' }}>{selectedCliente?.totalPontos || 0} pontos</Typography></Box></Box></Box></Paper></Grid><Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Cliente indicado:</Typography><Autocomplete options={clientes.filter(c => c.id !== selectedCliente?.id)} getOptionLabel={(option) => `${option.nome} - ${option.telefone || ''}`} value={clienteIndicado} onChange={(e, newValue) => setClienteIndicado(newValue)} renderInput={(params) => (<TextField {...params} label="Buscar cliente indicado" placeholder="Digite o nome do cliente..." size="small" fullWidth />)} /></Grid></Grid></Box></DialogContent>
         <DialogActions><Button onClick={() => setOpenIndicacaoDialog(false)}>Cancelar</Button><Button variant="contained" onClick={handleRegistrarIndicacao} disabled={!clienteIndicado} sx={{ bgcolor: '#ff9800' }}>Registrar Indicação</Button></DialogActions>
       </Dialog>
 
-      {/* Dialog de Anamnese */}
       <Dialog open={openAnamneseDialog} onClose={() => setOpenAnamneseDialog(false)} maxWidth="md" fullWidth>
         {anamneseSelecionada && (<><DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><AssignmentIcon /><Typography variant="h6">{getFormularioTitulo(anamneseSelecionada.formularioId)}</Typography></Box></DialogTitle><DialogContent><Box sx={{ mt: 2 }}><Paper sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5' }}><Grid container spacing={2}><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Cliente</Typography><Typography variant="body1" sx={{ fontWeight: 600 }}>{anamneseSelecionada.clienteNome}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Serviço</Typography><Typography variant="body1">{anamneseSelecionada.servicoNome}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Profissional</Typography><Typography variant="body1">{anamneseSelecionada.profissionalId || 'Não informado'}</Typography></Grid><Grid item xs={12} sm={6}><Typography variant="subtitle2" color="textSecondary">Respondido em</Typography><Typography variant="body1">{anamneseSelecionada.respondidoEm ? new Date(anamneseSelecionada.respondidoEm).toLocaleString('pt-BR') : '-'}</Typography></Grid></Grid></Paper><Typography variant="h6" gutterBottom>Respostas:</Typography>{anamneseSelecionada.respostas?.map((resposta, index) => (<Accordion key={index} defaultExpanded={index === 0}><AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{resposta.pergunta}</Typography></AccordionSummary><AccordionDetails>{resposta.tipo === 'checkbox' && Array.isArray(resposta.resposta) ? (<Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>{resposta.resposta.map((item, i) => (<Chip key={i} label={item} size="small" />))}</Box>) : (<Typography variant="body1">{resposta.resposta}</Typography>)}</AccordionDetails></Accordion>))}<TextField fullWidth label="Observações do profissional" multiline rows={3} value={anamneseSelecionada.observacoesProfissional || ''} placeholder="Adicione observações sobre este formulário..." sx={{ mt: 3 }} /></Box></DialogContent><DialogActions><Button onClick={() => setOpenAnamneseDialog(false)}>Fechar</Button><Button variant="contained" onClick={() => setOpenAnamneseDialog(false)} sx={{ bgcolor: '#9c27b0' }}>Editar Observações</Button></DialogActions></>)}
       </Dialog>
 
-      {/* Componente oculto para impressão */}
       {selectedCliente && (<Box sx={{ display: 'none' }}><ImprimirCliente ref={componentRef} cliente={selectedCliente} /></Box>)}
     </Box>
   );
