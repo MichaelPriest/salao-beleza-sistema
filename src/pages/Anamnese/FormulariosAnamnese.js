@@ -1,5 +1,5 @@
 // src/pages/Anamnese/FormulariosAnamnese.js
-// VERSÃO COMPLETA - MAIS DE 2000 LINHAS
+// VERSÃO COMPLETA CORRIGIDA - COM VALIDAÇÃO DE CONDICIONAIS
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -1040,15 +1040,43 @@ function FormulariosAnamnese() {
             
             const isCondicional = q.Condicional === 'Sim' || q.condicional === 'Sim';
             if (isCondicional && (q['Condicional Base'] || q.condicionalBase)) {
-              questao.condicional = {
-                perguntaTexto: q['Condicional Base'] || q.condicionalBase,
-                operador: mapearOperador(q['Condicional Operador'] || q.condicionalOperador || '=='),
-                valor: q['Condicional Valor'] || q.condicionalValor || ''
-              };
+              // Guarda o texto da pergunta base temporariamente
+              questao._condicionalTexto = q['Condicional Base'] || q.condicionalBase;
+              questao._condicionalOperador = mapearOperador(q['Condicional Operador'] || q.condicionalOperador || '==');
+              questao._condicionalValor = q['Condicional Valor'] || q.condicionalValor || '';
             }
             return questao;
           });
-          
+
+          // Resolve IDs das condicionais
+          questoesProcessadas.forEach(q => {
+            if (q._condicionalTexto) {
+              const perguntaBase = questoesProcessadas.find(p => p.pergunta === q._condicionalTexto);
+              if (perguntaBase) {
+                q.condicional = {
+                  perguntaId: perguntaBase.id,
+                  operador: q._condicionalOperador,
+                  valor: q._condicionalValor
+                };
+              } else {
+                // Tenta encontrar por similaridade
+                const similar = questoesProcessadas.find(p => 
+                  p.pergunta.toLowerCase().replace(/\s/g, '') === q._condicionalTexto.toLowerCase().replace(/\s/g, '')
+                );
+                if (similar) {
+                  q.condicional = {
+                    perguntaId: similar.id,
+                    operador: q._condicionalOperador,
+                    valor: q._condicionalValor
+                  };
+                }
+              }
+              delete q._condicionalTexto;
+              delete q._condicionalOperador;
+              delete q._condicionalValor;
+            }
+          });
+
           dados = {
             versao: '1.0',
             tipo: 'formulario_anamnese',
@@ -1082,41 +1110,18 @@ function FormulariosAnamnese() {
     if (!importPreview) return;
     
     try {
-      // Resolver condicionais - converter texto da pergunta para ID
-      const questoesComIds = importPreview.questoes.map((q, idx) => {
-        const novaQuestao = {
-          ...q,
-          id: `q${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 6)}`,
-          ordem: idx
-        };
-        
-        // Se tem condicional, buscar o ID da pergunta base
-        if (novaQuestao.condicional && novaQuestao.condicional.perguntaTexto) {
-          const perguntaBase = importPreview.questoes.find(qb => 
-            qb.pergunta === novaQuestao.condicional.perguntaTexto
-          );
-          if (perguntaBase && perguntaBase.id) {
-            novaQuestao.condicional = {
-              perguntaId: perguntaBase.id,
-              operador: novaQuestao.condicional.operador,
-              valor: novaQuestao.condicional.valor
-            };
-          } else {
-            delete novaQuestao.condicional;
-            console.warn(`Condicional ignorada: pergunta base "${novaQuestao.condicional.perguntaTexto}" não encontrada`);
-          }
-        }
-        
-        return novaQuestao;
-      });
-      
       const novoFormulario = {
         ...importPreview,
-        titulo: importPreview.titulo || `Importado_${new Date().toISOString().slice(0, 19)}`,
-        questoes: questoesComIds,
         criadoEm: new Date().toISOString(),
         atualizadoEm: new Date().toISOString(),
-        versao: 1
+        versao: 1,
+        questoes: importPreview.questoes.map(q => {
+          const nova = { ...q };
+          delete nova._condicionalTexto;
+          delete nova._condicionalOperador;
+          delete nova._condicionalValor;
+          return nova;
+        })
       };
       
       await firebaseService.add('formularios_anamnese', novoFormulario);
@@ -1262,7 +1267,7 @@ function FormulariosAnamnese() {
   };
 
   // ============================================
-  // FUNÇÕES CRUD (MANTIDAS COMPLETAS)
+  // FUNÇÕES CRUD (CORRIGIDAS)
   // ============================================
 
   const handleOpenDialog = (formulario = null) => {
@@ -1330,7 +1335,7 @@ function FormulariosAnamnese() {
 
   const adicionarQuestao = (secaoId = null) => {
     const novaQuestao = {
-      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       tipo: 'texto',
       pergunta: '',
       descricao: '',
@@ -1443,7 +1448,7 @@ function FormulariosAnamnese() {
   const duplicarQuestao = (index) => {
     const questao = { 
       ...formData.questoes[index], 
-      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       pergunta: `${questao.pergunta} (cópia)`
     };
     const novasQuestoes = [...formData.questoes];
@@ -1470,6 +1475,43 @@ function FormulariosAnamnese() {
     }
   };
 
+  // ============================================
+  // VALIDAÇÃO DE CONDICIONAIS
+  // ============================================
+  const validarCondicionais = () => {
+    const erros = [];
+    const avisos = [];
+
+    formData.questoes.forEach((q, index) => {
+      if (q.condicional) {
+        // 1. Verifica se a pergunta base existe
+        const perguntaBase = formData.questoes.find(p => p.id === q.condicional.perguntaId);
+        if (!perguntaBase) {
+          erros.push(`Questão "${q.pergunta || 'Sem nome'}" → Pergunta base não encontrada (ID: ${q.condicional.perguntaId})`);
+        } else {
+          // 2. Verifica se a pergunta base vem antes
+          const perguntaBaseIndex = formData.questoes.findIndex(p => p.id === q.condicional.perguntaId);
+          if (perguntaBaseIndex > index) {
+            erros.push(`Questão "${q.pergunta || 'Sem nome'}" → A pergunta base "${perguntaBase.pergunta}" deve vir antes`);
+          }
+          
+          // 3. Verifica se o valor é compatível com o tipo da pergunta base
+          if (['radio', 'select'].includes(perguntaBase.tipo)) {
+            const valorValido = perguntaBase.opcoes?.includes(q.condicional.valor);
+            if (!valorValido && q.condicional.operador !== 'contains') {
+              avisos.push(`Questão "${q.pergunta || 'Sem nome'}" → O valor "${q.condicional.valor}" não é uma opção válida de "${perguntaBase.pergunta}"`);
+            }
+          }
+        }
+      }
+    });
+
+    return { erros, avisos };
+  };
+
+  // ============================================
+  // HANDLE SALVAR COM VALIDAÇÃO
+  // ============================================
   const handleSalvar = async () => {
     try {
       if (!formData.titulo) {
@@ -1480,6 +1522,17 @@ function FormulariosAnamnese() {
       if (formData.questoes.length === 0) {
         mostrarSnackbar('Adicione pelo menos uma questão', 'error');
         return;
+      }
+
+      // 🔥 VALIDAÇÃO DAS CONDICIONAIS
+      const { erros, avisos } = validarCondicionais();
+      if (erros.length > 0) {
+        mostrarSnackbar(`❌ ${erros.length} erro(s) encontrado(s): ${erros.join('; ')}`, 'error');
+        return;
+      }
+      if (avisos.length > 0) {
+        mostrarSnackbar(`⚠️ ${avisos.length} aviso(s): ${avisos.join('; ')}`, 'warning');
+        // Avisos não bloqueiam o salvamento, mas informam
       }
 
       const dadosParaSalvar = limparObjeto({
@@ -1867,7 +1920,7 @@ function FormulariosAnamnese() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Condicional */}
+      {/* Dialog de Condicional (CORRIGIDO) */}
       <Dialog open={openCondicionalDialog} onClose={() => setOpenCondicionalDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: '#ff9800', color: 'white' }}>
           <ConditionalIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -1882,30 +1935,59 @@ function FormulariosAnamnese() {
 
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Pergunta base</InputLabel>
-                    <Select
-                      value={questaoCondicional.condicional?.perguntaId || ''}
-                      label="Pergunta base"
-                      onChange={(e) => setQuestaoCondicional({
+                  <Autocomplete
+                    fullWidth
+                    size="small"
+                    options={formData.questoes.filter((q, idx) => 
+                      idx !== questaoCondicional.index && 
+                      ['radio', 'select', 'checkbox'].includes(q.tipo)
+                    )}
+                    getOptionLabel={(option) => `${option.pergunta} (${option.tipo})`}
+                    value={formData.questoes.find(q => q.id === questaoCondicional.condicional?.perguntaId) || null}
+                    onChange={(e, newValue) => {
+                      setQuestaoCondicional({
                         ...questaoCondicional,
                         condicional: {
                           ...(questaoCondicional.condicional || {}),
-                          perguntaId: e.target.value
+                          perguntaId: newValue?.id || null
                         }
-                      })}
-                    >
-                      <MenuItem value="">Selecione uma pergunta</MenuItem>
-                      {formData.questoes
-                        .filter((q, idx) => idx !== questaoCondicional.index && 
-                          ['radio', 'select'].includes(q.tipo))
-                        .map(q => (
-                          <MenuItem key={q.id} value={q.id}>
-                            {q.pergunta}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
+                      });
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip 
+                            label={`#${formData.questoes.indexOf(option) + 1}`} 
+                            size="small" 
+                            color="primary" 
+                            variant="outlined"
+                          />
+                          <Typography variant="body2">{option.pergunta}</Typography>
+                          <Chip 
+                            label={option.tipo} 
+                            size="small" 
+                            variant="outlined"
+                            sx={{ fontSize: '0.65rem' }}
+                          />
+                          <Chip 
+                            label={option.obrigatoria ? 'Obrigatória' : 'Opcional'} 
+                            size="small" 
+                            color={option.obrigatoria ? 'success' : 'default'}
+                            variant="outlined"
+                            sx={{ fontSize: '0.65rem' }}
+                          />
+                        </Box>
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Pergunta base"
+                        placeholder="Selecione a pergunta que controla esta condição..."
+                        helperText="Apenas perguntas do tipo 'Opção única', 'Lista suspensa' ou 'Múltipla escolha' podem ser usadas"
+                      />
+                    )}
+                  />
                 </Grid>
 
                 <Grid item xs={12} md={6}>
@@ -1946,6 +2028,7 @@ function FormulariosAnamnese() {
                         valor: e.target.value
                       }
                     })}
+                    helperText="Digite o valor exato que deve ser selecionado na pergunta base"
                   />
                 </Grid>
               </Grid>
@@ -2023,7 +2106,7 @@ function FormulariosAnamnese() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog de Cadastro/Edição */}
+      {/* Dialog de Cadastro/Edição (CORRIGIDO) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {formularioEditando ? 'Editar Formulário' : 'Novo Formulário'}
@@ -2165,21 +2248,42 @@ function FormulariosAnamnese() {
             </Grid>
           )}
 
-          {/* Aba 1: Questões */}
+          {/* Aba 1: Questões (CORRIGIDO) */}
           {tabValue === 1 && (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ color: '#9c27b0' }}>
                   Questões do Formulário
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={() => adicionarQuestao()}
-                  sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
-                >
-                  Adicionar Questão
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CheckIcon />}
+                    onClick={() => {
+                      const { erros, avisos } = validarCondicionais();
+                      if (erros.length === 0 && avisos.length === 0) {
+                        mostrarSnackbar('✅ Todas as condicionais estão válidas!', 'success');
+                      } else {
+                        if (erros.length > 0) {
+                          mostrarSnackbar(`❌ ${erros.length} erro(s): ${erros.join('; ')}`, 'error');
+                        } else {
+                          mostrarSnackbar(`⚠️ ${avisos.length} aviso(s): ${avisos.join('; ')}`, 'warning');
+                        }
+                      }
+                    }}
+                    sx={{ borderColor: '#4caf50', color: '#4caf50' }}
+                  >
+                    Validar Condicionais
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={() => adicionarQuestao()}
+                    sx={{ borderColor: '#9c27b0', color: '#9c27b0' }}
+                  >
+                    Adicionar Questão
+                  </Button>
+                </Box>
               </Box>
 
               {formData.questoes.length === 0 ? (
@@ -2350,19 +2454,29 @@ function FormulariosAnamnese() {
                                 </Grid>
                               )}
 
-                              {questao.condicional && (
-                                <Grid item xs={12}>
-                                  <Alert severity="info" sx={{ mt: 1 }}>
-                                    <Typography variant="body2">
-                                      Esta questão aparece apenas se: 
-                                      <strong>
-                                        {formData.questoes.find(q => q.id === questao.condicional.perguntaId)?.pergunta || 'Pergunta'} 
-                                        {' '}for igual a "{questao.condicional.valor}"
-                                      </strong>
-                                    </Typography>
-                                  </Alert>
-                                </Grid>
-                              )}
+                              {/* EXIBIÇÃO DA CONDICIONAL (CORRIGIDA) */}
+                              {questao.condicional && (() => {
+                                const perguntaBase = formData.questoes.find(q => q.id === questao.condicional.perguntaId);
+                                const textoBase = perguntaBase ? perguntaBase.pergunta : '⚠️ Pergunta base não encontrada!';
+                                const operadorTexto = 
+                                  questao.condicional.operador === '==' ? 'igual a' :
+                                  questao.condicional.operador === '!=' ? 'diferente de' :
+                                  questao.condicional.operador === 'contains' ? 'contiver' :
+                                  questao.condicional.operador;
+                                return (
+                                  <Grid item xs={12}>
+                                    <Alert severity={perguntaBase ? 'info' : 'error'} sx={{ mt: 1 }}>
+                                      <Typography variant="body2">
+                                        <ConditionalIcon fontSize="inherit" sx={{ mr: 0.5, verticalAlign: 'middle' }} />
+                                        Esta questão aparece apenas se: 
+                                        <strong> {textoBase} </strong>
+                                        for <strong>{operadorTexto}</strong>
+                                        {' "'}{questao.condicional.valor}{'"'}
+                                      </Typography>
+                                    </Alert>
+                                  </Grid>
+                                );
+                              })()}
 
                               <Grid item xs={6}>
                                 <FormControlLabel
@@ -2549,7 +2663,7 @@ function FormulariosAnamnese() {
                     if (modelo && modelo.questoes) {
                       const novasQuestoes = modelo.questoes.map(q => ({
                         ...q,
-                        id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                         ordem: formData.questoes.length + (q.ordem || 0)
                       }));
                       setFormData({
