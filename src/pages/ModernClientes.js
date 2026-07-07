@@ -1,5 +1,5 @@
 // src/pages/ModernClientes.js
-// VERSÃO COMPLETA COM IMPORTAÇÃO DE CLIENTES VIA CSV, EXCEL E JSON
+// VERSÃO COMPLETA CORRIGIDA - SEM papaparse
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -52,7 +52,6 @@ import {
   FormControlLabel,
   Checkbox,
   Stack,
-  LinearProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -102,7 +101,45 @@ import {
 } from '../utils/plugins';
 import { ImprimirCliente } from '../components/ImprimirCliente';
 import * as XLSX from 'xlsx';
-import * as Papa from 'papaparse';
+
+// ============================================
+// FUNÇÃO NATIVA PARA PARSE DE CSV (SUBSTITUI PAPAPARSE)
+// ============================================
+function parseCSVSimples(texto) {
+  const linhas = texto.split('\n').filter(linha => linha.trim() !== '');
+  if (linhas.length === 0) return { dados: [], cabecalhos: [] };
+  
+  // Extrai cabeçalhos (primeira linha)
+  const cabecalhos = linhas[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const dados = [];
+  
+  for (let i = 1; i < linhas.length; i++) {
+    const linhaRaw = linhas[i];
+    // Suporte para campos com vírgula entre aspas
+    const valores = [];
+    let current = '';
+    let insideQuotes = false;
+    for (let char of linhaRaw) {
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === ',' && !insideQuotes) {
+        valores.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    valores.push(current.trim());
+    
+    const linha = {};
+    cabecalhos.forEach((h, idx) => {
+      linha[h] = valores[idx] || '';
+    });
+    dados.push(linha);
+  }
+  
+  return { dados, cabecalhos };
+}
 
 function TabPanel({ children, value, index }) {
   return (
@@ -372,24 +409,17 @@ function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
       reader.onload = (e) => {
         try {
           const csvData = e.target.result;
-          Papa.parse(csvData, {
-            header: true,
-            skipEmptyLines: true,
-            transformHeader: (header) => header.trim(),
-            complete: (results) => {
-              const data = results.data.filter(row => Object.values(row).some(v => v && v.trim() !== ''));
-              setDadosImportados(data);
-              const cols = results.meta.fields || Object.keys(data[0] || {});
-              setColunas(cols);
-              setStep(2);
-              toast.success(`${data.length} registros encontrados no arquivo CSV`);
-            },
-            error: (err) => {
-              toast.error('Erro ao ler CSV: ' + err.message);
-            }
-          });
+          const resultado = parseCSVSimples(csvData);
+          // Filtra linhas totalmente vazias
+          const dadosFiltrados = resultado.dados.filter(row => 
+            Object.values(row).some(v => v && v.trim() !== '')
+          );
+          setDadosImportados(dadosFiltrados);
+          setColunas(resultado.cabecalhos);
+          setStep(2);
+          toast.success(`${dadosFiltrados.length} registros encontrados no arquivo CSV`);
         } catch (err) {
-          toast.error('Erro ao processar CSV: ' + err.message);
+          toast.error('Erro ao ler CSV: ' + err.message);
         }
       };
       reader.readAsText(file, 'UTF-8');
