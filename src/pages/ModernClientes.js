@@ -1,4 +1,6 @@
 // src/pages/ModernClientes.js
+// VERSÃO COMPLETA COM IMPORTAÇÃO DE CLIENTES VIA CSV, EXCEL E JSON
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -50,6 +52,7 @@ import {
   FormControlLabel,
   Checkbox,
   Stack,
+  LinearProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -76,6 +79,11 @@ import {
   Sort as SortIcon,
   Download as DownloadIcon,
   Lock as LockIcon,
+  UploadFile as UploadFileIcon,
+  FilePresent as FilePresentIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -94,6 +102,7 @@ import {
 } from '../utils/plugins';
 import { ImprimirCliente } from '../components/ImprimirCliente';
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -103,7 +112,7 @@ function TabPanel({ children, value, index }) {
   );
 }
 
-// Componente de Filtros Avançados
+// Componente de Filtros Avançados (mesmo do código original)
 function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, onClearFilters }) {
   const [localFilters, setLocalFilters] = useState(filters);
 
@@ -288,6 +297,513 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
   );
 }
 
+// ============================================
+// COMPONENTE DE IMPORTAÇÃO DE CLIENTES
+// ============================================
+function ImportarClientesDialog({ open, onClose, onImportSuccess }) {
+  const [step, setStep] = useState(1); // 1: seleção, 2: preview/mapeamento, 3: confirmar
+  const [formato, setFormato] = useState('excel');
+  const [arquivo, setArquivo] = useState(null);
+  const [dadosImportados, setDadosImportados] = useState([]);
+  const [colunas, setColunas] = useState([]);
+  const [mapeamento, setMapeamento] = useState({});
+  const [linhasIgnoradas, setLinhasIgnoradas] = useState([]);
+  const [importando, setImportando] = useState(false);
+  const [progresso, setProgresso] = useState(0);
+
+  const camposDisponiveis = [
+    { key: 'nome', label: 'Nome Completo', obrigatorio: true },
+    { key: 'email', label: 'Email', obrigatorio: true },
+    { key: 'telefone', label: 'Telefone', obrigatorio: true },
+    { key: 'telefone2', label: 'Telefone Secundário' },
+    { key: 'cpf', label: 'CPF' },
+    { key: 'rg', label: 'RG' },
+    { key: 'dataNascimento', label: 'Data Nascimento' },
+    { key: 'cep', label: 'CEP' },
+    { key: 'logradouro', label: 'Logradouro' },
+    { key: 'numero', label: 'Número' },
+    { key: 'complemento', label: 'Complemento' },
+    { key: 'bairro', label: 'Bairro' },
+    { key: 'cidade', label: 'Cidade' },
+    { key: 'estado', label: 'Estado' },
+    { key: 'observacoes', label: 'Observações' },
+    { key: 'status', label: 'Status (VIP/Regular/Novo)' },
+    { key: 'totalPontos', label: 'Pontos de Fidelidade' },
+    { key: 'indicadoPor', label: 'Indicado Por (ID)' },
+    { key: 'indicadoPorNome', label: 'Indicado Por (Nome)' },
+  ];
+
+  const handleArquivoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setArquivo(file);
+    processarArquivo(file);
+  };
+
+  const processarArquivo = (file) => {
+    const reader = new FileReader();
+    const extension = file.name.split('.').pop().toLowerCase();
+
+    if (extension === 'json') {
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          let clientes = [];
+          if (Array.isArray(data)) {
+            clientes = data;
+          } else if (data.clientes && Array.isArray(data.clientes)) {
+            clientes = data.clientes;
+          } else if (data.dados && Array.isArray(data.dados)) {
+            clientes = data.dados;
+          } else {
+            clientes = [data];
+          }
+          setDadosImportados(clientes);
+          const cols = Object.keys(clientes[0] || {});
+          setColunas(cols);
+          setStep(2);
+          toast.success(`${clientes.length} registros encontrados no arquivo JSON`);
+        } catch (err) {
+          toast.error('Erro ao ler arquivo JSON: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    } else if (extension === 'csv') {
+      reader.onload = (e) => {
+        try {
+          const csvData = e.target.result;
+          Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.trim(),
+            complete: (results) => {
+              const data = results.data.filter(row => Object.values(row).some(v => v && v.trim() !== ''));
+              setDadosImportados(data);
+              const cols = results.meta.fields || Object.keys(data[0] || {});
+              setColunas(cols);
+              setStep(2);
+              toast.success(`${data.length} registros encontrados no arquivo CSV`);
+            },
+            error: (err) => {
+              toast.error('Erro ao ler CSV: ' + err.message);
+            }
+          });
+        } catch (err) {
+          toast.error('Erro ao processar CSV: ' + err.message);
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    } else if (['xlsx', 'xls'].includes(extension)) {
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+          setDadosImportados(jsonData);
+          const cols = Object.keys(jsonData[0] || {});
+          setColunas(cols);
+          setStep(2);
+          toast.success(`${jsonData.length} registros encontrados no arquivo Excel`);
+        } catch (err) {
+          toast.error('Erro ao ler Excel: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      toast.error('Formato de arquivo não suportado. Use JSON, CSV ou Excel.');
+    }
+  };
+
+  const handleMapeamentoChange = (coluna, campo) => {
+    setMapeamento(prev => ({ ...prev, [coluna]: campo }));
+  };
+
+  const validarDados = () => {
+    const erros = [];
+    const obrigatorios = camposDisponiveis.filter(c => c.obrigatorio).map(c => c.key);
+    const colunasMapeadas = Object.values(mapeamento).filter(v => v);
+
+    // Verifica se os campos obrigatórios estão mapeados
+    obrigatorios.forEach(campo => {
+      if (!colunasMapeadas.includes(campo)) {
+        erros.push(`Campo obrigatório "${campo}" não mapeado`);
+      }
+    });
+
+    // Verifica se há dados suficientes
+    if (dadosImportados.length === 0) {
+      erros.push('Nenhum dado para importar');
+    }
+
+    return erros;
+  };
+
+  const handleImportar = async () => {
+    const erros = validarDados();
+    if (erros.length > 0) {
+      toast.error('Erro na configuração: ' + erros.join('; '));
+      return;
+    }
+
+    setImportando(true);
+    setProgresso(0);
+
+    try {
+      const mapeamentoReverso = {};
+      Object.entries(mapeamento).forEach(([coluna, campo]) => {
+        if (campo) mapeamentoReverso[campo] = coluna;
+      });
+
+      const total = dadosImportados.length;
+      let sucessos = 0;
+      let falhas = 0;
+      const falhasDetalhes = [];
+
+      for (let i = 0; i < total; i++) {
+        const row = dadosImportados[i];
+        const cliente = {};
+
+        camposDisponiveis.forEach(campo => {
+          const coluna = mapeamentoReverso[campo.key];
+          if (coluna) {
+            let valor = row[coluna];
+            if (valor === undefined || valor === null) valor = '';
+            if (typeof valor === 'string') valor = valor.trim();
+            cliente[campo.key] = valor;
+          }
+        });
+
+        // Validação básica
+        if (!cliente.nome || !cliente.email || !cliente.telefone) {
+          falhas++;
+          falhasDetalhes.push(`Linha ${i+1}: campos obrigatórios faltando`);
+          continue;
+        }
+
+        // Converte status se presente
+        if (cliente.status) {
+          const statusValido = ['VIP', 'Regular', 'Novo'];
+          if (!statusValido.includes(cliente.status)) {
+            cliente.status = 'Regular';
+          }
+        } else {
+          cliente.status = 'Regular';
+        }
+
+        // Converte pontos
+        if (cliente.totalPontos) {
+          cliente.totalPontos = parseFloat(cliente.totalPontos) || 0;
+        } else {
+          cliente.totalPontos = 0;
+        }
+
+        // Nível fidelidade
+        cliente.nivelFidelidade = calcularNivelFidelidade(cliente.totalPontos);
+
+        // Data de cadastro
+        cliente.dataCadastro = new Date().toISOString().split('T')[0];
+        cliente.createdAt = new Date().toISOString();
+        cliente.updatedAt = new Date().toISOString();
+
+        // Prontuário vazio
+        cliente.prontuario = {
+          alergias: '',
+          medicamentos: '',
+          restricoes: '',
+          queixaPrincipal: '',
+          tipoPele: '',
+          fototipo: '',
+          classificacaoRisco: 'baixo',
+          cuidadosPosProcedimento: '',
+          procedimentosAnteriores: '',
+          evolucao: '',
+          termosAssinados: '',
+          fotosAntesDepois: '',
+          fotosCliente: [],
+          autorizacaoImagem: false,
+          assinaturaDigital: false,
+          dataAssinatura: '',
+        };
+
+        // Preferências
+        cliente.preferencias = {
+          profissionalPreferido: '',
+          servicosPreferidos: [],
+          notificacoes: true,
+        };
+
+        try {
+          await firebaseService.add('clientes', cliente);
+          sucessos++;
+        } catch (err) {
+          falhas++;
+          falhasDetalhes.push(`Linha ${i+1}: ${err.message}`);
+        }
+
+        setProgresso(Math.round(((i+1) / total) * 100));
+      }
+
+      // Registra auditoria
+      await registrarAuditoria(
+        'importar_clientes',
+        'lista',
+        `Importação de clientes via ${formato.toUpperCase()}`,
+        { total, sucessos, falhas, formato }
+      );
+
+      toast.success(`Importação concluída! ${sucessos} clientes importados, ${falhas} falhas.`);
+      if (falhasDetalhes.length > 0) {
+        console.warn('Detalhes das falhas:', falhasDetalhes);
+        toast.warning(`${falhasDetalhes.length} falhas. Verifique o console para detalhes.`);
+      }
+
+      setStep(1);
+      setArquivo(null);
+      setDadosImportados([]);
+      setColunas([]);
+      setMapeamento({});
+      onImportSuccess();
+      onClose();
+    } catch (err) {
+      console.error('Erro na importação:', err);
+      toast.error('Erro ao importar: ' + err.message);
+    } finally {
+      setImportando(false);
+      setProgresso(0);
+    }
+  };
+
+  // Função auxiliar para calcular nível (copiada do código principal)
+  const calcularNivelFidelidade = (pontos) => {
+    if (pontos >= 5000) return 'platina';
+    if (pontos >= 2000) return 'ouro';
+    if (pontos >= 500) return 'prata';
+    return 'bronze';
+  };
+
+  // Função auxiliar para auditoria (simplificada para este contexto)
+  const registrarAuditoria = async (acao, entidadeId, detalhes, dados = {}) => {
+    try {
+      const usuarioStr = localStorage.getItem('usuario');
+      const usuario = usuarioStr ? JSON.parse(usuarioStr) : null;
+      await auditoriaService.registrar(acao, {
+        entidade: 'clientes',
+        entidadeId,
+        detalhes,
+        dados: {
+          ...dados,
+          usuarioId: usuario?.id || 'sistema',
+          usuarioNome: usuario?.nome || 'Sistema',
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao registrar auditoria:', error);
+    }
+  };
+
+  const handleClose = () => {
+    if (importando) return;
+    setStep(1);
+    setArquivo(null);
+    setDadosImportados([]);
+    setColunas([]);
+    setMapeamento({});
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+      <DialogTitle sx={{ bgcolor: '#2196f3', color: 'white' }}>
+        <UploadFileIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+        Importar Clientes
+      </DialogTitle>
+      <DialogContent>
+        {step === 1 && (
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <strong>Formatos suportados:</strong> Excel (.xlsx, .xls), CSV (.csv) e JSON (.json)
+            </Alert>
+
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Formato do arquivo</InputLabel>
+              <Select
+                value={formato}
+                label="Formato do arquivo"
+                onChange={(e) => setFormato(e.target.value)}
+              >
+                <MenuItem value="excel">Excel (.xlsx, .xls)</MenuItem>
+                <MenuItem value="csv">CSV (.csv)</MenuItem>
+                <MenuItem value="json">JSON (.json)</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<FilePresentIcon />}
+              fullWidth
+              sx={{ py: 3, borderStyle: 'dashed', borderWidth: 2 }}
+            >
+              {arquivo ? `Arquivo: ${arquivo.name}` : 'Clique para selecionar ou arraste o arquivo'}
+              <input
+                type="file"
+                hidden
+                accept=".xlsx,.xls,.csv,.json"
+                onChange={handleArquivoChange}
+              />
+            </Button>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Campos esperados:</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {camposDisponiveis.map(campo => (
+                  <Chip
+                    key={campo.key}
+                    label={campo.label}
+                    size="small"
+                    color={campo.obrigatorio ? 'primary' : 'default'}
+                    variant={campo.obrigatorio ? 'filled' : 'outlined'}
+                  />
+                ))}
+              </Box>
+              <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+                * Campos obrigatórios: Nome, Email e Telefone
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        {step === 2 && (
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="success" sx={{ mb: 3 }}>
+              {dadosImportados.length} registros encontrados. Mapeie as colunas do arquivo para os campos do sistema.
+            </Alert>
+
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+              Mapeamento de Colunas
+            </Typography>
+
+            <Grid container spacing={2}>
+              {colunas.map(coluna => (
+                <Grid item xs={12} sm={6} md={4} key={coluna}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>{coluna}</InputLabel>
+                    <Select
+                      value={mapeamento[coluna] || ''}
+                      label={coluna}
+                      onChange={(e) => handleMapeamentoChange(coluna, e.target.value)}
+                    >
+                      <MenuItem value="">Ignorar</MenuItem>
+                      {camposDisponiveis.map(campo => (
+                        <MenuItem key={campo.key} value={campo.key}>
+                          {campo.label} {campo.obrigatorio ? '*' : ''}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+              Pré-visualização dos dados ({Math.min(dadosImportados.length, 10)} primeiros)
+            </Typography>
+
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    {colunas.map(col => (
+                      <TableCell key={col} sx={{ fontWeight: 600, bgcolor: '#f5f5f5' }}>
+                        {col}
+                        {mapeamento[col] && (
+                          <Chip
+                            label={mapeamento[col]}
+                            size="small"
+                            color="primary"
+                            sx={{ ml: 1, height: 18, fontSize: '0.6rem' }}
+                          />
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {dadosImportados.slice(0, 10).map((row, idx) => (
+                    <TableRow key={idx}>
+                      {colunas.map(col => (
+                        <TableCell key={col}>{row[col] || '-'}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {dadosImportados.length > 10 && (
+              <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+                ... e mais {dadosImportados.length - 10} registros
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        {step === 3 && (
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <CircularProgress variant="determinate" value={progresso} size={80} thickness={5} sx={{ mb: 3 }} />
+            <Typography variant="h6" gutterBottom>
+              {progresso < 100 ? `Importando... ${progresso}%` : 'Concluído!'}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Aguarde enquanto os clientes são cadastrados...
+            </Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        {step === 1 && (
+          <>
+            <Button onClick={handleClose}>Cancelar</Button>
+            <Button
+              variant="contained"
+              disabled={!arquivo || dadosImportados.length === 0}
+              onClick={() => setStep(2)}
+              sx={{ bgcolor: '#2196f3' }}
+            >
+              Avançar
+            </Button>
+          </>
+        )}
+        {step === 2 && (
+          <>
+            <Button onClick={() => setStep(1)}>Voltar</Button>
+            <Button
+              variant="contained"
+              onClick={handleImportar}
+              disabled={importando}
+              sx={{ bgcolor: '#4caf50' }}
+            >
+              Confirmar Importação
+            </Button>
+          </>
+        )}
+        {step === 3 && (
+          <Button onClick={handleClose} disabled={importando}>
+            Fechar
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 function ModernClientes() {
   const navigate = useNavigate();
   const componentRef = useRef(null);
@@ -297,6 +813,7 @@ function ModernClientes() {
   const [openDialog, setOpenDialog] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [openIndicacaoDialog, setOpenIndicacaoDialog] = useState(false);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [clienteIndicado, setClienteIndicado] = useState(null);
   const [tabValue, setTabValue] = useState(0);
@@ -1162,6 +1679,11 @@ function ModernClientes() {
     toast.info('Filtros removidos');
   };
 
+  // Callback para quando a importação for bem-sucedida
+  const handleImportSuccess = () => {
+    carregarClientes();
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -1189,7 +1711,17 @@ function ModernClientes() {
             Gerencie todos os clientes do salão
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outlined"
+              startIcon={<UploadFileIcon />}
+              onClick={() => setOpenImportDialog(true)}
+              sx={{ borderColor: '#2196f3', color: '#2196f3' }}
+            >
+              Importar
+            </Button>
+          </motion.div>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button
               variant="outlined"
@@ -1469,7 +2001,14 @@ function ModernClientes() {
         />
       </Card>
 
-      {/* Dialog de Cadastro/Edição (mesmo código anterior) */}
+      {/* Dialog de Importação de Clientes */}
+      <ImportarClientesDialog
+        open={openImportDialog}
+        onClose={() => setOpenImportDialog(false)}
+        onImportSuccess={handleImportSuccess}
+      />
+
+      {/* Dialog de Cadastro/Edição (mesmo código original) */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>
           {selectedCliente ? 'Editar Cliente' : 'Novo Cliente'}
@@ -1726,7 +2265,7 @@ function ModernClientes() {
         </form>
       </Dialog>
 
-      {/* Dialog de Visualização (mesmo código anterior) */}
+      {/* Dialog de Visualização (mesmo código original) */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: '#9c27b0', color: 'white' }}>Detalhes do Cliente</DialogTitle>
         <DialogContent>
