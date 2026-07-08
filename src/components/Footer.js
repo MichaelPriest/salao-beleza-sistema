@@ -23,22 +23,23 @@ import {
   Business as BusinessIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { firebaseService } from '../services/firebase';
 
 function Footer() {
-  const [config, setConfig] = useState(null);
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear());
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Começa como false para modo full width
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(0);
-  const [isFullWidthMode, setIsFullWidthMode] = useState(true); // Detectar se é SiteSalao
+  const [isFullWidthMode, setIsFullWidthMode] = useState(true);
+
+  // DADOS FIXOS DO SISTEMA (não usa dados do estabelecimento)
+  const SISTEMA_NOME = 'SysBeautyPro';
+  const SISTEMA_VERSAO = 'v3.0';
+  const SISTEMA_DESCRICAO = 'Sistema de gestão para salão de beleza';
 
   useEffect(() => {
-    carregarConfiguracoes();
-    
     window.addEventListener('scroll', handleScroll);
     
-    // Verificar se o footer deve ocupar largura total ou compensar sidebar administrativa.
+    // Verificar se o footer deve ocupar largura total ou compensar sidebar
     const checkIfSiteSalao = () => {
       const pathname = window.location.pathname || '';
       const sidebar = document.querySelector('.MuiDrawer-paper');
@@ -63,7 +64,7 @@ function Footer() {
       }
     };
     
-    // Escutar mudanças no estado do sidebar (apenas para páginas admin)
+    // Escutar mudanças no estado do sidebar
     const handleSidebarToggle = (event) => {
       if (event.detail && !isFullWidthMode) {
         setSidebarOpen(event.detail.open);
@@ -73,12 +74,9 @@ function Footer() {
     
     window.addEventListener('sidebarToggle', handleSidebarToggle);
     
-    // Verificar estado inicial
     setTimeout(checkIfSiteSalao, 100);
-    
     window.addEventListener('resize', checkIfSiteSalao);
 
-    // Observar mudanças no DOM
     const observer = new MutationObserver(() => {
       checkIfSiteSalao();
     });
@@ -105,25 +103,6 @@ function Footer() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const carregarConfiguracoes = async () => {
-    try {
-      const configuracoes = await firebaseService.getAll('configuracoes');
-      if (configuracoes && configuracoes.length > 0) {
-        setConfig(configuracoes[0]);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configurações:', error);
-    }
-  };
-
-  const salao = config?.salao || {};
-  const sistema = config?.sistema || {};
-  const nomeSistema = sistema.nome || 'BeautyPro';
-  const versaoSistema = sistema.versao || 'v2.0';
-  const logoEstabelecimento = salao.logo || config?.sitePublico?.logo || '';
-  const nomeEstabelecimento = salao.nomeFantasia || salao.nome || nomeSistema;
-
-  // Estilos base do footer
   const footerStyles = {
     bgcolor: '#1a1a2e',
     color: '#fff',
@@ -132,12 +111,10 @@ function Footer() {
     transition: 'margin-left 0.3s ease-in-out, width 0.3s ease-in-out',
   };
 
-  // Se for modo full width (SiteSalao), ocupa 100% da largura
   if (isFullWidthMode) {
     footerStyles.width = '100%';
     footerStyles.ml = 0;
   } else {
-    // Modo com sidebar (páginas admin)
     footerStyles.width = `calc(100% - ${sidebarOpen ? sidebarWidth : 0}px)`;
     footerStyles.ml = sidebarOpen ? `${sidebarWidth}px` : 0;
   }
@@ -154,17 +131,17 @@ function Footer() {
           alignItems={{ xs: 'stretch', sm: 'center' }}
           spacing={{ xs: 1.5, sm: 2 }}
         >
-          {/* Logo e Nome */}
+          {/* Logo e Nome do Sistema (fixo) */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' }, gap: 1.25, minWidth: 0, maxWidth: '100%' }}>
-            <Avatar src={logoEstabelecimento || undefined} sx={{ width: 36, height: 36, bgcolor: '#9c27b0' }}>
-              {!logoEstabelecimento && <BusinessIcon fontSize="small" />}
+            <Avatar sx={{ width: 36, height: 36, bgcolor: '#9c27b0' }}>
+              <BusinessIcon fontSize="small" />
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff', textAlign: { xs: 'center', sm: 'left' }, overflowWrap: 'anywhere' }}>
-                {nomeEstabelecimento}
+                {SISTEMA_NOME}
               </Typography>
               <Typography variant="caption" sx={{ opacity: 0.65, display: 'block', textAlign: { xs: 'center', sm: 'left' }, overflowWrap: 'anywhere' }}>
-                {nomeSistema} • {versaoSistema}
+                {SISTEMA_VERSAO}
               </Typography>
             </Box>
           </Box>
@@ -173,7 +150,7 @@ function Footer() {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, textAlign: 'center', flexWrap: 'wrap', px: { xs: 1, sm: 0 } }}>
             <CopyrightIcon sx={{ fontSize: 14, opacity: 0.6 }} />
             <Typography variant="caption" sx={{ opacity: 0.65 }}>
-              {anoAtual} {nomeEstabelecimento}. Sistema de gestão para salão de beleza.
+              {anoAtual} {SISTEMA_NOME}. {SISTEMA_DESCRICAO}
             </Typography>
           </Box>
 
@@ -183,9 +160,8 @@ function Footer() {
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                if (salao.contato?.whatsapp) {
-                  window.open('https://wa.me/' + (salao.contato?.whatsapp || ''), '_blank');
-                }
+                // Link para suporte do sistema
+                window.open('https://wa.me/5511999999999', '_blank');
               }}
               sx={{
                 color: '#fff',
@@ -224,21 +200,31 @@ function Footer() {
           </Stack>
         </Stack>
         
-        {/* Informações adicionais para o SiteSalao */}
+        {/* Informações adicionais do sistema (modo full width) */}
         {isFullWidthMode && (
           <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)', textAlign: 'center' }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="center" justifyContent="center" sx={{ flexWrap: 'wrap', px: { xs: 1, sm: 0 } }}>
               <Typography variant="caption" sx={{ opacity: 0.65 }}>
-                {nomeSistema} {versaoSistema} • Portal administrativo e portal do cliente
+                {SISTEMA_NOME} {SISTEMA_VERSAO} • Portal administrativo e portal do cliente
               </Typography>
-              {salao.contato?.email && <Chip size="small" icon={<EmailIcon />} label={salao.contato.email} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} />}
-              {salao.contato?.whatsapp && <Chip size="small" icon={<WhatsAppIcon />} label={salao.contato.whatsapp} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} />}
+              <Chip 
+                size="small" 
+                icon={<EmailIcon />} 
+                label="suporte@sysbeautypro.com" 
+                sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} 
+              />
+              <Chip 
+                size="small" 
+                icon={<WhatsAppIcon />} 
+                label="(11) 99999-9999" 
+                sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.08)', maxWidth: '100%' }} 
+              />
             </Stack>
           </Box>
         )}
       </Container>
 
-      {/* Botão Voltar ao Topo - Ajustado para não sobrepor o sidebar e funcionar no SiteSalao */}
+      {/* Botão Voltar ao Topo */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.div
