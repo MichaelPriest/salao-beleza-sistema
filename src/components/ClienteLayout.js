@@ -1,5 +1,5 @@
 // src/components/ClienteLayout.js
-// VERSÃO CORRIGIDA - COM NOTIFICAÇÕES FUNCIONANDO
+// VERSÃO CORRIGIDA E MELHORADA - COM SIDEBAR MODERNO (COLAPSÁVEL E COM ANIMAÇÕES)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
@@ -24,6 +24,9 @@ import {
   Button,
   Paper,
   CircularProgress,
+  Tooltip,
+  Collapse,
+  alpha,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -46,8 +49,12 @@ import {
   AccessTime as AccessTimeIcon,
   RateReview as RateReviewIcon,
   LocalOffer as LocalOfferIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthCliente } from '../contexts/AuthClienteContext';
 import { notificacoesPushService } from '../services/notificacoesPushService';
 import { browserPushService } from '../services/browserPushService';
@@ -75,7 +82,6 @@ const MENU_ITEMS = [
   { text: 'Manual de Uso', icon: <HelpCenterIcon />, path: '/cliente/manual' },
 ];
 
-
 const PAGE_TITLES = {
   '/cliente/dashboard': 'Dashboard do Cliente',
   '/cliente/agendamentos': 'Meus Agendamentos',
@@ -91,7 +97,6 @@ const PAGE_TITLES = {
 };
 
 const getBrasiliaTime = () => getLocalDateTime();
-
 
 const portalContentSx = {
   '& .MuiTypography-h3': { fontSize: { xs: '1.45rem', sm: '1.75rem', md: '2rem' }, lineHeight: 1.18, fontWeight: 800 },
@@ -140,7 +145,6 @@ const getAgendamentoServicoIds = (agendamento = {}) => Array.from(new Set([
   ...(agendamento.servicos || []).map((servico) => servico.id),
 ].flat().filter(Boolean)));
 
-
 const getFormularioKey = (formulario = {}, index = 0) => {
   const explicitId = formulario.id || formulario.document_id || formulario.uid || formulario.codigo;
   if (explicitId) return String(explicitId);
@@ -164,9 +168,161 @@ const formularioAtendeServico = (formulario = {}, servicoIds = []) => {
 };
 
 // ============================================
+// COMPONENTE DO SIDEBAR (MODERNO)
+// ============================================
+function ClientSidebar({ open, onClose, collapsed, onToggleCollapse, cliente, fidelidadeAtiva, formulariosPendentes, location, handleNavigation }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const filteredItems = MENU_ITEMS.filter(item => item.recurso !== 'fidelidade' || fidelidadeAtiva);
+
+  const logo = cliente?.empresa?.sitePublico?.logo || cliente?.empresaLogo || null;
+
+  return (
+    <Drawer
+      variant={isMobile ? 'temporary' : 'permanent'}
+      open={isMobile ? open : true}
+      onClose={onClose}
+      sx={{
+        width: collapsed ? 80 : 280,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: collapsed ? 80 : 280,
+          boxSizing: 'border-box',
+          backgroundColor: '#ffffff',
+          borderRight: '1px solid rgba(156,39,176,0.08)',
+          boxShadow: '4px 0 20px rgba(0,0,0,0.03)',
+          overflowX: 'hidden',
+          transition: theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+        },
+      }}
+    >
+      {/* Cabeçalho com logo e botão de colapso */}
+      <Box sx={{ p: collapsed ? 1 : 2, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
+        {!collapsed && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {logo ? (
+              <Avatar src={logo} sx={{ width: 40, height: 40 }} />
+            ) : (
+              <SpaIcon sx={{ fontSize: 36, color: '#9c27b0' }} />
+            )}
+            <Typography variant="h6" sx={{ fontWeight: 700, color: '#9c27b0', fontSize: '1.1rem' }}>
+              BeautyPro
+            </Typography>
+          </Box>
+        )}
+        {!isMobile && (
+          <Tooltip title={collapsed ? 'Expandir menu' : 'Recolher menu'} placement="right">
+            <IconButton onClick={onToggleCollapse} size="small" sx={{ mx: collapsed ? 'auto' : 0 }}>
+              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+
+      {/* Perfil do cliente */}
+      <Box sx={{ px: 2, py: 3, mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: collapsed ? 1 : 2, backgroundColor: alpha('#9c27b0', 0.06), borderRadius: 3, justifyContent: collapsed ? 'center' : 'flex-start' }}>
+          <Avatar src={cliente?.foto} sx={{ width: collapsed ? 40 : 56, height: collapsed ? 40 : 56, bgcolor: '#9c27b0' }}>
+            {!cliente?.foto && getInitials(cliente?.nome)}
+          </Avatar>
+          {!collapsed && (
+            <Box sx={{ overflow: 'hidden', flex: 1 }}>
+              <Typography variant="subtitle2" color="textSecondary" noWrap>Bem-vindo(a)</Typography>
+              <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600 }}>{cliente?.nome?.split(' ')[0] || 'Cliente'}</Typography>
+              <Typography variant="caption" color="textSecondary" noWrap>{cliente?.email}</Typography>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      <Divider sx={{ mx: 2 }} />
+
+      {/* Lista de itens do menu */}
+      <List sx={{ flex: 1, px: 1, py: 2 }}>
+        {filteredItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          const isAnamnese = item.text === 'Anamnese';
+          const badgeCount = isAnamnese ? formulariosPendentes : 0;
+
+          return (
+            <ListItem
+              key={item.text}
+              button
+              onClick={() => handleNavigation(item.path)}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                py: collapsed ? 1.2 : 1,
+                px: collapsed ? 1 : 2,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                backgroundColor: isActive ? alpha('#9c27b0', 0.12) : 'transparent',
+                '&:hover': {
+                  backgroundColor: alpha('#9c27b0', 0.06),
+                },
+                '& .MuiListItemIcon-root': {
+                  color: isActive ? '#9c27b0' : theme.palette.text.secondary,
+                  minWidth: collapsed ? 0 : 36,
+                  mr: collapsed ? 0 : 1,
+                  justifyContent: 'center',
+                },
+                '& .MuiListItemText-root': {
+                  display: collapsed ? 'none' : 'block',
+                },
+              }}
+            >
+              <ListItemIcon>
+                {badgeCount > 0 ? (
+                  <Badge badgeContent={badgeCount} color="secondary">{item.icon}</Badge>
+                ) : (
+                  item.icon
+                )}
+              </ListItemIcon>
+              {!collapsed && (
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{
+                    fontSize: '0.95rem',
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#9c27b0' : 'inherit',
+                  }}
+                />
+              )}
+              {!collapsed && badgeCount > 0 && (
+                <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 600, ml: 1 }}>{badgeCount}</Typography>
+              )}
+            </ListItem>
+          );
+        })}
+      </List>
+
+      {/* Botão sair */}
+      <Divider sx={{ mx: 2 }} />
+      <List sx={{ p: 1 }}>
+        <ListItem
+          button
+          onClick={() => { const logoutFn = onClose?.logout || (() => {}); if (typeof logoutFn === 'function') logoutFn(); }}
+          sx={{ borderRadius: 2, color: '#f44336', '&:hover': { bgcolor: '#ffebee' }, justifyContent: collapsed ? 'center' : 'flex-start' }}
+        >
+          <ListItemIcon sx={{ color: '#f44336', minWidth: collapsed ? 0 : 36, mr: collapsed ? 0 : 1, justifyContent: 'center' }}><LogoutIcon /></ListItemIcon>
+          {!collapsed && <ListItemText primary="Sair" />}
+        </ListItem>
+      </List>
+    </Drawer>
+  );
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
-
 function ClienteLayout() {
   // ==========================================
   // HOOKS
@@ -182,21 +338,20 @@ function ClienteLayout() {
   // ESTADOS
   // ==========================================
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // Estados de Notificações
+  const [collapsed, setCollapsed] = useState(false);
   const [notificacoes, setNotificacoes] = useState([]);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [notificacoesAnchor, setNotificacoesAnchor] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(false);
   const [pushStatus, setPushStatus] = useState(browserPushService.getPermission());
   const [ativandoPush, setAtivandoPush] = useState(false);
-
-  // Estados de Anamnese
   const [formulariosPendentes, setFormulariosPendentes] = useState(0);
   const [horaBrasilia, setHoraBrasilia] = useState(getBrasiliaTime());
   const [configSistema, setConfigSistema] = useState(null);
 
-
+  // ==========================================
+  // FUNÇÕES (mesmas do original, mantidas)
+  // ==========================================
   const carregarConfigSistema = useCallback(async () => {
     try {
       const configs = await firebaseService.getAll('configuracoes').catch(() => []);
@@ -206,9 +361,6 @@ function ClienteLayout() {
     }
   }, []);
 
-  // ==========================================
-  // FUNÇÃO PARA CARREGAR NOTIFICAÇÕES
-  // ==========================================
   const carregarNotificacoes = useCallback(async () => {
     const idsCliente = getClienteIds(cliente, firebaseUser);
     if (idsCliente.length === 0) return [];
@@ -217,11 +369,9 @@ function ClienteLayout() {
       setLoadingNotificacoes(true);
       const data = await notificacoesPushService.buscarNotificacoes(idsCliente).catch(() => []);
 
-      // Ocultar notificações do programa quando a fidelidade estiver desativada
       const tiposFidelidade = ['pontos', 'nivel', 'recompensa', 'resgate'];
       const notificacoesVisiveis = fidelidadeAtiva ? (data || []) : (data || []).filter((item) => !tiposFidelidade.includes(item.tipo));
 
-      // Ordenar por data (mais recentes primeiro)
       const notificacoesOrdenadas = notificacoesVisiveis.sort((a, b) =>
         new Date(b.createdAt || b.data || 0) - new Date(a.createdAt || a.data || 0)
       );
@@ -239,9 +389,6 @@ function ClienteLayout() {
     }
   }, [cliente, firebaseUser, fidelidadeAtiva]);
 
-  // ==========================================
-  // FUNÇÃO PARA VERIFICAR FORMULÁRIOS PENDENTES
-  // ==========================================
   const verificarFormulariosPendentes = useCallback(async () => {
     const idsCliente = getClienteIds(cliente, firebaseUser);
     if (idsCliente.length === 0) return 0;
@@ -282,9 +429,6 @@ function ClienteLayout() {
     }
   }, [cliente, firebaseUser]);
 
-  // ==========================================
-  // FUNÇÃO PARA MARCAR NOTIFICAÇÃO COMO LIDA
-  // ==========================================
   const marcarNotificacaoComoLida = useCallback(async (notificacaoId) => {
     try {
       await firebaseService.update('notificacoes_cliente', notificacaoId, {
@@ -304,9 +448,6 @@ function ClienteLayout() {
     }
   }, []);
 
-  // ==========================================
-  // FUNÇÃO PARA MARCAR TODAS COMO LIDAS
-  // ==========================================
   const marcarTodasComoLidas = useCallback(async () => {
     const naoLidas = notificacoes.filter(n => !n.lida);
     if (naoLidas.length === 0) return;
@@ -326,9 +467,6 @@ function ClienteLayout() {
     }
   }, [notificacoes]);
 
-  // ==========================================
-  // FUNÇÃO PARA IR PARA PRIMEIRO FORMULÁRIO PENDENTE
-  // ==========================================
   const irParaPrimeiroFormularioPendente = useCallback(async () => {
     try {
       const idsCliente = getClienteIds(cliente, firebaseUser);
@@ -372,18 +510,16 @@ function ClienteLayout() {
     }
   }, [cliente, firebaseUser, navigate]);
 
+  // ==========================================
+  // EFEITOS (mantidos)
+  // ==========================================
   useEffect(() => {
     const timer = setInterval(() => setHoraBrasilia(getBrasiliaTime()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // ==========================================
-  // EFEITO PARA CARREGAR DADOS INICIAIS
-  // ==========================================
   useEffect(() => {
     if (!cliente?.id) return;
-
-    console.log('📌 ClienteLayout - Carregando dados para cliente:', cliente.id);
 
     const carregarDados = async () => {
       await carregarConfigSistema();
@@ -393,7 +529,6 @@ function ClienteLayout() {
 
     carregarDados();
 
-    // Intervalo para atualizar notificações a cada 30 segundos
     const interval = setInterval(() => {
       carregarNotificacoes();
     }, 30000);
@@ -404,29 +539,14 @@ function ClienteLayout() {
   // ==========================================
   // HANDLERS
   // ==========================================
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
+  const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
   const handleNavigation = (path) => {
     navigate(path);
-    if (isMobile) {
-      setMobileOpen(false);
-    }
+    if (isMobile) setMobileOpen(false);
   };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/cliente/login');
-  };
-
-  const handleNotificacoesClick = (event) => {
-    setNotificacoesAnchor(event.currentTarget);
-  };
-
-  const handleNotificacoesClose = () => {
-    setNotificacoesAnchor(null);
-  };
+  const handleLogout = () => { logout(); navigate('/cliente/login'); };
+  const handleNotificacoesClick = (event) => setNotificacoesAnchor(event.currentTarget);
+  const handleNotificacoesClose = () => setNotificacoesAnchor(null);
 
   const ativarPushCliente = async () => {
     try {
@@ -449,129 +569,35 @@ function ClienteLayout() {
   };
 
   const handleNotificacaoClick = async (notificacao) => {
-    if (!notificacao.lida) {
-      await marcarNotificacaoComoLida(notificacao.id);
-    }
-
+    if (!notificacao.lida) await marcarNotificacaoComoLida(notificacao.id);
     navigate(normalizarLinkNotificacao(notificacao, 'cliente'));
-
     handleNotificacoesClose();
   };
 
-  const getIconeNotificacao = (tipo) => {
-    return NOTIFICATION_ICONS[tipo] || NOTIFICATION_ICONS.default;
-  };
-
+  const getIconeNotificacao = (tipo) => NOTIFICATION_ICONS[tipo] || NOTIFICATION_ICONS.default;
   const formatarData = (data) => {
     if (!data) return '';
     try {
       const date = new Date(data);
       const agora = new Date();
       const diff = Math.floor((agora - date) / 1000);
-
       if (diff < 60) return 'agora';
       if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
       if (diff < 86400) return `${Math.floor(diff / 3600)} h atrás`;
       if (diff < 604800) return `${Math.floor(diff / 86400)} d atrás`;
-
       return date.toLocaleDateString('pt-BR');
-    } catch {
-      return '';
-    }
+    } catch { return ''; }
   };
 
   const getInitials = (name) => {
     if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const salaoConfig = configSistema?.salao || {};
   const logoEstabelecimento = salaoConfig.logo || cliente?.empresa?.sitePublico?.logo || cliente?.empresaLogo || null;
   const nomeEstabelecimento = salaoConfig.nomeFantasia || salaoConfig.nome || cliente?.empresaNome || 'Portal do Cliente';
-
   const currentTitle = PAGE_TITLES[location.pathname] || (location.pathname.includes('/anamnese') ? 'Anamnese' : 'Área do Cliente');
-
-  // ==========================================
-  // DRAWER
-  // ==========================================
-  const drawer = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, background: 'linear-gradient(135deg, #9c27b0 0%, #ff4081 100%)', color: 'white' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <SpaIcon sx={{ fontSize: 32 }} />
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>BeautyPro</Typography>
-        </Box>
-      </Box>
-
-      <Box sx={{ p: 2, bgcolor: '#faf5ff' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar src={cliente?.foto} sx={{ width: 48, height: 48, bgcolor: '#9c27b0' }}>
-            {!cliente?.foto && getInitials(cliente?.nome)}
-          </Avatar>
-          <Box>
-            <Typography variant="subtitle2" color="textSecondary">Bem-vindo(a)</Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {cliente?.nome?.split(' ')[0] || 'Cliente'}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-
-      <Divider />
-
-      <List sx={{ flex: 1, p: 1 }}>
-        {MENU_ITEMS.filter((item) => item.recurso !== 'fidelidade' || fidelidadeAtiva).map((item) => {
-          const isActive = location.pathname === item.path;
-          const isAnamnese = item.text === 'Anamnese';
-          const badgeCount = isAnamnese ? formulariosPendentes : 0;
-
-          return (
-            <ListItem
-              key={item.text}
-              button
-              onClick={() => handleNavigation(item.path)}
-              sx={{
-                borderRadius: 2,
-                mb: 0.5,
-                bgcolor: isActive ? '#f3e5f5' : 'transparent',
-                color: isActive ? '#9c27b0' : 'inherit',
-                '&:hover': { bgcolor: '#f3e5f5' },
-                '& .MuiListItemIcon-root': { color: isActive ? '#9c27b0' : 'inherit' },
-              }}
-            >
-              <ListItemIcon>
-                {badgeCount > 0 ? (
-                  <Badge badgeContent={badgeCount} color="secondary">
-                    {item.icon}
-                  </Badge>
-                ) : (
-                  item.icon
-                )}
-              </ListItemIcon>
-              <ListItemText primary={item.text} primaryTypographyProps={{ sx: { fontSize: { xs: '0.9rem', sm: '0.95rem' }, fontWeight: isActive ? 700 : 500 } }} />
-              {badgeCount > 0 && (
-                <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 600 }}>
-                  {badgeCount}
-                </Typography>
-              )}
-            </ListItem>
-          );
-        })}
-      </List>
-
-      <Divider />
-
-      <ListItem button onClick={handleLogout} sx={{ m: 1, borderRadius: 2, color: '#f44336', '&:hover': { bgcolor: '#ffebee' } }}>
-        <ListItemIcon sx={{ color: '#f44336' }}><LogoutIcon /></ListItemIcon>
-        <ListItemText primary="Sair" />
-      </ListItem>
-    </Box>
-  );
 
   // ==========================================
   // RENDER
@@ -579,18 +605,22 @@ function ClienteLayout() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Box sx={{ display: 'flex', flex: 1 }}>
-        {/* Header do cliente inspirado no cabeçalho administrativo */}
+        {/* App Bar */}
         <AppBar
           position="fixed"
           color="inherit"
           elevation={0}
           sx={{
-            left: { md: isMobile ? 0 : 280 },
-            width: { xs: '100%', md: isMobile ? '100%' : 'calc(100% - 280px)' },
+            left: { md: isMobile ? 0 : (collapsed ? 80 : 280) },
+            width: { xs: '100%', md: isMobile ? '100%' : `calc(100% - ${collapsed ? 80 : 280}px)` },
             borderBottom: '1px solid rgba(156,39,176,0.12)',
             backdropFilter: 'blur(20px)',
             backgroundColor: 'rgba(255,255,255,0.94)',
             zIndex: 1200,
+            transition: theme.transitions.create(['left', 'width'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
           }}
         >
           <Toolbar sx={{ px: { xs: 1.5, sm: 2.5, md: 3 }, minHeight: { xs: 64, sm: 72 } }}>
@@ -640,23 +670,50 @@ function ClienteLayout() {
           </Toolbar>
         </AppBar>
 
-        {/* Drawer Desktop */}
-        {!isMobile && (
-          <Drawer variant="permanent" sx={{ width: 280, flexShrink: 0, '& .MuiDrawer-paper': { width: 280, boxSizing: 'border-box', borderRight: 'none', boxShadow: '4px 0 20px rgba(0,0,0,0.05)' } }}>
-            {drawer}
-          </Drawer>
-        )}
-
-        {/* Drawer Mobile */}
-        <SwipeableDrawer anchor="left" open={mobileOpen} onClose={handleDrawerToggle} onOpen={() => {}} disableBackdropTransition ModalProps={{ keepMounted: true }} sx={{ '& .MuiDrawer-paper': { width: { xs: '84vw', sm: 320 }, maxWidth: 320, backgroundColor: '#ffffff' } }}>
-          {drawer}
-        </SwipeableDrawer>
+        {/* Sidebar Moderno */}
+        <ClientSidebar
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed(!collapsed)}
+          cliente={cliente}
+          fidelidadeAtiva={fidelidadeAtiva}
+          formulariosPendentes={formulariosPendentes}
+          location={location}
+          handleNavigation={handleNavigation}
+          // Passamos logout para o botão sair
+          logout={handleLogout}
+        />
 
         {/* Conteúdo Principal */}
-        <Box component="main" sx={{ flexGrow: 1, width: '100%', maxWidth: '100vw', overflowX: 'hidden', p: { xs: 1.25, sm: 2, md: 3 }, pt: { xs: '76px', sm: '88px', md: '96px' }, backgroundColor: '#faf5ff', minHeight: '100vh', position: 'relative', ...portalContentSx }}>
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            width: '100%',
+            maxWidth: '100vw',
+            overflowX: 'hidden',
+            p: { xs: 1.25, sm: 2, md: 3 },
+            pt: { xs: '76px', sm: '88px', md: '96px' },
+            backgroundColor: '#faf5ff',
+            minHeight: '100vh',
+            position: 'relative',
+            ...portalContentSx,
+          }}
+        >
           {/* Badge Formulários Pendentes */}
           {formulariosPendentes > 0 && (
-            <Box sx={{ position: 'fixed', top: isMobile ? 70 : 80, right: { xs: 12, sm: 20 }, left: { xs: 12, sm: 'auto' }, zIndex: 999, cursor: 'pointer' }} onClick={irParaPrimeiroFormularioPendente}>
+            <Box
+              sx={{
+                position: 'fixed',
+                top: isMobile ? 70 : 80,
+                right: { xs: 12, sm: 20 },
+                left: { xs: 12, sm: 'auto' },
+                zIndex: 999,
+                cursor: 'pointer',
+              }}
+              onClick={irParaPrimeiroFormularioPendente}
+            >
               <Paper elevation={3} sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#fff3e0', borderRadius: 2, border: '1px solid #ff9800', '&:hover': { bgcolor: '#ffe0b2' } }}>
                 <Badge badgeContent={formulariosPendentes} color="warning"><AssignmentIcon sx={{ color: '#ff9800' }} /></Badge>
                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#ff9800' }}>
@@ -666,7 +723,13 @@ function ClienteLayout() {
             </Box>
           )}
 
-          <motion.div key={location.pathname} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={{ width: '100%', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}>
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ width: '100%', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box' }}
+          >
             <Outlet />
           </motion.div>
         </Box>
@@ -674,7 +737,7 @@ function ClienteLayout() {
 
       <Footer />
 
-      {/* Popover de Notificações */}
+      {/* Popover Notificações (mantido) */}
       <Popover
         open={Boolean(notificacoesAnchor)}
         anchorEl={notificacoesAnchor}
@@ -685,9 +748,7 @@ function ClienteLayout() {
       >
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>Notificações</Typography>
-          {notificacoesNaoLidas > 0 && (
-            <Button size="small" onClick={marcarTodasComoLidas}>Marcar todas como lidas</Button>
-          )}
+          {notificacoesNaoLidas > 0 && <Button size="small" onClick={marcarTodasComoLidas}>Marcar todas como lidas</Button>}
         </Box>
         {browserPushService.isSupported() && pushStatus !== 'granted' && (
           <Box sx={{ px: 2, pb: 1.5 }}>
@@ -706,15 +767,9 @@ function ClienteLayout() {
         <Divider />
 
         {loadingNotificacoes ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <CircularProgress size={30} />
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>Carregando...</Typography>
-          </Box>
+          <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress size={30} /><Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>Carregando...</Typography></Box>
         ) : notificacoes.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} />
-            <Typography variant="body2" color="textSecondary">Nenhuma notificação</Typography>
-          </Box>
+          <Box sx={{ p: 3, textAlign: 'center' }}><NotificationsIcon sx={{ fontSize: 40, color: '#ccc', mb: 1 }} /><Typography variant="body2" color="textSecondary">Nenhuma notificação</Typography></Box>
         ) : (
           <List sx={{ p: 0 }}>
             {notificacoes.slice(0, 10).map((notificacao) => (
@@ -723,12 +778,7 @@ function ClienteLayout() {
                   <ListItemIcon>{getIconeNotificacao(notificacao.tipo)}</ListItemIcon>
                   <ListItemText
                     primary={<Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{notificacao.titulo}</Typography>}
-                    secondary={
-                      <>
-                        <Typography variant="body2" color="textSecondary" noWrap>{notificacao.mensagem}</Typography>
-                        <Typography variant="caption" color="textSecondary">{formatarData(notificacao.createdAt || notificacao.data)}</Typography>
-                      </>
-                    }
+                    secondary={<><Typography variant="body2" color="textSecondary" noWrap>{notificacao.mensagem}</Typography><Typography variant="caption" color="textSecondary">{formatarData(notificacao.createdAt || notificacao.data)}</Typography></>}
                   />
                   {!notificacao.lida && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#9c27b0', ml: 1 }} />}
                 </ListItem>
@@ -737,9 +787,7 @@ function ClienteLayout() {
             ))}
             {notificacoes.length > 10 && (
               <Box sx={{ p: 1, textAlign: 'center' }}>
-                <Button size="small" onClick={() => { handleNotificacoesClose(); navigate('/cliente/notificacoes'); }}>
-                  Ver todas ({notificacoes.length})
-                </Button>
+                <Button size="small" onClick={() => { handleNotificacoesClose(); navigate('/cliente/notificacoes'); }}>Ver todas ({notificacoes.length})</Button>
               </Box>
             )}
           </List>
