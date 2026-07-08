@@ -1,5 +1,5 @@
 // src/pages/ModernClientes.js
-// VERSÃO COMPLETA CORRIGIDA - SEM PAPAPARSE E COM SINTAXE CORRETA
+// VERSÃO COMPLETA CORRIGIDA - COM VERIFICAÇÕES DE TIPO
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -211,11 +211,11 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={localFilters.status.includes(opt)}
+                    checked={Array.isArray(localFilters.status) && localFilters.status.includes(opt)}
                     onChange={(e) => {
                       const newStatus = e.target.checked
-                        ? [...localFilters.status, opt]
-                        : localFilters.status.filter(s => s !== opt);
+                        ? [...(localFilters.status || []), opt]
+                        : (localFilters.status || []).filter(s => s !== opt);
                       handleChange('status', newStatus);
                     }}
                     size="small"
@@ -237,11 +237,11 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={localFilters.nivelFidelidade.includes(opt)}
+                    checked={Array.isArray(localFilters.nivelFidelidade) && localFilters.nivelFidelidade.includes(opt)}
                     onChange={(e) => {
                       const newNivel = e.target.checked
-                        ? [...localFilters.nivelFidelidade, opt]
-                        : localFilters.nivelFidelidade.filter(n => n !== opt);
+                        ? [...(localFilters.nivelFidelidade || []), opt]
+                        : (localFilters.nivelFidelidade || []).filter(n => n !== opt);
                       handleChange('nivelFidelidade', newNivel);
                     }}
                     size="small"
@@ -258,7 +258,7 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Pontuação</Typography>
       <Box sx={{ px: 1, mb: 2 }}>
         <Slider
-          value={[localFilters.pontosMin, localFilters.pontosMax]}
+          value={[localFilters.pontosMin || 0, localFilters.pontosMax || 10000]}
           onChange={(e, newValue) => {
             handleChange('pontosMin', newValue[0]);
             handleChange('pontosMax', newValue[1]);
@@ -269,8 +269,8 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
           step={100}
         />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-          <Typography variant="caption">{localFilters.pontosMin} pts</Typography>
-          <Typography variant="caption">{localFilters.pontosMax} pts</Typography>
+          <Typography variant="caption">{localFilters.pontosMin || 0} pts</Typography>
+          <Typography variant="caption">{localFilters.pontosMax || 10000} pts</Typography>
         </Box>
       </Box>
 
@@ -283,7 +283,7 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
             type="date"
             label="De"
             size="small"
-            value={localFilters.dataInicio}
+            value={localFilters.dataInicio || ''}
             onChange={(e) => handleChange('dataInicio', e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
@@ -294,7 +294,7 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
             type="date"
             label="Até"
             size="small"
-            value={localFilters.dataFim}
+            value={localFilters.dataFim || ''}
             onChange={(e) => handleChange('dataFim', e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
@@ -307,7 +307,7 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
         fullWidth
         size="small"
         label="Cidade"
-        value={localFilters.cidade}
+        value={localFilters.cidade || ''}
         onChange={(e) => handleChange('cidade', e.target.value)}
         sx={{ mb: 1 }}
       />
@@ -315,7 +315,7 @@ function FiltrosAvancados({ open, anchorEl, onClose, filters, onFilterChange, on
         fullWidth
         size="small"
         label="Bairro"
-        value={localFilters.bairro}
+        value={localFilters.bairro || ''}
         onChange={(e) => handleChange('bairro', e.target.value)}
         sx={{ mb: 2 }}
       />
@@ -907,8 +907,8 @@ function ModernClientes() {
 
   useEffect(() => {
     const ativos = 
-      filtros.status.length > 0 ||
-      filtros.nivelFidelidade.length > 0 ||
+      (filtros.status && filtros.status.length > 0) ||
+      (filtros.nivelFidelidade && filtros.nivelFidelidade.length > 0) ||
       filtros.dataInicio !== '' ||
       filtros.dataFim !== '' ||
       filtros.pontosMin > 0 ||
@@ -1049,11 +1049,11 @@ function ModernClientes() {
   const handleExportExcel = () => {
     try {
       const dadosExport = filteredClientes.map(cliente => ({
-        'Nome': cliente.nome,
-        'Email': cliente.email,
-        'Telefone': cliente.telefone,
+        'Nome': cliente.nome || '',
+        'Email': cliente.email || '',
+        'Telefone': cliente.telefone || '',
         'CPF': cliente.cpf || '-',
-        'Status': cliente.status,
+        'Status': cliente.status || 'Regular',
         'Nível Fidelidade': cliente.nivelFidelidade?.toUpperCase() || '-',
         'Pontos': cliente.totalPontos || 0,
         'Data Cadastro': cliente.dataCadastro || '-',
@@ -1100,26 +1100,53 @@ function ModernClientes() {
     return true;
   };
 
+  // ============================================
+  // FILTERED CLIENTES CORRIGIDO COM VERIFICAÇÕES
+  // ============================================
   const filteredClientes = clientes
     .filter(cliente => {
+      // Garantir que searchTerm é uma string
+      const term = (searchTerm || '').toLowerCase();
+      
+      // Busca segura com verificações de tipo
       const matchesSearch = 
-        cliente.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cliente.telefone?.includes(searchTerm) ||
-        cliente.cpf?.includes(searchTerm);
+        (cliente.nome && typeof cliente.nome === 'string' && cliente.nome.toLowerCase().includes(term)) ||
+        (cliente.email && typeof cliente.email === 'string' && cliente.email.toLowerCase().includes(term)) ||
+        (cliente.telefone && typeof cliente.telefone === 'string' && cliente.telefone.includes(term)) ||
+        (cliente.cpf && typeof cliente.cpf === 'string' && cliente.cpf.includes(term));
       
       if (!matchesSearch) return false;
       
-      if (filtros.status.length > 0 && !filtros.status.includes(cliente.status)) return false;
-      if (filtros.nivelFidelidade.length > 0 && !filtros.nivelFidelidade.includes(cliente.nivelFidelidade)) return false;
+      // Filtro por status (verificação de array)
+      if (filtros.status && Array.isArray(filtros.status) && filtros.status.length > 0) {
+        if (!filtros.status.includes(cliente.status)) return false;
+      }
       
+      // Filtro por nível fidelidade (verificação de array)
+      if (filtros.nivelFidelidade && Array.isArray(filtros.nivelFidelidade) && filtros.nivelFidelidade.length > 0) {
+        if (!filtros.nivelFidelidade.includes(cliente.nivelFidelidade)) return false;
+      }
+      
+      // Filtro por pontuação
       const pontos = cliente.totalPontos || 0;
-      if (pontos < filtros.pontosMin || pontos > filtros.pontosMax) return false;
+      if (pontos < (filtros.pontosMin || 0) || pontos > (filtros.pontosMax || 10000)) return false;
       
+      // Filtro por data
       if (!filtrarPorData(cliente, filtros.dataInicio, filtros.dataFim)) return false;
       
-      if (filtros.cidade && !cliente.cidade?.toLowerCase().includes(filtros.cidade.toLowerCase())) return false;
-      if (filtros.bairro && !cliente.bairro?.toLowerCase().includes(filtros.bairro.toLowerCase())) return false;
+      // Filtro por cidade (verificação de string)
+      if (filtros.cidade && typeof filtros.cidade === 'string' && filtros.cidade.trim() !== '') {
+        if (!cliente.cidade || typeof cliente.cidade !== 'string' || !cliente.cidade.toLowerCase().includes(filtros.cidade.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Filtro por bairro (verificação de string)
+      if (filtros.bairro && typeof filtros.bairro === 'string' && filtros.bairro.trim() !== '') {
+        if (!cliente.bairro || typeof cliente.bairro !== 'string' || !cliente.bairro.toLowerCase().includes(filtros.bairro.toLowerCase())) {
+          return false;
+        }
+      }
       
       return true;
     })
@@ -1814,18 +1841,18 @@ function ModernClientes() {
           
           {filtrosAtivos && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
-              {filtros.status.map(s => (
+              {Array.isArray(filtros.status) && filtros.status.map(s => (
                 <Chip key={s} label={`Status: ${s}`} size="small" onDelete={() => {
-                  setFiltros(prev => ({ ...prev, status: prev.status.filter(st => st !== s) }));
+                  setFiltros(prev => ({ ...prev, status: (prev.status || []).filter(st => st !== s) }));
                 }} />
               ))}
-              {filtros.nivelFidelidade.map(n => (
+              {Array.isArray(filtros.nivelFidelidade) && filtros.nivelFidelidade.map(n => (
                 <Chip key={n} label={`Nível: ${n}`} size="small" onDelete={() => {
-                  setFiltros(prev => ({ ...prev, nivelFidelidade: prev.nivelFidelidade.filter(nv => nv !== n) }));
+                  setFiltros(prev => ({ ...prev, nivelFidelidade: (prev.nivelFidelidade || []).filter(nv => nv !== n) }));
                 }} />
               ))}
               {(filtros.pontosMin > 0 || filtros.pontosMax < 10000) && (
-                <Chip label={`Pontos: ${filtros.pontosMin} - ${filtros.pontosMax}`} size="small" onDelete={() => {
+                <Chip label={`Pontos: ${filtros.pontosMin || 0} - ${filtros.pontosMax || 10000}`} size="small" onDelete={() => {
                   setFiltros(prev => ({ ...prev, pontosMin: 0, pontosMax: 10000 }));
                 }} />
               )}
