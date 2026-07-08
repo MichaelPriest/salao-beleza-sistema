@@ -1,4 +1,5 @@
-// src/components/ModernSidebar.js - ATUALIZADO COM NOVAS ROTAS SAAS
+// src/components/ModernSidebar.js - CORRIGIDO
+// Comportamento: collapsed mostra só ícones; expandido abre apenas um grupo por vez.
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -183,7 +184,7 @@ import { isSaasPlatformAdmin } from '../utils/saasAccess';
 import { saasService } from '../services/saasService';
 
 // ============================================
-// ESTRUTURA DO MENU ATUALIZADA
+// ESTRUTURA DO MENU ATUALIZADA (mesma de antes)
 // ============================================
 const menuGroups = [
   {
@@ -207,6 +208,7 @@ const menuGroups = [
       },
     ],
   },
+  // ... o restante dos grupos (mantido igual)
   {
     title: 'AGENDA E ATENDIMENTOS',
     icon: <EventAvailableIcon />,
@@ -514,9 +516,7 @@ const menuGroups = [
       },
     ],
   },
-  // ============================================
-  // 🔥 ATUALIZADO: ADMIN SAAS COM NOVAS ROTAS
-  // ============================================
+  // ADMIN SAAS
   {
     title: 'ADMIN SAAS',
     icon: <WorkspacePremiumIcon />,
@@ -587,9 +587,6 @@ const menuGroups = [
       },
     ],
   },
-  // ============================================
-  // 🔥 ATUALIZADO: MINHA EMPRESA COM NOVAS ROTAS
-  // ============================================
   {
     title: 'MINHA EMPRESA',
     icon: <BusinessIcon />,
@@ -688,7 +685,7 @@ const menuGroups = [
 ];
 
 // ============================================
-// ÍCONES EXTRAS
+// ÍCONES EXTRAS (mantido igual)
 // ============================================
 export const extraIcons = {
   success: <CheckCircleIcon />,
@@ -734,7 +731,7 @@ export const extraIcons = {
 };
 
 // ============================================
-// COMPONENTE MOBILE SIDEBAR
+// COMPONENTE MOBILE (mantido igual, sem alterações)
 // ============================================
 const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
@@ -988,7 +985,7 @@ const MobileSidebar = ({ open, onClose, usuario, fotoUrl, unreadCount, filteredG
 };
 
 // ============================================
-// COMPONENTE DESKTOP SIDEBAR
+// COMPONENTE DESKTOP - CORRIGIDO
 // ============================================
 const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadCount, filteredGroups, location, handleGroupClick, openGroups, isGroupActive }) => {
   const theme = useTheme();
@@ -1064,7 +1061,7 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
         )}
       </Box>
 
-      {/* Perfil */}
+      {/* Perfil - quando collapsed, mostra apenas o avatar */}
       <Box sx={{ px: 2, py: 3, mb: 2 }}>
         <Box
           sx={{
@@ -1127,144 +1124,130 @@ const DesktopSidebar = ({ collapsed, onToggleCollapse, usuario, fotoUrl, unreadC
           const groupActive = isGroupActive(group);
           const isOpen = openGroups[group.title] || false;
 
+          // Se collapsed, mostra apenas ícones dos itens, sem título de grupo
+          if (collapsed) {
+            return (
+              <Box key={group.title} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                {group.items.map((item) => {
+                  const itemPath = item.path?.split('?')[0] || '';
+                  const isActive = location.pathname === itemPath;
+                  return (
+                    <Tooltip key={item.text} title={item.text} placement="right">
+                      <IconButton
+                        component={Link}
+                        to={item.path}
+                        size="small"
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          mb: 0.5,
+                          backgroundColor: isActive ? alpha('#667eea', 0.12) : 'transparent',
+                          color: isActive ? '#667eea' : theme.palette.text.secondary,
+                          '&:hover': {
+                            backgroundColor: alpha('#667eea', 0.08),
+                          },
+                        }}
+                      >
+                        {item.text === 'Notificações' && unreadCount > 0 ? (
+                          <Badge badgeContent={unreadCount} color="secondary" variant="dot">
+                            {item.icon}
+                          </Badge>
+                        ) : (
+                          item.icon
+                        )}
+                      </IconButton>
+                    </Tooltip>
+                  );
+                })}
+              </Box>
+            );
+          }
+
+          // Modo expandido - exibe grupo com accordion
           return (
             <Box key={group.title} sx={{ mb: 1 }}>
-              {!collapsed ? (
-                <>
-                  <ListItemButton
-                    onClick={() => handleGroupClick(group.title)}
-                    sx={{
-                      py: 1,
-                      px: 2,
-                      borderRadius: 2,
-                      backgroundColor: groupActive && !isOpen ? alpha('#667eea', 0.08) : 'transparent',
-                      '&:hover': {
-                        backgroundColor: alpha('#667eea', 0.08),
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#667eea' : alpha('#000', 0.54) }}>
-                      {group.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={group.title}
-                      primaryTypographyProps={{
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: groupActive ? '#667eea' : 'textSecondary',
-                      }}
-                    />
-                    {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                  </ListItemButton>
+              <ListItemButton
+                onClick={() => handleGroupClick(group.title)}
+                sx={{
+                  py: 1,
+                  px: 2,
+                  borderRadius: 2,
+                  backgroundColor: groupActive && !isOpen ? alpha('#667eea', 0.08) : 'transparent',
+                  '&:hover': {
+                    backgroundColor: alpha('#667eea', 0.08),
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: groupActive ? '#667eea' : alpha('#000', 0.54) }}>
+                  {group.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={group.title}
+                  primaryTypographyProps={{
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    color: groupActive ? '#667eea' : 'textSecondary',
+                  }}
+                />
+                {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </ListItemButton>
 
-                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding>
-                      {group.items.map((item) => {
-                        const itemPath = item.path?.split('?')[0] || '';
-                        const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
-                        const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
-                          (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
-
-                        return (
-                          <motion.div
-                            key={item.text}
-                            whileHover={{ x: 5 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            <ListItem
-                              component={Link}
-                              to={item.path}
-                              sx={{
-                                pl: 4,
-                                py: 0.8,
-                                borderRadius: '0 20px 20px 0',
-                                mr: 1,
-                                backgroundColor: isActive ? alpha('#667eea', 0.12) : 'transparent',
-                                color: isActive ? '#667eea' : 'text.primary',
-                                '&:hover': {
-                                  backgroundColor: alpha('#667eea', 0.08),
-                                },
-                                '& .MuiListItemIcon-root': {
-                                  color: isActive ? '#667eea' : theme.palette.text.secondary,
-                                  minWidth: 36,
-                                },
-                              }}
-                            >
-                              <ListItemIcon>
-                                {item.text === 'Notificações' ? (
-                                  <Badge badgeContent={unreadCount} color="secondary">
-                                    {item.icon}
-                                  </Badge>
-                                ) : (
-                                  item.icon
-                                )}
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={item.text}
-                                primaryTypographyProps={{
-                                  fontSize: '0.95rem',
-                                  fontWeight: isActive ? 600 : 400,
-                                  noWrap: true,
-                                }}
-                              />
-                            </ListItem>
-                          </motion.div>
-                        );
-                      })}
-                    </List>
-                  </Collapse>
-                </>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, my: 1 }}>
-                  <Tooltip title={group.title} placement="right">
-                    <IconButton
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        backgroundColor: groupActive ? alpha('#667eea', 0.12) : 'transparent',
-                        color: groupActive ? '#667eea' : theme.palette.text.secondary,
-                        '&:hover': {
-                          backgroundColor: alpha('#667eea', 0.08),
-                        },
-                      }}
-                    >
-                      {group.icon}
-                    </IconButton>
-                  </Tooltip>
-
+              <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
                   {group.items.map((item) => {
                     const itemPath = item.path?.split('?')[0] || '';
                     const itemSearch = item.path?.includes('?') ? `?${item.path.split('?')[1]}` : '';
-                    const isActive = location.pathname === itemPath && (!itemSearch || location.search === itemSearch);
+                    const isActive = (location.pathname === itemPath && (!itemSearch || location.search === itemSearch)) ||
+                      (!itemSearch && itemPath !== '/' && location.pathname.startsWith(itemPath));
+
                     return (
-                      <Tooltip key={item.text} title={item.text} placement="right">
-                        <IconButton
+                      <motion.div
+                        key={item.text}
+                        whileHover={{ x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <ListItem
                           component={Link}
                           to={item.path}
-                          size="small"
                           sx={{
-                            width: 40,
-                            height: 40,
+                            pl: 4,
+                            py: 0.8,
+                            borderRadius: '0 20px 20px 0',
+                            mr: 1,
                             backgroundColor: isActive ? alpha('#667eea', 0.12) : 'transparent',
-                            color: isActive ? '#667eea' : theme.palette.text.secondary,
+                            color: isActive ? '#667eea' : 'text.primary',
                             '&:hover': {
                               backgroundColor: alpha('#667eea', 0.08),
                             },
+                            '& .MuiListItemIcon-root': {
+                              color: isActive ? '#667eea' : theme.palette.text.secondary,
+                              minWidth: 36,
+                            },
                           }}
                         >
-                          {item.text === 'Notificações' && unreadCount > 0 ? (
-                            <Badge badgeContent={unreadCount} color="secondary" variant="dot">
-                              {item.icon}
-                            </Badge>
-                          ) : (
-                            item.icon
-                          )}
-                        </IconButton>
-                      </Tooltip>
+                          <ListItemIcon>
+                            {item.text === 'Notificações' ? (
+                              <Badge badgeContent={unreadCount} color="secondary">
+                                {item.icon}
+                              </Badge>
+                            ) : (
+                              item.icon
+                            )}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.text}
+                            primaryTypographyProps={{
+                              fontSize: '0.95rem',
+                              fontWeight: isActive ? 600 : 400,
+                              noWrap: true,
+                            }}
+                          />
+                        </ListItem>
+                      </motion.div>
                     );
                   })}
-                </Box>
-              )}
+                </List>
+              </Collapse>
             </Box>
           );
         })}
@@ -1401,11 +1384,18 @@ function ModernSidebar() {
   const handleMobileOpen = () => setMobileOpen(true);
   const handleMobileClose = () => setMobileOpen(false);
 
+  // 🔥 CORREÇÃO: Ao clicar em um grupo, fecha todos os outros e abre apenas o clicado
   const handleGroupClick = (groupTitle) => {
-    setOpenGroups(prev => ({
-      ...prev,
-      [groupTitle]: !prev[groupTitle]
-    }));
+    setOpenGroups(prev => {
+      const newState = {};
+      // Fecha todos os grupos
+      Object.keys(prev).forEach(key => {
+        newState[key] = false;
+      });
+      // Abre apenas o grupo clicado
+      newState[groupTitle] = !prev[groupTitle];
+      return newState;
+    });
   };
 
   const isGroupActive = (group) => {
@@ -1424,7 +1414,10 @@ function ModernSidebar() {
     menuGroups.forEach(group => {
       const groupActive = isGroupActive(group);
       if (groupActive && !openGroups[group.title]) {
-        newOpenGroups[group.title] = true;
+        // Se um grupo estiver ativo, abra apenas ele (fecha os outros)
+        Object.keys(newOpenGroups).forEach(key => {
+          newOpenGroups[key] = (key === group.title);
+        });
         changed = true;
       }
     });
