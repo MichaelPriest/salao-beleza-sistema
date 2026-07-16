@@ -469,6 +469,7 @@ const RelatorioAgenda = React.forwardRef(({
   usuarioCargo,
   configuracoes
 }, ref) => {
+  // 🔥 FUNÇÕES AUXILIARES DENTRO DO COMPONENTE
   const formatarData = (data) => {
     if (!data) return '';
     try {
@@ -489,6 +490,70 @@ const RelatorioAgenda = React.forwardRef(({
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
     return mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+  };
+
+  // 🔥 FUNÇÃO getStatusLabel COPIADA PARA DENTRO DO COMPONENTE
+  const getStatusLabel = (status) => {
+    switch(status) {
+      case 'confirmado': return 'Confirmado';
+      case 'pendente': return 'Pendente';
+      case 'cancelado': return 'Cancelado';
+      case 'finalizado': return 'Finalizado';
+      case 'em_andamento': return 'Em Andamento';
+      default: return status || 'Desconhecido';
+    }
+  };
+
+  // 🔥 FUNÇÃO getStatusColor COPIADA PARA DENTRO DO COMPONENTE
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'confirmado': return 'success';
+      case 'pendente': return 'warning';
+      case 'cancelado': return 'error';
+      case 'finalizado': return 'info';
+      case 'em_andamento': return 'secondary';
+      default: return 'default';
+    }
+  };
+
+  // 🔥 FUNÇÃO getStatusIcon COPIADA PARA DENTRO DO COMPONENTE
+  const getStatusIcon = (status) => {
+    switch(status) {
+      case 'confirmado': return '✓';
+      case 'pendente': return '⏳';
+      case 'cancelado': return '✗';
+      case 'finalizado': return '✓';
+      case 'em_andamento': return '▶';
+      default: return '•';
+    }
+  };
+
+  // 🔥 FUNÇÃO calcularHorarioFim COPIADA PARA DENTRO DO COMPONENTE
+  const calcularHorarioFim = (horarioInicio, duracaoMinutos) => {
+    if (!horarioInicio || !duracaoMinutos) return null;
+    
+    try {
+      const [horas, minutos] = horarioInicio.split(':').map(Number);
+      if (isNaN(horas) || isNaN(minutos)) return null;
+      
+      const totalMinutos = horas * 60 + minutos + duracaoMinutos;
+      const horasFim = Math.floor(totalMinutos / 60);
+      const minutosFim = totalMinutos % 60;
+      
+      return `${String(horasFim).padStart(2, '0')}:${String(minutosFim).padStart(2, '0')}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // 🔥 FUNÇÃO formatarBlocoHorario COPIADA PARA DENTRO DO COMPONENTE
+  const formatarBlocoHorario = (horarioInicio, duracaoMinutos) => {
+    if (!horarioInicio) return horarioInicio || '--:--';
+    
+    const horarioFim = calcularHorarioFim(horarioInicio, duracaoMinutos || 60);
+    if (!horarioFim) return horarioInicio;
+    
+    return `${horarioInicio} - ${horarioFim}`;
   };
 
   const profissionalNome = profissional === 'all' ? 'Todos os Profissionais' : 
@@ -605,8 +670,9 @@ const RelatorioAgenda = React.forwardRef(({
                             nome: evento.servicoNome || 'Serviço'
                           }] : []);
                         const duracao = calcularDuracaoTotal(servicos) || evento.duracao || 60;
-                        const horarioFim = calcularHorarioFim(evento.horario || evento.horaInicio, duracao);
                         const blocoHorario = formatarBlocoHorario(evento.horario || evento.horaInicio, duracao);
+                        const statusLabel = getStatusLabel(evento.status);
+                        const statusColor = getStatusColor(evento.status);
                         
                         return (
                           <TableRow key={evento.id}>
@@ -619,9 +685,9 @@ const RelatorioAgenda = React.forwardRef(({
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{profissional?.nome || '—'}</TableCell>
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
                               <Chip
-                                label={getStatusLabel(evento.status)}
+                                label={statusLabel}
                                 size="small"
-                                color={getStatusColor(evento.status)}
+                                color={statusColor}
                                 sx={{ height: 18, fontSize: '0.5rem' }}
                               />
                             </TableCell>
