@@ -168,20 +168,17 @@ const formatDateTime = (date) => {
   if (!date) return 'Data inválida';
   
   try {
-    // Se for string
     if (typeof date === 'string') {
       const parsed = new Date(date);
       if (isNaN(parsed.getTime())) return 'Data inválida';
       return format(parsed, 'dd/MM/yyyy HH:mm:ss');
     }
     
-    // Se for objeto Date
     if (date instanceof Date) {
       if (isNaN(date.getTime())) return 'Data inválida';
       return format(date, 'dd/MM/yyyy HH:mm:ss');
     }
     
-    // Se for Timestamp do Firebase
     if (date && typeof date.toDate === 'function') {
       const d = date.toDate();
       if (isNaN(d.getTime())) return 'Data inválida';
@@ -259,7 +256,6 @@ const formatDateBR = (data) => {
   if (!data) return 'Data a confirmar';
   
   try {
-    // Se for data no formato 'YYYY-MM-DD'
     if (typeof data === 'string' && data.includes('-')) {
       const parts = data.split('-');
       if (parts.length === 3) {
@@ -296,6 +292,41 @@ const formatarDataBrasil = (data) => {
   } catch {
     return '';
   }
+};
+
+// ============================================
+// ⏱️ FUNÇÕES PARA CÁLCULO DE HORÁRIO
+// ============================================
+
+const calcularHorarioFim = (horarioInicio, duracaoMinutos) => {
+  if (!horarioInicio || !duracaoMinutos) return null;
+  
+  try {
+    const [horas, minutos] = horarioInicio.split(':').map(Number);
+    if (isNaN(horas) || isNaN(minutos)) return null;
+    
+    const totalMinutos = horas * 60 + minutos + duracaoMinutos;
+    const horasFim = Math.floor(totalMinutos / 60);
+    const minutosFim = totalMinutos % 60;
+    
+    return `${String(horasFim).padStart(2, '0')}:${String(minutosFim).padStart(2, '0')}`;
+  } catch {
+    return null;
+  }
+};
+
+const formatarBlocoHorario = (horarioInicio, duracaoMinutos) => {
+  if (!horarioInicio) return horarioInicio || '--:--';
+  
+  const horarioFim = calcularHorarioFim(horarioInicio, duracaoMinutos || 60);
+  if (!horarioFim) return horarioInicio;
+  
+  return `${horarioInicio} - ${horarioFim}`;
+};
+
+const calcularLarguraBloco = (duracaoMinutos, slotMinutos = 30) => {
+  if (!duracaoMinutos || duracaoMinutos <= 0) return 1;
+  return Math.ceil(duracaoMinutos / slotMinutos);
 };
 
 // ============================================
@@ -556,11 +587,11 @@ const RelatorioAgenda = React.forwardRef(({
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: '#f0f0f0' }}>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Hor.</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Horário</strong></TableCell>
+                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Duração</strong></TableCell>
                         <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Cliente</strong></TableCell>
                         <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Serviços</strong></TableCell>
                         <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Prof.</strong></TableCell>
-                        <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Tipo</strong></TableCell>
                         <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}><strong>Status</strong></TableCell>
                       </TableRow>
                     </TableHead>
@@ -573,20 +604,26 @@ const RelatorioAgenda = React.forwardRef(({
                             id: evento.servicoId, 
                             nome: evento.servicoNome || 'Serviço'
                           }] : []);
+                        const duracao = calcularDuracaoTotal(servicos) || evento.duracao || 60;
+                        const horarioFim = calcularHorarioFim(evento.horario || evento.horaInicio, duracao);
+                        const blocoHorario = formatarBlocoHorario(evento.horario || evento.horaInicio, duracao);
                         
                         return (
                           <TableRow key={evento.id}>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{evento.horario || evento.horaInicio}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{blocoHorario}</TableCell>
+                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{duracao}min</TableCell>
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{cliente?.nome || '—'}</TableCell>
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
                               {servicos.map(s => s.nome).join(', ')}
                             </TableCell>
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>{profissional?.nome || '—'}</TableCell>
                             <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
-                              {evento.tipo === 'agendamento' ? 'Agend.' : 'Atend.'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.6rem', p: 0.5 }}>
-                              {evento.status}
+                              <Chip
+                                label={getStatusLabel(evento.status)}
+                                size="small"
+                                color={getStatusColor(evento.status)}
+                                sx={{ height: 18, fontSize: '0.5rem' }}
+                              />
                             </TableCell>
                           </TableRow>
                         );
@@ -797,7 +834,7 @@ function ModernAgendamentos() {
 
   const calcularDuracaoEvento = (event) => {
     const servicosLista = Array.isArray(event?.servicos) ? event.servicos : [];
-    return servicosLista.reduce((total, servico) => total + Number(servico.duracao || servico.tempo || 0), 0) || Number(event?.duracao || 0);
+    return servicosLista.reduce((total, servico) => total + Number(servico.duracao || servico.tempo || 0), 0) || Number(event?.duracao || 0) || 60;
   };
 
   const getStatusColor = (status) => {
@@ -1838,7 +1875,7 @@ function ModernAgendamentos() {
               </div>
               <table class="events-table">
                 <thead>
-                  <tr><th>Horário</th><th>Cliente</th><th>Telefone</th><th>Serviços</th><th>Profissional</th><th>Status</th><th>Valor</th></tr>
+                  <tr><th>Horário</th><th>Duração</th><th>Cliente</th><th>Telefone</th><th>Serviços</th><th>Profissional</th><th>Status</th><th>Valor</th></tr>
                 </thead>
                 <tbody>
           `;
@@ -1850,6 +1887,8 @@ function ModernAgendamentos() {
             const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
             const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
             const valorEvento = evento.valorTotal || 0;
+            const duracao = calcularDuracaoEvento(evento);
+            const blocoHorario = formatarBlocoHorario(evento.horario || evento.horaInicio, duracao);
             
             let statusClass = '';
             let statusLabel = '';
@@ -1866,7 +1905,8 @@ function ModernAgendamentos() {
             
             html += `
               <tr>
-                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
+                <td class="time-cell"><strong>${blocoHorario}</strong></td>
+                <td class="duracao-cell">${duracao}min</td>
                 <td><strong>${cliente?.nome || '—'}</strong></td>
                 <td class="phone-cell">${telefone}</td>
                 <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
@@ -1881,7 +1921,7 @@ function ModernAgendamentos() {
           html += `
                 </tbody>
                 <tfoot>
-                  <tr class="total-row"><td colspan="6"><strong>Total do Dia</strong></td><td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td></tr>
+                  <tr class="total-row"><td colspan="7"><strong>Total do Dia</strong></td><td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td></tr>
                 </tfoot>
               </table>
             </div>
@@ -1927,7 +1967,8 @@ function ModernAgendamentos() {
             .events-table { width: 100%; border-collapse: collapse; font-size: 11px; }
             .events-table th { background: #f8f9fa; padding: 12px 10px; text-align: left; font-weight: 700; border-bottom: 1px solid #e0e0e0; }
             .events-table td { padding: 10px; border-bottom: 1px solid #f0f0f0; }
-            .time-cell { font-weight: 600; color: #9c27b0; width: 70px; }
+            .time-cell { font-weight: 600; color: #9c27b0; width: 90px; }
+            .duracao-cell { width: 60px; text-align: center; }
             .value-cell { text-align: right; font-weight: 600; color: #9c27b0; }
             .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; }
             .status-confirmed { background: #e8f5e9; color: #4caf50; }
@@ -1997,431 +2038,595 @@ function ModernAgendamentos() {
     }
   };
 
-  const handleExportPDF = async () => {
-    try {
-      if (!periodoRelatorio || !periodoRelatorio.dataInicio) {
-        mostrarSnackbar('Período inválido', 'error');
-        return;
-      }
-      
-      mostrarSnackbar('Gerando PDF...', 'info');
-      
-      let eventosFiltrados = filteredEvents;
-      if (periodoRelatorio.tipo === 'dia') {
-        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
-      } else {
-        eventosFiltrados = eventosFiltrados.filter(e => 
-          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
-        );
-      }
+  // ============================================
+  // RENDER - VISUALIZAÇÃO POR DIA COM BLOCO DE HORÁRIO
+  // ============================================
 
-      eventosFiltrados.sort((a, b) => {
-        if (a.data !== b.data) return a.data.localeCompare(b.data);
-        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
-      });
+  const renderDayView = () => {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
+            {cargo === 'cliente' ? 'Meus Agendamentos' : getHeaderText()}
+          </Typography>
 
-      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
-        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      
-      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
-      if (isNaN(dataInicioDate.getTime())) {
-        mostrarSnackbar('Data de início inválida', 'error');
-        return;
-      }
-      
-      const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
-      const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
-      const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
-
-      const totalEventos = eventosFiltrados.length;
-      const totalAgendamentos = eventosFiltrados.filter(e => e.tipo === 'agendamento').length;
-      const totalAtendimentos = eventosFiltrados.filter(e => e.tipo === 'atendimento').length;
-      const totalConfirmados = eventosFiltrados.filter(e => e.status === 'confirmado').length;
-      const totalPendentes = eventosFiltrados.filter(e => e.status === 'pendente').length;
-      const totalCancelados = eventosFiltrados.filter(e => e.status === 'cancelado').length;
-      const totalValor = eventosFiltrados.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-
-      const eventosPorData = {};
-      eventosFiltrados.forEach(evento => {
-        if (!eventosPorData[evento.data]) {
-          eventosPorData[evento.data] = [];
-        }
-        eventosPorData[evento.data].push(evento);
-      });
-
-      const gerarTabelaEventos = () => {
-        let html = '';
-        
-        Object.keys(eventosPorData).sort().forEach(data => {
-          const eventosDoDia = eventosPorData[data];
-          const dateObj = new Date(data + 'T12:00:00');
-          const diaSemana = format(dateObj, 'EEEE', { locale: ptBR });
-          const diaNumero = format(dateObj, 'dd');
-          const mesAno = format(dateObj, 'MMMM [de] yyyy', { locale: ptBR });
-          
-          html += `
-            <div class="day-card">
-              <div class="day-header">
-                <div class="day-number">${diaNumero}</div>
-                <div class="day-info">
-                  <div class="day-name">${diaSemana}</div>
-                  <div class="day-date">${mesAno}</div>
-                </div>
-                <div class="day-count">${eventosDoDia.length} evento(s)</div>
-              </div>
-              <table class="events-table">
-                <thead>
-                  <tr><th>Horário</th><th>Cliente</th><th>Telefone</th><th>Serviços</th><th>Profissional</th><th>Status</th><th>Valor</th></tr>
-                </thead>
-                <tbody>
-          `;
-          
-          eventosDoDia.sort((a, b) => (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || ''));
-          
-          eventosDoDia.forEach(evento => {
-            const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
-            const profissionalItem = profissionais?.find(p => p.id === evento.profissionalId);
-            const servicos = evento.servicos || (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço' }] : []);
-            const valorEvento = evento.valorTotal || 0;
-            
-            let statusClass = '';
-            let statusLabel = '';
-            switch(evento.status) {
-              case 'confirmado': statusClass = 'status-confirmed'; statusLabel = '✓ Confirmado'; break;
-              case 'pendente': statusClass = 'status-pending'; statusLabel = '⏳ Pendente'; break;
-              case 'cancelado': statusClass = 'status-cancelled'; statusLabel = '✗ Cancelado'; break;
-              case 'finalizado': statusClass = 'status-finished'; statusLabel = '✓ Finalizado'; break;
-              case 'em_andamento': statusClass = 'status-progress'; statusLabel = '▶ Em Andamento'; break;
-              default: statusClass = 'status-default'; statusLabel = evento.status;
-            }
-            
-            const telefone = cliente?.telefone ? formatarTelefone(toSafeString(cliente.telefone)) : '—';
-            
-            html += `
-              <tr>
-                <td class="time-cell"><strong>${evento.horario || evento.horaInicio || '--:--'}</strong></td>
-                <td><strong>${cliente?.nome || '—'}</strong></td>
-                <td class="phone-cell">${telefone}</td>
-                <td class="services-cell">${servicos.map(s => s.nome).join(', ')}</td>
-                <td>${profissionalItem?.nome || '—'}</td>
-                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                <td class="value-cell">R$ ${valorEvento.toFixed(2)}</td>
-              </tr>
-            `;
-          });
-          
-          const totalDia = eventosDoDia.reduce((acc, e) => acc + (e.valorTotal || 0), 0);
-          html += `
-                </tbody>
-                <tfoot>
-                  <tr class="total-row"><td colspan="6"><strong>Total do Dia</strong></td><td class="value-cell"><strong>R$ ${totalDia.toFixed(2)}</strong></td></tr>
-                </tfoot>
-              </table>
-            </div>
-          `;
-        });
-        
-        return html;
-      };
-
-      const fullHTML = `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Relatório de Agenda - ${profissionalNome}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; background: #ffffff; padding: 20px; font-size: 12px; line-height: 1.5; color: #333; }
-            .report-container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; }
-            .header { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); color: white; padding: 30px; text-align: center; position: relative; overflow: hidden; }
-            .header::before { content: ''; position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%; }
-            .header::after { content: ''; position: absolute; bottom: -30px; left: -30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; }
-            .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; position: relative; z-index: 1; }
-            .header h2 { font-size: 18px; font-weight: 500; margin-bottom: 20px; opacity: 0.95; position: relative; z-index: 1; }
-            .header-info { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); position: relative; z-index: 1; }
-            .header-info-item { text-align: center; }
-            .header-info-label { font-size: 10px; opacity: 0.8; display: block; margin-bottom: 4px; }
-            .header-info-value { font-size: 13px; font-weight: 600; }
-            .stats-section { padding: 25px 30px; border-bottom: 1px solid #e0e0e0; }
-            .stats-title { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 15px; padding-left: 12px; border-left: 4px solid #9c27b0; }
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
-            .stat-card { padding: 15px; border-radius: 12px; text-align: center; color: white; }
-            .stat-card.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-            .stat-card.agendamentos { background: linear-gradient(135deg, #9c27b0 0%, #ff4081 100%); }
-            .stat-card.atendimentos { background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); }
-            .stat-card.confirmados { background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%); }
-            .stat-card.pendentes { background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); }
-            .stat-card.cancelados { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); }
-            .stat-number { font-size: 28px; font-weight: 800; margin-bottom: 5px; }
-            .stat-label { font-size: 11px; opacity: 0.9; }
-            .financial-summary { background: #f5f5f5; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-            .total-value { font-size: 24px; font-weight: 800; color: #9c27b0; }
-            .average-value { font-size: 14px; font-weight: 600; color: #666; }
-            .day-card { margin-bottom: 25px; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
-            .day-header { background: #faf5ff; padding: 15px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 2px solid #9c27b0; flex-wrap: wrap; }
-            .day-number { background: #9c27b0; color: white; width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
-            .day-info { flex: 1; }
-            .day-name { font-size: 16px; font-weight: 700; color: #9c27b0; text-transform: capitalize; }
-            .day-date { font-size: 11px; color: #666; }
-            .day-count { background: #9c27b0; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-            .events-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-            .events-table th { background: #f8f9fa; padding: 12px 10px; text-align: left; font-weight: 700; color: #555; border-bottom: 1px solid #e0e0e0; }
-            .events-table td { padding: 10px; border-bottom: 1px solid #f0f0f0; }
-            .events-table tr:hover { background: #faf5ff; }
-            .time-cell { font-weight: 600; color: #9c27b0; width: 70px; }
-            .phone-cell { width: 100px; }
-            .services-cell { min-width: 150px; }
-            .value-cell { text-align: right; font-weight: 600; color: #9c27b0; width: 80px; }
-            .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; }
-            .status-confirmed { background: #e8f5e9; color: #4caf50; }
-            .status-pending { background: #fff3e0; color: #ff9800; }
-            .status-cancelled { background: #ffebee; color: #f44336; }
-            .status-finished { background: #e3f2fd; color: #2196f3; }
-            .status-progress { background: #f3e5f5; color: #9c27b0; }
-            .status-default { background: #f5f5f5; color: #9e9e9e; }
-            .total-row { background: #f5f5f5; font-weight: 700; }
-            .total-row td { border-top: 2px solid #e0e0e0; padding: 12px 10px; }
-            .footer { background: #faf5ff; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0; margin-top: 20px; }
-            .footer p { font-size: 10px; color: #666; margin: 5px 0; }
-            .footer-copyright { color: #9c27b0; font-weight: 500; }
-            @media print { body { background: white; padding: 0; margin: 0; } .day-card { break-inside: avoid; page-break-inside: avoid; } .status-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .stat-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-          </style>
-        </head>
-        <body>
-          <div class="report-container">
-            <div class="header">
-              <h1>📋 RELATÓRIO DE AGENDA</h1>
-              <h2>${profissionalNome}</h2>
-              <div class="header-info">
-                <div class="header-info-item">
-                  <span class="header-info-label">Período</span>
-                  <span class="header-info-value">${dataInicioFormat} - ${dataFimFormat}</span>
-                </div>
-                <div class="header-info-item">
-                  <span class="header-info-label">Data de Emissão</span>
-                  <span class="header-info-value">${formatDateTime(new Date())}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="stats-section">
-              <div class="stats-title">📊 Resumo do Período</div>
-              <div class="stats-grid">
-                <div class="stat-card total">
-                  <div class="stat-number">${totalEventos}</div>
-                  <div class="stat-label">Total de Eventos</div>
-                </div>
-                <div class="stat-card agendamentos">
-                  <div class="stat-number">${totalAgendamentos}</div>
-                  <div class="stat-label">Agendamentos</div>
-                </div>
-                <div class="stat-card atendimentos">
-                  <div class="stat-number">${totalAtendimentos}</div>
-                  <div class="stat-label">Atendimentos</div>
-                </div>
-                <div class="stat-card confirmados">
-                  <div class="stat-number">${totalConfirmados}</div>
-                  <div class="stat-label">Confirmados</div>
-                </div>
-                <div class="stat-card pendentes">
-                  <div class="stat-number">${totalPendentes}</div>
-                  <div class="stat-label">Pendentes</div>
-                </div>
-                <div class="stat-card cancelados">
-                  <div class="stat-number">${totalCancelados}</div>
-                  <div class="stat-label">Cancelados</div>
-                </div>
-              </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {timeSlots.map(time => {
+              // Eventos que começam neste horário
+              const eventsAtTime = dayEvents.filter(event => event.horario === time);
               
-              <div class="financial-summary">
-                <div>
-                  <div style="font-size: 11px; color: #666;">Valor Total dos Serviços</div>
-                  <div class="total-value">R$ ${totalValor.toFixed(2)}</div>
-                </div>
-                <div style="display: flex; gap: 30px;">
-                  <div>
-                    <div style="font-size: 10px; color: #666;">Média por Atendimento</div>
-                    <div class="average-value">R$ ${totalAtendimentos > 0 ? (totalValor / totalAtendimentos).toFixed(2) : '0,00'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size: 10px; color: #666;">Média por Agendamento</div>
-                    <div class="average-value">R$ ${totalAgendamentos > 0 ? (totalValor / totalAgendamentos).toFixed(2) : '0,00'}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div style="padding: 0 30px 30px 30px;">
-              <div class="stats-title" style="margin-bottom: 20px;">📅 Agenda Detalhada</div>
-              ${eventosFiltrados.length > 0 ? gerarTabelaEventos() : '<div style="text-align: center; padding: 40px; color: #666;">Nenhum evento encontrado para o período selecionado.</div>'}
-            </div>
-            
-            <div class="footer">
-              <p>Relatório gerado automaticamente pelo Sistema Salão Beleza</p>
-              <p>Documento não fiscal • Este relatório contém informações confidenciais</p>
-              <p class="footer-copyright">© ${new Date().getFullYear()} Salão Beleza - Todos os direitos reservados</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
+              // Eventos que estão em andamento (começaram antes e ainda não terminaram)
+              const eventsInProgress = dayEvents.filter(event => {
+                if (event.horario === time) return false;
+                const duracao = calcularDuracaoEvento(event) || 60;
+                const horarioFim = calcularHorarioFim(event.horario, duracao);
+                if (!horarioFim) return false;
+                return time > event.horario && time < horarioFim;
+              });
+              
+              // Verifica se este horário está dentro de algum bloco
+              const isInsideBlock = dayEvents.some(event => {
+                if (event.horario === time) return false;
+                const duracao = calcularDuracaoEvento(event) || 60;
+                const horarioFim = calcularHorarioFim(event.horario, duracao);
+                if (!horarioFim) return false;
+                return time > event.horario && time < horarioFim;
+              });
+              
+              // Verifica se este é o início de um bloco
+              const isBlockStart = dayEvents.some(event => event.horario === time);
+              
+              return (
+                <motion.div
+                  key={time}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Paper 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 2,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      backgroundColor: isInsideBlock ? '#f3e5f5' : (eventsAtTime.length > 0 ? '#faf5ff' : 'transparent'),
+                      borderLeft: isBlockStart ? '4px solid #9c27b0' : (isInsideBlock ? '4px solid #ce93d8' : 'none'),
+                      opacity: isInsideBlock ? 0.7 : 1,
+                      position: 'relative',
+                      minHeight: 60,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 80, display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: isInsideBlock ? '#9e9e9e' : '#9c27b0' }}>
+                        {time}
+                      </Typography>
+                    </Box>
 
-      const tempElement = document.createElement('div');
-      tempElement.innerHTML = fullHTML;
-      document.body.appendChild(tempElement);
+                    <Box sx={{ flex: 1 }}>
+                      {eventsAtTime.length > 0 ? (
+                        <AnimatePresence>
+                          <Grid container spacing={2}>
+                            {eventsAtTime.map(event => {
+                              const cliente = getClienteData(event.clienteId) || { 
+                                nome: event.clienteNome || 'Cliente', 
+                                telefone: event.clienteTelefone, 
+                                foto: event.clienteFoto 
+                              };
+                              const profissional = getProfissionalData(event.profissionalId);
+                              const servicosLista = event.servicos || [];
+                              const temFormularioPendente = formulariosPendentes[event.id];
+                              const duracaoTotal = calcularDuracaoEvento(event) || 60;
+                              const blocoHorario = formatarBlocoHorario(event.horario, duracaoTotal);
 
-      const html2pdf = (await import('html2pdf.js')).default;
-      
-      const opt = {
-        margin: [0.5, 0.5, 0.5, 0.5],
-        filename: `relatorio_agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-      };
-      
-      await html2pdf().set(opt).from(tempElement).save();
-      
-      document.body.removeChild(tempElement);
-      
-      await auditoriaService.registrar('exportar_pdf_agenda', {
-        entidade: 'agendamentos',
-        detalhes: 'Exportação de relatório de agenda em PDF',
-        dados: {
-          periodo: periodoRelatorio.tipo,
-          profissional: profissionalNome,
-          totalEventos: eventosFiltrados.length
-        }
-      });
-      
-      mostrarSnackbar('PDF gerado com sucesso!', 'success');
-      handleCloseRelatorio();
-      
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      mostrarSnackbar('Erro ao gerar PDF: ' + error.message, 'error');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: 'exportar_pdf_agenda'
-      });
-    }
+                              return (
+                                <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                  >
+                                    <Card 
+                                      variant="outlined" 
+                                      sx={{ 
+                                        p: 2,
+                                        position: 'relative',
+                                        borderLeft: '4px solid',
+                                        borderLeftColor: 
+                                          event.tipo === 'atendimento' ? '#ff9800' :
+                                          event.status === 'confirmado' ? '#4caf50' :
+                                          event.status === 'pendente' ? '#ff9800' :
+                                          event.status === 'cancelado' ? '#f44336' : '#9c27b0',
+                                        bgcolor: event.status === 'cancelado' ? '#ffebee' : 'white',
+                                        opacity: event.status === 'cancelado' ? 0.6 : 1,
+                                      }}
+                                    >
+                                      {/* Badge de Duração */}
+                                      <Box sx={{ 
+                                        position: 'absolute', 
+                                        top: 10, 
+                                        right: 10,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1
+                                      }}>
+                                        <Chip
+                                          icon={<TimerIcon />}
+                                          label={`${duracaoTotal} min`}
+                                          size="small"
+                                          color="info"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.7rem' }}
+                                        />
+                                        {temFormularioPendente && (
+                                          <Tooltip title="Formulário de anamnese pendente">
+                                            <Badge
+                                              badgeContent="!"
+                                              color="warning"
+                                              sx={{
+                                                '& .MuiBadge-badge': {
+                                                  fontSize: '0.8rem',
+                                                  height: 20,
+                                                  minWidth: 20,
+                                                }
+                                              }}
+                                            >
+                                              <AssignmentIcon sx={{ color: '#ff9800', opacity: 0.7 }} />
+                                            </Badge>
+                                          </Tooltip>
+                                        )}
+                                      </Box>
+
+                                      <Grid container spacing={2} alignItems="center">
+                                        <Grid item xs={12} sm={6} md={3}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Avatar 
+                                              src={cliente.foto}
+                                              sx={{ 
+                                                bgcolor: event.tipo === 'atendimento' ? '#ff9800' : '#9c27b0', 
+                                                width: 40, 
+                                                height: 40 
+                                              }}
+                                            >
+                                              {!cliente.foto && cliente.nome?.charAt(0)}
+                                            </Avatar>
+                                            <Box>
+                                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                                {cliente.nome}
+                                              </Typography>
+                                              <Typography variant="caption" color="textSecondary" display="block">
+                                                ⏱️ {blocoHorario}
+                                              </Typography>
+                                              {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && cliente.telefone && (
+                                                <Typography variant="caption" color="textSecondary">
+                                                  {formatarTelefone(toSafeString(cliente.telefone))}
+                                                </Typography>
+                                              )}
+                                              {cliente.primeiroAtendimentoRealizado && (
+                                                <Chip
+                                                  icon={<TrophyIcon />}
+                                                  label="1º atendimento"
+                                                  size="small"
+                                                  sx={{ mt: 0.5, height: 18, fontSize: '0.6rem', bgcolor: '#e8f5e9', color: '#4caf50' }}
+                                                />
+                                              )}
+                                            </Box>
+                                          </Box>
+                                        </Grid>
+
+                                        <Grid item xs={12} sm={6} md={2}>
+                                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {servicosLista.length} serviço(s)
+                                          </Typography>
+                                          <Typography variant="caption" color="textSecondary" display="block">
+                                            {servicosLista.map(s => s.nome).join(', ')}
+                                          </Typography>
+                                          <Typography variant="caption" color="primary" display="block">
+                                            🕐 {duracaoTotal} min
+                                          </Typography>
+                                        </Grid>
+
+                                        <Grid item xs={12} sm={6} md={2}>
+                                          <Typography variant="subtitle2" color="textSecondary">
+                                            Profissional
+                                          </Typography>
+                                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {profissional?.nome || event.profissionalNome || 'A definir'}
+                                          </Typography>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                            {getTipoIcon(event.tipo)}
+                                            <Typography variant="caption" color="textSecondary">
+                                              {getTipoLabel(event.tipo)}
+                                            </Typography>
+                                          </Box>
+                                        </Grid>
+
+                                        {cargo === 'cliente' && (
+                                          <Grid item xs={12} sm={6} md={2}>
+                                            <Typography variant="subtitle2" color="textSecondary">Data</Typography>
+                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                              {formatDateBR(event.data)}
+                                            </Typography>
+                                            <Typography variant="caption" color="textSecondary">
+                                              {formatarMoeda(event.valorTotal)}
+                                            </Typography>
+                                          </Grid>
+                                        )}
+
+                                        <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 2 : 2}>
+                                          <Chip
+                                            icon={getStatusIcon(event.status)}
+                                            label={getStatusLabel(event.status)}
+                                            size="small"
+                                            color={getStatusColor(event.status)}
+                                            sx={{ fontWeight: 500 }}
+                                          />
+                                        </Grid>
+
+                                        <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
+                                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+                                            {temFormularioPendente && (
+                                              <Tooltip title="Preencher formulário">
+                                                <IconButton
+                                                  size="small"
+                                                  onClick={() => navigate(`/cliente/agendamento/${event.id}/anamnese`)}
+                                                  sx={{ color: '#ff9800' }}
+                                                >
+                                                  <AssignmentIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            )}
+
+                                            {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
+                                              <Button
+                                                size="small"
+                                                variant="contained"
+                                                color="success"
+                                                startIcon={<PlayIcon />}
+                                                onClick={() => iniciarAtendimento(event)}
+                                              >
+                                                Iniciar
+                                              </Button>
+                                            )}
+                                            
+                                            {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
+                                              <>
+                                                <Button
+                                                  size="small"
+                                                  variant="contained"
+                                                  color="warning"
+                                                  startIcon={<PlayIcon />}
+                                                  onClick={() => continuarAtendimento(event)}
+                                                >
+                                                  Continuar
+                                                </Button>
+                                                <Button
+                                                  size="small"
+                                                  variant="contained"
+                                                  color="success"
+                                                  startIcon={<CheckIcon />}
+                                                  onClick={() => finalizarAtendimento(event)}
+                                                >
+                                                  Finalizar
+                                                </Button>
+                                              </>
+                                            )}
+                                            
+                                            {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'pendente' && (
+                                              <>
+                                                <IconButton 
+                                                  size="small" 
+                                                  onClick={() => handleStatusChange(event.id, 'confirmado')}
+                                                  color="success"
+                                                  title="Confirmar"
+                                                >
+                                                  <CheckIcon fontSize="small" />
+                                                </IconButton>
+                                                <IconButton 
+                                                  size="small" 
+                                                  onClick={() => handleStatusChange(event.id, 'cancelado')}
+                                                  color="error"
+                                                  title="Cancelar"
+                                                >
+                                                  <CancelIcon fontSize="small" />
+                                                </IconButton>
+                                              </>
+                                            )}
+                                            
+                                            {cargo !== 'cliente' && event.tipo === 'agendamento' && (
+                                              <>
+                                                <IconButton 
+                                                  size="small" 
+                                                  onClick={() => handleEdit(event)}
+                                                  color="primary"
+                                                  title="Editar"
+                                                >
+                                                  <EditIcon fontSize="small" />
+                                                </IconButton>
+                                                
+                                                {event.status !== 'finalizado' && event.status !== 'cancelado' && (
+                                                  <IconButton 
+                                                    size="small" 
+                                                    onClick={() => handleDelete(event.id, event.tipo)}
+                                                    color="error"
+                                                    title="Excluir"
+                                                  >
+                                                    <DeleteIcon fontSize="small" />
+                                                  </IconButton>
+                                                )}
+                                              </>
+                                            )}
+
+                                            {cargo === 'cliente' && (
+                                              <Tooltip title="Detalhes do agendamento">
+                                                <IconButton 
+                                                  size="small"
+                                                  color="info"
+                                                  onClick={() => handleDayDetails(event.data, [event])}
+                                                >
+                                                  <VisibilityIcon fontSize="small" />
+                                                </IconButton>
+                                              </Tooltip>
+                                            )}
+                                          </Box>
+                                        </Grid>
+                                      </Grid>
+
+                                      {event.observacoes && (
+                                        <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #ccc' }}>
+                                          <Typography variant="caption" color="textSecondary">
+                                            Obs: {event.observacoes}
+                                          </Typography>
+                                        </Box>
+                                      )}
+                                    </Card>
+                                  </motion.div>
+                                </Grid>
+                              );
+                            })}
+                          </Grid>
+                        </AnimatePresence>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
+                          {isInsideBlock ? '⏳ Em andamento' : 'Horário disponível'}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Paper>
+                </motion.div>
+              );
+            })}
+          </Box>
+        </CardContent>
+      </Card>
+    );
   };
 
-  const handleExportExcel = async () => {
-    try {
-      if (!periodoRelatorio || !periodoRelatorio.dataInicio) {
-        mostrarSnackbar('Período inválido', 'error');
-        return;
-      }
-      
-      mostrarSnackbar('Gerando planilha...', 'info');
-      
-      let eventosFiltrados = filteredEvents;
-      if (periodoRelatorio.tipo === 'dia') {
-        eventosFiltrados = eventosFiltrados.filter(e => e.data === periodoRelatorio.dataInicio);
-      } else {
-        eventosFiltrados = eventosFiltrados.filter(e => 
-          e.data >= periodoRelatorio.dataInicio && e.data <= periodoRelatorio.dataFim
-        );
-      }
+  // ============================================
+  // RENDER - VISUALIZAÇÃO POR SEMANA
+  // ============================================
 
-      eventosFiltrados.sort((a, b) => {
-        if (a.data !== b.data) return a.data.localeCompare(b.data);
-        return (a.horario || a.horaInicio || '').localeCompare(b.horario || b.horaInicio || '');
-      });
+  const renderWeekView = () => {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+            Semana de {getHeaderText()}
+          </Typography>
 
-      const wb = XLSX.utils.book_new();
+          <Grid container spacing={2}>
+            {weekEvents.map((day, index) => (
+              <Grid item xs={12} md={6} lg key={index}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    cursor: 'pointer',
+                    bgcolor: day.date === selectedDate ? '#f3e5f5' : 'white',
+                    '&:hover': { boxShadow: 3 }
+                  }}
+                  onClick={() => handleDayClick(day.date)}
+                >
+                  <CardContent>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                      {day.dayName}
+                    </Typography>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      {new Date(day.date + 'T12:00:00').getDate()}
+                    </Typography>
+                    
+                    {day.events.length > 0 ? (
+                      <Box>
+                        {day.events.slice(0, 3).map(event => {
+                          const cliente = getClienteData(event.clienteId);
+                          const servicosLista = event.servicos || [];
+                          const temFormularioPendente = formulariosPendentes[event.id];
+                          const duracao = calcularDuracaoEvento(event);
+                          const blocoHorario = formatarBlocoHorario(event.horario, duracao);
+                          
+                          return (
+                            <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
+                              {temFormularioPendente && (
+                                <Badge
+                                  badgeContent="!"
+                                  color="warning"
+                                  sx={{
+                                    '& .MuiBadge-badge': {
+                                      fontSize: '0.6rem',
+                                      height: 16,
+                                      minWidth: 16,
+                                    }
+                                  }}
+                                >
+                                  {event.tipo === 'atendimento' ? (
+                                    <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
+                                  ) : (
+                                    <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
+                                  )}
+                                </Badge>
+                              )}
+                              {!temFormularioPendente && (
+                                event.tipo === 'atendimento' ? (
+                                  <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
+                                ) : (
+                                  <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
+                                )
+                              )}
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="caption" noWrap display="block">
+                                  {blocoHorario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]}
+                                </Typography>
+                                <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.6rem' }}>
+                                  {duracao}min • {servicosLista.length} serviço(s)
+                                </Typography>
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                        {day.events.length > 3 && (
+                          <Typography variant="caption" color="textSecondary">
+                            +{day.events.length - 3} mais
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
+                        Sem eventos
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+    );
+  };
 
-      const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
-        profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      
-      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
-      const dataInicioFormat = isNaN(dataInicioDate.getTime()) ? '' : dataInicioDate.toLocaleDateString('pt-BR');
-      const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
-        new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
+  // ============================================
+  // RENDER - VISUALIZAÇÃO POR MÊS
+  // ============================================
 
-      const infoData = [
-        ['RELATÓRIO DE AGENDA'],
-        [''],
-        ['Informações do Relatório'],
-        ['Profissional', profissionalNome],
-        ['Período', `${dataInicioFormat} - ${dataFimFormat}`],
-        ['Data de Emissão', new Date().toLocaleString('pt-BR')],
-        ['Total de Eventos', eventosFiltrados.length],
-      ];
+  const renderMonthView = () => {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
+            {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </Typography>
 
-      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-      XLSX.utils.book_append_sheet(wb, wsInfo, 'Informações');
+          <Grid container spacing={1} sx={{ mb: 2 }}>
+            {weekDays.map(day => (
+              <Grid item xs key={day}>
+                <Typography variant="subtitle2" align="center" sx={{ fontWeight: 600, color: '#9c27b0' }}>
+                  {day}
+                </Typography>
+              </Grid>
+            ))}
+          </Grid>
 
-      const statsPorStatus = {
-        'Agendamentos': eventosFiltrados.filter(e => e.tipo === 'agendamento').length,
-        'Atendimentos': eventosFiltrados.filter(e => e.tipo === 'atendimento').length,
-        'Confirmados': eventosFiltrados.filter(e => e.status === 'confirmado').length,
-        'Pendentes': eventosFiltrados.filter(e => e.status === 'pendente').length,
-        'Em Andamento': eventosFiltrados.filter(e => e.status === 'em_andamento').length,
-        'Cancelados': eventosFiltrados.filter(e => e.status === 'cancelado').length,
-        'Finalizados': eventosFiltrados.filter(e => e.status === 'finalizado').length,
-      };
-
-      const statsData = [
-        ['Resumo por Categoria', 'Quantidade'],
-        ...Object.entries(statsPorStatus).map(([cat, qtd]) => [cat, qtd])
-      ];
-
-      const wsStats = XLSX.utils.aoa_to_sheet(statsData);
-      XLSX.utils.book_append_sheet(wb, wsStats, 'Resumo');
-
-      const agendaData = [
-        ['Data', 'Horário', 'Cliente', 'Telefone', 'Serviços', 'Profissional', 'Tipo', 'Status', 'Valor', 'Observações'],
-        ...eventosFiltrados.map(evento => {
-          const cliente = clientes?.find(c => c.id === evento.clienteId || c.uid === evento.clienteId || c.authUid === evento.clienteId || c.googleUid === evento.clienteId);
-          const profissional = profissionais?.find(p => p.id === evento.profissionalId);
-          const servicos = evento.servicos || 
-            (evento.servicoId ? [{ nome: evento.servicoNome || 'Serviço', preco: evento.preco || 0 }] : []);
-          
-          return [
-            new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR'),
-            evento.horario || evento.horaInicio || '--:--',
-            cliente?.nome || '—',
-            cliente?.telefone || '—',
-            servicos.map(s => s.nome).join(', '),
-            profissional?.nome || '—',
-            evento.tipo === 'agendamento' ? 'Agendamento' : 'Atendimento',
-            evento.status || '—',
-            evento.valorTotal ? `R$ ${evento.valorTotal.toFixed(2)}` : '—',
-            evento.observacoes || '—'
-          ];
-        })
-      ];
-
-      const wsAgenda = XLSX.utils.aoa_to_sheet(agendaData);
-      XLSX.utils.book_append_sheet(wb, wsAgenda, 'Agenda Detalhada');
-
-      const fileName = `agenda_${profissionalNome.replace(/\s+/g, '_')}_${new Date().getTime()}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-      
-      await auditoriaService.registrar('exportar_excel_agenda', {
-        entidade: 'agendamentos',
-        detalhes: 'Exportação de relatório de agenda em Excel',
-        dados: {
-          periodo: periodoRelatorio.tipo,
-          profissional: profissionalNome,
-          totalEventos: eventosFiltrados.length
-        }
-      });
-      
-      mostrarSnackbar('Planilha gerada com sucesso!', 'success');
-      handleCloseRelatorio();
-    } catch (error) {
-      console.error('Erro ao gerar Excel:', error);
-      mostrarSnackbar('Erro ao gerar planilha', 'error');
-      
-      await auditoriaService.registrarErro(error, { 
-        acao: 'exportar_excel_agenda'
-      });
-    }
+          {monthMatrix.map((week, weekIndex) => (
+            <Grid container spacing={1} key={weekIndex} sx={{ mb: 1 }}>
+              {week.map((day, dayIndex) => (
+                <Grid item xs key={dayIndex}>
+                  {day ? (
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        p: 1,
+                        minHeight: 100,
+                        cursor: 'pointer',
+                        bgcolor: day.date === selectedDate ? '#f3e5f5' : 'white',
+                        borderLeft: day.count > 0 ? '3px solid' : 'none',
+                        borderLeftColor: '#9c27b0',
+                        '&:hover': { boxShadow: 3, bgcolor: '#faf5ff' },
+                        position: 'relative',
+                      }}
+                      onClick={() => day.count > 0 ? handleDayDetails(day.date, day.events) : handleDayClick(day.date)}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                        {day.day}
+                      </Typography>
+                      
+                      {day.count > 0 && (
+                        <Box>
+                          <Box sx={{ display: 'flex', gap: 0.5, mb: 1, flexWrap: 'wrap' }}>
+                            {day.agendamentos > 0 && (
+                              <Chip
+                                icon={<ScheduleIcon style={{ fontSize: 14 }} />}
+                                label={day.agendamentos}
+                                size="small"
+                                sx={{
+                                  bgcolor: '#9c27b0',
+                                  color: 'white',
+                                  height: 20,
+                                  '& .MuiChip-icon': { color: 'white', fontSize: 14 }
+                                }}
+                              />
+                            )}
+                            
+                            {day.atendimentos > 0 && (
+                              <Chip
+                                icon={<TimerIcon style={{ fontSize: 14 }} />}
+                                label={day.atendimentos}
+                                size="small"
+                                sx={{
+                                  bgcolor: '#ff9800',
+                                  color: 'white',
+                                  height: 20,
+                                  '& .MuiChip-icon': { color: 'white', fontSize: 14 }
+                                }}
+                              />
+                            )}
+                          </Box>
+                          
+                          {day.events.slice(0, 2).map(event => {
+                            const cliente = getClienteData(event.clienteId);
+                            const servicosLista = event.servicos || [];
+                            const temFormularioPendente = formulariosPendentes[event.id];
+                            const duracao = calcularDuracaoEvento(event);
+                            const blocoHorario = formatarBlocoHorario(event.horario, duracao);
+                            
+                            return (
+                              <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                <Box
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: temFormularioPendente ? '#ff9800' : (
+                                      event.tipo === 'atendimento' ? '#ff9800' :
+                                      event.status === 'confirmado' ? '#4caf50' :
+                                      event.status === 'pendente' ? '#ff9800' :
+                                      event.status === 'cancelado' ? '#f44336' : '#9c27b0'
+                                    ),
+                                  }}
+                                />
+                                <Typography variant="caption" noWrap sx={{ fontSize: '0.65rem' }}>
+                                  {blocoHorario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]}
+                                </Typography>
+                              </Box>
+                            );
+                          })}
+                          
+                          {day.count > 2 && (
+                            <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.65rem' }}>
+                              +{day.count - 2} mais
+                            </Typography>
+                          )}
+                        </Box>
+                      )}
+                    </Card>
+                  ) : (
+                    <Box sx={{ p: 1, minHeight: 100, bgcolor: '#f5f5f5', borderRadius: 1 }} />
+                  )}
+                </Grid>
+              ))}
+            </Grid>
+          ))}
+        </CardContent>
+      </Card>
+    );
   };
 
   // ============================================
@@ -2571,7 +2776,7 @@ function ModernAgendamentos() {
   }, [debouncedSearchTerm, debouncedCpfInput, debouncedDataNascimento, searchClientType, showClientSearch, buscarClientesOtimizado]);
   
   // ============================================
-  // RENDER
+  // RENDER PRINCIPAL
   // ============================================
 
   const loading = loadingAgendamentos || loadingAtendimentos || loadingClientes || loadingProfissionais || loadingServicos || loadingUsuarios;
@@ -2876,534 +3081,10 @@ function ModernAgendamentos() {
         </CardContent>
       </Card>
 
-      {/* Visualização por Dia */}
-      {viewMode === 'day' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {cargo === 'cliente' ? 'Meus Agendamentos' : getHeaderText()}
-            </Typography>
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {timeSlots.map(time => {
-                const eventsAtTime = dayEvents.filter(event => event.horario === time);
-                
-                return (
-                  <motion.div
-                    key={time}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Paper 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 2,
-                        backgroundColor: eventsAtTime.length > 0 ? '#faf5ff' : 'transparent',
-                        borderLeft: eventsAtTime.length > 0 ? '4px solid #9c27b0' : 'none',
-                      }}
-                    >
-                      <Box sx={{ minWidth: 80 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                          {time}
-                        </Typography>
-                      </Box>
-
-                      <Box sx={{ flex: 1 }}>
-                        {eventsAtTime.length > 0 ? (
-                          <AnimatePresence>
-                            <Grid container spacing={2}>
-                              {eventsAtTime.map(event => {
-                                const cliente = getClienteData(event.clienteId) || { nome: event.clienteNome || 'Cliente', telefone: event.clienteTelefone, foto: event.clienteFoto };
-                                const profissional = getProfissionalData(event.profissionalId);
-                                const servicosLista = event.servicos || [];
-                                const temFormularioPendente = formulariosPendentes[event.id];
-                                const duracaoTotal = calcularDuracaoEvento(event);
-
-                                return (
-                                  <Grid item xs={12} key={`${event.tipo}-${event.id}`}>
-                                    <motion.div
-                                      initial={{ opacity: 0, y: 10 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      exit={{ opacity: 0, y: -10 }}
-                                    >
-                                      <Card variant="outlined" sx={{ 
-                                        p: 2,
-                                        position: 'relative',
-                                        borderLeft: '4px solid',
-                                        borderLeftColor: 
-                                          event.tipo === 'atendimento' ? '#ff9800' :
-                                          event.status === 'confirmado' ? '#4caf50' :
-                                          event.status === 'pendente' ? '#ff9800' :
-                                          event.status === 'cancelado' ? '#f44336' : '#9c27b0',
-                                      }}>
-                                        {temFormularioPendente && (
-                                          <Tooltip title="Formulário de anamnese pendente">
-                                            <Badge
-                                              badgeContent="!"
-                                              color="warning"
-                                              sx={{
-                                                position: 'absolute',
-                                                top: 10,
-                                                right: 10,
-                                                '& .MuiBadge-badge': {
-                                                  fontSize: '0.8rem',
-                                                  height: 20,
-                                                  minWidth: 20,
-                                                }
-                                              }}
-                                            >
-                                              <AssignmentIcon sx={{ color: '#ff9800', opacity: 0.7 }} />
-                                            </Badge>
-                                          </Tooltip>
-                                        )}
-
-                                        <Grid container spacing={2} alignItems="center">
-                                          <Grid item xs={12} sm={6} md={3}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                              <Avatar 
-                                                src={cliente.foto}
-                                                sx={{ 
-                                                  bgcolor: event.tipo === 'atendimento' ? '#ff9800' : '#9c27b0', 
-                                                  width: 40, 
-                                                  height: 40 
-                                                }}
-                                              >
-                                                {!cliente.foto && cliente.nome?.charAt(0)}
-                                              </Avatar>
-                                              <Box>
-                                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                                  {cliente.nome}
-                                                </Typography>
-                                                {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && cliente.telefone && (
-                                                  <Typography variant="caption" color="textSecondary">
-                                                    {formatarTelefone(toSafeString(cliente.telefone))}
-                                                  </Typography>
-                                                )}
-                                                {cliente.primeiroAtendimentoRealizado && (
-                                                  <Chip
-                                                    icon={<TrophyIcon />}
-                                                    label="1º atendimento"
-                                                    size="small"
-                                                    sx={{ mt: 0.5, height: 18, fontSize: '0.6rem', bgcolor: '#e8f5e9', color: '#4caf50' }}
-                                                  />
-                                                )}
-                                              </Box>
-                                            </Box>
-                                          </Grid>
-
-                                          <Grid item xs={12} sm={6} md={2}>
-                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                              {servicosLista.length} serviço(s)
-                                            </Typography>
-                                            <Typography variant="caption" color="textSecondary">
-                                              {servicosLista.map(s => s.nome).join(', ')}
-                                            </Typography>
-                                          </Grid>
-
-                                          <Grid item xs={12} sm={6} md={2}>
-                                            <Typography variant="subtitle2" color="textSecondary">
-                                              Profissional
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                              {profissional?.nome || event.profissionalNome || 'A definir'}
-                                            </Typography>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                              {getTipoIcon(event.tipo)}
-                                              <Typography variant="caption" color="textSecondary">
-                                                {getTipoLabel(event.tipo)}
-                                              </Typography>
-                                            </Box>
-                                          </Grid>
-
-                                          {cargo === 'cliente' && (
-                                            <Grid item xs={12} sm={6} md={2}>
-                                              <Typography variant="subtitle2" color="textSecondary">Data e duração</Typography>
-                                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                {formatDateBR(event.data)} às {event.horario}
-                                              </Typography>
-                                              <Typography variant="caption" color="textSecondary">
-                                                {duracaoTotal ? `${duracaoTotal} min` : 'Duração a confirmar'} • {formatarMoeda(event.valorTotal)}
-                                              </Typography>
-                                            </Grid>
-                                          )}
-
-                                          <Grid item xs={12} sm={6} md={cargo === 'cliente' ? 2 : 2}>
-                                            <Chip
-                                              icon={getStatusIcon(event.status)}
-                                              label={getStatusLabel(event.status)}
-                                              size="small"
-                                              color={getStatusColor(event.status)}
-                                              sx={{ fontWeight: 500 }}
-                                            />
-                                          </Grid>
-
-                                          {cargo === 'cliente' && (
-                                            <Grid item xs={12}>
-                                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                                {servicosLista.map((servico, idx) => (
-                                                  <Chip
-                                                    key={servico.id || idx}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    label={`${servico.nome || 'Serviço'}${servico.preco ? ` • ${formatarMoeda(servico.preco)}` : ''}`}
-                                                  />
-                                                ))}
-                                                {event.observacoes && (
-                                                  <Chip size="small" color="info" variant="outlined" label={`Obs: ${event.observacoes}`} />
-                                                )}
-                                              </Box>
-                                            </Grid>
-                                          )}
-
-                                          <Grid item xs={12} md={cargo === 'cliente' ? 4 : 3}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                                              {temFormularioPendente && (
-                                                <Tooltip title="Preencher formulário">
-                                                  <IconButton
-                                                    size="small"
-                                                    onClick={() => navigate(`/cliente/agendamento/${event.id}/anamnese`)}
-                                                    sx={{ color: '#ff9800' }}
-                                                  >
-                                                    <AssignmentIcon fontSize="small" />
-                                                  </IconButton>
-                                                </Tooltip>
-                                              )}
-
-                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'confirmado' && (
-                                                <Button
-                                                  size="small"
-                                                  variant="contained"
-                                                  color="success"
-                                                  startIcon={<PlayIcon />}
-                                                  onClick={() => iniciarAtendimento(event)}
-                                                >
-                                                  Iniciar
-                                                </Button>
-                                              )}
-                                              
-                                              {cargo !== 'cliente' && event.tipo === 'atendimento' && event.status === 'em_andamento' && (
-                                                <>
-                                                  <Button
-                                                    size="small"
-                                                    variant="contained"
-                                                    color="warning"
-                                                    startIcon={<PlayIcon />}
-                                                    onClick={() => continuarAtendimento(event)}
-                                                  >
-                                                    Continuar
-                                                  </Button>
-                                                  <Button
-                                                    size="small"
-                                                    variant="contained"
-                                                    color="success"
-                                                    startIcon={<CheckIcon />}
-                                                    onClick={() => finalizarAtendimento(event)}
-                                                  >
-                                                    Finalizar
-                                                  </Button>
-                                                </>
-                                              )}
-                                              
-                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && event.status === 'pendente' && (
-                                                <>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleStatusChange(event.id, 'confirmado')}
-                                                    color="success"
-                                                    title="Confirmar"
-                                                  >
-                                                    <CheckIcon fontSize="small" />
-                                                  </IconButton>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleStatusChange(event.id, 'cancelado')}
-                                                    color="error"
-                                                    title="Cancelar"
-                                                  >
-                                                    <CancelIcon fontSize="small" />
-                                                  </IconButton>
-                                                </>
-                                              )}
-                                              
-                                              {cargo !== 'cliente' && event.tipo === 'agendamento' && (
-                                                <>
-                                                  <IconButton 
-                                                    size="small" 
-                                                    onClick={() => handleEdit(event)}
-                                                    color="primary"
-                                                    title="Editar"
-                                                  >
-                                                    <EditIcon fontSize="small" />
-                                                  </IconButton>
-                                                  
-                                                  {event.status !== 'finalizado' && event.status !== 'cancelado' && (
-                                                    <IconButton 
-                                                      size="small" 
-                                                      onClick={() => handleDelete(event.id, event.tipo)}
-                                                      color="error"
-                                                      title="Excluir"
-                                                    >
-                                                      <DeleteIcon fontSize="small" />
-                                                    </IconButton>
-                                                  )}
-                                                </>
-                                              )}
-
-                                              {cargo === 'cliente' && (
-                                                <Tooltip title="Detalhes do agendamento">
-                                                  <IconButton 
-                                                    size="small"
-                                                    color="info"
-                                                    onClick={() => handleDayDetails(event.data, [event])}
-                                                  >
-                                                    <VisibilityIcon fontSize="small" />
-                                                  </IconButton>
-                                                </Tooltip>
-                                              )}
-                                            </Box>
-                                          </Grid>
-                                        </Grid>
-
-                                        {event.observacoes && (
-                                          <Box sx={{ mt: 1, pl: 1, borderLeft: '2px solid #ccc' }}>
-                                            <Typography variant="caption" color="textSecondary">
-                                              Obs: {event.observacoes}
-                                            </Typography>
-                                          </Box>
-                                        )}
-                                      </Card>
-                                    </motion.div>
-                                  </Grid>
-                                );
-                              })}
-                            </Grid>
-                          </AnimatePresence>
-                        ) : (
-                          <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-                            Horário disponível
-                          </Typography>
-                        )}
-                      </Box>
-                    </Paper>
-                  </motion.div>
-                );
-              })}
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Visualização por Semana */}
-      {viewMode === 'week' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-              Semana de {getHeaderText()}
-            </Typography>
-
-            <Grid container spacing={2}>
-              {weekEvents.map((day, index) => (
-                <Grid item xs={12} md={6} lg key={index}>
-                  <Card 
-                    variant="outlined" 
-                    sx={{ 
-                      cursor: 'pointer',
-                      bgcolor: day.date === selectedDate ? '#f3e5f5' : 'white',
-                      '&:hover': { boxShadow: 3 }
-                    }}
-                    onClick={() => handleDayClick(day.date)}
-                  >
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                        {day.dayName}
-                      </Typography>
-                      <Typography variant="h6" sx={{ mb: 2 }}>
-                        {new Date(day.date + 'T12:00:00').getDate()}
-                      </Typography>
-                      
-                      {day.events.length > 0 ? (
-                        <Box>
-                          {day.events.slice(0, 3).map(event => {
-                            const cliente = getClienteData(event.clienteId);
-                            const servicosLista = event.servicos || [];
-                            const temFormularioPendente = formulariosPendentes[event.id];
-                            
-                            return (
-                              <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, position: 'relative' }}>
-                                {temFormularioPendente && (
-                                  <Badge
-                                    badgeContent="!"
-                                    color="warning"
-                                    sx={{
-                                      '& .MuiBadge-badge': {
-                                        fontSize: '0.6rem',
-                                        height: 16,
-                                        minWidth: 16,
-                                      }
-                                    }}
-                                  >
-                                    {event.tipo === 'atendimento' ? (
-                                      <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
-                                    ) : (
-                                      <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
-                                    )}
-                                  </Badge>
-                                )}
-                                {!temFormularioPendente && (
-                                  event.tipo === 'atendimento' ? (
-                                    <TimerIcon fontSize="small" sx={{ color: '#ff9800' }} />
-                                  ) : (
-                                    <ScheduleIcon fontSize="small" sx={{ color: '#9c27b0' }} />
-                                  )
-                                )}
-                                <Typography variant="caption" noWrap>
-                                  {event.horario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]} ({servicosLista.length})
-                                </Typography>
-                              </Box>
-                            );
-                          })}
-                          {day.events.length > 3 && (
-                            <Typography variant="caption" color="textSecondary">
-                              +{day.events.length - 3} mais
-                            </Typography>
-                          )}
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>
-                          Sem eventos
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Visualização por Mês */}
-      {viewMode === 'month' && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, textTransform: 'capitalize' }}>
-              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-            </Typography>
-
-            <Grid container spacing={1} sx={{ mb: 2 }}>
-              {weekDays.map(day => (
-                <Grid item xs key={day}>
-                  <Typography variant="subtitle2" align="center" sx={{ fontWeight: 600, color: '#9c27b0' }}>
-                    {day}
-                  </Typography>
-                </Grid>
-              ))}
-            </Grid>
-
-            {monthMatrix.map((week, weekIndex) => (
-              <Grid container spacing={1} key={weekIndex} sx={{ mb: 1 }}>
-                {week.map((day, dayIndex) => (
-                  <Grid item xs key={dayIndex}>
-                    {day ? (
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          p: 1,
-                          minHeight: 100,
-                          cursor: 'pointer',
-                          bgcolor: day.date === selectedDate ? '#f3e5f5' : 'white',
-                          borderLeft: day.count > 0 ? '3px solid' : 'none',
-                          borderLeftColor: '#9c27b0',
-                          '&:hover': { boxShadow: 3, bgcolor: '#faf5ff' },
-                          position: 'relative',
-                        }}
-                        onClick={() => day.count > 0 ? handleDayDetails(day.date, day.events) : handleDayClick(day.date)}
-                      >
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                          {day.day}
-                        </Typography>
-                        
-                        {day.count > 0 && (
-                          <Box>
-                            <Box sx={{ display: 'flex', gap: 0.5, mb: 1, flexWrap: 'wrap' }}>
-                              {day.agendamentos > 0 && (
-                                <Chip
-                                  icon={<ScheduleIcon style={{ fontSize: 14 }} />}
-                                  label={day.agendamentos}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: '#9c27b0',
-                                    color: 'white',
-                                    height: 20,
-                                    '& .MuiChip-icon': { color: 'white', fontSize: 14 }
-                                  }}
-                                />
-                              )}
-                              
-                              {day.atendimentos > 0 && (
-                                <Chip
-                                  icon={<TimerIcon style={{ fontSize: 14 }} />}
-                                  label={day.atendimentos}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: '#ff9800',
-                                    color: 'white',
-                                    height: 20,
-                                    '& .MuiChip-icon': { color: 'white', fontSize: 14 }
-                                  }}
-                                />
-                              )}
-                            </Box>
-                            
-                            {day.events.slice(0, 2).map(event => {
-                              const cliente = getClienteData(event.clienteId);
-                              const servicosLista = event.servicos || [];
-                              const temFormularioPendente = formulariosPendentes[event.id];
-                              
-                              return (
-                                <Box key={`${event.tipo}-${event.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                  <Box
-                                    sx={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: '50%',
-                                      bgcolor: temFormularioPendente ? '#ff9800' : (
-                                        event.tipo === 'atendimento' ? '#ff9800' :
-                                        event.status === 'confirmado' ? '#4caf50' :
-                                        event.status === 'pendente' ? '#ff9800' :
-                                        event.status === 'cancelado' ? '#f44336' : '#9c27b0'
-                                      ),
-                                    }}
-                                  />
-                                  <Typography variant="caption" noWrap sx={{ fontSize: '0.65rem' }}>
-                                    {event.horario} - {cargo === 'cliente' ? (servicosLista[0]?.nome || 'Agendamento') : cliente?.nome?.split(' ')[0]} ({servicosLista.length})
-                                  </Typography>
-                                </Box>
-                              );
-                            })}
-                            
-                            {day.count > 2 && (
-                              <Typography variant="caption" color="textSecondary" sx={{ fontSize: '0.65rem' }}>
-                                +{day.count - 2} mais
-                              </Typography>
-                            )}
-                          </Box>
-                        )}
-                      </Card>
-                    ) : (
-                      <Box sx={{ p: 1, minHeight: 100, bgcolor: '#f5f5f5', borderRadius: 1 }} />
-                    )}
-                  </Grid>
-                ))}
-              </Grid>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* Renderização das Views */}
+      {viewMode === 'day' && renderDayView()}
+      {viewMode === 'week' && renderWeekView()}
+      {viewMode === 'month' && renderMonthView()}
 
       {/* Dialog de Detalhes do Dia */}
       <Dialog open={openDayDialog} onClose={() => setOpenDayDialog(false)} maxWidth="md" fullWidth>
@@ -3425,6 +3106,7 @@ function ModernAgendamentos() {
               const servicosLista = event.servicos || [];
               const temFormularioPendente = formulariosPendentes[event.id];
               const duracaoTotal = calcularDuracaoEvento(event);
+              const blocoHorario = formatarBlocoHorario(event.horario, duracaoTotal);
 
               return (
                 <Card key={`${event.tipo}-${event.id}`} variant="outlined" sx={{ mb: 2, p: 2, position: 'relative' }}>
@@ -3459,16 +3141,21 @@ function ModernAgendamentos() {
                         >
                           {!cliente.foto && cliente.nome?.charAt(0)}
                         </Avatar>
-                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                          {cliente.nome}
-                        </Typography>
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            {cliente.nome}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            {blocoHorario} • {duracaoTotal}min
+                          </Typography>
+                        </Box>
                       </Box>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="subtitle2" color="textSecondary">Data/Horário</Typography>
-                      <Typography variant="body1">{formatDateBR(event.data)} às {event.horario}</Typography>
+                      <Typography variant="body1">{formatDateBR(event.data)}</Typography>
                       <Typography variant="caption" color="textSecondary">
-                        {duracaoTotal ? `${duracaoTotal} min` : 'Duração a confirmar'} • {formatarMoeda(event.valorTotal)}
+                        {formatarMoeda(event.valorTotal)}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
