@@ -109,6 +109,39 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 // ============================================
+// 🔧 FUNÇÕES AUXILIARES SEGURAS
+// ============================================
+
+// Converte qualquer valor para string de forma segura
+const toSafeString = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (value.toString && value.toString !== Object.prototype.toString) {
+      return value.toString();
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+  return String(value);
+};
+
+// Versão segura do replace
+const safeReplace = (value, regex, replacement) => {
+  const str = toSafeString(value);
+  if (!str) return '';
+  try {
+    return str.replace(regex, replacement);
+  } catch {
+    return str;
+  }
+};
+
+// ============================================
 // CONSTANTES E FUNÇÕES AUXILIARES
 // ============================================
 
@@ -121,11 +154,44 @@ const getFirstDayOfMonth = (date) => {
 };
 
 const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
+  if (!date) return '';
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().split('T')[0];
+  } catch {
+    return '';
+  }
 };
 
 const formatDateTime = (date) => {
-  return format(date, 'dd/MM/yyyy HH:mm:ss');
+  if (!date) return 'Data inválida';
+  
+  try {
+    // Se for string
+    if (typeof date === 'string') {
+      const parsed = new Date(date);
+      if (isNaN(parsed.getTime())) return 'Data inválida';
+      return format(parsed, 'dd/MM/yyyy HH:mm:ss');
+    }
+    
+    // Se for objeto Date
+    if (date instanceof Date) {
+      if (isNaN(date.getTime())) return 'Data inválida';
+      return format(date, 'dd/MM/yyyy HH:mm:ss');
+    }
+    
+    // Se for Timestamp do Firebase
+    if (date && typeof date.toDate === 'function') {
+      const d = date.toDate();
+      if (isNaN(d.getTime())) return 'Data inválida';
+      return format(d, 'dd/MM/yyyy HH:mm:ss');
+    }
+    
+    return 'Data inválida';
+  } catch {
+    return 'Data inválida';
+  }
 };
 
 const getWeekDays = (date) => {
@@ -139,6 +205,100 @@ const getWeekDays = (date) => {
 };
 
 // ============================================
+// 🛡️ FUNÇÕES DE FORMATAÇÃO SEGURAS
+// ============================================
+
+const formatarCPF = (cpf) => {
+  try {
+    if (!cpf) return '';
+    const cpfStr = toSafeString(cpf);
+    if (!cpfStr || cpfStr === 'undefined' || cpfStr === 'null') return '';
+    
+    const numeros = cpfStr.replace(/\D/g, '');
+    if (numeros.length !== 11) return cpfStr;
+    
+    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  } catch {
+    return toSafeString(cpf);
+  }
+};
+
+const removerMascaraCPF = (cpf) => {
+  try {
+    if (!cpf) return '';
+    const cpfStr = toSafeString(cpf);
+    if (!cpfStr || cpfStr === 'undefined' || cpfStr === 'null') return '';
+    return cpfStr.replace(/\D/g, '');
+  } catch {
+    return toSafeString(cpf);
+  }
+};
+
+const formatarTelefone = (telefone) => {
+  try {
+    if (!telefone) return 'Telefone não informado';
+    const telStr = toSafeString(telefone);
+    if (!telStr || telStr === 'undefined' || telStr === 'null') return 'Telefone não informado';
+    if (telStr === 'Não informado') return telStr;
+    
+    const numeros = telStr.replace(/\D/g, '');
+    
+    if (numeros.length === 11) {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    } else if (numeros.length === 10) {
+      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+    
+    return telStr;
+  } catch {
+    return toSafeString(telefone);
+  }
+};
+
+const formatDateBR = (data) => {
+  if (!data) return 'Data a confirmar';
+  
+  try {
+    // Se for data no formato 'YYYY-MM-DD'
+    if (typeof data === 'string' && data.includes('-')) {
+      const parts = data.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('pt-BR');
+        }
+      }
+    }
+    
+    const d = new Date(data);
+    if (isNaN(d.getTime())) return 'Data inválida';
+    return d.toLocaleDateString('pt-BR');
+  } catch {
+    return 'Data inválida';
+  }
+};
+
+const formatarMoeda = (valor) => {
+  const num = Number(valor || 0);
+  if (isNaN(num)) return 'R$ 0,00';
+  return num.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+};
+
+const formatarDataBrasil = (data) => {
+  if (!data) return '';
+  try {
+    const d = new Date(data);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('pt-BR');
+  } catch {
+    return '';
+  }
+};
+
+// ============================================
 // 🔥 FUNÇÃO PARA LIBERAR PONTOS DE INDICAÇÃO
 // ============================================
 
@@ -146,7 +306,6 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
   try {
     console.log('🎯 Verificando pontos de indicação para cliente:', clienteId);
     
-    // Buscar cliente
     const cliente = await firebaseService.getById('clientes', clienteId);
     
     if (!cliente) {
@@ -154,25 +313,21 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
       return false;
     }
     
-    // Verificar se já liberou os pontos de indicação
     if (cliente.pontosIndicacaoLiberados) {
       console.log('✅ Pontos de indicação já foram liberados anteriormente');
       return false;
     }
     
-    // Verificar se é o primeiro atendimento
     if (cliente.primeiroAtendimentoRealizado) {
       console.log('✅ Primeiro atendimento já foi realizado anteriormente');
       return false;
     }
     
-    // Verificar se tem indicação
     if (!cliente.indicadoPor) {
       console.log('ℹ️ Cliente não foi indicado por ninguém');
       return false;
     }
     
-    // Buscar indicação
     const indicacoes = await firebaseService.query('indicacoes', [
       { field: 'clienteIndicadoId', operator: '==', value: clienteId }
     ]);
@@ -188,14 +343,12 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
       return false;
     }
     
-    // Buscar configurações de fidelidade
     const configFidelidade = await firebaseService.getAll('config_fidelidade');
     const pontosIndicacao = configFidelidade[0]?.pontosIndicacao || 100;
     
     const agora = new Date();
     const agoraISO = agora.toISOString();
     
-    // 🔥 Adicionar pontos para o cliente indicado (bônus do primeiro atendimento)
     await firebaseService.add('pontuacao', {
       clienteId: clienteId,
       clienteNome: cliente.nome,
@@ -209,7 +362,6 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
     
     console.log(`✅ ${pontosIndicacao} pontos adicionados para o cliente indicado: ${cliente.nome}`);
     
-    // 🔥 Adicionar pontos para o cliente que indicou
     await firebaseService.add('pontuacao', {
       clienteId: indicacao.clienteId,
       clienteNome: indicacao.clienteNome,
@@ -224,7 +376,6 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
     
     console.log(`✅ ${pontosIndicacao} pontos adicionados para o cliente indicador: ${indicacao.clienteNome}`);
     
-    // 🔥 Atualizar cliente
     await firebaseService.update('clientes', clienteId, {
       primeiroAtendimentoRealizado: true,
       pontosIndicacaoLiberados: true,
@@ -232,7 +383,6 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
       updatedAt: agoraISO,
     });
     
-    // 🔥 Atualizar indicação
     await firebaseService.update('indicacoes', indicacao.id, {
       status: 'confirmada',
       pontosLiberados: true,
@@ -242,7 +392,6 @@ const liberarPontosIndicacao = async (clienteId, valorTotal, agendamentoId) => {
       updatedAt: agoraISO,
     });
     
-    // 🔥 Registrar auditoria
     await auditoriaService.registrar('liberar_pontos_indicacao', {
       entidade: 'pontuacao',
       detalhes: `Pontos de indicação liberados para ${cliente.nome} e ${indicacao.clienteNome}`,
@@ -291,7 +440,11 @@ const RelatorioAgenda = React.forwardRef(({
 }, ref) => {
   const formatarData = (data) => {
     if (!data) return '';
-    return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+    try {
+      return new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+    } catch {
+      return '';
+    }
   };
 
   const calcularDuracaoTotal = (servicos) => {
@@ -300,6 +453,7 @@ const RelatorioAgenda = React.forwardRef(({
   };
 
   const formatarDuracao = (minutos) => {
+    if (!minutos || minutos < 0) return '0min';
     if (minutos < 60) return `${minutos}min`;
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
@@ -309,14 +463,14 @@ const RelatorioAgenda = React.forwardRef(({
   const profissionalNome = profissional === 'all' ? 'Todos os Profissionais' : 
     profissionais?.find(p => p.id === profissional)?.nome || 'Profissional';
 
-  const totalEventos = eventos.length;
-  const totalAgendamentos = eventos.filter(e => e.tipo === 'agendamento').length;
-  const totalAtendimentos = eventos.filter(e => e.tipo === 'atendimento').length;
-  const totalAndamento = eventos.filter(e => e.status === 'em_andamento').length;
-  const totalConfirmados = eventos.filter(e => e.status === 'confirmado').length;
-  const totalPendentes = eventos.filter(e => e.status === 'pendente').length;
-  const totalCancelados = eventos.filter(e => e.status === 'cancelado').length;
-  const totalFinalizados = eventos.filter(e => e.status === 'finalizado').length;
+  const totalEventos = eventos?.length || 0;
+  const totalAgendamentos = eventos?.filter(e => e.tipo === 'agendamento').length || 0;
+  const totalAtendimentos = eventos?.filter(e => e.tipo === 'atendimento').length || 0;
+  const totalAndamento = eventos?.filter(e => e.status === 'em_andamento').length || 0;
+  const totalConfirmados = eventos?.filter(e => e.status === 'confirmado').length || 0;
+  const totalPendentes = eventos?.filter(e => e.status === 'pendente').length || 0;
+  const totalCancelados = eventos?.filter(e => e.status === 'cancelado').length || 0;
+  const totalFinalizados = eventos?.filter(e => e.status === 'finalizado').length || 0;
 
   return (
     <Box ref={ref} sx={{ p: 3, fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
@@ -379,7 +533,7 @@ const RelatorioAgenda = React.forwardRef(({
           Agenda Detalhada
         </Typography>
         
-        {Object.entries(
+        {eventos && Object.entries(
           eventos.reduce((acc, evento) => {
             const data = evento.data;
             if (!acc[data]) acc[data] = [];
@@ -618,7 +772,6 @@ function ModernAgendamentos() {
     };
   };
 
-
   const getClienteIdsUsuarioAtual = () => Array.from(new Set([
     usuario?.clienteId,
     usuario?.id,
@@ -642,50 +795,9 @@ function ModernAgendamentos() {
     return idsEvento.some((id) => idsCliente.includes(id));
   };
 
-  const formatarMoeda = (valor) => Number(valor || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  });
-
-  const formatDateBR = (data) => {
-    if (!data) return 'Data a confirmar';
-    try {
-      return new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR');
-    } catch {
-      return data;
-    }
-  };
-
   const calcularDuracaoEvento = (event) => {
     const servicosLista = Array.isArray(event?.servicos) ? event.servicos : [];
     return servicosLista.reduce((total, servico) => total + Number(servico.duracao || servico.tempo || 0), 0) || Number(event?.duracao || 0);
-  };
-
-  const formatarTelefone = (telefone) => {
-    if (!telefone || telefone === 'Não informado') return telefone;
-    const numeros = telefone.replace(/\D/g, '');
-    if (numeros.length === 11) {
-      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    } else if (numeros.length === 10) {
-      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-    }
-    return telefone;
-  };
-
-  const formatarCPF = (cpf) => {
-    if (!cpf) return '';
-    const numeros = cpf.replace(/\D/g, '');
-    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-
-  const removerMascaraCPF = (cpf) => {
-    return cpf ? cpf.replace(/\D/g, '') : '';
-  };
-
-  const formatarDataBrasil = (data) => {
-    if (!data) return '';
-    const d = new Date(data);
-    return d.toLocaleDateString('pt-BR');
   };
 
   const getStatusColor = (status) => {
@@ -731,18 +843,30 @@ function ModernAgendamentos() {
 
   const getHeaderText = () => {
     if (viewMode === 'day') {
-      return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      try {
+        return new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      } catch {
+        return selectedDate;
+      }
     } else if (viewMode === 'week') {
-      const start = getWeekDays(currentDate)[0];
-      const end = getWeekDays(currentDate)[6];
-      return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+      try {
+        const start = getWeekDays(currentDate)[0];
+        const end = getWeekDays(currentDate)[6];
+        return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+      } catch {
+        return 'Semana atual';
+      }
     } else {
-      return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      try {
+        return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      } catch {
+        return 'Mês atual';
+      }
     }
   };
   
@@ -842,29 +966,25 @@ function ModernAgendamentos() {
     try {
       const toastId = toast.loading('Finalizando atendimento...');
       
-      // Atualizar atendimento
       await firebaseService.update('atendimentos', atendimento.id, {
         status: 'finalizado',
         horaFim: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        updatedAt: Timestamp.now(),
+        updatedAt: new Date().toISOString(),
       });
       
-      // Atualizar agendamento relacionado
       if (atendimento.agendamentoId) {
         await firebaseService.update('agendamentos', atendimento.agendamentoId, {
           status: 'finalizado',
-          updatedAt: Timestamp.now(),
+          updatedAt: new Date().toISOString(),
         });
       }
       
-      // 🔥 LIBERAR PONTOS DE INDICAÇÃO (se for o primeiro atendimento)
       const pontosLiberados = await liberarPontosIndicacao(
         atendimento.clienteId,
         atendimento.valorTotal || 0,
         atendimento.agendamentoId || atendimento.id
       );
       
-      // Registrar auditoria
       await auditoriaService.registrar('finalizar_atendimento', {
         entidade: 'atendimentos',
         entidadeId: atendimento.id,
@@ -882,7 +1002,6 @@ function ModernAgendamentos() {
       toast.dismiss(toastId);
       toast.success(`Atendimento finalizado com sucesso!${pontosLiberados ? ' 🎉 Pontos de indicação creditados!' : ''}`);
       
-      // Recarregar dados
       setTimeout(() => {
         window.location.reload();
       }, 1500);
@@ -957,8 +1076,9 @@ function ModernAgendamentos() {
     switch (searchClientType) {
       case 'nome':
         if (!searchClientTerm || searchClientTerm.length < 2) return [];
+        const searchTermLower = searchClientTerm.toLowerCase();
         resultados = clientes.filter(cliente => 
-          cliente.nome?.toLowerCase().includes(searchClientTerm.toLowerCase())
+          cliente.nome?.toLowerCase().includes(searchTermLower)
         );
         break;
 
@@ -1182,7 +1302,7 @@ function ModernAgendamentos() {
     return timeSlots.filter(time => 
       verificarDisponibilidadeProfissional(formData.profissionalId, formData.data, time)
     );
-  }, [formData.profissionalId, formData.data, verificarDisponibilidadeProfissional]);
+  }, [formData.profissionalId, formData.data]);
   
   // ============================================
   // FUNÇÕES DE NAVEGAÇÃO
@@ -1419,8 +1539,8 @@ function ModernAgendamentos() {
         })),
         itensProduto: [],
         valorTotal: Number(agendamento.valorTotal || agendamento.valor || primeiroServico.preco || 0),
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         iniciadoPor: usuario?.nome || 'Sistema',
         iniciadoPorId: usuario?.id || usuario?.uid
       };
@@ -1431,7 +1551,7 @@ function ModernAgendamentos() {
       await atualizar(agendamento.id, { 
         status: 'em_andamento',
         atendimentoId: atendimentoCriadoId,
-        updatedAt: Timestamp.now()
+        updatedAt: new Date().toISOString()
       });
 
       await auditoriaService.registrar('iniciar_atendimento', {
@@ -1485,9 +1605,13 @@ function ModernAgendamentos() {
   };
 
   const handleSelectClient = (cliente) => {
+    if (!cliente || !cliente.id) {
+      toast.error('Cliente inválido');
+      return;
+    }
     setFormData({ ...formData, clienteId: cliente.id });
     setShowClientSearch(false);
-    toast.success(`Cliente ${cliente.nome} selecionado`);
+    toast.success(`Cliente ${cliente.nome || 'selecionado'} selecionado`);
   };
 
   const handleClearClient = () => {
@@ -1636,6 +1760,11 @@ function ModernAgendamentos() {
 
   const handlePrint = () => {
     try {
+      if (!periodoRelatorio || !periodoRelatorio.dataInicio) {
+        mostrarSnackbar('Período inválido', 'error');
+        return;
+      }
+      
       mostrarSnackbar('Preparando impressão...', 'info');
       
       const printWindow = window.open('', '_blank');
@@ -1662,6 +1791,11 @@ function ModernAgendamentos() {
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       
       const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
+      if (isNaN(dataInicioDate.getTime())) {
+        mostrarSnackbar('Data de início inválida', 'error');
+        return;
+      }
+      
       const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
       const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
       const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
@@ -1728,7 +1862,7 @@ function ModernAgendamentos() {
               default: statusClass = 'status-default'; statusLabel = evento.status;
             }
             
-            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+            const telefone = cliente?.telefone ? formatarTelefone(toSafeString(cliente.telefone)) : '—';
             
             html += `
               <tr>
@@ -1865,6 +1999,11 @@ function ModernAgendamentos() {
 
   const handleExportPDF = async () => {
     try {
+      if (!periodoRelatorio || !periodoRelatorio.dataInicio) {
+        mostrarSnackbar('Período inválido', 'error');
+        return;
+      }
+      
       mostrarSnackbar('Gerando PDF...', 'info');
       
       let eventosFiltrados = filteredEvents;
@@ -1885,6 +2024,11 @@ function ModernAgendamentos() {
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
       
       const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
+      if (isNaN(dataInicioDate.getTime())) {
+        mostrarSnackbar('Data de início inválida', 'error');
+        return;
+      }
+      
       const dataFimDate = periodoRelatorio.tipo === 'dia' ? dataInicioDate : new Date(periodoRelatorio.dataFim + 'T12:00:00');
       const dataInicioFormat = format(dataInicioDate, 'dd/MM/yyyy');
       const dataFimFormat = format(dataFimDate, 'dd/MM/yyyy');
@@ -1951,7 +2095,7 @@ function ModernAgendamentos() {
               default: statusClass = 'status-default'; statusLabel = evento.status;
             }
             
-            const telefone = cliente?.telefone ? formatarTelefone(cliente.telefone) : '—';
+            const telefone = cliente?.telefone ? formatarTelefone(toSafeString(cliente.telefone)) : '—';
             
             html += `
               <tr>
@@ -2167,6 +2311,11 @@ function ModernAgendamentos() {
 
   const handleExportExcel = async () => {
     try {
+      if (!periodoRelatorio || !periodoRelatorio.dataInicio) {
+        mostrarSnackbar('Período inválido', 'error');
+        return;
+      }
+      
       mostrarSnackbar('Gerando planilha...', 'info');
       
       let eventosFiltrados = filteredEvents;
@@ -2187,7 +2336,9 @@ function ModernAgendamentos() {
 
       const profissionalNome = selectedProfessional === 'all' ? 'Todos os Profissionais' : 
         profissionais?.find(p => p.id === selectedProfessional)?.nome || 'Profissional';
-      const dataInicioFormat = new Date(periodoRelatorio.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR');
+      
+      const dataInicioDate = new Date(periodoRelatorio.dataInicio + 'T12:00:00');
+      const dataInicioFormat = isNaN(dataInicioDate.getTime()) ? '' : dataInicioDate.toLocaleDateString('pt-BR');
       const dataFimFormat = periodoRelatorio.tipo === 'dia' ? dataInicioFormat : 
         new Date(periodoRelatorio.dataFim + 'T12:00:00').toLocaleDateString('pt-BR');
 
@@ -2293,9 +2444,13 @@ function ModernAgendamentos() {
 
   useEffect(() => {
     const carregarConfiguracoes = async () => {
-      const configData = await firebaseService.getAll('configuracoes');
-      if (configData && configData.length > 0) {
-        setConfiguracoes(configData[0]);
+      try {
+        const configData = await firebaseService.getAll('configuracoes');
+        if (configData && configData.length > 0) {
+          setConfiguracoes(configData[0]);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
       }
     };
     carregarConfiguracoes();
@@ -2303,12 +2458,16 @@ function ModernAgendamentos() {
 
   useEffect(() => {
     const carregarDisponibilidade = async () => {
-      const [dispData, ausData] = await Promise.all([
-        firebaseService.getAll('disponibilidades').catch(() => []),
-        firebaseService.getAll('ausencias').catch(() => [])
-      ]);
-      setDisponibilidades(dispData || []);
-      setAusencias(ausData || []);
+      try {
+        const [dispData, ausData] = await Promise.all([
+          firebaseService.getAll('disponibilidades').catch(() => []),
+          firebaseService.getAll('ausencias').catch(() => [])
+        ]);
+        setDisponibilidades(dispData || []);
+        setAusencias(ausData || []);
+      } catch (error) {
+        console.error('Erro ao carregar disponibilidade:', error);
+      }
     };
     carregarDisponibilidade();
   }, [updateTrigger]);
@@ -2821,7 +2980,7 @@ function ModernAgendamentos() {
                                                 </Typography>
                                                 {(cargo === 'admin' || cargo === 'gerente' || cargo === 'atendente') && cliente.telefone && (
                                                   <Typography variant="caption" color="textSecondary">
-                                                    {formatarTelefone(cliente.telefone)}
+                                                    {formatarTelefone(toSafeString(cliente.telefone))}
                                                   </Typography>
                                                 )}
                                                 {cliente.primeiroAtendimentoRealizado && (
@@ -3593,7 +3752,7 @@ function ModernAgendamentos() {
                                               </Typography>
                                               {cliente.cpf && (
                                                 <Chip
-                                                  label={formatarCPF(cliente.cpf)}
+                                                  label={formatarCPF(toSafeString(cliente.cpf))}
                                                   size="small"
                                                   variant="outlined"
                                                   sx={{ fontSize: '0.7rem' }}
@@ -3605,7 +3764,7 @@ function ModernAgendamentos() {
                                             <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
                                               {cliente.telefone && (
                                                 <Typography variant="caption">
-                                                  📞 {formatarTelefone(cliente.telefone)}
+                                                  📞 {formatarTelefone(toSafeString(cliente.telefone))}
                                                 </Typography>
                                               )}
                                               {cliente.dataNascimento && (
@@ -3652,12 +3811,12 @@ function ModernAgendamentos() {
                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                               {getSelectedClientData()?.cpf && (
                                 <Typography variant="caption">
-                                  CPF: {formatarCPF(getSelectedClientData()?.cpf)}
+                                  CPF: {formatarCPF(toSafeString(getSelectedClientData()?.cpf))}
                                 </Typography>
                               )}
                               {getSelectedClientData()?.telefone && (
                                 <Typography variant="caption">
-                                  📞 {formatarTelefone(getSelectedClientData()?.telefone)}
+                                  📞 {formatarTelefone(toSafeString(getSelectedClientData()?.telefone))}
                                 </Typography>
                               )}
                             </Box>
