@@ -411,6 +411,41 @@ function App() {
     };
   }, []);
 
+  // Diagnóstico para identificar em qual rota ocorrem erros de hooks em produção
+  useEffect(() => {
+    const reportarErroDeHook = (erro) => {
+      const mensagem = erro?.message || '';
+
+      if (
+        mensagem.includes('useState') ||
+        mensagem.includes('Invalid hook call') ||
+        mensagem.includes('dispatcher')
+      ) {
+        console.error('🚨 Erro de hook detectado', {
+          rota: window.location.pathname,
+          mensagem,
+          stack: erro?.stack,
+        });
+      }
+    };
+
+    const onWindowError = (event) => {
+      reportarErroDeHook(event.error || new Error(event.message));
+    };
+
+    const onUnhandledRejection = (event) => {
+      reportarErroDeHook(event.reason);
+    };
+
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
+
   if (loading) {
     return <AppLoading />;
   }
